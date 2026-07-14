@@ -1,0 +1,15 @@
+server:
+  servlet:
+    session:
+      cookie:
+        secure: true
+
+logging:
+  level:
+    root: INFO
+    com.storeanalytics: INFO
+    org.springframework.security: WARN
+
+spring:
+  jpa:
+    show-sql: false

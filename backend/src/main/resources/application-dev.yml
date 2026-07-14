@@ -1,0 +1,8 @@
+logging:
+  level:
+    com.storeanalytics: DEBUG
+    org.springframework.security: INFO
+
+spring:
+  jpa:
+    show-sql: false
