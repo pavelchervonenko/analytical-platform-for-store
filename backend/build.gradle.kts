@@ -48,6 +48,9 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    System.getenv("DOCKER_API_VERSION")?.let {
+        systemProperty("api.version", it)
+    }
 }
 
 checkstyle {
