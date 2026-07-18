@@ -1,0 +1,18 @@
+{
+  "store-fixture-1": [
+    {
+      "id": "employee-shared",
+      "name": "Shared Employee"
+    },
+    {
+      "id": "employee-north",
+      "name": "North Employee"
+    }
+  ],
+  "store-fixture-2": [
+    {
+      "id": "employee-shared",
+      "name": "Shared Employee"
+    }
+  ]
+}

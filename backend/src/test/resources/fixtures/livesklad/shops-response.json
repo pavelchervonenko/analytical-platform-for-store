@@ -1,0 +1,18 @@
+{
+  "data": [
+    {
+      "id": "store-fixture-1",
+      "name": "Fixture North",
+      "address": "Example Street 1",
+      "color": "#112233"
+    },
+    {
+      "id": "store-fixture-2",
+      "name": "Fixture South",
+      "address": "Example Street 2",
+      "color": "#445566"
+    }
+  ],
+  "remainRequest": 98,
+  "expireDate": "2026-07-15T12:00:00Z"
+}
