@@ -46,6 +46,7 @@ app:
     cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
   livesklad:
     base-url: ${LIVESKLAD_BASE_URL:}
-    api-token: ${LIVESKLAD_API_TOKEN:}
+    login: ${LIVESKLAD_LOGIN:}
+    password: ${LIVESKLAD_PASSWORD:}
     connect-timeout: ${LIVESKLAD_CONNECT_TIMEOUT:5s}
     read-timeout: ${LIVESKLAD_READ_TIMEOUT:30s}
