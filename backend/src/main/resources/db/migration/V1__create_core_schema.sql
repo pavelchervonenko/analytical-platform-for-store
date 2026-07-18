@@ -1,8 +1,33 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
+CREATE TABLE integration_connections (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    connection_key text NOT NULL UNIQUE,
+    source_system text NOT NULL CHECK (source_system IN ('LIVESKLAD', 'AMOCRM', 'AI')),
+    display_name text NOT NULL,
+    base_url text,
+    credentials_ref text,
+    is_active boolean NOT NULL DEFAULT true,
+    settings jsonb NOT NULL DEFAULT '{}'::jsonb,
+    version bigint NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (id, source_system)
+);
+CREATE INDEX ix_integration_connections_source_active
+    ON integration_connections (source_system, is_active);
+
+INSERT INTO integration_connections (
+    connection_key, source_system, display_name, credentials_ref, settings
+) VALUES (
+    'livesklad-default', 'LIVESKLAD', 'LiveSklad (default)',
+    'env:LIVESKLAD_LOGIN,LIVESKLAD_PASSWORD', '{"configurationSource":"environment"}'::jsonb
+);
+
 CREATE TABLE stores (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    connection_id uuid REFERENCES integration_connections(id),
     source_system text NOT NULL DEFAULT 'LIVESKLAD' CHECK (source_system IN ('LIVESKLAD', 'MANUAL')),
     external_id text,
     name text NOT NULL,
@@ -12,11 +37,20 @@ CREATE TABLE stores (
     opens_at time NOT NULL DEFAULT '10:00:00',
     closes_at time NOT NULL DEFAULT '21:00:00',
     is_active boolean NOT NULL DEFAULT true,
+    version bigint NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
-    CHECK (opens_at < closes_at)
+    CHECK ((source_system = 'MANUAL' AND connection_id IS NULL)
+        OR (source_system = 'LIVESKLAD' AND connection_id IS NOT NULL)),
+    CHECK (opens_at < closes_at),
+    FOREIGN KEY (connection_id, source_system)
+        REFERENCES integration_connections(id, source_system),
+    UNIQUE (id, connection_id)
 );
-CREATE UNIQUE INDEX ux_stores_source_external_id ON stores (source_system, external_id) WHERE external_id IS NOT NULL;
+CREATE UNIQUE INDEX ux_stores_connection_external_id
+    ON stores (connection_id, external_id) WHERE connection_id IS NOT NULL AND external_id IS NOT NULL;
+CREATE UNIQUE INDEX ux_stores_manual_external_id
+    ON stores (source_system, external_id) WHERE source_system = 'MANUAL' AND external_id IS NOT NULL;
 
 CREATE TABLE app_users (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -25,6 +59,7 @@ CREATE TABLE app_users (
     display_name text NOT NULL,
     role text NOT NULL CHECK (role IN ('ADMIN', 'MANAGER')),
     is_active boolean NOT NULL DEFAULT true,
+    version bigint NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -41,6 +76,7 @@ CREATE INDEX ix_user_store_access_store ON user_store_access (store_id);
 
 CREATE TABLE sync_runs (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    connection_id uuid REFERENCES integration_connections(id),
     store_id uuid REFERENCES stores(id),
     source_system text NOT NULL CHECK (source_system IN ('LIVESKLAD', 'MANUAL', 'AMOCRM', 'AI')),
     trigger_type text NOT NULL CHECK (trigger_type IN ('INITIAL', 'SCHEDULED', 'MANUAL', 'REPROCESS')),
@@ -59,8 +95,15 @@ CREATE TABLE sync_runs (
     error_summary text,
     metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
     created_at timestamptz NOT NULL DEFAULT now(),
+    CHECK ((source_system = 'MANUAL' AND connection_id IS NULL)
+        OR (source_system <> 'MANUAL' AND connection_id IS NOT NULL)),
+    FOREIGN KEY (connection_id, source_system)
+        REFERENCES integration_connections(id, source_system),
     CHECK (period_end IS NULL OR period_start IS NULL OR period_end >= period_start),
-    CHECK (finished_at IS NULL OR finished_at >= started_at)
+    CHECK (finished_at IS NULL OR finished_at >= started_at),
+    CHECK ((status IN ('PENDING', 'RUNNING') AND finished_at IS NULL)
+        OR (status IN ('SUCCESS', 'PARTIAL_SUCCESS', 'FAILED', 'CANCELLED')
+            AND finished_at IS NOT NULL))
 );
 CREATE INDEX ix_sync_runs_store_started_at ON sync_runs (store_id, started_at DESC);
 CREATE INDEX ix_sync_runs_source_status ON sync_runs (source_system, status, started_at DESC);
@@ -82,6 +125,7 @@ CREATE INDEX ix_sync_run_errors_entity ON sync_run_errors (entity_type, external
 
 CREATE TABLE raw_record_versions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    connection_id uuid REFERENCES integration_connections(id),
     store_id uuid REFERENCES stores(id),
     source_system text NOT NULL CHECK (source_system IN ('LIVESKLAD', 'MANUAL', 'AMOCRM', 'AI')),
     entity_type text NOT NULL,
@@ -96,10 +140,15 @@ CREATE TABLE raw_record_versions (
     normalization_status text NOT NULL DEFAULT 'PENDING'
         CHECK (normalization_status IN ('PENDING', 'NORMALIZED', 'FAILED', 'SKIPPED')),
     normalized_at timestamptz,
+    CHECK ((source_system = 'MANUAL' AND connection_id IS NULL)
+        OR (source_system <> 'MANUAL' AND connection_id IS NOT NULL)),
+    FOREIGN KEY (connection_id, source_system)
+        REFERENCES integration_connections(id, source_system),
     CHECK (last_seen_at >= first_seen_at),
-    CHECK ((normalization_status = 'NORMALIZED' AND normalized_at IS NOT NULL) OR normalization_status <> 'NORMALIZED')
+    CHECK ((normalization_status = 'NORMALIZED') = (normalized_at IS NOT NULL))
 );
 CREATE UNIQUE INDEX ux_raw_record_versions_identity_hash ON raw_record_versions (
+    COALESCE(connection_id, '00000000-0000-0000-0000-000000000000'::uuid),
     COALESCE(store_id, '00000000-0000-0000-0000-000000000000'::uuid),
     source_system, entity_type, external_id, payload_hash
 );
@@ -109,45 +158,68 @@ CREATE INDEX ix_raw_record_versions_normalization ON raw_record_versions (normal
 
 CREATE TABLE employees (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    connection_id uuid REFERENCES integration_connections(id),
     source_system text NOT NULL DEFAULT 'LIVESKLAD' CHECK (source_system IN ('LIVESKLAD', 'MANUAL')),
-    external_id text,
+    external_id text NOT NULL,
     full_name text NOT NULL,
     is_active boolean NOT NULL DEFAULT true,
     source_updated_at timestamptz,
     metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    version bigint NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now()
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    CHECK ((source_system = 'MANUAL' AND connection_id IS NULL)
+        OR (source_system = 'LIVESKLAD' AND connection_id IS NOT NULL)),
+    FOREIGN KEY (connection_id, source_system)
+        REFERENCES integration_connections(id, source_system)
 );
-CREATE UNIQUE INDEX ux_employees_source_external_id ON employees (source_system, external_id) WHERE external_id IS NOT NULL;
+CREATE UNIQUE INDEX ux_employees_connection_external_id
+    ON employees (connection_id, external_id) WHERE connection_id IS NOT NULL;
+CREATE UNIQUE INDEX ux_employees_manual_external_id
+    ON employees (source_system, external_id) WHERE source_system = 'MANUAL';
 CREATE INDEX ix_employees_active_name ON employees (is_active, full_name);
 
 CREATE TABLE employee_store_assignments (
     employee_id uuid NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
     store_id uuid NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
     is_active boolean NOT NULL DEFAULT true,
-    participates_in_ranking boolean NOT NULL DEFAULT true,
+    participates_in_ranking boolean NOT NULL DEFAULT false,
     assigned_at timestamptz NOT NULL DEFAULT now(),
     metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    version bigint NOT NULL DEFAULT 0,
+    updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (employee_id, store_id)
 );
 CREATE INDEX ix_employee_store_assignments_store ON employee_store_assignments (store_id, is_active, participates_in_ranking);
 
 CREATE TABLE cash_registers (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    connection_id uuid REFERENCES integration_connections(id),
     store_id uuid NOT NULL REFERENCES stores(id),
     source_system text NOT NULL DEFAULT 'LIVESKLAD' CHECK (source_system IN ('LIVESKLAD', 'MANUAL')),
     external_id text NOT NULL,
     name text NOT NULL,
     is_active boolean NOT NULL DEFAULT true,
     metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    version bigint NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (source_system, external_id)
+    CHECK ((source_system = 'MANUAL' AND connection_id IS NULL)
+        OR (source_system = 'LIVESKLAD' AND connection_id IS NOT NULL)),
+    FOREIGN KEY (connection_id, source_system)
+        REFERENCES integration_connections(id, source_system),
+    FOREIGN KEY (store_id, connection_id)
+        REFERENCES stores(id, connection_id)
 );
+CREATE UNIQUE INDEX ux_cash_registers_connection_external_id
+    ON cash_registers (connection_id, external_id) WHERE connection_id IS NOT NULL;
+CREATE UNIQUE INDEX ux_cash_registers_manual_external_id
+    ON cash_registers (source_system, external_id) WHERE source_system = 'MANUAL';
 CREATE INDEX ix_cash_registers_store_active ON cash_registers (store_id, is_active);
 
 CREATE TABLE source_product_groups (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    connection_id uuid REFERENCES integration_connections(id),
     source_system text NOT NULL DEFAULT 'LIVESKLAD' CHECK (source_system IN ('LIVESKLAD', 'MANUAL')),
     external_id text,
     path text NOT NULL,
@@ -155,15 +227,31 @@ CREATE TABLE source_product_groups (
     parent_id uuid REFERENCES source_product_groups(id),
     is_active boolean NOT NULL DEFAULT true,
     metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    version bigint NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (source_system, path)
+    CHECK ((source_system = 'MANUAL' AND connection_id IS NULL)
+        OR (source_system = 'LIVESKLAD' AND connection_id IS NOT NULL)),
+    FOREIGN KEY (connection_id, source_system)
+        REFERENCES integration_connections(id, source_system),
+    FOREIGN KEY (parent_id, connection_id)
+        REFERENCES source_product_groups(id, connection_id),
+    UNIQUE (id, connection_id)
 );
-CREATE UNIQUE INDEX ux_source_product_groups_external_id ON source_product_groups (source_system, external_id)
-    WHERE external_id IS NOT NULL;
+CREATE UNIQUE INDEX ux_source_product_groups_connection_path
+    ON source_product_groups (connection_id, path) WHERE connection_id IS NOT NULL;
+CREATE UNIQUE INDEX ux_source_product_groups_manual_path
+    ON source_product_groups (source_system, path) WHERE source_system = 'MANUAL';
+CREATE UNIQUE INDEX ux_source_product_groups_connection_external_id
+    ON source_product_groups (connection_id, external_id)
+    WHERE connection_id IS NOT NULL AND external_id IS NOT NULL;
+CREATE UNIQUE INDEX ux_source_product_groups_manual_external_id
+    ON source_product_groups (source_system, external_id)
+    WHERE source_system = 'MANUAL' AND external_id IS NOT NULL;
 
 CREATE TABLE products (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    connection_id uuid REFERENCES integration_connections(id),
     source_system text NOT NULL DEFAULT 'LIVESKLAD' CHECK (source_system IN ('LIVESKLAD', 'MANUAL')),
     external_id text NOT NULL,
     source_group_id uuid REFERENCES source_product_groups(id),
@@ -174,10 +262,20 @@ CREATE TABLE products (
     is_active boolean NOT NULL DEFAULT true,
     source_updated_at timestamptz,
     metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    version bigint NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (source_system, external_id)
+    CHECK ((source_system = 'MANUAL' AND connection_id IS NULL)
+        OR (source_system = 'LIVESKLAD' AND connection_id IS NOT NULL)),
+    FOREIGN KEY (connection_id, source_system)
+        REFERENCES integration_connections(id, source_system),
+    FOREIGN KEY (source_group_id, connection_id)
+        REFERENCES source_product_groups(id, connection_id)
 );
+CREATE UNIQUE INDEX ux_products_connection_external_id
+    ON products (connection_id, external_id) WHERE connection_id IS NOT NULL;
+CREATE UNIQUE INDEX ux_products_manual_external_id
+    ON products (source_system, external_id) WHERE source_system = 'MANUAL';
 CREATE INDEX ix_products_source_group ON products (source_group_id);
 CREATE INDEX ix_products_active_name ON products (is_active, name);
 
@@ -198,6 +296,7 @@ CREATE TABLE analytics_categories (
                                            'NEW_DEVICE', 'USED_DEVICE', 'MATCH_DEVICE_CONDITION')),
     requires_same_document_for_attach boolean NOT NULL DEFAULT false,
     is_active boolean NOT NULL DEFAULT true,
+    version bigint NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     CHECK (attach_denominator_code IS NOT NULL OR NOT requires_same_document_for_attach)
@@ -236,14 +335,35 @@ CREATE TABLE store_product_inventory (
     source_updated_at timestamptz,
     last_sync_run_id uuid REFERENCES sync_runs(id),
     metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    version bigint NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (store_id, product_id)
 );
 CREATE INDEX ix_store_product_inventory_product ON store_product_inventory (product_id);
 
+CREATE TABLE store_product_inventory_history (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    store_id uuid NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+    product_id uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    quantity numeric(19, 3) NOT NULL,
+    retail_price numeric(19, 2) CHECK (retail_price IS NULL OR retail_price >= 0),
+    cost_amount numeric(19, 2) CHECK (cost_amount IS NULL OR cost_amount >= 0),
+    observed_at timestamptz NOT NULL,
+    source_updated_at timestamptz,
+    sync_run_id uuid NOT NULL REFERENCES sync_runs(id),
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (store_id, product_id, observed_at)
+);
+CREATE INDEX ix_store_product_inventory_history_store_observed
+    ON store_product_inventory_history (store_id, observed_at DESC);
+CREATE INDEX ix_store_product_inventory_history_product_observed
+    ON store_product_inventory_history (product_id, observed_at DESC);
+
 CREATE TABLE sales_documents (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    connection_id uuid REFERENCES integration_connections(id),
     source_system text NOT NULL DEFAULT 'LIVESKLAD' CHECK (source_system IN ('LIVESKLAD', 'MANUAL')),
     external_id text NOT NULL,
     store_id uuid NOT NULL REFERENCES stores(id),
@@ -262,11 +382,22 @@ CREATE TABLE sales_documents (
     raw_record_version_id uuid REFERENCES raw_record_versions(id),
     last_sync_run_id uuid NOT NULL REFERENCES sync_runs(id),
     metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    version bigint NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (source_system, external_id),
-    CHECK (document_kind = 'RETURN' OR original_document_id IS NULL)
+    CHECK ((source_system = 'MANUAL' AND connection_id IS NULL)
+        OR (source_system = 'LIVESKLAD' AND connection_id IS NOT NULL)),
+    FOREIGN KEY (connection_id, source_system)
+        REFERENCES integration_connections(id, source_system),
+    FOREIGN KEY (store_id, connection_id)
+        REFERENCES stores(id, connection_id),
+    CHECK ((document_kind = 'SALE' AND original_document_id IS NULL)
+        OR (document_kind = 'RETURN' AND original_document_id IS NOT NULL))
 );
+CREATE UNIQUE INDEX ux_sales_documents_connection_external_id
+    ON sales_documents (connection_id, external_id) WHERE connection_id IS NOT NULL;
+CREATE UNIQUE INDEX ux_sales_documents_manual_external_id
+    ON sales_documents (source_system, external_id) WHERE source_system = 'MANUAL';
 CREATE INDEX ix_sales_documents_store_business_date ON sales_documents (store_id, business_date DESC, document_kind)
     WHERE NOT is_deleted;
 CREATE INDEX ix_sales_documents_employee_business_date ON sales_documents (employee_id, business_date DESC)
@@ -294,8 +425,11 @@ CREATE TABLE sales_document_items (
     cost_amount numeric(19, 2) CHECK (cost_amount IS NULL OR cost_amount >= 0),
     cost_quality text NOT NULL CHECK (cost_quality IN ('KNOWN', 'ZERO_SERVICE', 'MISSING', 'ZERO_UNEXPECTED')),
     is_work boolean NOT NULL DEFAULT false,
+    is_deleted boolean NOT NULL DEFAULT false,
     metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    version bigint NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (sales_document_id, external_id)
 );
 CREATE INDEX ix_sales_document_items_document ON sales_document_items (sales_document_id);
@@ -314,7 +448,9 @@ CREATE TABLE sales_payments (
     paid_at timestamptz,
     is_deleted boolean NOT NULL DEFAULT false,
     metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    version bigint NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (sales_document_id, external_id)
 );
 CREATE INDEX ix_sales_payments_document ON sales_payments (sales_document_id);
@@ -356,7 +492,8 @@ CREATE TABLE data_quality_issues (
     resolved_at timestamptz,
     resolved_by uuid REFERENCES app_users(id) ON DELETE SET NULL,
     metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
-    CHECK ((status = 'OPEN' AND resolved_at IS NULL) OR status <> 'OPEN')
+    CHECK ((status = 'OPEN' AND resolved_at IS NULL)
+        OR (status IN ('RESOLVED', 'IGNORED') AND resolved_at IS NOT NULL))
 );
 CREATE UNIQUE INDEX ux_data_quality_issues_open ON data_quality_issues (entity_type, entity_id, issue_code)
     WHERE status = 'OPEN';
@@ -377,6 +514,167 @@ CREATE TABLE audit_log (
 CREATE INDEX ix_audit_log_actor_created_at ON audit_log (actor_user_id, created_at DESC);
 CREATE INDEX ix_audit_log_store_created_at ON audit_log (store_id, created_at DESC);
 CREATE INDEX ix_audit_log_action_created_at ON audit_log (action, created_at DESC);
+
+CREATE FUNCTION prevent_source_identity_change()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.connection_id IS DISTINCT FROM OLD.connection_id
+            OR NEW.source_system IS DISTINCT FROM OLD.source_system
+            OR NEW.external_id IS DISTINCT FROM OLD.external_id THEN
+        RAISE EXCEPTION 'source identity cannot be changed'
+            USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER tr_stores_identity_immutable
+    BEFORE UPDATE OF connection_id, source_system, external_id ON stores
+    FOR EACH ROW EXECUTE FUNCTION prevent_source_identity_change();
+CREATE TRIGGER tr_employees_identity_immutable
+    BEFORE UPDATE OF connection_id, source_system, external_id ON employees
+    FOR EACH ROW EXECUTE FUNCTION prevent_source_identity_change();
+CREATE TRIGGER tr_products_identity_immutable
+    BEFORE UPDATE OF connection_id, source_system, external_id ON products
+    FOR EACH ROW EXECUTE FUNCTION prevent_source_identity_change();
+CREATE TRIGGER tr_sales_documents_identity_immutable
+    BEFORE UPDATE OF connection_id, source_system, external_id ON sales_documents
+    FOR EACH ROW EXECUTE FUNCTION prevent_source_identity_change();
+
+CREATE FUNCTION validate_employee_store_assignment()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    employee_connection_id uuid;
+    employee_source_system text;
+    store_connection_id uuid;
+BEGIN
+    SELECT connection_id, source_system
+    INTO STRICT employee_connection_id, employee_source_system
+    FROM employees
+    WHERE id = NEW.employee_id;
+
+    SELECT connection_id
+    INTO STRICT store_connection_id
+    FROM stores
+    WHERE id = NEW.store_id;
+
+    IF employee_source_system <> 'MANUAL'
+            AND employee_connection_id IS DISTINCT FROM store_connection_id THEN
+        RAISE EXCEPTION 'employee and store must belong to the same connection'
+            USING ERRCODE = '23514';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER tr_employee_store_assignments_connection
+    BEFORE INSERT OR UPDATE OF employee_id, store_id ON employee_store_assignments
+    FOR EACH ROW EXECUTE FUNCTION validate_employee_store_assignment();
+
+CREATE FUNCTION validate_inventory_store_product()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    store_connection_id uuid;
+    product_connection_id uuid;
+    product_source_system text;
+BEGIN
+    SELECT connection_id
+    INTO STRICT store_connection_id
+    FROM stores
+    WHERE id = NEW.store_id;
+
+    SELECT connection_id, source_system
+    INTO STRICT product_connection_id, product_source_system
+    FROM products
+    WHERE id = NEW.product_id;
+
+    IF product_source_system <> 'MANUAL'
+            AND product_connection_id IS DISTINCT FROM store_connection_id THEN
+        RAISE EXCEPTION 'product and store must belong to the same connection'
+            USING ERRCODE = '23514';
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER tr_store_product_inventory_connection
+    BEFORE INSERT OR UPDATE OF store_id, product_id ON store_product_inventory
+    FOR EACH ROW EXECUTE FUNCTION validate_inventory_store_product();
+CREATE TRIGGER tr_store_product_inventory_history_connection
+    BEFORE INSERT ON store_product_inventory_history
+    FOR EACH ROW EXECUTE FUNCTION validate_inventory_store_product();
+
+CREATE FUNCTION prevent_inventory_history_update()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION 'inventory history observations are immutable'
+        USING ERRCODE = '23514';
+END;
+$$;
+
+CREATE TRIGGER tr_store_product_inventory_history_immutable
+    BEFORE UPDATE ON store_product_inventory_history
+    FOR EACH ROW EXECUTE FUNCTION prevent_inventory_history_update();
+
+CREATE FUNCTION set_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.updated_at = GREATEST(clock_timestamp(), OLD.updated_at);
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER tr_integration_connections_updated_at
+    BEFORE UPDATE ON integration_connections
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER tr_stores_updated_at
+    BEFORE UPDATE ON stores
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER tr_app_users_updated_at
+    BEFORE UPDATE ON app_users
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER tr_employees_updated_at
+    BEFORE UPDATE ON employees
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER tr_employee_store_assignments_updated_at
+    BEFORE UPDATE ON employee_store_assignments
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER tr_cash_registers_updated_at
+    BEFORE UPDATE ON cash_registers
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER tr_source_product_groups_updated_at
+    BEFORE UPDATE ON source_product_groups
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER tr_products_updated_at
+    BEFORE UPDATE ON products
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER tr_analytics_categories_updated_at
+    BEFORE UPDATE ON analytics_categories
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER tr_store_product_inventory_updated_at
+    BEFORE UPDATE ON store_product_inventory
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER tr_sales_documents_updated_at
+    BEFORE UPDATE ON sales_documents
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER tr_sales_document_items_updated_at
+    BEFORE UPDATE ON sales_document_items
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER tr_sales_payments_updated_at
+    BEFORE UPDATE ON sales_payments
+    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 INSERT INTO analytics_categories (
     code, name, category_kind, device_family,
@@ -404,10 +702,16 @@ INSERT INTO analytics_categories (
     ('UNMAPPED', 'Не классифицировано', 'OTHER', 'NONE', false, false, false, NULL, false),
     ('EXCLUDE', 'Исключить из аналитики', 'EXCLUDED', 'NONE', false, false, false, NULL, false);
 
+COMMENT ON TABLE integration_connections IS
+    'External adapter instances. credentials_ref points to secret storage; credentials and tokens are never stored here.';
 COMMENT ON TABLE raw_record_versions IS
     'Versioned source payloads for replay and diagnostics; dashboard queries must not use this table.';
 COMMENT ON TABLE products IS
     'Company-wide products; store-specific stock is stored in store_product_inventory.';
+COMMENT ON TABLE store_product_inventory IS
+    'Current inventory projection for fast reads.';
+COMMENT ON TABLE store_product_inventory_history IS
+    'Append-only sequence of observed inventory states for historical stock analytics.';
 COMMENT ON TABLE product_category_assignments IS
     'Non-overlapping category history. Category changes apply only from valid_from.';
 COMMENT ON COLUMN sales_document_items.analytics_category_id IS
