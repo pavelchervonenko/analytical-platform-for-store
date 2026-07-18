@@ -6,7 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "app.livesklad")
 public record LiveSkladProperties(
         String baseUrl,
-        String apiToken,
+        String login,
+        String password,
         Duration connectTimeout,
         Duration readTimeout
 ) {
