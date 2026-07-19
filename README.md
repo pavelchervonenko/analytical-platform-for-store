@@ -42,11 +42,3 @@ docker/                  Docker and deployment helper files
    ```
 
 The backend uses the `dev` profile by default. Swagger UI is available at `/swagger-ui.html` after the app starts.
-
-## Production Notes
-
-- Do not commit `.env`.
-- Store LiveSklad credentials only in environment variables.
-- Use HTTPS behind Nginx on the VPS.
-- Keep PostgreSQL closed to the public internet.
-- Run regular PostgreSQL backups and test restore before launch.
