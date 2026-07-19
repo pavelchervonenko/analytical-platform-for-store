@@ -1,4 +1,4 @@
-package com.storeanalytics.sync;
+package com.storeanalytics.sync.model;
 
 public enum SourceSystem {
     LIVESKLAD,
