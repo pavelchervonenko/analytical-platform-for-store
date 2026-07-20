@@ -1,5 +1,7 @@
 package com.storeanalytics.common.web;
 
+import com.storeanalytics.sync.exception.ActiveSyncJobException;
+import com.storeanalytics.sync.exception.SyncJobNotFoundException;
 import com.storeanalytics.sync.exception.EmployeeSyncException;
 import com.storeanalytics.sync.exception.ReturnSyncCapacityException;
 import com.storeanalytics.sync.exception.ReturnSyncException;
@@ -150,6 +152,35 @@ public class ApiExceptionHandler {
         return ResponseEntity.badRequest().body(error);
     }
 
+    @ExceptionHandler(ActiveSyncJobException.class)
+    ResponseEntity<ApiError> handleActiveSyncJob(
+            ActiveSyncJobException exception,
+            HttpServletRequest request
+    ) {
+        ApiError error = new ApiError(
+                Instant.now(),
+                HttpStatus.CONFLICT.value(),
+                "ACTIVE_SYNC_JOB_EXISTS",
+                "An active synchronization job already exists",
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
+    @ExceptionHandler(SyncJobNotFoundException.class)
+    ResponseEntity<ApiError> handleSyncJobNotFound(
+            SyncJobNotFoundException exception,
+            HttpServletRequest request
+    ) {
+        ApiError error = new ApiError(
+                Instant.now(),
+                HttpStatus.NOT_FOUND.value(),
+                "SYNC_JOB_NOT_FOUND",
+                exception.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<ApiError> handleIllegalArgument(
             IllegalArgumentException exception,

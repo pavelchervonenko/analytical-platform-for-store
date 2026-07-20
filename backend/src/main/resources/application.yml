@@ -44,9 +44,27 @@ springdoc:
 app:
   security:
     cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+    bootstrap-admin:
+      email: ${BOOTSTRAP_ADMIN_EMAIL:}
+      password: ${BOOTSTRAP_ADMIN_PASSWORD:}
+      display-name: ${BOOTSTRAP_ADMIN_DISPLAY_NAME:Administrator}
   livesklad:
     base-url: ${LIVESKLAD_BASE_URL:}
     login: ${LIVESKLAD_LOGIN:}
     password: ${LIVESKLAD_PASSWORD:}
     connect-timeout: ${LIVESKLAD_CONNECT_TIMEOUT:5s}
     read-timeout: ${LIVESKLAD_READ_TIMEOUT:30s}
+  sync:
+    worker-enabled: ${SYNC_WORKER_ENABLED:true}
+    worker-delay: ${SYNC_WORKER_DELAY:5s}
+    schedule-enabled: ${SYNC_SCHEDULE_ENABLED:false}
+    schedule-cron: ${SYNC_SCHEDULE_CRON:0 15 3 * * *}
+    schedule-zone: ${SYNC_SCHEDULE_ZONE:Europe/Kaliningrad}
+    window-size: ${SYNC_WINDOW_SIZE:1d}
+    max-attempts: ${SYNC_MAX_ATTEMPTS:5}
+    lease-duration: ${SYNC_LEASE_DURATION:2h}
+    retry-initial-delay: ${SYNC_RETRY_INITIAL_DELAY:1m}
+    retry-max-delay: ${SYNC_RETRY_MAX_DELAY:15m}
+    incremental-overlap-days: ${SYNC_INCREMENTAL_OVERLAP_DAYS:3}
+    maximum-backfill-days: ${SYNC_MAXIMUM_BACKFILL_DAYS:730}
+    reporting-zone: ${SYNC_REPORTING_ZONE:Europe/Kaliningrad}

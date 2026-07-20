@@ -57,6 +57,13 @@ public class SalesSyncService {
     }
 
     public SalesSyncResult synchronize(SalesSyncPeriod period) {
+        return synchronize(period, SyncExecutionContext.manual());
+    }
+
+    public SalesSyncResult synchronize(
+            SalesSyncPeriod period,
+            SyncExecutionContext context
+    ) {
         IntegrationConnection connection = activeLiveSkladConnection();
         List<Store> stores = storeRepository
                 .findAllByConnectionIdAndActiveTrueOrderByExternalId(connection.getId());
@@ -69,6 +76,9 @@ public class SalesSyncService {
         SyncRun syncRun = syncRunRepository.save(SyncRun.startSalesSync(
                 connection,
                 new SyncPeriod(period.start(), period.end()),
+                context.triggerType(),
+                context.syncJobId(),
+                context.requestedBy(),
                 clock.instant()
         ));
         int fetched = 0;

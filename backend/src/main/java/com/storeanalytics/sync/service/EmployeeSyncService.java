@@ -55,6 +55,10 @@ public class EmployeeSyncService {
     }
 
     public EmployeeSyncResult synchronize() {
+        return synchronize(SyncExecutionContext.manual());
+    }
+
+    public EmployeeSyncResult synchronize(SyncExecutionContext context) {
         IntegrationConnection connection = activeLiveSkladConnection();
         List<Store> stores = storeRepository
                 .findAllByConnectionIdAndActiveTrueOrderByExternalId(connection.getId());
@@ -64,9 +68,13 @@ public class EmployeeSyncService {
             );
         }
 
-        SyncRun syncRun = syncRunRepository.save(
-                SyncRun.startEmployeeSync(connection, clock.instant())
-        );
+        SyncRun syncRun = syncRunRepository.save(SyncRun.startEmployeeSync(
+                connection,
+                context.triggerType(),
+                context.syncJobId(),
+                context.requestedBy(),
+                clock.instant()
+        ));
         int fetched = 0;
         try {
             List<StoreEmployeeBatch> batches = new ArrayList<>();

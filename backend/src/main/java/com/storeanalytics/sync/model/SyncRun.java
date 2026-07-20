@@ -37,6 +37,9 @@ public class SyncRun {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "store_id")
     private Store store;
+    @Column(name = "sync_job_id")
+    private UUID syncJobId;
+
 
     @Enumerated(EnumType.STRING)
     @Column(name = "source_system", nullable = false)
@@ -99,18 +102,42 @@ public class SyncRun {
     }
 
     public static SyncRun startStoreSync(IntegrationConnection connection, Instant now) {
+        return startStoreSync(
+                connection, SyncTriggerType.MANUAL, null, null, now
+        );
+    }
+
+    public static SyncRun startStoreSync(
+            IntegrationConnection connection,
+            SyncTriggerType triggerType,
+            UUID syncJobId,
+            AppUser requestedBy,
+            Instant now
+    ) {
         requireNonNull(connection, "connection");
         return start(new SyncRunRequest(
-                connection.getSourceSystem(), connection, null, SyncTriggerType.MANUAL,
-                SyncScope.STORES, null, null
+                connection.getSourceSystem(), connection, null, triggerType,
+                SyncScope.STORES, null, syncJobId, requestedBy
         ), now);
     }
 
     public static SyncRun startEmployeeSync(IntegrationConnection connection, Instant now) {
+        return startEmployeeSync(
+                connection, SyncTriggerType.MANUAL, null, null, now
+        );
+    }
+
+    public static SyncRun startEmployeeSync(
+            IntegrationConnection connection,
+            SyncTriggerType triggerType,
+            UUID syncJobId,
+            AppUser requestedBy,
+            Instant now
+    ) {
         requireNonNull(connection, "connection");
         return start(new SyncRunRequest(
-                connection.getSourceSystem(), connection, null, SyncTriggerType.MANUAL,
-                SyncScope.EMPLOYEES, null, null
+                connection.getSourceSystem(), connection, null, triggerType,
+                SyncScope.EMPLOYEES, null, syncJobId, requestedBy
         ), now);
     }
 
@@ -119,23 +146,50 @@ public class SyncRun {
             SyncPeriod period,
             Instant now
     ) {
-        requireNonNull(connection, "connection");
-        requireNonNull(period, "period");
-        return start(new SyncRunRequest(
-                connection.getSourceSystem(), connection, null, SyncTriggerType.MANUAL,
-                SyncScope.SALES, period, null
-        ), now);
+        return startSalesSync(
+                connection, period, SyncTriggerType.MANUAL, null, null, now
+        );
     }
-    public static SyncRun startReturnSync(
+
+    public static SyncRun startSalesSync(
             IntegrationConnection connection,
             SyncPeriod period,
+            SyncTriggerType triggerType,
+            UUID syncJobId,
+            AppUser requestedBy,
             Instant now
     ) {
         requireNonNull(connection, "connection");
         requireNonNull(period, "period");
         return start(new SyncRunRequest(
-                connection.getSourceSystem(), connection, null, SyncTriggerType.MANUAL,
-                SyncScope.RETURNS, period, null
+                connection.getSourceSystem(), connection, null, triggerType,
+                SyncScope.SALES, period, syncJobId, requestedBy
+        ), now);
+    }
+
+    public static SyncRun startReturnSync(
+            IntegrationConnection connection,
+            SyncPeriod period,
+            Instant now
+    ) {
+        return startReturnSync(
+                connection, period, SyncTriggerType.MANUAL, null, null, now
+        );
+    }
+
+    public static SyncRun startReturnSync(
+            IntegrationConnection connection,
+            SyncPeriod period,
+            SyncTriggerType triggerType,
+            UUID syncJobId,
+            AppUser requestedBy,
+            Instant now
+    ) {
+        requireNonNull(connection, "connection");
+        requireNonNull(period, "period");
+        return start(new SyncRunRequest(
+                connection.getSourceSystem(), connection, null, triggerType,
+                SyncScope.RETURNS, period, syncJobId, requestedBy
         ), now);
     }
 
@@ -145,6 +199,7 @@ public class SyncRun {
         SyncRun run = new SyncRun();
         run.connection = request.connection();
         run.store = request.store();
+        run.syncJobId = request.syncJobId();
         run.sourceSystem = request.sourceSystem();
         run.triggerType = request.triggerType();
         run.syncScope = request.syncScope();
@@ -211,6 +266,10 @@ public class SyncRun {
 
     public UUID getId() {
         return id;
+    }
+
+    public UUID getSyncJobId() {
+        return syncJobId;
     }
 
     public IntegrationConnection getConnection() {

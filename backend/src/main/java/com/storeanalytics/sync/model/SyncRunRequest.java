@@ -6,6 +6,7 @@ import static com.storeanalytics.common.validation.ModelValidation.requireNonNul
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.integration.connection.model.IntegrationConnection;
 import com.storeanalytics.store.model.Store;
+import java.util.UUID;
 
 public record SyncRunRequest(
         SourceSystem sourceSystem,
@@ -14,6 +15,7 @@ public record SyncRunRequest(
         SyncTriggerType triggerType,
         SyncScope syncScope,
         SyncPeriod period,
+        UUID syncJobId,
         AppUser requestedBy
 ) {
 
@@ -26,5 +28,7 @@ public record SyncRunRequest(
                 "connection presence must match sourceSystem");
         require(connection == null || connection.getSourceSystem() == sourceSystem,
                 "connection sourceSystem must match sync sourceSystem");
+        require(syncJobId == null || triggerType != SyncTriggerType.MANUAL,
+                "a sync job cannot create a manual child run");
     }
 }

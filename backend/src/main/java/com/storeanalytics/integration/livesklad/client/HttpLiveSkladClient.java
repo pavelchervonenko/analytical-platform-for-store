@@ -15,8 +15,10 @@ import com.storeanalytics.integration.livesklad.dto.LiveSkladSalePositionPayload
 import com.storeanalytics.integration.livesklad.dto.LiveSkladSaleSummaryPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladStorePayload;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladRateLimitException;
 import java.math.BigDecimal;
 import java.net.http.HttpClient;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -26,6 +28,7 @@ import java.util.Set;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.StringUtils;
@@ -45,17 +48,29 @@ public class HttpLiveSkladClient implements LiveSkladClient {
     private final LiveSkladProperties properties;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
+    private final LiveSkladRequestBudget requestBudget;
     private static final int CASH_PAGE_SIZE = 50;
     private static final int MAX_CASH_PAGES = 200;
     private volatile CachedToken cachedToken;
 
-    public HttpLiveSkladClient(
+    HttpLiveSkladClient(
             RestClient.Builder builder,
             LiveSkladProperties properties,
             ObjectMapper objectMapper
     ) {
+        this(builder, properties, objectMapper, Clock.systemUTC());
+    }
+
+    @Autowired
+    public HttpLiveSkladClient(
+            RestClient.Builder builder,
+            LiveSkladProperties properties,
+            ObjectMapper objectMapper,
+            Clock clock
+    ) {
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.requestBudget = new LiveSkladRequestBudget(clock);
         this.restClient = buildRestClient(builder, properties);
     }
 
@@ -286,6 +301,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                         "LiveSklad sales response does not contain data"
                 );
             }
+            requestBudget.observe(response.remainRequest(), response.expireDate());
 
             for (JsonNode payload : response.data()) {
                 SaleSummaryDto sale = objectMapper.convertValue(
@@ -331,6 +347,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                     "LiveSklad sale detail response does not contain data"
             );
         }
+        requestBudget.observe(response.remainRequest(), response.expireDate());
 
         SaleDetailDto detail = objectMapper.convertValue(
                 response.data(),
@@ -425,6 +442,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                     "LiveSklad cash registers response does not contain data"
             );
         }
+        requestBudget.observe(response.remainRequest(), response.expireDate());
         List<LiveSkladCashRegisterPayload> registers = new ArrayList<>();
         Set<String> registerIds = new HashSet<>();
         for (JsonNode payload : response.data()) {
@@ -478,6 +496,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                         "LiveSklad cash transactions response does not contain data"
                 );
             }
+            requestBudget.observe(response.remainRequest(), response.expireDate());
             for (JsonNode payload : response.data()) {
                 CashTransactionDto transaction = objectMapper.convertValue(
                         payload,
@@ -544,6 +563,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                     "LiveSklad return detail response does not contain data"
             );
         }
+        requestBudget.observe(response.remainRequest(), response.expireDate());
         ReturnDetailDto detail = objectMapper.convertValue(
                 response.data(),
                 ReturnDetailDto.class
@@ -658,6 +678,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                         "LiveSklad employees response does not contain data"
                 );
             }
+            requestBudget.observe(response.remainRequest(), response.expireDate());
 
             for (JsonNode payload : response.data()) {
                 EmployeeDto employee = objectMapper.convertValue(payload, EmployeeDto.class);
@@ -697,6 +718,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
         if (response == null || response.data() == null) {
             throw new LiveSkladException("LiveSklad stores response does not contain data");
         }
+        requestBudget.observe(response.remainRequest(), response.expireDate());
 
         List<LiveSkladStorePayload> stores = new ArrayList<>();
         for (JsonNode payload : response.data()) {
@@ -738,6 +760,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
             if (response == null || !StringUtils.hasText(response.token()) || response.ttl() <= 0) {
                 throw new LiveSkladException("LiveSklad authentication response is invalid");
             }
+            requestBudget.observe(response.remainRequest(), response.expireDate());
             Duration ttl = Duration.ofSeconds(response.ttl());
             Duration effectiveSkew = ttl.compareTo(TOKEN_REFRESH_SKEW) > 0
                     ? TOKEN_REFRESH_SKEW : ttl.dividedBy(2);
@@ -774,7 +797,10 @@ public class HttpLiveSkladClient implements LiveSkladClient {
     private LiveSkladException translate(String message, RestClientResponseException exception) {
         int status = exception.getStatusCode().value();
         if (status == 429) {
-            return new LiveSkladException(message + ": request limit exceeded");
+            return new LiveSkladRateLimitException(
+                    message + ": request limit exceeded",
+                    Duration.ofMinutes(15)
+            );
         }
         return new LiveSkladException(message + ": HTTP " + status);
     }
@@ -1043,6 +1069,10 @@ public class HttpLiveSkladClient implements LiveSkladClient {
         return builder
                 .baseUrl(stripTrailingSlash(clientProperties.baseUrl()))
                 .requestFactory(requestFactory)
+                .requestInterceptor((request, body, execution) -> {
+                    requestBudget.beforeRequest();
+                    return execution.execute(request, body);
+                })
                 .build();
     }
 
@@ -1051,11 +1081,20 @@ public class HttpLiveSkladClient implements LiveSkladClient {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record AuthResponse(String token, long ttl) {
+    private record AuthResponse(
+            String token,
+            long ttl,
+            Integer remainRequest,
+            Instant expireDate
+    ) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record StoresEnvelope(List<JsonNode> data) {
+    private record StoresEnvelope(
+            List<JsonNode> data,
+            Integer remainRequest,
+            Instant expireDate
+    ) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -1063,7 +1102,11 @@ public class HttpLiveSkladClient implements LiveSkladClient {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record EmployeesEnvelope(List<JsonNode> data) {
+    private record EmployeesEnvelope(
+            List<JsonNode> data,
+            Integer remainRequest,
+            Instant expireDate
+    ) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -1071,7 +1114,12 @@ public class HttpLiveSkladClient implements LiveSkladClient {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record SalesEnvelope(List<JsonNode> data, Integer total) {
+    private record SalesEnvelope(
+            List<JsonNode> data,
+            Integer total,
+            Integer remainRequest,
+            Instant expireDate
+    ) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -1093,7 +1141,11 @@ public class HttpLiveSkladClient implements LiveSkladClient {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record SaleDetailEnvelope(JsonNode data) {
+    private record SaleDetailEnvelope(
+            JsonNode data,
+            Integer remainRequest,
+            Instant expireDate
+    ) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -1152,7 +1204,11 @@ public class HttpLiveSkladClient implements LiveSkladClient {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record CashRegistersEnvelope(List<JsonNode> data) {
+    private record CashRegistersEnvelope(
+            List<JsonNode> data,
+            Integer remainRequest,
+            Instant expireDate
+    ) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -1162,7 +1218,9 @@ public class HttpLiveSkladClient implements LiveSkladClient {
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record CashTransactionsEnvelope(
             List<JsonNode> data,
-            Integer total
+            Integer total,
+            Integer remainRequest,
+            Instant expireDate
     ) {
     }
 

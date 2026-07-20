@@ -44,13 +44,23 @@ public class StoreSyncService {
     }
 
     public StoreSyncResult synchronize() {
+        return synchronize(SyncExecutionContext.manual());
+    }
+
+    public StoreSyncResult synchronize(SyncExecutionContext context) {
         IntegrationConnection connection = connectionRepository
                 .findByConnectionKeyAndActiveTrue(LIVESKLAD_CONNECTION_KEY)
                 .filter(candidate -> candidate.getSourceSystem() == SourceSystem.LIVESKLAD)
                 .orElseThrow(() -> new IllegalStateException(
                         "Active LiveSklad integration connection is not configured"
                 ));
-        SyncRun syncRun = syncRunRepository.save(SyncRun.startStoreSync(connection, clock.instant()));
+        SyncRun syncRun = syncRunRepository.save(SyncRun.startStoreSync(
+                connection,
+                context.triggerType(),
+                context.syncJobId(),
+                context.requestedBy(),
+                clock.instant()
+        ));
         int fetched = 0;
         try {
             List<LiveSkladStorePayload> stores = liveSkladClient.fetchStores();

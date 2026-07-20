@@ -65,6 +65,13 @@ public class ReturnSyncService {
     }
 
     public ReturnSyncResult synchronize(ReturnSyncPeriod period) {
+        return synchronize(period, SyncExecutionContext.manual());
+    }
+
+    public ReturnSyncResult synchronize(
+            ReturnSyncPeriod period,
+            SyncExecutionContext context
+    ) {
         IntegrationConnection connection = activeLiveSkladConnection();
         List<Store> stores = storeRepository
                 .findAllByConnectionIdAndActiveTrueOrderByExternalId(connection.getId());
@@ -76,6 +83,9 @@ public class ReturnSyncService {
         SyncRun syncRun = syncRunRepository.save(SyncRun.startReturnSync(
                 connection,
                 new SyncPeriod(period.start(), period.end()),
+                context.triggerType(),
+                context.syncJobId(),
+                context.requestedBy(),
                 clock.instant()
         ));
         int fetched = 0;
