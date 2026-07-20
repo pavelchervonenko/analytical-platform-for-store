@@ -54,6 +54,14 @@ public class UserStoreAccess {
         return id;
     }
 
+    public AppUser getUser() {
+        return user;
+    }
+
+    public Store getStore() {
+        return store;
+    }
+
     public Instant getGrantedAt() {
         return grantedAt;
     }
