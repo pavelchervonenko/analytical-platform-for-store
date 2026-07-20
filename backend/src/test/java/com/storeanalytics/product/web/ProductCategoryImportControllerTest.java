@@ -1,0 +1,81 @@
+package com.storeanalytics.product.web;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.storeanalytics.common.web.ApiExceptionHandler;
+import com.storeanalytics.product.service.ProductCategoryImportResult;
+import com.storeanalytics.product.service.ProductCategoryImportService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+class ProductCategoryImportControllerTest {
+
+    private ProductCategoryImportService importService;
+    private MockMvc mockMvc;
+
+    @BeforeEach
+    void setUp() {
+        importService = mock(ProductCategoryImportService.class);
+        mockMvc = MockMvcBuilders
+                .standaloneSetup(new ProductCategoryImportController(importService))
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+    }
+
+    @Test
+    void importsValidatedRequest() throws Exception {
+        when(importService.importAssignments(any())).thenReturn(
+                new ProductCategoryImportResult(1, 1, 1, 0)
+        );
+
+        mockMvc.perform(post(
+                        "/api/integration-connections/livesklad-default/product-category-imports"
+                )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "validFrom": "2025-12-31T22:00:00Z",
+                                  "ruleVersion": "customer-approved-2026-07-20-v1",
+                                  "changeReason": "Initial customer-approved classification",
+                                  "assignments": [
+                                    {
+                                      "externalProductId": "4310",
+                                      "productName": "Cable",
+                                      "categoryCode": "CHARGER_CABLE",
+                                      "conditionType": "NOT_APPLICABLE"
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requested").value(1))
+                .andExpect(jsonPath("$.productsCreated").value(1))
+                .andExpect(jsonPath("$.assignmentsCreated").value(1))
+                .andExpect(jsonPath("$.assignmentsUnchanged").value(0));
+    }
+
+    @Test
+    void rejectsEmptyAssignmentList() throws Exception {
+        mockMvc.perform(post(
+                        "/api/integration-connections/livesklad-default/product-category-imports"
+                )
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "validFrom": "2025-12-31T22:00:00Z",
+                                  "ruleVersion": "v1",
+                                  "assignments": []
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+}

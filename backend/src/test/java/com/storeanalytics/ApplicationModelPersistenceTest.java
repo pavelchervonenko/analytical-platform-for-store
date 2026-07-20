@@ -49,6 +49,9 @@ import com.storeanalytics.store.model.CashRegister;
 import com.storeanalytics.store.model.Store;
 import com.storeanalytics.sync.model.RawRecordVersion;
 import com.storeanalytics.sync.model.SourceSystem;
+import com.storeanalytics.sync.model.SyncJob;
+import com.storeanalytics.sync.model.SyncJobDefinition;
+import com.storeanalytics.sync.model.SyncJobType;
 import com.storeanalytics.sync.model.SyncRun;
 import com.storeanalytics.sync.model.SyncRunError;
 import jakarta.persistence.EntityManager;
@@ -56,6 +59,7 @@ import jakarta.persistence.OptimisticLockException;
 import jakarta.persistence.metamodel.EntityType;
 import java.math.BigDecimal;
 import java.net.InetAddress;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
@@ -226,6 +230,18 @@ class ApplicationModelPersistenceTest {
         graph.user = new AppUser(
                 "model-test@example.invalid", "password-hash", "Model Test", UserRole.ADMIN
         );
+        graph.syncJob = SyncJob.create(
+                new SyncJobDefinition(
+                        graph.connection,
+                        graph.user,
+                        SyncJobType.BACKFILL,
+                        now,
+                        now.plus(Duration.ofDays(1)),
+                        Duration.ofDays(1),
+                        5
+                ),
+                now
+        );
         graph.syncRun = SyncRun.startStoreSync(graph.connection, now);
         graph.employee = Employee.fromLiveSklad(
                 graph.connection, "employee-model-test", "Model Employee", now
@@ -265,6 +281,7 @@ class ApplicationModelPersistenceTest {
 
         entityManager.persist(graph.store);
         entityManager.persist(graph.user);
+        entityManager.persist(graph.syncJob);
         entityManager.persist(graph.syncRun);
         entityManager.persist(graph.employee);
         entityManager.persist(cashRegister);
@@ -538,7 +555,7 @@ class ApplicationModelPersistenceTest {
     }
 
     private void assertEveryEntityWasPersisted() {
-        assertThat(entityManager.getMetamodel().getEntities()).hasSize(22);
+        assertThat(entityManager.getMetamodel().getEntities()).hasSize(23);
         for (EntityType<?> entityType : entityManager.getMetamodel().getEntities()) {
             Long count = entityManager.createQuery(
                     "select count(entity) from " + entityType.getName() + " entity",
@@ -555,6 +572,7 @@ class ApplicationModelPersistenceTest {
         private IntegrationConnection connection;
         private Store store;
         private AppUser user;
+        private SyncJob syncJob;
         private SyncRun syncRun;
         private Employee employee;
         private SourceProductGroup sourceGroup;

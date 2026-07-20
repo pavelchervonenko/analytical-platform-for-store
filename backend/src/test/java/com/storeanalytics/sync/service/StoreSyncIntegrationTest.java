@@ -183,9 +183,9 @@ class StoreSyncIntegrationTest {
                 Integer.class
         );
 
-        assertThat(tableCount).isEqualTo(22);
-        assertThat(entityManagerFactory.getMetamodel().getEntities()).hasSize(22);
-        assertThat(applicationContext.getBeanNamesForType(JpaRepository.class)).hasSize(22);
+        assertThat(tableCount).isEqualTo(23);
+        assertThat(entityManagerFactory.getMetamodel().getEntities()).hasSize(23);
+        assertThat(applicationContext.getBeanNamesForType(JpaRepository.class)).hasSize(23);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM integration_connections WHERE connection_key = 'livesklad-default'",
                 Integer.class
@@ -198,7 +198,7 @@ class StoreSyncIntegrationTest {
                   AND NOT tgisinternal
                 """,
                 Integer.class
-        )).isEqualTo(13);
+        )).isEqualTo(14);
     }
 
     @Test

@@ -42,6 +42,7 @@ import com.storeanalytics.store.model.Store;
 import com.storeanalytics.store.model.StoreSchedule;
 import com.storeanalytics.sync.model.RawRecordVersion;
 import com.storeanalytics.sync.model.SourceSystem;
+import com.storeanalytics.sync.model.SyncJob;
 import com.storeanalytics.sync.model.SyncRun;
 import com.storeanalytics.sync.model.SyncRunError;
 import jakarta.persistence.Column;
@@ -65,6 +66,7 @@ class ModelConstructionTest {
             Store.class,
             AppUser.class,
             UserStoreAccess.class,
+            SyncJob.class,
             SyncRun.class,
             SyncRunError.class,
             RawRecordVersion.class,
@@ -87,7 +89,7 @@ class ModelConstructionTest {
 
     @Test
     void everyEntityHasJpaConstructorAndApplicationCreationPath() throws NoSuchMethodException {
-        assertThat(ENTITY_TYPES).hasSize(22);
+        assertThat(ENTITY_TYPES).hasSize(23);
         for (Class<?> entityType : ENTITY_TYPES) {
             assertThat(entityType).hasAnnotation(Entity.class);
             assertThat(Modifier.isProtected(entityType.getDeclaredConstructor().getModifiers()))
@@ -130,7 +132,7 @@ class ModelConstructionTest {
                                     entityType.getSimpleName(), field.getName())
                             .isTrue());
         }
-        assertThat(mutableEntityCount).isEqualTo(13);
+        assertThat(mutableEntityCount).isEqualTo(14);
     }
 
     @Test
