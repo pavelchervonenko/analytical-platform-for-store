@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f4f6f8">
+  <title>Store Analytics — прототип кабинета</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="prototype-banner">
+    <span>Кликабельный прототип</span>
+    <span class="prototype-banner__note">Демонстрационные данные</span>
+    <button class="prototype-banner__close" type="button" aria-label="Скрыть плашку">×</button>
+  </div>
+
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Основная навигация">
+      <div class="brand">
+        <div class="brand__mark" aria-hidden="true">SA</div>
+        <div class="brand__copy">
+          <strong>Store Analytics</strong>
+          <span>Кабинет руководителя</span>
+        </div>
+      </div>
+
+      <nav class="navigation">
+        <p class="navigation__label">Рабочее пространство</p>
+        <button class="nav-item is-active" type="button" data-view="overview">
+          <span class="nav-item__icon" data-icon="grid"></span>
+          <span>Обзор</span>
+        </button>
+        <button class="nav-item" type="button" data-view="employees">
+          <span class="nav-item__icon" data-icon="users"></span>
+          <span>Сотрудники</span>
+          <span class="nav-item__count">8</span>
+        </button>
+        <button class="nav-item" type="button" data-view="schedule">
+          <span class="nav-item__icon" data-icon="calendar"></span>
+          <span>План магазина</span>
+        </button>
+        <button class="nav-item" type="button" data-view="payroll">
+          <span class="nav-item__icon" data-icon="wallet"></span>
+          <span>Зарплата</span>
+          <span class="nav-item__dot" aria-label="Требуется действие"></span>
+        </button>
+      </nav>
+
+      <div class="sidebar__bottom">
+        <button class="nav-item" type="button" data-toast="Раздел настроек появится в следующей версии прототипа">
+          <span class="nav-item__icon" data-icon="settings"></span>
+          <span>Настройки</span>
+        </button>
+        <div class="sync-status">
+          <span class="sync-status__indicator"></span>
+          <div>
+            <strong>Данные актуальны</strong>
+            <span>по 21 июля, 23:48</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <button class="icon-button mobile-menu-button" id="mobileMenuButton" type="button" aria-label="Открыть меню" aria-expanded="false">
+          <span data-icon="menu"></span>
+        </button>
+
+        <div class="store-control">
+          <span class="store-control__label">Магазин</span>
+          <button class="store-switcher" id="storeSwitcher" type="button" aria-haspopup="listbox" aria-expanded="false">
+            <span class="store-switcher__avatar">FS</span>
+            <span class="store-switcher__copy">
+              <strong id="currentStoreName">Future Store</strong>
+              <small id="currentStoreAddress">Ленинский проспект, 30</small>
+            </span>
+            <span class="store-switcher__chevron" data-icon="chevron"></span>
+          </button>
+          <div class="store-menu" id="storeMenu" role="listbox" aria-label="Выбор магазина">
+            <button class="store-option is-selected" type="button" role="option" aria-selected="true" data-store="future">
+              <span class="store-switcher__avatar">FS</span>
+              <span><strong>Future Store</strong><small>Ленинский проспект, 30</small></span>
+              <span data-icon="check"></span>
+            </button>
+            <button class="store-option" type="button" role="option" aria-selected="false" data-store="mobi">
+              <span class="store-switcher__avatar store-switcher__avatar--warm">МС</span>
+              <span><strong>Моби Сфера</strong><small>ул. Театральная, 17</small></span>
+              <span data-icon="check"></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="topbar__actions">
+          <button class="icon-button" type="button" aria-label="Уведомления" data-toast="Новых системных уведомлений нет">
+            <span data-icon="bell"></span>
+            <span class="notification-dot"></span>
+          </button>
+          <button class="profile-button" type="button" data-toast="Профиль: Павел, руководитель">
+            <span class="profile-button__avatar">ПЧ</span>
+            <span class="profile-button__copy"><strong>Павел</strong><small>Руководитель</small></span>
+            <span data-icon="chevron"></span>
+          </button>
+        </div>
+      </header>
+
+      <div class="view-container">
+        <section class="app-view is-active" data-page="overview" aria-labelledby="overviewTitle">
+          <div class="page-heading">
+            <div>
+              <div class="eyebrow">Главная</div>
+              <h1 id="overviewTitle">Обзор магазина</h1>
+              <p>Ключевые результаты и причины изменений за выбранный период</p>
+            </div>
+            <div class="page-heading__tools">
+              <div class="segmented-control period-presets" aria-label="Быстрый выбор периода">
+                <button type="button" data-period="week">Неделя</button>
+                <button class="is-active" type="button" data-period="month">Месяц</button>
+                <button type="button" data-period="custom">Период</button>
+              </div>
+              <button class="date-button" type="button" data-toast="В production здесь откроется календарь периода">
+                <span data-icon="calendar"></span>
+                <span id="overviewPeriod">1–21 июля 2026</span>
+                <span data-icon="chevron"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="freshness-bar">
+            <span class="freshness-bar__icon" data-icon="database"></span>
+            <span><strong>Данные синхронизированы по 21 июля.</strong> Последнее обновление сегодня в 23:48.</span>
+            <button type="button" data-toast="История синхронизации доступна администратору">Подробнее</button>
+          </div>
+
+          <div class="metric-grid metric-grid--primary">
+            <article class="metric-card metric-card--featured">
+              <div class="metric-card__head"><span>Чистая выручка</span><span class="info-trigger" title="Продажи за вычетом возвратов">i</span></div>
+              <strong class="metric-card__value">4 286 740 ₽</strong>
+              <div class="metric-card__meta"><span class="delta delta--positive">↗ 12,4%</span><span>к прошлому периоду</span></div>
+              <svg class="sparkline" viewBox="0 0 260 54" role="img" aria-label="Выручка растет">
+                <defs><linearGradient id="sparkFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5367f8" stop-opacity=".22"/><stop offset="1" stop-color="#5367f8" stop-opacity="0"/></linearGradient></defs>
+                <path class="sparkline__fill" d="M1 49 C18 43, 27 45, 42 37 S70 44, 88 31 S117 34, 133 25 S163 31, 181 17 S214 22, 229 11 S250 12, 259 4 L259 54 L1 54 Z" fill="url(#sparkFill)"/>
+                <path d="M1 49 C18 43, 27 45, 42 37 S70 44, 88 31 S117 34, 133 25 S163 31, 181 17 S214 22, 229 11 S250 12, 259 4" fill="none" stroke="#5367f8" stroke-width="2.5" stroke-linecap="round"/>
+              </svg>
+            </article>
+
+            <article class="metric-card metric-card--plan">
+              <div class="metric-card__head"><span>Выполнение плана</span><span class="status-pill status-pill--success">По графику</span></div>
+              <strong class="metric-card__value">62%</strong>
+              <div class="metric-plan-progress" role="progressbar" aria-label="Выполнение плана продаж" aria-valuemin="0" aria-valuemax="100" aria-valuenow="62"><i style="--progress: 62%"></i></div>
+              <div class="metric-card__meta"><span>4,29 млн ₽ из 6,90 млн ₽</span></div>
+              <div class="metric-card__foot"><span>Осталось</span><strong>2,61 млн ₽</strong></div>
+            </article>
+
+            <article class="metric-card metric-card--margin">
+              <div class="metric-card__head"><span>Маржа</span><span class="metric-icon metric-icon--green" data-icon="trend"></span></div>
+              <strong class="metric-card__value">25,06%</strong>
+              <div class="metric-card__meta"><span class="delta delta--positive">↗ 1,8 п.п.</span><span>к прошлому периоду</span></div>
+              <div class="metric-card__foot"><span>Валовая прибыль</span><strong>1 074 380 ₽</strong></div>
+            </article>
+
+            <article class="metric-card">
+              <div class="metric-card__head"><span>Средний чек</span><span class="metric-icon metric-icon--blue" data-icon="receipt"></span></div>
+              <strong class="metric-card__value">38 990 ₽</strong>
+              <div class="metric-card__meta"><span class="delta delta--negative">↘ 2,1%</span><span>−840 ₽</span></div>
+              <div class="metric-card__foot"><span>Завершено чеков</span><strong>118</strong></div>
+            </article>
+
+            <article class="metric-card metric-card--additional">
+              <div class="metric-card__head"><span>Дополнительная выручка</span><span class="metric-icon metric-icon--amber" data-icon="plus-circle"></span></div>
+              <strong class="metric-card__value">417 540 ₽</strong>
+              <div class="metric-card__meta"><span class="delta delta--positive">↗ 16,8%</span><span>+59 980 ₽</span></div>
+              <div class="metric-card__foot"><span>На один телефон</span><strong>5 640 ₽</strong></div>
+            </article>
+          </div>
+
+          <div class="content-grid content-grid--chart">
+            <article class="panel revenue-panel">
+              <div class="panel__header">
+                <div><h2>Динамика выручки</h2><p>Продажи и возвраты по дням</p></div>
+                <div class="chart-legend"><span><i class="legend-dot legend-dot--primary"></i>Выручка</span><span><i class="legend-dot legend-dot--danger"></i>Возвраты</span></div>
+              </div>
+              <div class="chart-summary"><strong>4,29 млн ₽</strong><span>среднее в день: 204 130 ₽</span></div>
+              <div class="bar-chart" aria-label="График выручки за 14 дней">
+                <div class="bar-chart__grid"><span>350 тыс.</span><span>250 тыс.</span><span>150 тыс.</span><span>50 тыс.</span></div>
+                <div class="bar-chart__bars">
+                  <div><i style="--bar:58%"></i><b style="--return:8%"></b><span>08</span></div>
+                  <div><i style="--bar:74%"></i><b style="--return:4%"></b><span>09</span></div>
+                  <div><i style="--bar:52%"></i><b style="--return:11%"></b><span>10</span></div>
+                  <div><i style="--bar:81%"></i><b style="--return:5%"></b><span>11</span></div>
+                  <div><i style="--bar:66%"></i><b style="--return:0%"></b><span>12</span></div>
+                  <div><i style="--bar:91%"></i><b style="--return:7%"></b><span>13</span></div>
+                  <div><i style="--bar:63%"></i><b style="--return:14%"></b><span>14</span></div>
+                  <div><i style="--bar:70%"></i><b style="--return:3%"></b><span>15</span></div>
+                  <div><i style="--bar:86%"></i><b style="--return:6%"></b><span>16</span></div>
+                  <div><i style="--bar:57%"></i><b style="--return:2%"></b><span>17</span></div>
+                  <div><i style="--bar:95%"></i><b style="--return:9%"></b><span>18</span></div>
+                  <div><i style="--bar:77%"></i><b style="--return:4%"></b><span>19</span></div>
+                  <div><i style="--bar:68%"></i><b style="--return:12%"></b><span>20</span></div>
+                  <div><i style="--bar:88%"></i><b style="--return:5%"></b><span>21</span></div>
+                </div>
+              </div>
+            </article>
+
+            <article class="panel quality-panel">
+              <div class="panel__header">
+                <div><h2>Качество данных</h2><p>Что влияет на точность показателей</p></div>
+                <span class="status-badge status-badge--warning">Нужно внимание</span>
+              </div>
+              <div class="quality-score">
+                <div class="quality-score__ring"><strong>98%</strong><span>полнота</span></div>
+                <div><strong>Расчеты доступны</strong><p>Денежные итоги полные, есть 2 предупреждения классификации.</p></div>
+              </div>
+              <div class="issue-list">
+                <button type="button" data-toast="Будет открыт список неклассифицированных товаров"><span class="issue-icon issue-icon--warning">!</span><span><strong>3 позиции не классифицированы</strong><small>42 600 ₽ учтены только в общем итоге</small></span><span data-icon="arrow"></span></button>
+                <button type="button" data-toast="Будет открыт журнал качества себестоимости"><span class="issue-icon issue-icon--info">i</span><span><strong>1 нулевая себестоимость</strong><small>Проверьте карточку обычного товара</small></span><span data-icon="arrow"></span></button>
+              </div>
+            </article>
+          </div>
+
+          <article class="panel categories-panel">
+            <div class="panel__header panel__header--responsive">
+              <div><h2>Категории продаж</h2><p>Финансовый результат и доля в выручке</p></div>
+              <button class="text-button" type="button" data-toast="В production откроется полная аналитика категорий">Все категории <span data-icon="arrow"></span></button>
+            </div>
+            <div class="category-groups">
+              <div class="category-group"><span class="category-group__icon category-group__icon--violet" data-icon="phone"></span><span><small>Телефоны</small><strong>2 784 600 ₽</strong></span><span class="category-group__share">65,0%</span></div>
+              <div class="category-group"><span class="category-group__icon category-group__icon--blue" data-icon="devices"></span><span><small>Все устройства</small><strong>3 291 800 ₽</strong></span><span class="category-group__share">76,8%</span></div>
+              <div class="category-group"><span class="category-group__icon category-group__icon--green" data-icon="plus-circle"></span><span><small>Доп. выручка</small><strong>417 540 ₽</strong></span><span class="category-group__share">9,7%</span></div>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead><tr><th>Категория</th><th>Выручка</th><th>Количество</th><th>Валовая прибыль</th><th>Маржа</th><th>Динамика</th></tr></thead>
+                <tbody>
+                  <tr><td data-label="Категория"><span class="table-category-dot table-category-dot--violet"></span><strong>iPhone New / ASIS+</strong></td><td data-label="Выручка">1 624 800 ₽</td><td data-label="Количество">31 шт.</td><td data-label="Валовая прибыль">294 600 ₽</td><td data-label="Маржа">18,1%</td><td data-label="Динамика"><span class="delta delta--positive">↗ 14,2%</span></td></tr>
+                  <tr><td data-label="Категория"><span class="table-category-dot table-category-dot--blue"></span><strong>Samsung новые</strong></td><td data-label="Выручка">756 400 ₽</td><td data-label="Количество">18 шт.</td><td data-label="Валовая прибыль">151 280 ₽</td><td data-label="Маржа">20,0%</td><td data-label="Динамика"><span class="delta delta--positive">↗ 6,8%</span></td></tr>
+                  <tr><td data-label="Категория"><span class="table-category-dot table-category-dot--green"></span><strong>Аксессуары</strong></td><td data-label="Выручка">238 900 ₽</td><td data-label="Количество">116 шт.</td><td data-label="Валовая прибыль">147 600 ₽</td><td data-label="Маржа">61,8%</td><td data-label="Динамика"><span class="delta delta--negative">↘ 3,1%</span></td></tr>
+                  <tr><td data-label="Категория"><span class="table-category-dot table-category-dot--amber"></span><strong>Настройки и услуги</strong></td><td data-label="Выручка">104 700 ₽</td><td data-label="Количество">49 шт.</td><td data-label="Валовая прибыль">104 700 ₽</td><td data-label="Маржа">100%</td><td data-label="Динамика"><span class="delta delta--positive">↗ 22,6%</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="app-view" data-page="employees" aria-labelledby="employeesTitle">
+          <div class="page-heading">
+            <div><div class="eyebrow">Команда</div><h1 id="employeesTitle">Сотрудники</h1><p>Результаты, рейтинг и динамика команды</p></div>
+            <div class="page-heading__tools">
+              <button class="date-button" type="button" data-toast="В production здесь откроется календарь периода"><span data-icon="calendar"></span><span>1–21 июля 2026</span><span data-icon="chevron"></span></button>
+              <button class="secondary-button" type="button" data-nav="schedule"><span data-icon="calendar"></span>План магазина</button>
+            </div>
+          </div>
+
+          <div class="context-banner context-banner--info">
+            <span class="context-banner__icon" data-icon="info"></span>
+            <div><strong>Рейтинг рассчитан с покрытием 100%</strong><p>План магазина и все смены заполнены. Формула employee-rating-v1.</p></div>
+            <button type="button" data-toast="Откроется описание версии формулы">Как считается</button>
+          </div>
+
+          <div class="employee-summary-grid">
+            <article class="team-card team-card--leader">
+              <span class="team-card__medal">1</span>
+              <div class="employee-avatar employee-avatar--purple">АК</div>
+              <div class="team-card__person"><small>Лидер периода</small><strong>Алексей К.</strong><span>7 смен · 1 264 800 ₽</span></div>
+              <div class="score-pill"><strong>124,8</strong><span>балла</span></div>
+            </article>
+            <article class="team-stat"><span class="metric-icon metric-icon--green" data-icon="trend"></span><div><small>Рост команды</small><strong>+9,4%</strong><span>к прошлому периоду</span></div></article>
+            <article class="team-stat"><span class="metric-icon metric-icon--blue" data-icon="users"></span><div><small>Участвуют</small><strong>5 из 6</strong><span>активных сотрудников</span></div></article>
+          </div>
+
+          <article class="panel employee-panel">
+            <div class="panel__header panel__header--responsive">
+              <div><h2>Рейтинг команды</h2><p>Итоговый балл и четыре направления оценки</p></div>
+              <div class="filter-row">
+                <label class="search-field"><span data-icon="search"></span><input id="employeeSearch" type="search" placeholder="Найти сотрудника" aria-label="Найти сотрудника"></label>
+                <button class="icon-button icon-button--bordered" type="button" data-toast="Фильтры: активность, участие в рейтинге"><span data-icon="filter"></span></button>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table employee-table">
+                <thead><tr><th class="rank-column">Место</th><th>Сотрудник</th><th>Результат</th><th>Вклад</th><th>Эффективность</th><th>Структура</th><th>Attach-rate</th><th></th></tr></thead>
+                <tbody>
+                  <tr class="employee-row" data-employee="Алексей К."><td data-label="Место"><span class="rank-badge rank-badge--gold">1</span></td><td data-label="Сотрудник"><div class="employee-cell"><span class="employee-avatar employee-avatar--purple">АК</span><span><strong>Алексей К.</strong><small>7 смен · 77 часов</small></span></div></td><td data-label="Результат"><strong class="score-value">124,8</strong><span class="delta delta--positive">↗ 8,3</span></td><td data-label="Вклад"><span class="score-bar"><i style="--score:90%"></i></span><strong>135</strong></td><td data-label="Эффективность"><span class="score-bar"><i style="--score:80%"></i></span><strong>120</strong></td><td data-label="Структура"><span class="score-bar"><i style="--score:77%"></i></span><strong>116</strong></td><td data-label="Attach-rate"><span class="score-bar"><i style="--score:86%"></i></span><strong>128</strong></td><td><button class="row-action" type="button" data-employee-detail="Алексей К."><span data-icon="arrow"></span></button></td></tr>
+                  <tr class="employee-row" data-employee="Валерия"><td data-label="Место"><span class="rank-badge rank-badge--silver">2</span></td><td data-label="Сотрудник"><div class="employee-cell"><span class="employee-avatar employee-avatar--green">В</span><span><strong>Валерия</strong><small>8 смен · 88 часов</small></span></div></td><td data-label="Результат"><strong class="score-value">116,2</strong><span class="delta delta--positive">↗ 3,1</span></td><td data-label="Вклад"><span class="score-bar"><i style="--score:78%"></i></span><strong>117</strong></td><td data-label="Эффективность"><span class="score-bar"><i style="--score:73%"></i></span><strong>109</strong></td><td data-label="Структура"><span class="score-bar"><i style="--score:84%"></i></span><strong>126</strong></td><td data-label="Attach-rate"><span class="score-bar"><i style="--score:75%"></i></span><strong>113</strong></td><td><button class="row-action" type="button" data-employee-detail="Валерия"><span data-icon="arrow"></span></button></td></tr>
+                  <tr class="employee-row" data-employee="Ангелина"><td data-label="Место"><span class="rank-badge rank-badge--bronze">3</span></td><td data-label="Сотрудник"><div class="employee-cell"><span class="employee-avatar employee-avatar--amber">А</span><span><strong>Ангелина</strong><small>6 смен · 66 часов</small></span></div></td><td data-label="Результат"><strong class="score-value">108,9</strong><span class="delta delta--negative">↘ 1,8</span></td><td data-label="Вклад"><span class="score-bar"><i style="--score:67%"></i></span><strong>101</strong></td><td data-label="Эффективность"><span class="score-bar"><i style="--score:85%"></i></span><strong>128</strong></td><td data-label="Структура"><span class="score-bar"><i style="--score:71%"></i></span><strong>106</strong></td><td data-label="Attach-rate"><span class="score-bar"><i style="--score:68%"></i></span><strong>102</strong></td><td><button class="row-action" type="button" data-employee-detail="Ангелина"><span data-icon="arrow"></span></button></td></tr>
+                  <tr class="employee-row" data-employee="Алексей Д."><td data-label="Место"><span class="rank-badge">4</span></td><td data-label="Сотрудник"><div class="employee-cell"><span class="employee-avatar employee-avatar--blue">АД</span><span><strong>Алексей Д.</strong><small>7 смен · 77 часов</small></span></div></td><td data-label="Результат"><strong class="score-value">102,4</strong><span class="delta delta--positive">↗ 0,6</span></td><td data-label="Вклад"><span class="score-bar"><i style="--score:73%"></i></span><strong>110</strong></td><td data-label="Эффективность"><span class="score-bar"><i style="--score:62%"></i></span><strong>93</strong></td><td data-label="Структура"><span class="score-bar"><i style="--score:65%"></i></span><strong>98</strong></td><td data-label="Attach-rate"><span class="score-bar"><i style="--score:72%"></i></span><strong>108</strong></td><td><button class="row-action" type="button" data-employee-detail="Алексей Д."><span data-icon="arrow"></span></button></td></tr>
+                  <tr class="employee-row employee-row--muted" data-employee="Кирилл Долгов"><td data-label="Место"><span class="rank-badge">—</span></td><td data-label="Сотрудник"><div class="employee-cell"><span class="employee-avatar employee-avatar--gray">КД</span><span><strong>Кирилл Долгов</strong><small>Не участвует в рейтинге</small></span></div></td><td data-label="Результат"><strong class="score-value">—</strong></td><td colspan="4"><span class="muted-note">Продажи учтены в результате магазина</span></td><td><button class="row-action" type="button" data-employee-detail="Кирилл Долгов"><span data-icon="arrow"></span></button></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="app-view" data-page="schedule" aria-labelledby="scheduleTitle">
+          <div class="page-heading">
+            <div><div class="eyebrow">Управление</div><h1 id="scheduleTitle">План магазина</h1><p>Месячные цели по выручке и структуре продаж</p></div>
+            <div class="page-heading__tools"><button class="date-button" type="button" data-toast="Выбор месяца плана"><span data-icon="calendar"></span><span>Июль 2026</span><span data-icon="chevron"></span></button><button class="primary-button" type="button" data-toast="План откроется в форме редактирования"><span data-icon="edit"></span>Изменить план</button></div>
+          </div>
+
+          <div class="plan-grid">
+            <article class="panel plan-progress-panel">
+              <div class="panel__header"><div><h2>План июля</h2><p>1–31 июля 2026</p></div><span class="status-badge status-badge--success">По плану</span></div>
+              <div class="plan-progress-main"><div class="progress-ring"><strong>62%</strong><span>выполнено</span></div><div class="plan-progress-copy"><small>Выручка</small><strong>4,29 млн ₽ <span>из 6,90 млн ₽</span></strong><div class="linear-progress"><i style="--progress:62%"></i></div><p>Для выполнения плана нужно в среднем 237 800 ₽ в день.</p></div></div>
+            </article>
+            <article class="panel targets-panel">
+              <div class="panel__header"><div><h2>Цели структуры</h2><p>Факт относительно месячного плана</p></div></div>
+              <div class="target-list">
+                <div><span><strong>Аксессуары</strong><small>3,8% из 3,9%</small></span><span class="mini-progress"><i style="--progress:97%"></i></span><span class="status-badge status-badge--neutral">−0,1 п.п.</span></div>
+                <div><span><strong>Услуги</strong><small>3,2% из 3,0%</small></span><span class="mini-progress"><i style="--progress:100%"></i></span><span class="status-badge status-badge--success">+0,2 п.п.</span></div>
+                <div><span><strong>Доп. выручка</strong><small>9,7% из 7,0%</small></span><span class="mini-progress"><i style="--progress:100%"></i></span><span class="status-badge status-badge--success">+2,7 п.п.</span></div>
+              </div>
+            </article>
+          </div>
+
+          <article class="panel schedule-panel">
+            <div class="panel__header panel__header--responsive">
+              <div><h2>Календарь смен</h2><p>Полная смена: 10:00–21:00 · 11 часов</p></div>
+              <div class="calendar-nav"><button class="icon-button icon-button--bordered" type="button" aria-label="Предыдущая неделя"><span class="chevron-left" data-icon="chevron"></span></button><strong>20–26 июля</strong><button class="icon-button icon-button--bordered" type="button" aria-label="Следующая неделя"><span data-icon="chevron"></span></button></div>
+            </div>
+            <div class="week-calendar">
+              <div class="calendar-day"><div class="calendar-day__head"><span>Пн</span><strong>20</strong></div><div class="shift-list"><button type="button"><span class="employee-avatar employee-avatar--purple">АК</span><span>Алексей К.</span><i data-icon="close"></i></button><button type="button"><span class="employee-avatar employee-avatar--green">В</span><span>Валерия</span><i data-icon="close"></i></button></div><button class="add-shift" type="button" data-toast="Откроется выбор сотрудников">+ Добавить</button></div>
+              <div class="calendar-day is-today"><div class="calendar-day__head"><span>Вт</span><strong>21</strong><small>сегодня</small></div><div class="shift-list"><button type="button"><span class="employee-avatar employee-avatar--amber">А</span><span>Ангелина</span><i data-icon="close"></i></button><button type="button"><span class="employee-avatar employee-avatar--blue">АД</span><span>Алексей Д.</span><i data-icon="close"></i></button></div><button class="add-shift" type="button" data-toast="Откроется выбор сотрудников">+ Добавить</button></div>
+              <div class="calendar-day"><div class="calendar-day__head"><span>Ср</span><strong>22</strong></div><div class="shift-list"><button type="button"><span class="employee-avatar employee-avatar--purple">АК</span><span>Алексей К.</span><i data-icon="close"></i></button><button type="button"><span class="employee-avatar employee-avatar--green">В</span><span>Валерия</span><i data-icon="close"></i></button></div><button class="add-shift" type="button" data-toast="Откроется выбор сотрудников">+ Добавить</button></div>
+              <div class="calendar-day"><div class="calendar-day__head"><span>Чт</span><strong>23</strong></div><div class="shift-list"><button type="button"><span class="employee-avatar employee-avatar--amber">А</span><span>Ангелина</span><i data-icon="close"></i></button></div><button class="add-shift" type="button" data-toast="Откроется выбор сотрудников">+ Добавить</button></div>
+              <div class="calendar-day"><div class="calendar-day__head"><span>Пт</span><strong>24</strong></div><div class="shift-list"><button type="button"><span class="employee-avatar employee-avatar--blue">АД</span><span>Алексей Д.</span><i data-icon="close"></i></button><button type="button"><span class="employee-avatar employee-avatar--purple">АК</span><span>Алексей К.</span><i data-icon="close"></i></button></div><button class="add-shift" type="button" data-toast="Откроется выбор сотрудников">+ Добавить</button></div>
+              <div class="calendar-day calendar-day--weekend"><div class="calendar-day__head"><span>Сб</span><strong>25</strong></div><div class="shift-list"><button type="button"><span class="employee-avatar employee-avatar--green">В</span><span>Валерия</span><i data-icon="close"></i></button><button type="button"><span class="employee-avatar employee-avatar--amber">А</span><span>Ангелина</span><i data-icon="close"></i></button></div><button class="add-shift" type="button" data-toast="Откроется выбор сотрудников">+ Добавить</button></div>
+              <div class="calendar-day calendar-day--weekend"><div class="calendar-day__head"><span>Вс</span><strong>26</strong></div><div class="shift-list"></div><button class="add-shift add-shift--warning" type="button" data-toast="Для дня без смены нельзя распределить зарплатный фонд">! Назначить смену</button></div>
+            </div>
+            <div class="schedule-warning"><span data-icon="warning"></span><span><strong>26 июля смена не заполнена.</strong> Если в этот день будут продажи, расчет зарплаты нельзя будет утвердить.</span><button type="button" data-toast="Переход к 26 июля">Заполнить</button></div>
+          </article>
+        </section>
+
+        <section class="app-view" data-page="payroll" aria-labelledby="payrollTitle">
+          <div class="page-heading">
+            <div><div class="eyebrow">Финансы</div><h1 id="payrollTitle">Зарплата</h1><p>Расчет, проверка и утверждение выплаты сотрудникам</p></div>
+            <div class="page-heading__tools"><button class="date-button" type="button" data-toast="Выбор расчетного месяца"><span data-icon="calendar"></span><span>Июль 2026</span><span data-icon="chevron"></span></button><button class="secondary-button" type="button" data-toast="Откроется история всех расчетов"><span data-icon="history"></span>История</button></div>
+          </div>
+
+          <ol class="workflow-steps" aria-label="Этапы расчета зарплаты">
+            <li class="is-complete"><span data-icon="check"></span><div><strong>Готовность</strong><small>Проверено</small></div></li>
+            <li class="is-active"><span>2</span><div><strong>Предпросмотр</strong><small>Обе развилки</small></div></li>
+            <li><span>3</span><div><strong>Расчет</strong><small>Черновик</small></div></li>
+            <li><span>4</span><div><strong>Утверждение</strong><small>Фиксация</small></div></li>
+            <li><span>5</span><div><strong>Выплата</strong><small>Завершение</small></div></li>
+          </ol>
+
+          <div class="context-banner context-banner--success">
+            <span class="context-banner__icon" data-icon="check-circle"></span>
+            <div><strong>Расчет готов к созданию</strong><p>Формула, план, смены и себестоимость заполнены. Критических проблем нет.</p></div>
+            <button type="button" data-toast="Откроется подробный readiness checklist">7 проверок пройдено</button>
+          </div>
+
+          <article class="panel payroll-shifts-panel">
+            <div class="panel__header panel__header--responsive">
+              <div><h2>Смены для расчета</h2><p>Фактически отработанные полные смены · 10:00–21:00</p></div>
+              <span class="status-badge status-badge--success">Все заполнено</span>
+            </div>
+            <div class="payroll-shifts-summary">
+              <div class="shift-summary-metric"><small>Всего смен</small><strong>32</strong><span>за июль</span></div>
+              <div class="shift-summary-metric"><small>Отработано</small><strong>352 ч</strong><span>по 11 часов</span></div>
+              <div class="shift-summary-metric"><small>Сотрудников</small><strong>5</strong><span>в расчете</span></div>
+              <div class="shift-summary-team">
+                <div class="shift-avatar-stack"><span class="employee-avatar employee-avatar--purple">АК</span><span class="employee-avatar employee-avatar--green">В</span><span class="employee-avatar employee-avatar--amber">А</span><span class="employee-avatar employee-avatar--blue">АД</span><span class="employee-avatar employee-avatar--gray">+1</span></div>
+                <span><strong>Состав подтвержден</strong><small>Нет дней с фондом без смены</small></span>
+              </div>
+            </div>
+            <details class="payroll-shifts-details">
+              <summary><span><span data-icon="calendar"></span>Неделя 20–26 июля</span><span>Показать по дням <i data-icon="chevron"></i></span></summary>
+              <div class="shift-week-strip">
+                <div><span>Пн</span><strong>20</strong><small>2 сотрудника</small></div>
+                <div class="is-today"><span>Вт</span><strong>21</strong><small>2 сотрудника</small></div>
+                <div><span>Ср</span><strong>22</strong><small>2 сотрудника</small></div>
+                <div><span>Чт</span><strong>23</strong><small>1 сотрудник</small></div>
+                <div><span>Пт</span><strong>24</strong><small>2 сотрудника</small></div>
+                <div><span>Сб</span><strong>25</strong><small>2 сотрудника</small></div>
+                <div><span>Вс</span><strong>26</strong><small>2 сотрудника</small></div>
+              </div>
+            </details>
+            <div class="payroll-shifts-footer">
+              <span><span data-icon="info"></span>Состав смен определяет распределение дневного зарплатного фонда.</span>
+              <button class="secondary-button secondary-button--small" type="button" data-toast="В production календарь смен откроется в модальном окне"><span data-icon="edit"></span>Изменить смены</button>
+            </div>
+          </article>
+
+          <div class="scenario-switcher">
+            <div><span>Сценарий предпросмотра</span><div class="segmented-control"><button class="is-active" type="button" data-scenario="completed">План выполнен</button><button type="button" data-scenario="missed">План не выполнен</button></div></div>
+            <span class="selected-scenario"><i></i>Текущая выручка соответствует сценарию «План выполнен»</span>
+          </div>
+
+          <div class="payroll-summary-grid">
+            <article class="metric-card"><div class="metric-card__head"><span>Начислено команде</span><span class="metric-icon metric-icon--blue" data-icon="wallet"></span></div><strong class="metric-card__value" id="payrollAccrued">684 720 ₽</strong><div class="metric-card__foot"><span>Дневной фонд</span><strong id="payrollPool">+118 420 ₽</strong></div></article>
+            <article class="metric-card"><div class="metric-card__head"><span>Авансы</span><span class="metric-icon metric-icon--amber" data-icon="minus-circle"></span></div><strong class="metric-card__value">250 000 ₽</strong><div class="metric-card__foot"><span>5 сотрудников</span><strong>50 000 ₽ каждому</strong></div></article>
+            <article class="metric-card"><div class="metric-card__head"><span>Удержания</span><span class="metric-icon metric-icon--red" data-icon="warning"></span></div><strong class="metric-card__value">12 500 ₽</strong><div class="metric-card__foot"><span>Активные</span><strong>2 удержания</strong></div></article>
+            <article class="metric-card metric-card--featured"><div class="metric-card__head"><span>К выплате</span><span class="info-trigger" title="Начислено минус авансы и удержания">i</span></div><strong class="metric-card__value" id="payrollPayable">422 220 ₽</strong><div class="metric-card__meta"><span class="delta delta--positive">Предпросмотр</span><span>без записи в БД</span></div></article>
+          </div>
+
+          <article class="panel payroll-table-panel">
+            <div class="panel__header panel__header--responsive"><div><h2>Ведомость сотрудников</h2><p>Состав выплаты по выбранному сценарию</p></div><button class="secondary-button secondary-button--small" type="button" data-toast="Откроется форма добавления удержания"><span data-icon="plus"></span>Добавить удержание</button></div>
+            <div class="table-scroll">
+              <table class="data-table payroll-table">
+                <thead><tr><th>Сотрудник</th><th>Смены</th><th>Начислено</th><th>Аванс</th><th>Удержания</th><th>К выплате</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td data-label="Сотрудник"><div class="employee-cell"><span class="employee-avatar employee-avatar--purple">АК</span><span><strong>Алексей К.</strong><small>77 часов</small></span></div></td><td data-label="Смены">7</td><td data-label="Начислено">164 800 ₽</td><td data-label="Аванс">−50 000 ₽</td><td data-label="Удержания">—</td><td data-label="К выплате"><strong>114 800 ₽</strong></td><td><button class="row-action" type="button" data-toast="Откроется дневная расшифровка Алексея К."><span data-icon="arrow"></span></button></td></tr>
+                  <tr><td data-label="Сотрудник"><div class="employee-cell"><span class="employee-avatar employee-avatar--green">В</span><span><strong>Валерия</strong><small>88 часов</small></span></div></td><td data-label="Смены">8</td><td data-label="Начислено">177 240 ₽</td><td data-label="Аванс">−50 000 ₽</td><td data-label="Удержания"><span class="negative-value">−3 500 ₽</span></td><td data-label="К выплате"><strong>123 740 ₽</strong></td><td><button class="row-action" type="button" data-toast="Откроется дневная расшифровка Валерии"><span data-icon="arrow"></span></button></td></tr>
+                  <tr><td data-label="Сотрудник"><div class="employee-cell"><span class="employee-avatar employee-avatar--amber">А</span><span><strong>Ангелина</strong><small>66 часов</small></span></div></td><td data-label="Смены">6</td><td data-label="Начислено">128 480 ₽</td><td data-label="Аванс">−50 000 ₽</td><td data-label="Удержания">—</td><td data-label="К выплате"><strong>78 480 ₽</strong></td><td><button class="row-action" type="button" data-toast="Откроется дневная расшифровка Ангелины"><span data-icon="arrow"></span></button></td></tr>
+                  <tr><td data-label="Сотрудник"><div class="employee-cell"><span class="employee-avatar employee-avatar--blue">АД</span><span><strong>Алексей Д.</strong><small>77 часов</small></span></div></td><td data-label="Смены">7</td><td data-label="Начислено">142 200 ₽</td><td data-label="Аванс">−50 000 ₽</td><td data-label="Удержания"><span class="negative-value">−9 000 ₽</span></td><td data-label="К выплате"><strong>83 200 ₽</strong></td><td><button class="row-action" type="button" data-toast="Откроется дневная расшифровка Алексея Д."><span data-icon="arrow"></span></button></td></tr>
+                  <tr><td data-label="Сотрудник"><div class="employee-cell"><span class="employee-avatar employee-avatar--gray">ВЛ</span><span><strong>Владимир</strong><small>44 часа</small></span></div></td><td data-label="Смены">4</td><td data-label="Начислено">72 000 ₽</td><td data-label="Аванс">−50 000 ₽</td><td data-label="Удержания">—</td><td data-label="К выплате"><strong>22 000 ₽</strong></td><td><button class="row-action" type="button" data-toast="Откроется дневная расшифровка Владимира"><span data-icon="arrow"></span></button></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <div class="payroll-action-bar"><div><span class="payroll-action-bar__icon" data-icon="info"></span><span><strong>Предпросмотр ничего не сохраняет</strong><small>После создания расчета появится ревизия №1 с полным аудитом.</small></span></div><button class="primary-button primary-button--large" id="calculatePayroll" type="button">Создать расчет <span data-icon="arrow"></span></button></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <nav class="mobile-navigation" aria-label="Мобильная навигация">
+    <button class="is-active" type="button" data-view="overview"><span data-icon="grid"></span><small>Обзор</small></button>
+    <button type="button" data-view="employees"><span data-icon="users"></span><small>Команда</small></button>
+    <button type="button" data-view="schedule"><span data-icon="calendar"></span><small>План</small></button>
+    <button type="button" data-view="payroll"><span data-icon="wallet"></span><small>Зарплата</small><i></i></button>
+  </nav>
+
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+  <aside class="employee-drawer" id="employeeDrawer" aria-hidden="true" aria-labelledby="employeeDrawerTitle">
+    <div class="employee-drawer__header"><div><span class="eyebrow">Карточка сотрудника</span><h2 id="employeeDrawerTitle">Алексей К.</h2></div><button class="icon-button icon-button--bordered" id="closeEmployeeDrawer" type="button" aria-label="Закрыть"><span data-icon="close"></span></button></div>
+    <div class="drawer-person"><span class="employee-avatar employee-avatar--purple">АК</span><div><strong id="drawerEmployeeName">Алексей К.</strong><span>Активен · участвует в рейтинге</span></div><span class="rank-badge rank-badge--gold">1</span></div>
+    <div class="drawer-score"><div><small>Общий балл</small><strong>124,8</strong><span class="delta delta--positive">↗ 8,3</span></div><div><small>Чистая выручка</small><strong>1 264 800 ₽</strong><span>29,5% магазина</span></div></div>
+    <div class="drawer-section"><div class="drawer-section__head"><h3>Направления</h3><span>Покрытие 100%</span></div><div class="dimension-list"><div><span><i class="dimension-dot dimension-dot--violet"></i>Коммерческий вклад</span><strong>135</strong><div class="linear-progress"><i style="--progress:90%"></i></div></div><div><span><i class="dimension-dot dimension-dot--blue"></i>Эффективность времени</span><strong>120</strong><div class="linear-progress"><i style="--progress:80%"></i></div></div><div><span><i class="dimension-dot dimension-dot--amber"></i>Структура продаж</span><strong>116</strong><div class="linear-progress"><i style="--progress:77%"></i></div></div><div><span><i class="dimension-dot dimension-dot--green"></i>Attach-rate</span><strong>128</strong><div class="linear-progress"><i style="--progress:86%"></i></div></div></div></div>
+    <div class="drawer-section"><div class="drawer-section__head"><h3>Фактические показатели</h3></div><dl class="facts-grid"><div><dt>Смены</dt><dd>7</dd></div><div><dt>Выручка / смену</dt><dd>180 686 ₽</dd></div><div><dt>Доп. выручка</dt><dd>148 300 ₽</dd></div><div><dt>Доля допродаж</dt><dd>11,7%</dd></div></dl></div>
+    <button class="primary-button drawer-primary-action" type="button" data-toast="В production откроется отдельная полная страница сотрудника">Открыть полную карточку <span data-icon="arrow"></span></button>
+  </aside>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"><span data-icon="check-circle"></span><span id="toastText">Готово</span></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
