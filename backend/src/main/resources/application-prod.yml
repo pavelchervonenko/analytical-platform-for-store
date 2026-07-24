@@ -13,3 +13,9 @@ logging:
 spring:
   jpa:
     show-sql: false
+
+app:
+  security:
+    secure-cookies: true
+  livesklad:
+    require-https: true

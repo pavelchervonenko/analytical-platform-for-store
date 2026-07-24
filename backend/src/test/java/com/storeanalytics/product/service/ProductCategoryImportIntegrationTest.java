@@ -3,10 +3,16 @@ package com.storeanalytics.product.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.storeanalytics.auth.model.AppUser;
+import com.storeanalytics.auth.model.UserRole;
+import com.storeanalytics.auth.repository.AppUserRepository;
+import com.storeanalytics.common.exception.InvalidRequestException;
+import com.storeanalytics.product.exception.ProductClassificationConflictException;
 import com.storeanalytics.product.model.ProductConditionType;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +41,11 @@ class ProductCategoryImportIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private AppUserRepository userRepository;
+
+    private AppUser actor;
+
     @DynamicPropertySource
     static void configurePostgres(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
@@ -46,6 +57,12 @@ class ProductCategoryImportIntegrationTest {
     void cleanDatabase() {
         jdbcTemplate.update("DELETE FROM product_category_assignments");
         jdbcTemplate.update("DELETE FROM products");
+        actor = userRepository.saveAndFlush(new AppUser(
+                "category-import-" + UUID.randomUUID() + "@example.invalid",
+                "{noop}test-password-hash",
+                "Category Import Admin",
+                UserRole.ADMIN
+        ));
     }
 
     @Test
@@ -55,8 +72,8 @@ class ProductCategoryImportIntegrationTest {
                 entry("5035", "Setup", "SETUP_SERVICE", ProductConditionType.NOT_APPLICABLE)
         ));
 
-        ProductCategoryImportResult first = importService.importAssignments(command);
-        ProductCategoryImportResult second = importService.importAssignments(command);
+        ProductCategoryImportResult first = importAssignments(command);
+        ProductCategoryImportResult second = importAssignments(command);
 
         assertThat(first).isEqualTo(new ProductCategoryImportResult(2, 2, 2, 0));
         assertThat(second).isEqualTo(new ProductCategoryImportResult(2, 0, 0, 2));
@@ -88,7 +105,7 @@ class ProductCategoryImportIntegrationTest {
 
     @Test
     void rejectsConflictingHistoryAndRollsBackEntireBatch() {
-        importService.importAssignments(command(List.of(
+        importAssignments(command(List.of(
                 entry("4310", "Cable", "CHARGER_CABLE", ProductConditionType.NOT_APPLICABLE)
         )));
         ProductCategoryImportCommand conflict = command(List.of(
@@ -98,8 +115,8 @@ class ProductCategoryImportIntegrationTest {
                         ProductConditionType.NOT_APPLICABLE)
         ));
 
-        assertThatThrownBy(() -> importService.importAssignments(conflict))
-                .isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> importAssignments(conflict))
+                .isInstanceOf(ProductClassificationConflictException.class)
                 .hasMessageContaining("conflicting category history");
 
         assertThat(count("products")).isOne();
@@ -112,19 +129,25 @@ class ProductCategoryImportIntegrationTest {
 
     @Test
     void rejectsUnknownAndUnmappedCategoriesBeforeWriting() {
-        assertThatThrownBy(() -> importService.importAssignments(command(List.of(
+        assertThatThrownBy(() -> importAssignments(command(List.of(
                 entry("unknown-category", "Unknown", "DOES_NOT_EXIST",
                         ProductConditionType.UNKNOWN)
-        )))).isInstanceOf(IllegalArgumentException.class)
+        )))).isInstanceOf(InvalidRequestException.class)
                 .hasMessageContaining("Unknown or inactive analytics categories");
 
-        assertThatThrownBy(() -> importService.importAssignments(command(List.of(
+        assertThatThrownBy(() -> importAssignments(command(List.of(
                 entry("unmapped", "Unmapped", "UNMAPPED", ProductConditionType.UNKNOWN)
-        )))).isInstanceOf(IllegalArgumentException.class)
+        )))).isInstanceOf(InvalidRequestException.class)
                 .hasMessageContaining("absence of a category assignment");
 
         assertThat(count("products")).isZero();
         assertThat(count("product_category_assignments")).isZero();
+    }
+
+    private ProductCategoryImportResult importAssignments(
+            ProductCategoryImportCommand command
+    ) {
+        return importService.importAssignments(command, actor.getId());
     }
 
     private ProductCategoryImportCommand command(List<ProductCategoryImportEntry> entries) {

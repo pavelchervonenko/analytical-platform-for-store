@@ -1,13 +1,15 @@
 package com.storeanalytics.sync.exception;
 
+import com.storeanalytics.common.exception.BusinessErrorCode;
+import com.storeanalytics.common.exception.BusinessException;
 import java.util.UUID;
 
-public class EmployeeSyncException extends RuntimeException {
+public class EmployeeSyncException extends BusinessException {
 
     private final UUID syncRunId;
 
     public EmployeeSyncException(UUID syncRunId, Throwable cause) {
-        super("Employee synchronization failed", cause);
+        super(BusinessErrorCode.EMPLOYEE_SYNC_FAILED, "Employee synchronization failed", cause);
         this.syncRunId = syncRunId;
     }
 

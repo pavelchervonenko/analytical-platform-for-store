@@ -59,5 +59,7 @@ public interface SyncJobRepository extends JpaRepository<SyncJob, UUID> {
             Instant periodEnd
     );
 
+    long countByStatus(SyncJobStatus status);
+
     List<SyncJob> findAllByOrderByCreatedAtDesc(Pageable pageable);
 }

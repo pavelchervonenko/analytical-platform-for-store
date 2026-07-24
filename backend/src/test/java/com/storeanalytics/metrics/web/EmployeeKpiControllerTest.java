@@ -37,8 +37,7 @@ class EmployeeKpiControllerTest {
                 .standaloneSetup(new EmployeeKpiController(employeeKpiService))
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
                 .setControllerAdvice(
-                        new ApiExceptionHandler(),
-                        new MetricsApiExceptionHandler()
+                        new ApiExceptionHandler()
                 )
                 .build();
     }

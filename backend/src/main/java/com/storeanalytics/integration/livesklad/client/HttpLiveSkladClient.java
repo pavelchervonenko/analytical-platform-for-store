@@ -40,6 +40,8 @@ import org.springframework.web.client.RestClientResponseException;
 public class HttpLiveSkladClient implements LiveSkladClient {
 
     private static final Duration TOKEN_REFRESH_SKEW = Duration.ofSeconds(30);
+    private static final Duration MAX_TOKEN_CACHE_TTL = Duration.ofDays(1);
+    private static final int MAX_ACCESS_TOKEN_LENGTH = 4096;
     private static final int EMPLOYEE_PAGE_SIZE = 50;
     private static final int MAX_EMPLOYEE_PAGES = 100;
     private static final int SALES_PAGE_SIZE = 50;
@@ -757,11 +759,13 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                     .body(form)
                     .retrieve()
                     .body(AuthResponse.class);
-            if (response == null || !StringUtils.hasText(response.token()) || response.ttl() <= 0) {
+            if (isInvalidTokenResponse(response)) {
                 throw new LiveSkladException("LiveSklad authentication response is invalid");
             }
             requestBudget.observe(response.remainRequest(), response.expireDate());
-            Duration ttl = Duration.ofSeconds(response.ttl());
+            Duration ttl = Duration.ofSeconds(
+                    Math.min(response.ttl(), MAX_TOKEN_CACHE_TTL.toSeconds())
+            );
             Duration effectiveSkew = ttl.compareTo(TOKEN_REFRESH_SKEW) > 0
                     ? TOKEN_REFRESH_SKEW : ttl.dividedBy(2);
             return new CachedToken(response.token(), Instant.now().plus(ttl).minus(effectiveSkew));
@@ -770,6 +774,15 @@ public class HttpLiveSkladClient implements LiveSkladClient {
         } catch (RestClientException exception) {
             throw new LiveSkladException("LiveSklad authentication failed", exception);
         }
+    }
+
+    private boolean isInvalidTokenResponse(AuthResponse response) {
+        return response == null
+                || !StringUtils.hasText(response.token())
+                || response.token().length() > MAX_ACCESS_TOKEN_LENGTH
+                || response.token().indexOf('\r') >= 0
+                || response.token().indexOf('\n') >= 0
+                || response.ttl() <= 0;
     }
 
     private void requireCredentials() {

@@ -1,8 +1,11 @@
 package com.storeanalytics.auth.exception;
 
-public class InvalidCurrentPasswordException extends RuntimeException {
+import com.storeanalytics.common.exception.BusinessErrorCode;
+import com.storeanalytics.common.exception.BusinessException;
+
+public class InvalidCurrentPasswordException extends BusinessException {
 
     public InvalidCurrentPasswordException() {
-        super("Current password is invalid");
+        super(BusinessErrorCode.INVALID_CURRENT_PASSWORD, "Current password is invalid");
     }
 }

@@ -7,6 +7,7 @@ public record ApiError(
         int status,
         String code,
         String message,
-        String path
+        String path,
+        String correlationId
 ) {
 }

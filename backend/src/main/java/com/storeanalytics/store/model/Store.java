@@ -17,6 +17,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Objects;
 import java.util.UUID;
@@ -67,6 +68,10 @@ public class Store {
 
     @Column(name = "is_active", nullable = false)
     private boolean active;
+
+    @Generated(event = EventType.INSERT)
+    @Column(name = "reporting_started_on", nullable = false, insertable = false, updatable = false)
+    private LocalDate reportingStartedOn;
 
     @Version
     @Column(nullable = false)
@@ -167,8 +172,24 @@ public class Store {
         return timezone;
     }
 
+    public LocalTime getBusinessDayStart() {
+        return businessDayStart;
+    }
+
+    public LocalTime getOpensAt() {
+        return opensAt;
+    }
+
+    public LocalTime getClosesAt() {
+        return closesAt;
+    }
+
     public boolean isActive() {
         return active;
+    }
+
+    public LocalDate getReportingStartedOn() {
+        return reportingStartedOn;
     }
 
     public boolean isConnectedTo(IntegrationConnection candidate) {

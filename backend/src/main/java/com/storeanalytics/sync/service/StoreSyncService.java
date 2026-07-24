@@ -8,6 +8,7 @@ import com.storeanalytics.sync.exception.StoreSyncException;
 import com.storeanalytics.sync.model.SourceSystem;
 import com.storeanalytics.sync.model.SyncRun;
 import com.storeanalytics.sync.model.SyncRunError;
+import com.storeanalytics.sync.model.SyncScope;
 import com.storeanalytics.sync.repository.SyncRunErrorRepository;
 import com.storeanalytics.sync.repository.SyncRunRepository;
 import java.time.Clock;
@@ -26,21 +27,21 @@ public class StoreSyncService {
     private final SyncRunRepository syncRunRepository;
     private final SyncRunErrorRepository errorRepository;
     private final Clock clock;
+    private final SyncMetrics syncMetrics;
 
     public StoreSyncService(
             LiveSkladClient liveSkladClient,
             IntegrationConnectionRepository connectionRepository,
             StoreSyncPersistence persistence,
-            SyncRunRepository syncRunRepository,
-            SyncRunErrorRepository errorRepository,
-            Clock clock
+            SyncRunLifecycle lifecycle
     ) {
         this.liveSkladClient = liveSkladClient;
         this.connectionRepository = connectionRepository;
         this.persistence = persistence;
-        this.syncRunRepository = syncRunRepository;
-        this.errorRepository = errorRepository;
-        this.clock = clock;
+        this.syncRunRepository = lifecycle.runs();
+        this.errorRepository = lifecycle.errors();
+        this.clock = lifecycle.clock();
+        this.syncMetrics = lifecycle.metrics();
     }
 
     public StoreSyncResult synchronize() {
@@ -48,6 +49,14 @@ public class StoreSyncService {
     }
 
     public StoreSyncResult synchronize(SyncExecutionContext context) {
+        return syncMetrics.record(
+                SyncScope.STORES,
+                context.triggerType(),
+                () -> synchronizeInternal(context)
+        );
+    }
+
+    private StoreSyncResult synchronizeInternal(SyncExecutionContext context) {
         IntegrationConnection connection = connectionRepository
                 .findByConnectionKeyAndActiveTrue(LIVESKLAD_CONNECTION_KEY)
                 .filter(candidate -> candidate.getSourceSystem() == SourceSystem.LIVESKLAD)

@@ -5,7 +5,9 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -23,13 +25,20 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SPRING_CONFIG_IMPORT: configtree:/run/secrets/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       LIVESKLAD_BASE_URL: ${LIVESKLAD_BASE_URL}
-      LIVESKLAD_API_TOKEN: ${LIVESKLAD_API_TOKEN}
+      LIVESKLAD_ALLOWED_HOSTS: ${LIVESKLAD_ALLOWED_HOSTS}
       SESSION_COOKIE_SECURE: "true"
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+    secrets:
+      - source: postgres_password
+        target: spring.datasource.password
+      - source: livesklad_login
+        target: app.livesklad.login
+      - source: livesklad_password
+        target: app.livesklad.password
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,3 +53,11 @@ networks:
 
 volumes:
   postgres_data:
+
+secrets:
+  postgres_password:
+    file: ${POSTGRES_PASSWORD_FILE}
+  livesklad_login:
+    file: ${LIVESKLAD_LOGIN_FILE}
+  livesklad_password:
+    file: ${LIVESKLAD_PASSWORD_FILE}

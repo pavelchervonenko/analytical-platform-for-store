@@ -14,6 +14,7 @@ import com.storeanalytics.sync.model.SourceSystem;
 import com.storeanalytics.sync.model.SyncPeriod;
 import com.storeanalytics.sync.model.SyncRun;
 import com.storeanalytics.sync.model.SyncRunError;
+import com.storeanalytics.sync.model.SyncScope;
 import com.storeanalytics.sync.repository.SyncRunErrorRepository;
 import com.storeanalytics.sync.repository.SyncRunRepository;
 import java.time.Clock;
@@ -37,23 +38,23 @@ public class SalesSyncService {
     private final SyncRunRepository syncRunRepository;
     private final SyncRunErrorRepository errorRepository;
     private final Clock clock;
+    private final SyncMetrics syncMetrics;
 
     public SalesSyncService(
             LiveSkladClient liveSkladClient,
             IntegrationConnectionRepository connectionRepository,
             StoreRepository storeRepository,
             SalesSyncPersistence persistence,
-            SyncRunRepository syncRunRepository,
-            SyncRunErrorRepository errorRepository,
-            Clock clock
+            SyncRunLifecycle lifecycle
     ) {
         this.liveSkladClient = liveSkladClient;
         this.connectionRepository = connectionRepository;
         this.storeRepository = storeRepository;
         this.persistence = persistence;
-        this.syncRunRepository = syncRunRepository;
-        this.errorRepository = errorRepository;
-        this.clock = clock;
+        this.syncRunRepository = lifecycle.runs();
+        this.errorRepository = lifecycle.errors();
+        this.clock = lifecycle.clock();
+        this.syncMetrics = lifecycle.metrics();
     }
 
     public SalesSyncResult synchronize(SalesSyncPeriod period) {
@@ -61,6 +62,17 @@ public class SalesSyncService {
     }
 
     public SalesSyncResult synchronize(
+            SalesSyncPeriod period,
+            SyncExecutionContext context
+    ) {
+        return syncMetrics.record(
+                SyncScope.SALES,
+                context.triggerType(),
+                () -> synchronizeInternal(period, context)
+        );
+    }
+
+    private SalesSyncResult synchronizeInternal(
             SalesSyncPeriod period,
             SyncExecutionContext context
     ) {

@@ -22,6 +22,7 @@ import com.storeanalytics.integration.livesklad.dto.LiveSkladSalePositionPayload
 import com.storeanalytics.integration.livesklad.exception.LiveSkladException;
 import com.storeanalytics.metrics.model.ReportPeriodType;
 import com.storeanalytics.metrics.model.ReportStatus;
+import com.storeanalytics.metrics.model.ReportType;
 import com.storeanalytics.product.model.AnalyticsCategoryKind;
 import com.storeanalytics.product.model.AttachDenominatorCode;
 import com.storeanalytics.product.model.CategoryAssignmentSource;
@@ -183,9 +184,9 @@ class StoreSyncIntegrationTest {
                 Integer.class
         );
 
-        assertThat(tableCount).isEqualTo(23);
-        assertThat(entityManagerFactory.getMetamodel().getEntities()).hasSize(23);
-        assertThat(applicationContext.getBeanNamesForType(JpaRepository.class)).hasSize(23);
+        assertThat(tableCount).isEqualTo(37);
+        assertThat(entityManagerFactory.getMetamodel().getEntities()).hasSize(36);
+        assertThat(applicationContext.getBeanNamesForType(JpaRepository.class)).hasSize(36);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM integration_connections WHERE connection_key = 'livesklad-default'",
                 Integer.class
@@ -198,7 +199,7 @@ class StoreSyncIntegrationTest {
                   AND NOT tgisinternal
                 """,
                 Integer.class
-        )).isEqualTo(14);
+        )).isEqualTo(19);
     }
 
     @Test
@@ -209,7 +210,7 @@ class StoreSyncIntegrationTest {
                 SELECT table_name, column_name
                 FROM information_schema.columns
                 WHERE table_schema = 'public'
-                  AND table_name <> 'flyway_schema_history'
+                  AND table_name NOT IN ('flyway_schema_history', 'auth_login_throttles')
                 ORDER BY table_name, ordinal_position
                 """,
                 resultSet -> {
@@ -1356,6 +1357,7 @@ class StoreSyncIntegrationTest {
                 enumColumn("sales_document_items", "cost_quality", CostQuality.class),
                 enumColumn("sales_payments", "payment_method", PaymentMethod.class),
                 enumColumn("report_snapshots", "period_type", ReportPeriodType.class),
+                enumColumn("report_snapshots", "report_type", ReportType.class),
                 enumColumn("report_snapshots", "status", ReportStatus.class),
                 enumColumn("data_quality_issues", "severity", DataQualitySeverity.class),
                 enumColumn("data_quality_issues", "status", DataQualityStatus.class)
@@ -1381,11 +1383,11 @@ class StoreSyncIntegrationTest {
                 FROM pg_constraint constraint_row
                 WHERE constraint_row.contype = 'c'
                   AND constraint_row.conrelid = CAST(? AS regclass)
-                  AND pg_get_constraintdef(constraint_row.oid) LIKE ?
+                  AND constraint_row.conname = ?
                 """,
                 String.class,
                 column.table(),
-                "%" + column.column() + "%"
+                column.table() + "_" + column.column() + "_check"
         );
         Pattern quotedValue = Pattern.compile("'([^']+)'");
         Set<String> values = new TreeSet<>();

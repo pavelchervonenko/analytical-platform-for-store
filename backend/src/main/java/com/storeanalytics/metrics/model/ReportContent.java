@@ -8,7 +8,7 @@ import com.storeanalytics.auth.model.AppUser;
 import java.time.Instant;
 
 public record ReportContent(
-        String inputHash,
+        ReportIntegrity integrity,
         String payload,
         Instant generatedAt,
         AppUser generatedBy,
@@ -17,15 +17,15 @@ public record ReportContent(
 ) {
 
     public ReportContent {
-        require(inputHash == null || inputHash.length() == 64,
-                "inputHash must contain 64 characters");
+        integrity = requireNonNull(integrity, "integrity");
         payload = requireJson(payload, "payload");
         generatedAt = requireNonNull(generatedAt, "generatedAt");
     }
 
     public void validateStatus(ReportStatus status) {
-        require((status != ReportStatus.APPROVED && status != ReportStatus.ARCHIVED)
+        require((status != ReportStatus.APPROVED && status != ReportStatus.ARCHIVED
+                        && status != ReportStatus.FINALIZED)
                         || approvedAt != null,
-                "approvedAt is required for approved or archived reports");
+                "approvedAt is required for finalized reports");
     }
 }

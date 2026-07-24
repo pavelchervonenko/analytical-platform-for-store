@@ -16,6 +16,7 @@ import com.storeanalytics.sync.model.SourceSystem;
 import com.storeanalytics.sync.model.SyncPeriod;
 import com.storeanalytics.sync.model.SyncRun;
 import com.storeanalytics.sync.model.SyncRunError;
+import com.storeanalytics.sync.model.SyncScope;
 import com.storeanalytics.sync.model.SyncStatus;
 import com.storeanalytics.sync.repository.SyncRunErrorRepository;
 import com.storeanalytics.sync.repository.SyncRunRepository;
@@ -45,23 +46,23 @@ public class ReturnSyncService {
     private final SyncRunRepository syncRunRepository;
     private final SyncRunErrorRepository errorRepository;
     private final Clock clock;
+    private final SyncMetrics syncMetrics;
 
     public ReturnSyncService(
             LiveSkladClient liveSkladClient,
             IntegrationConnectionRepository connectionRepository,
             StoreRepository storeRepository,
             ReturnSyncPersistence persistence,
-            SyncRunRepository syncRunRepository,
-            SyncRunErrorRepository errorRepository,
-            Clock clock
+            SyncRunLifecycle lifecycle
     ) {
         this.liveSkladClient = liveSkladClient;
         this.connectionRepository = connectionRepository;
         this.storeRepository = storeRepository;
         this.persistence = persistence;
-        this.syncRunRepository = syncRunRepository;
-        this.errorRepository = errorRepository;
-        this.clock = clock;
+        this.syncRunRepository = lifecycle.runs();
+        this.errorRepository = lifecycle.errors();
+        this.clock = lifecycle.clock();
+        this.syncMetrics = lifecycle.metrics();
     }
 
     public ReturnSyncResult synchronize(ReturnSyncPeriod period) {
@@ -69,6 +70,17 @@ public class ReturnSyncService {
     }
 
     public ReturnSyncResult synchronize(
+            ReturnSyncPeriod period,
+            SyncExecutionContext context
+    ) {
+        return syncMetrics.record(
+                SyncScope.RETURNS,
+                context.triggerType(),
+                () -> synchronizeInternal(period, context)
+        );
+    }
+
+    private ReturnSyncResult synchronizeInternal(
             ReturnSyncPeriod period,
             SyncExecutionContext context
     ) {

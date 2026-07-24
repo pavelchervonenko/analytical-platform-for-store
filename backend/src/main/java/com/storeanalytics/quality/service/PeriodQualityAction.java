@@ -1,0 +1,16 @@
+package com.storeanalytics.quality.service;
+
+public enum PeriodQualityAction {
+    NONE,
+    WAIT_FOR_SYNC,
+    RUN_SYNC,
+    SET_STORE_PLAN,
+    UPDATE_WORK_SCHEDULE,
+    REVIEW_EMPLOYEE_ELIGIBILITY,
+    CLASSIFY_PRODUCTS,
+    PROVIDE_COST_DATA,
+    CALCULATE_PAYROLL,
+    RECALCULATE_PAYROLL,
+    FINALIZE_RATING,
+    REVIEW_DATA_ISSUES
+}

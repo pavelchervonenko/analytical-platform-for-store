@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.storeanalytics.common.exception.InvalidRequestException;
 import com.storeanalytics.metrics.exception.StoreNotFoundException;
 import com.storeanalytics.metrics.repository.StoreKpiAggregate;
 import com.storeanalytics.metrics.repository.StoreKpiRepository;
@@ -107,7 +108,27 @@ class StoreKpiServiceTest {
     @Test
     void rejectsReversedPeriod() {
         assertThatThrownBy(() -> new StoreKpiPeriod(PERIOD_END, PERIOD_START))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
+    void acceptsMaximumInclusiveAnalyticsPeriod() {
+        StoreKpiPeriod period = new StoreKpiPeriod(
+                LocalDate.of(2024, 1, 1),
+                LocalDate.of(2024, 12, 31)
+        );
+
+        assertThat(period.end()).isEqualTo(LocalDate.of(2024, 12, 31));
+    }
+
+    @Test
+    void rejectsAnalyticsPeriodLongerThan366InclusiveDays() {
+        assertThatThrownBy(() -> new StoreKpiPeriod(
+                LocalDate.of(2024, 1, 1),
+                LocalDate.of(2025, 1, 1)
+        ))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage("analytics period must not exceed 366 inclusive days");
     }
 
     private StoreKpiPeriod period() {

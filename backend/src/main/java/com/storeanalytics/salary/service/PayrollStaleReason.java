@@ -1,0 +1,10 @@
+package com.storeanalytics.salary.service;
+
+public enum PayrollStaleReason {
+    SALES_DATA_CHANGED,
+    WORK_SHIFTS_CHANGED,
+    STORE_PLAN_CHANGED,
+    PRODUCT_CLASSIFICATION_CHANGED,
+    PAYROLL_SCHEME_CHANGED,
+    SOURCE_FINGERPRINT_MISSING
+}

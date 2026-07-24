@@ -10,6 +10,7 @@ import com.storeanalytics.sync.exception.EmployeeSyncException;
 import com.storeanalytics.sync.model.SourceSystem;
 import com.storeanalytics.sync.model.SyncRun;
 import com.storeanalytics.sync.model.SyncRunError;
+import com.storeanalytics.sync.model.SyncScope;
 import com.storeanalytics.sync.repository.SyncRunErrorRepository;
 import com.storeanalytics.sync.repository.SyncRunRepository;
 import java.time.Clock;
@@ -35,23 +36,23 @@ public class EmployeeSyncService {
     private final SyncRunRepository syncRunRepository;
     private final SyncRunErrorRepository errorRepository;
     private final Clock clock;
+    private final SyncMetrics syncMetrics;
 
     public EmployeeSyncService(
             LiveSkladClient liveSkladClient,
             IntegrationConnectionRepository connectionRepository,
             StoreRepository storeRepository,
             EmployeeSyncPersistence persistence,
-            SyncRunRepository syncRunRepository,
-            SyncRunErrorRepository errorRepository,
-            Clock clock
+            SyncRunLifecycle lifecycle
     ) {
         this.liveSkladClient = liveSkladClient;
         this.connectionRepository = connectionRepository;
         this.storeRepository = storeRepository;
         this.persistence = persistence;
-        this.syncRunRepository = syncRunRepository;
-        this.errorRepository = errorRepository;
-        this.clock = clock;
+        this.syncRunRepository = lifecycle.runs();
+        this.errorRepository = lifecycle.errors();
+        this.clock = lifecycle.clock();
+        this.syncMetrics = lifecycle.metrics();
     }
 
     public EmployeeSyncResult synchronize() {
@@ -59,6 +60,14 @@ public class EmployeeSyncService {
     }
 
     public EmployeeSyncResult synchronize(SyncExecutionContext context) {
+        return syncMetrics.record(
+                SyncScope.EMPLOYEES,
+                context.triggerType(),
+                () -> synchronizeInternal(context)
+        );
+    }
+
+    private EmployeeSyncResult synchronizeInternal(SyncExecutionContext context) {
         IntegrationConnection connection = activeLiveSkladConnection();
         List<Store> stores = storeRepository
                 .findAllByConnectionIdAndActiveTrueOrderByExternalId(connection.getId());

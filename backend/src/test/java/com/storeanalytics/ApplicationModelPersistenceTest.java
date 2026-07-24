@@ -9,13 +9,21 @@ import com.storeanalytics.auth.model.UserRole;
 import com.storeanalytics.auth.model.UserStoreAccess;
 import com.storeanalytics.employee.model.Employee;
 import com.storeanalytics.employee.model.EmployeeStoreAssignment;
+import com.storeanalytics.metrics.model.AnnualReportMonth;
 import com.storeanalytics.employee.model.EmployeeStoreAssignmentId;
 import com.storeanalytics.integration.connection.model.IntegrationConnection;
 import com.storeanalytics.metrics.model.ReportContent;
 import com.storeanalytics.metrics.model.ReportDefinition;
+import com.storeanalytics.metrics.model.ReportIntegrity;
+import com.storeanalytics.metrics.model.ReportRevision;
+import com.storeanalytics.metrics.model.ReportType;
 import com.storeanalytics.metrics.model.ReportPeriodType;
 import com.storeanalytics.metrics.model.ReportSnapshot;
 import com.storeanalytics.metrics.model.ReportStatus;
+import com.storeanalytics.performance.model.EmployeeWorkShift;
+import com.storeanalytics.performance.model.EmployeeRatingSnapshot;
+import com.storeanalytics.performance.model.StorePerformancePlan;
+import com.storeanalytics.performance.model.StorePlanTargets;
 import com.storeanalytics.product.model.AnalyticsCategory;
 import com.storeanalytics.product.model.AnalyticsCategoryKind;
 import com.storeanalytics.product.model.AnalyticsCategoryRules;
@@ -45,6 +53,25 @@ import com.storeanalytics.sales.model.SalesItemAmounts;
 import com.storeanalytics.sales.model.SalesItemClassification;
 import com.storeanalytics.sales.model.SalesItemIdentity;
 import com.storeanalytics.sales.model.SalesPayment;
+import com.storeanalytics.salary.model.PayrollAdjustment;
+import com.storeanalytics.salary.model.PayrollAdjustmentType;
+import com.storeanalytics.salary.model.PayrollCategoryCode;
+import com.storeanalytics.salary.model.PayrollDailyAllocation;
+import com.storeanalytics.salary.model.PayrollDailyPool;
+import com.storeanalytics.salary.model.PayrollDailyPoolAmounts;
+import com.storeanalytics.salary.model.PayrollDailyPoolInput;
+import com.storeanalytics.salary.model.PayrollEvent;
+import com.storeanalytics.salary.model.PayrollEventType;
+import com.storeanalytics.salary.model.PayrollPlanResult;
+import com.storeanalytics.salary.model.PayrollRun;
+import com.storeanalytics.salary.model.PayrollRunDefinition;
+import com.storeanalytics.salary.model.PayrollRunQuality;
+import com.storeanalytics.salary.model.PayrollScheme;
+import com.storeanalytics.salary.model.PayrollSchemeDefinition;
+import com.storeanalytics.salary.model.PayrollSourceFingerprint;
+import com.storeanalytics.salary.model.PayrollStatement;
+import com.storeanalytics.salary.model.PayrollStatementAmounts;
+import com.storeanalytics.salary.model.ProductPayrollCategoryAssignment;
 import com.storeanalytics.store.model.CashRegister;
 import com.storeanalytics.store.model.Store;
 import com.storeanalytics.sync.model.RawRecordVersion;
@@ -109,6 +136,7 @@ class ApplicationModelPersistenceTest {
 
         persistRelationships(graph, now, businessDate);
         persistFactsAndOperations(graph, now, businessDate);
+        persistPayroll(graph, businessDate);
         updateMutableEntities(graph, now);
         graph.syncRun.complete(1, 1, 0, 0, now.plusSeconds(1));
         entityManager.flush();
@@ -301,6 +329,29 @@ class ApplicationModelPersistenceTest {
                 new UserStoreAccess(graph.user, graph.store, graph.user);
         graph.employeeStoreAssignment =
                 new EmployeeStoreAssignment(graph.employee, graph.store, true);
+        StorePerformancePlan performancePlan = new StorePerformancePlan(
+                graph.store,
+                businessDate.withDayOfMonth(1),
+                new StorePlanTargets(
+                        new BigDecimal("1000000.00"),
+                        new BigDecimal("4.00"),
+                        new BigDecimal("3.00"),
+                        new BigDecimal("7.00")
+                ),
+                graph.user
+        );
+        EmployeeWorkShift workShift = new EmployeeWorkShift(
+                graph.store, graph.employee, businessDate, graph.user
+        );
+        EmployeeRatingSnapshot ratingSnapshot = new EmployeeRatingSnapshot(
+                graph.store,
+                businessDate,
+                businessDate,
+                "model-rating-v1",
+                "{}",
+                "a".repeat(64),
+                graph.user
+        );
         graph.rawRecord = RawRecordVersion.pendingStore(
                 "store-model-test",
                 "{\"id\":\"store-model-test\"}",
@@ -337,6 +388,9 @@ class ApplicationModelPersistenceTest {
 
         entityManager.persist(graph.userStoreAccess);
         entityManager.persist(graph.employeeStoreAssignment);
+        entityManager.persist(performancePlan);
+        entityManager.persist(workShift);
+        entityManager.persist(ratingSnapshot);
         entityManager.persist(graph.rawRecord);
         entityManager.persist(graph.categoryAssignment);
         entityManager.persist(graph.inventory);
@@ -414,15 +468,23 @@ class ApplicationModelPersistenceTest {
         ReportSnapshot report = new ReportSnapshot(
                 graph.store,
                 new ReportDefinition(
-                        "MODEL_REPORT",
-                        ReportPeriodType.DAY,
-                        businessDate,
-                        businessDate,
-                        ReportStatus.DRAFT,
+                        ReportType.ANNUAL,
+                        ReportPeriodType.YEAR,
+                        businessDate.withDayOfYear(1),
+                        businessDate.withMonth(12).withDayOfMonth(31),
+                        ReportStatus.FINALIZED,
                         "formula-v1",
                         "model-v1"
                 ),
-                new ReportContent(null, "{}", now, graph.user, null, null)
+                new ReportContent(
+                        new ReportIntegrity("1".repeat(64), "0".repeat(64)),
+                        "{}",
+                        now,
+                        graph.user,
+                        now,
+                        graph.user
+                ),
+                new ReportRevision(1, null, null, null, 1)
         );
         DataQualityIssue issue = DataQualityIssue.open(
                 graph.store,
@@ -455,6 +517,171 @@ class ApplicationModelPersistenceTest {
         entityManager.persist(auditLog);
         entityManager.persist(failedRun);
         entityManager.persist(syncError);
+    }
+
+    private void persistPayroll(ModelGraph graph, LocalDate businessDate) {
+        PayrollScheme scheme = new PayrollScheme(
+                "model-payroll-v1",
+                businessDate.withDayOfMonth(1),
+                new PayrollSchemeDefinition(
+                        new BigDecimal("20.00"),
+                        new BigDecimal("15.00"),
+                        new BigDecimal("500.00"),
+                        new BigDecimal("400.00"),
+                        new BigDecimal("300.00"),
+                        new BigDecimal("200.00"),
+                        new BigDecimal("50000.00")
+                ),
+                graph.user
+        );
+        ProductPayrollCategoryAssignment payrollCategory =
+                new ProductPayrollCategoryAssignment(
+                        graph.product,
+                        PayrollCategoryCode.TECH_TIER_1,
+                        businessDate.withDayOfMonth(1),
+                        graph.user,
+                        "Persistence test"
+                );
+        entityManager.persist(scheme);
+        entityManager.persist(payrollCategory);
+        entityManager.flush();
+
+        PayrollRun run = new PayrollRun(new PayrollRunDefinition(
+                graph.store,
+                businessDate.withDayOfMonth(1),
+                1,
+                null,
+                null,
+                scheme,
+                new PayrollPlanResult(
+                        new BigDecimal("1000.00"),
+                        new BigDecimal("100.00"),
+                        false,
+                        new BigDecimal("3.90"),
+                        new BigDecimal("10.00"),
+                        new BigDecimal("10.00"),
+                        true,
+                        new BigDecimal("3.00"),
+                        new BigDecimal("5.00"),
+                        new BigDecimal("5.00"),
+                        true
+                ),
+                new PayrollRunQuality(true, 0, 0, 0),
+                new PayrollSourceFingerprint(
+                        1,
+                        "0".repeat(64),
+                        "0".repeat(64),
+                        "0".repeat(64),
+                        "0".repeat(64),
+                        "0".repeat(64)
+                ),
+                graph.user
+        ));
+        entityManager.persist(run);
+        entityManager.flush();
+
+        PayrollDailyPool pool = new PayrollDailyPool(
+                run,
+                new PayrollDailyPoolInput(
+                        businessDate,
+                        new BigDecimal("100.00"),
+                        BigDecimal.ZERO.setScale(2),
+                        new BigDecimal("10.00"),
+                        new BigDecimal("5.00"),
+                        BigDecimal.ONE,
+                        BigDecimal.ZERO,
+                        0,
+                        0
+                ),
+                new PayrollDailyPoolAmounts(
+                        new BigDecimal("15.00"),
+                        new BigDecimal("15.00"),
+                        new BigDecimal("400.00"),
+                        new BigDecimal("200.00"),
+                        new BigDecimal("15.00"),
+                        BigDecimal.ZERO.setScale(2),
+                        new BigDecimal("1.50"),
+                        new BigDecimal("0.75"),
+                        new BigDecimal("400.00"),
+                        BigDecimal.ZERO,
+                        new BigDecimal("417.25")
+                ),
+                1
+        );
+        entityManager.persist(pool);
+        entityManager.flush();
+
+        entityManager.persist(new PayrollDailyAllocation(
+                run, graph.employee, businessDate,
+                new BigDecimal("11.00"), new BigDecimal("417.25")
+        ));
+        entityManager.persist(new PayrollAdjustment(
+                run,
+                graph.employee,
+                PayrollAdjustmentType.PENALTY,
+                new BigDecimal("10.00"),
+                "Persistence test",
+                graph.user
+        ));
+        entityManager.persist(new PayrollStatement(
+                run,
+                graph.employee,
+                1,
+                new BigDecimal("11.00"),
+                new PayrollStatementAmounts(
+                        new BigDecimal("417.25"),
+                        new BigDecimal("50000.00"),
+                        new BigDecimal("10.00"),
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        new BigDecimal("-49592.75")
+                )
+        ));
+        entityManager.persist(new PayrollEvent(
+                run, PayrollEventType.CALCULATED, graph.user, "Persistence test"
+        ));
+        run.approve(graph.user, Instant.parse("2026-07-16T12:01:00Z"));
+        run.markPaid(graph.user, Instant.parse("2026-07-16T12:02:00Z"));
+        entityManager.flush();
+        persistReportProvenance(graph, businessDate, run);
+    }
+    private void persistReportProvenance(
+            ModelGraph graph,
+            LocalDate businessDate,
+            PayrollRun run
+    ) {
+        ReportSnapshot annualReport = entityManager.createQuery(
+                "select report from ReportSnapshot report",
+                ReportSnapshot.class
+        ).getSingleResult();
+        ReportSnapshot monthlyReport = new ReportSnapshot(
+                graph.store,
+                new ReportDefinition(
+                        ReportType.MONTHLY,
+                        ReportPeriodType.MONTH,
+                        businessDate.withDayOfMonth(1),
+                        businessDate.withDayOfMonth(1).plusMonths(1).minusDays(1),
+                        ReportStatus.FINALIZED,
+                        "formula-v1",
+                        "model-v1"
+                ),
+                new ReportContent(
+                        new ReportIntegrity("2".repeat(64), "0".repeat(64)),
+                        "{}",
+                        Instant.parse("2026-07-16T12:00:00Z"),
+                        graph.user,
+                        Instant.parse("2026-07-16T12:02:00Z"),
+                        graph.user
+                ),
+                new ReportRevision(1, null, run, null, 1)
+        );
+        entityManager.persist(monthlyReport);
+        entityManager.flush();
+        entityManager.persist(new AnnualReportMonth(
+                annualReport,
+                monthlyReport,
+                businessDate.getMonthValue()
+        ));
     }
 
     private void updateMutableEntities(ModelGraph graph, Instant now) {
@@ -555,7 +782,7 @@ class ApplicationModelPersistenceTest {
     }
 
     private void assertEveryEntityWasPersisted() {
-        assertThat(entityManager.getMetamodel().getEntities()).hasSize(23);
+        assertThat(entityManager.getMetamodel().getEntities()).hasSize(36);
         for (EntityType<?> entityType : entityManager.getMetamodel().getEntities()) {
             Long count = entityManager.createQuery(
                     "select count(entity) from " + entityType.getName() + " entity",

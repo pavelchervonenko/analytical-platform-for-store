@@ -112,4 +112,28 @@ public class DataQualityIssue {
     public UUID getId() {
         return id;
     }
+
+    public UUID getStoreId() {
+        return store == null ? null : store.getId();
+    }
+
+    public String getEntityType() {
+        return entityType;
+    }
+
+    public String getIssueCode() {
+        return issueCode;
+    }
+
+    public DataQualitySeverity getSeverity() {
+        return severity;
+    }
+
+    public DataQualityStatus getStatus() {
+        return status;
+    }
+
+    public Instant getDetectedAt() {
+        return detectedAt;
+    }
 }

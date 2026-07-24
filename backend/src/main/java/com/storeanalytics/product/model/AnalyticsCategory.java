@@ -5,11 +5,14 @@ import static com.storeanalytics.common.validation.ModelValidation.requireNonNul
 import static com.storeanalytics.common.validation.ModelValidation.requireText;
 
 import com.storeanalytics.common.persistence.AbstractMutableEntity;
+import com.storeanalytics.salary.model.PayrollCategoryCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
 
 @Entity
 @Table(name = "analytics_categories")
@@ -47,6 +50,11 @@ public class AnalyticsCategory extends AbstractMutableEntity {
     @Column(name = "requires_same_document_for_attach", nullable = false)
     private boolean requiresSameDocumentForAttach;
 
+    @Generated(event = EventType.INSERT)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payroll_category_code", nullable = false, insertable = false, updatable = false)
+    private PayrollCategoryCode payrollCategoryCode;
+
     @Column(name = "is_active", nullable = false)
     private boolean active;
 
@@ -74,5 +82,9 @@ public class AnalyticsCategory extends AbstractMutableEntity {
     }
     public String getCode() {
         return code;
+    }
+
+    public PayrollCategoryCode getPayrollCategoryCode() {
+        return payrollCategoryCode;
     }
 }

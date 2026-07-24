@@ -101,6 +101,10 @@ public class AppUser extends AbstractMutableEntity {
         securityVersion++;
     }
 
+    public void upgradePasswordHash(String upgradedPasswordHash) {
+        passwordHash = requireText(upgradedPasswordHash, "passwordHash");
+    }
+
     public void changePassword(String newPasswordHash) {
         passwordHash = requireText(newPasswordHash, "passwordHash");
         passwordChangeRequired = false;

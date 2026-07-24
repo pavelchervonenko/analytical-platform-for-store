@@ -1,8 +1,9 @@
 package com.storeanalytics.common.web;
 
+import java.time.Clock;
 import java.time.Instant;
-import java.util.Map;
-import org.springframework.core.env.Environment;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.info.BuildProperties;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -11,18 +12,26 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/system")
 public class SystemInfoController {
 
-    private final Environment environment;
+    private static final String APPLICATION_NAME = "store-analytics";
 
-    public SystemInfoController(Environment environment) {
-        this.environment = environment;
+    private final ObjectProvider<BuildProperties> buildPropertiesProvider;
+    private final Clock clock;
+
+    public SystemInfoController(
+            ObjectProvider<BuildProperties> buildPropertiesProvider,
+            Clock clock
+    ) {
+        this.buildPropertiesProvider = buildPropertiesProvider;
+        this.clock = clock;
     }
 
     @GetMapping("/status")
-    Map<String, Object> status() {
-        return Map.of(
-                "application", "store-analytics",
-                "profiles", environment.getActiveProfiles(),
-                "time", Instant.now().toString()
+    SystemStatusView status() {
+        BuildProperties build = buildPropertiesProvider.getIfAvailable();
+        return new SystemStatusView(
+                APPLICATION_NAME,
+                build == null ? "development" : build.getVersion(),
+                Instant.now(clock)
         );
     }
 }

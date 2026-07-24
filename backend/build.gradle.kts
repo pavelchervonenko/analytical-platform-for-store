@@ -1,7 +1,7 @@
 plugins {
     id("java")
     id("checkstyle")
-    id("org.springframework.boot") version "3.5.3"
+    id("org.springframework.boot") version "3.5.16"
     id("io.spring.dependency-management") version "1.1.7"
     // id("org.sonarqube") version "7.2.3.7755"
     id("jacoco")
@@ -44,6 +44,10 @@ dependencies {
     testImplementation("org.testcontainers:junit-jupiter")
     testImplementation("org.testcontainers:postgresql")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+springBoot {
+    buildInfo()
 }
 
 tasks.withType<Test> {

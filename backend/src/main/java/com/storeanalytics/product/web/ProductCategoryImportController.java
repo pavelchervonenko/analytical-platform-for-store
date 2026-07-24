@@ -1,11 +1,13 @@
 package com.storeanalytics.product.web;
 
+import com.storeanalytics.auth.security.AppUserPrincipal;
 import com.storeanalytics.product.service.ProductCategoryImportCommand;
 import com.storeanalytics.product.service.ProductCategoryImportEntry;
 import com.storeanalytics.product.service.ProductCategoryImportResult;
 import com.storeanalytics.product.service.ProductCategoryImportService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,7 +29,8 @@ public class ProductCategoryImportController {
     @ResponseStatus(HttpStatus.OK)
     ProductCategoryImportResult importAssignments(
             @PathVariable String connectionKey,
-            @Valid @RequestBody ProductCategoryImportRequest request
+            @Valid @RequestBody ProductCategoryImportRequest request,
+            Authentication authentication
     ) {
         return importService.importAssignments(new ProductCategoryImportCommand(
                 connectionKey,
@@ -42,6 +45,6 @@ public class ProductCategoryImportController {
                                 item.conditionType()
                         ))
                         .toList()
-        ));
+        ), ((AppUserPrincipal) authentication.getPrincipal()).getUserId());
     }
 }

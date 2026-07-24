@@ -57,7 +57,10 @@ public class SyncJobController {
     }
 
     @PostMapping("/{jobId}/cancel")
-    SyncJobView cancel(@PathVariable UUID jobId) {
-        return coordinator.cancel(jobId);
+    SyncJobView cancel(
+            @PathVariable UUID jobId,
+            @AuthenticationPrincipal AppUserPrincipal principal
+    ) {
+        return coordinator.cancel(jobId, principal.getUserId());
     }
 }

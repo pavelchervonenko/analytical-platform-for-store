@@ -32,8 +32,11 @@ public class AuthenticationService {
     }
 
     @Transactional
-    public void recordSuccessfulLogin(UUID userId) {
+    public void recordSuccessfulLogin(UUID userId, String authenticatedPassword) {
         AppUser user = requireUser(userId);
+        if (passwordEncoder.upgradeEncoding(user.getPasswordHash())) {
+            user.upgradePasswordHash(passwordEncoder.encode(authenticatedPassword));
+        }
         user.recordSuccessfulLogin(Instant.now(clock));
     }
 

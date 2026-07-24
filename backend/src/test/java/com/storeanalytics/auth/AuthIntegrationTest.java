@@ -39,7 +39,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class AuthIntegrationTest {
 
     private static final String PASSWORD = "correct horse battery staple";
-    private static final String NEW_PASSWORD = "passw0rd";
+    private static final String NEW_PASSWORD = "passw0rd-2026";
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES =
@@ -126,6 +126,8 @@ class AuthIntegrationTest {
         mockMvc.perform(get("/api/system/status").session(session))
                 .andExpect(status().isForbidden());
 
+        mockMvc.perform(get("/api/stores").session(session))
+                .andExpect(status().isForbidden());
         Cookie csrfCookie = csrfCookie(session);
         mockMvc.perform(post("/api/auth/change-password")
                         .session(session)
@@ -180,9 +182,18 @@ class AuthIntegrationTest {
         MvcResult managerLogin = login("manager@example.com", PASSWORD).andReturn();
         performStoreKpi(session(managerLogin), assignedStore.getId()).andExpect(status().isOk());
         performStoreKpi(session(managerLogin), deniedStore.getId()).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/stores").session(session(managerLogin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(assignedStore.getId().toString()));
 
         MvcResult adminLogin = login("admin@example.com", PASSWORD).andReturn();
         performStoreKpi(session(adminLogin), deniedStore.getId()).andExpect(status().isOk());
+        mockMvc.perform(get("/api/stores").session(session(adminLogin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(assignedStore.getId().toString()))
+                .andExpect(jsonPath("$[1].id").value(deniedStore.getId().toString()));
     }
 
     private org.springframework.test.web.servlet.ResultActions login(String email, String password)

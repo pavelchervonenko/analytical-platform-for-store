@@ -1,140 +1,57 @@
 package com.storeanalytics.common.web;
 
-import com.storeanalytics.sync.exception.ActiveSyncJobException;
-import com.storeanalytics.sync.exception.SyncJobNotFoundException;
-import com.storeanalytics.sync.exception.EmployeeSyncException;
-import com.storeanalytics.sync.exception.ReturnSyncCapacityException;
-import com.storeanalytics.sync.exception.ReturnSyncException;
-import com.storeanalytics.sync.exception.SalesSyncCapacityException;
-import com.storeanalytics.sync.exception.SalesSyncException;
-import com.storeanalytics.sync.exception.StoreSyncException;
+import com.storeanalytics.common.exception.BusinessErrorType;
+import com.storeanalytics.common.exception.BusinessException;
 import jakarta.servlet.http.HttpServletRequest;
-import java.time.Instant;
+import jakarta.validation.ConstraintViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.BindException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException exception, HttpServletRequest request) {
-        ApiError error = new ApiError(
-                Instant.now(),
-                HttpStatus.BAD_REQUEST.value(),
-                "VALIDATION_ERROR",
+    private static final Logger LOGGER = LoggerFactory.getLogger(ApiExceptionHandler.class);
+
+    @ExceptionHandler(BusinessException.class)
+    ResponseEntity<ApiError> handleBusiness(
+            BusinessException exception,
+            HttpServletRequest request
+    ) {
+        HttpStatus status = status(exception.getErrorCode().type());
+        return ResponseEntity.status(status).body(
+                ApiErrorFactory.create(status, exception, request)
+        );
+    }
+
+    @ExceptionHandler({
+        MethodArgumentNotValidException.class,
+        BindException.class,
+        ConstraintViolationException.class
+    })
+    ResponseEntity<ApiError> handleValidation(
+            Exception exception,
+            HttpServletRequest request
+    ) {
+        return error(
+                HttpStatus.BAD_REQUEST,
+                ApiErrorCode.VALIDATION_ERROR,
                 "Request validation failed",
-                request.getRequestURI()
+                request
         );
-        return ResponseEntity.badRequest().body(error);
-    }
-
-    @ExceptionHandler(IllegalStateException.class)
-    ResponseEntity<ApiError> handleIllegalState(IllegalStateException exception, HttpServletRequest request) {
-        ApiError error = new ApiError(
-                Instant.now(),
-                HttpStatus.CONFLICT.value(),
-                "ILLEGAL_STATE",
-                exception.getMessage(),
-                request.getRequestURI()
-        );
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
-    }
-
-    @ExceptionHandler(StoreSyncException.class)
-    ResponseEntity<ApiError> handleStoreSync(StoreSyncException exception, HttpServletRequest request) {
-        ApiError error = new ApiError(
-                Instant.now(),
-                HttpStatus.BAD_GATEWAY.value(),
-                "STORE_SYNC_FAILED",
-                "Store synchronization failed; sync run: " + exception.getSyncRunId(),
-                request.getRequestURI()
-        );
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(error);
-    }
-
-    @ExceptionHandler(EmployeeSyncException.class)
-    ResponseEntity<ApiError> handleEmployeeSync(
-            EmployeeSyncException exception,
-            HttpServletRequest request
-    ) {
-        ApiError error = new ApiError(
-                Instant.now(),
-                HttpStatus.BAD_GATEWAY.value(),
-                "EMPLOYEE_SYNC_FAILED",
-                "Employee synchronization failed; sync run: " + exception.getSyncRunId(),
-                request.getRequestURI()
-        );
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(error);
-    }
-
-    @ExceptionHandler(SalesSyncCapacityException.class)
-    ResponseEntity<ApiError> handleSalesSyncCapacity(
-            SalesSyncCapacityException exception,
-            HttpServletRequest request
-    ) {
-        ApiError error = new ApiError(
-                Instant.now(),
-                HttpStatus.UNPROCESSABLE_ENTITY.value(),
-                "SALES_SYNC_WINDOW_TOO_LARGE",
-                "Sales window contains " + exception.getRecordCount()
-                        + " records; maximum is " + exception.getMaximumRecordCount()
-                        + "; sync run: " + exception.getSyncRunId(),
-                request.getRequestURI()
-        );
-        return ResponseEntity.unprocessableEntity().body(error);
-    }
-
-    @ExceptionHandler(SalesSyncException.class)
-    ResponseEntity<ApiError> handleSalesSync(
-            SalesSyncException exception,
-            HttpServletRequest request
-    ) {
-        ApiError error = new ApiError(
-                Instant.now(),
-                HttpStatus.BAD_GATEWAY.value(),
-                "SALES_SYNC_FAILED",
-                "Sales synchronization failed; sync run: " + exception.getSyncRunId(),
-                request.getRequestURI()
-        );
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(error);
-    }
-
-    @ExceptionHandler(ReturnSyncCapacityException.class)
-    ResponseEntity<ApiError> handleReturnSyncCapacity(
-            ReturnSyncCapacityException exception,
-            HttpServletRequest request
-    ) {
-        ApiError error = new ApiError(
-                Instant.now(),
-                HttpStatus.UNPROCESSABLE_ENTITY.value(),
-                "RETURN_SYNC_WINDOW_TOO_LARGE",
-                "Return window contains " + exception.getRecordCount()
-                        + " active documents; maximum is "
-                        + exception.getMaximumRecordCount()
-                        + "; sync run: " + exception.getSyncRunId(),
-                request.getRequestURI()
-        );
-        return ResponseEntity.unprocessableEntity().body(error);
-    }
-
-    @ExceptionHandler(ReturnSyncException.class)
-    ResponseEntity<ApiError> handleReturnSync(
-            ReturnSyncException exception,
-            HttpServletRequest request
-    ) {
-        ApiError error = new ApiError(
-                Instant.now(),
-                HttpStatus.BAD_GATEWAY.value(),
-                "RETURN_SYNC_FAILED",
-                "Return synchronization failed; sync run: "
-                        + exception.getSyncRunId(),
-                request.getRequestURI()
-        );
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(error);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -142,57 +59,145 @@ public class ApiExceptionHandler {
             HttpMessageNotReadableException exception,
             HttpServletRequest request
     ) {
-        ApiError error = new ApiError(
-                Instant.now(),
-                HttpStatus.BAD_REQUEST.value(),
-                "MALFORMED_REQUEST",
+        return error(
+                HttpStatus.BAD_REQUEST,
+                ApiErrorCode.MALFORMED_REQUEST,
                 "Request body is missing or malformed",
-                request.getRequestURI()
+                request
         );
-        return ResponseEntity.badRequest().body(error);
     }
 
-    @ExceptionHandler(ActiveSyncJobException.class)
-    ResponseEntity<ApiError> handleActiveSyncJob(
-            ActiveSyncJobException exception,
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    ResponseEntity<ApiError> handleArgumentTypeMismatch(
+            MethodArgumentTypeMismatchException exception,
             HttpServletRequest request
     ) {
-        ApiError error = new ApiError(
-                Instant.now(),
-                HttpStatus.CONFLICT.value(),
-                "ACTIVE_SYNC_JOB_EXISTS",
-                "An active synchronization job already exists",
-                request.getRequestURI()
-        );
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
-    }
-
-    @ExceptionHandler(SyncJobNotFoundException.class)
-    ResponseEntity<ApiError> handleSyncJobNotFound(
-            SyncJobNotFoundException exception,
-            HttpServletRequest request
-    ) {
-        ApiError error = new ApiError(
-                Instant.now(),
-                HttpStatus.NOT_FOUND.value(),
-                "SYNC_JOB_NOT_FOUND",
-                exception.getMessage(),
-                request.getRequestURI()
-        );
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
-    }
-    @ExceptionHandler(IllegalArgumentException.class)
-    ResponseEntity<ApiError> handleIllegalArgument(
-            IllegalArgumentException exception,
-            HttpServletRequest request
-    ) {
-        ApiError error = new ApiError(
-                Instant.now(),
-                HttpStatus.BAD_REQUEST.value(),
-                "INVALID_ARGUMENT",
+        return error(
+                HttpStatus.BAD_REQUEST,
+                ApiErrorCode.INVALID_ARGUMENT,
                 "Request parameters are invalid",
-                request.getRequestURI()
+                request
         );
-        return ResponseEntity.badRequest().body(error);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    ResponseEntity<ApiError> handleMissingParameter(
+            MissingServletRequestParameterException exception,
+            HttpServletRequest request
+    ) {
+        return error(
+                HttpStatus.BAD_REQUEST,
+                ApiErrorCode.MISSING_PARAMETER,
+                "A required request parameter is missing",
+                request
+        );
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    ResponseEntity<ApiError> handleAccessDenied(
+            AccessDeniedException exception,
+            HttpServletRequest request
+    ) {
+        return error(
+                HttpStatus.FORBIDDEN,
+                ApiErrorCode.ACCESS_DENIED,
+                "Access is denied",
+                request
+        );
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    ResponseEntity<ApiError> handleConcurrentModification(
+            OptimisticLockingFailureException exception,
+            HttpServletRequest request
+    ) {
+        return error(
+                HttpStatus.CONFLICT,
+                ApiErrorCode.CONCURRENT_MODIFICATION,
+                "The resource was changed; reload and retry",
+                request
+        );
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    ResponseEntity<ApiError> handleMethodNotAllowed(
+            HttpRequestMethodNotSupportedException exception,
+            HttpServletRequest request
+    ) {
+        return error(
+                HttpStatus.METHOD_NOT_ALLOWED,
+                ApiErrorCode.METHOD_NOT_ALLOWED,
+                "HTTP method is not supported for this resource",
+                request
+        );
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    ResponseEntity<ApiError> handleUnsupportedMediaType(
+            HttpMediaTypeNotSupportedException exception,
+            HttpServletRequest request
+    ) {
+        return error(
+                HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                ApiErrorCode.UNSUPPORTED_MEDIA_TYPE,
+                "Request media type is not supported",
+                request
+        );
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    ResponseEntity<ApiError> handleResourceNotFound(
+            NoResourceFoundException exception,
+            HttpServletRequest request
+    ) {
+        return error(
+                HttpStatus.NOT_FOUND,
+                ApiErrorCode.RESOURCE_NOT_FOUND,
+                "Resource was not found",
+                request
+        );
+    }
+
+    @ExceptionHandler(Exception.class)
+    ResponseEntity<ApiError> handleUnexpected(
+            Exception exception,
+            HttpServletRequest request
+    ) {
+        String correlationId = CorrelationId.getOrCreate(request);
+        LOGGER.error(
+                "Unhandled request failure correlationId={} method={} path={}",
+                correlationId,
+                request.getMethod(),
+                request.getRequestURI(),
+                exception
+        );
+        return error(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                ApiErrorCode.INTERNAL_ERROR,
+                "An unexpected error occurred",
+                request
+        );
+    }
+
+    private ResponseEntity<ApiError> error(
+            HttpStatus status,
+            ApiErrorCode code,
+            String message,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(status).body(
+                ApiErrorFactory.create(status, code, message, request)
+        );
+    }
+
+    private HttpStatus status(BusinessErrorType type) {
+        return switch (type) {
+            case INVALID_REQUEST -> HttpStatus.BAD_REQUEST;
+            case UNPROCESSABLE -> HttpStatus.UNPROCESSABLE_ENTITY;
+            case NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case CONFLICT -> HttpStatus.CONFLICT;
+            case RATE_LIMITED -> HttpStatus.TOO_MANY_REQUESTS;
+            case UPSTREAM_FAILURE -> HttpStatus.BAD_GATEWAY;
+        };
     }
 }

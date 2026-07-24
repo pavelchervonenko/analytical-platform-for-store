@@ -1,12 +1,16 @@
+logging:
+  pattern:
+    correlation: "[correlationId=%X{correlationId:-none}] "
+
 spring:
   application:
     name: store-analytics
   profiles:
     default: dev
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/store_analytics}
-    username: ${SPRING_DATASOURCE_USERNAME:store_analytics}
-    password: ${SPRING_DATASOURCE_PASSWORD:change_me}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
   jpa:
     open-in-view: false
     hibernate:
@@ -15,6 +19,14 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+  task:
+    scheduling:
+      pool:
+        size: 4
+      thread-name-prefix: store-analytics-scheduler-
+      shutdown:
+        await-termination: true
+        await-termination-period: 30s
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -22,6 +34,7 @@ spring:
 server:
   servlet:
     session:
+      timeout: 30m
       cookie:
         http-only: true
         secure: ${SESSION_COOKIE_SECURE:false}
@@ -34,8 +47,34 @@ management:
         include: health,info,metrics
   endpoint:
     health:
+      show-details: never
       probes:
         enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db,flywayReadiness
+  info:
+    defaults:
+      enabled: false
+    build:
+      enabled: true
+    env:
+      enabled: false
+    git:
+      enabled: false
+    java:
+      enabled: false
+    os:
+      enabled: false
+    process:
+      enabled: false
+    ssl:
+      enabled: false
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 springdoc:
   swagger-ui:
@@ -43,7 +82,17 @@ springdoc:
 
 app:
   security:
-    cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+    cors-allowed-origins: ${CORS_ALLOWED_ORIGINS}
+    secure-cookies: ${SESSION_COOKIE_SECURE:false}
+    session-absolute-timeout: ${SESSION_ABSOLUTE_TIMEOUT:12h}
+    max-concurrent-sessions: ${MAX_CONCURRENT_SESSIONS:3}
+    login-throttle:
+      email-max-failures: ${LOGIN_EMAIL_MAX_FAILURES:5}
+      ip-max-failures: ${LOGIN_IP_MAX_FAILURES:30}
+      window: ${LOGIN_FAILURE_WINDOW:15m}
+      block-duration: ${LOGIN_BLOCK_DURATION:15m}
+      retention: ${LOGIN_THROTTLE_RETENTION:2d}
+      cleanup-cron: ${LOGIN_THROTTLE_CLEANUP_CRON:0 0 4 * * *}
     bootstrap-admin:
       email: ${BOOTSTRAP_ADMIN_EMAIL:}
       password: ${BOOTSTRAP_ADMIN_PASSWORD:}
@@ -52,8 +101,16 @@ app:
     base-url: ${LIVESKLAD_BASE_URL:}
     login: ${LIVESKLAD_LOGIN:}
     password: ${LIVESKLAD_PASSWORD:}
+    allowed-hosts: ${LIVESKLAD_ALLOWED_HOSTS:}
+    require-https: ${LIVESKLAD_REQUIRE_HTTPS:false}
     connect-timeout: ${LIVESKLAD_CONNECT_TIMEOUT:5s}
     read-timeout: ${LIVESKLAD_READ_TIMEOUT:30s}
+  observability:
+    state-initial-delay: ${OBSERVABILITY_STATE_INITIAL_DELAY:30s}
+    state-refresh-delay: ${OBSERVABILITY_STATE_REFRESH_DELAY:1m}
+    payroll-refresh-delay: ${OBSERVABILITY_PAYROLL_REFRESH_DELAY:5m}
+    livesklad-initial-delay: ${OBSERVABILITY_LIVESKLAD_INITIAL_DELAY:30s}
+    livesklad-refresh-delay: ${OBSERVABILITY_LIVESKLAD_REFRESH_DELAY:5m}
   sync:
     worker-enabled: ${SYNC_WORKER_ENABLED:true}
     worker-delay: ${SYNC_WORKER_DELAY:5s}
@@ -68,3 +125,7 @@ app:
     incremental-overlap-days: ${SYNC_INCREMENTAL_OVERLAP_DAYS:3}
     maximum-backfill-days: ${SYNC_MAXIMUM_BACKFILL_DAYS:730}
     reporting-zone: ${SYNC_REPORTING_ZONE:Europe/Kaliningrad}
+  reports:
+    annual-scheduling-enabled: ${REPORTS_ANNUAL_SCHEDULING_ENABLED:true}
+    annual-cron: ${REPORTS_ANNUAL_CRON:0 30 4 * * *}
+    zone: ${REPORTS_SCHEDULING_ZONE:Europe/Kaliningrad}

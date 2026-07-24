@@ -7,7 +7,7 @@ import static com.storeanalytics.common.validation.ModelValidation.requireText;
 import java.time.LocalDate;
 
 public record ReportDefinition(
-        String reportType,
+        ReportType reportType,
         ReportPeriodType periodType,
         LocalDate periodStart,
         LocalDate periodEnd,
@@ -17,7 +17,7 @@ public record ReportDefinition(
 ) {
 
     public ReportDefinition {
-        reportType = requireText(reportType, "reportType");
+        reportType = requireNonNull(reportType, "reportType");
         periodType = requireNonNull(periodType, "periodType");
         periodStart = requireNonNull(periodStart, "periodStart");
         periodEnd = requireNonNull(periodEnd, "periodEnd");

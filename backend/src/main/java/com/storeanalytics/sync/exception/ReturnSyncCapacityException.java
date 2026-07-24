@@ -1,8 +1,10 @@
 package com.storeanalytics.sync.exception;
 
+import com.storeanalytics.common.exception.BusinessErrorCode;
+import com.storeanalytics.common.exception.BusinessException;
 import java.util.UUID;
 
-public class ReturnSyncCapacityException extends RuntimeException {
+public class ReturnSyncCapacityException extends BusinessException {
 
     private final UUID syncRunId;
     private final int recordCount;
@@ -13,7 +15,10 @@ public class ReturnSyncCapacityException extends RuntimeException {
             int recordCount,
             int maximumRecordCount
     ) {
-        super("Return synchronization window contains too many records");
+        super(
+                BusinessErrorCode.RETURN_SYNC_WINDOW_TOO_LARGE,
+                "Return synchronization window contains too many records"
+        );
         this.syncRunId = syncRunId;
         this.recordCount = recordCount;
         this.maximumRecordCount = maximumRecordCount;

@@ -10,10 +10,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.storeanalytics.auth.security.AppUserPrincipal;
 import com.storeanalytics.common.web.ApiExceptionHandler;
 import com.storeanalytics.sync.exception.ReturnSyncCapacityException;
 import com.storeanalytics.sync.exception.ReturnSyncException;
 import com.storeanalytics.sync.model.SyncStatus;
+import com.storeanalytics.sync.service.ManualSyncAuditService;
 import com.storeanalytics.sync.service.ReturnSyncPeriod;
 import com.storeanalytics.sync.service.ReturnSyncResult;
 import com.storeanalytics.sync.service.ReturnSyncService;
@@ -22,6 +24,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -29,12 +33,19 @@ class ReturnSyncControllerTest {
 
     private ReturnSyncService returnSyncService;
     private MockMvc mockMvc;
+    private Authentication authentication;
 
     @BeforeEach
     void setUp() {
         returnSyncService = mock(ReturnSyncService.class);
+        AppUserPrincipal principal = mock(AppUserPrincipal.class);
+        when(principal.getUserId()).thenReturn(UUID.randomUUID());
+        authentication = new TestingAuthenticationToken(principal, null);
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new ReturnSyncController(returnSyncService))
+                .standaloneSetup(new ReturnSyncController(
+                        returnSyncService,
+                        mock(ManualSyncAuditService.class)
+                ))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -72,8 +83,7 @@ class ReturnSyncControllerTest {
                         "RETURN_SYNC_WINDOW_TOO_LARGE"
                 ))
                 .andExpect(jsonPath("$.message").value(
-                        "Return window contains 71 active documents; maximum is 70; "
-                                + "sync run: " + syncRunId
+                        "Return synchronization window is too large"
                 ));
     }
 
@@ -90,13 +100,14 @@ class ReturnSyncControllerTest {
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.code").value("RETURN_SYNC_FAILED"))
                 .andExpect(jsonPath("$.message").value(
-                        "Return synchronization failed; sync run: " + syncRunId
+                        "Return synchronization failed"
                 ));
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder
             validRequest() {
         return post("/api/sync/returns")
+                .principal(authentication)
                 .contentType(APPLICATION_JSON)
                 .content("""
                         {

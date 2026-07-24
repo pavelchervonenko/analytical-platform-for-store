@@ -1,8 +1,14 @@
 package com.storeanalytics.auth.exception;
 
-public class UserEmailConflictException extends RuntimeException {
+import com.storeanalytics.common.exception.BusinessErrorCode;
+import com.storeanalytics.common.exception.BusinessException;
+
+public class UserEmailConflictException extends BusinessException {
 
     public UserEmailConflictException(String email) {
-        super("Application user already exists for email: " + email);
+        super(
+                BusinessErrorCode.USER_EMAIL_CONFLICT,
+                "Application user already exists for email: " + email
+        );
     }
 }

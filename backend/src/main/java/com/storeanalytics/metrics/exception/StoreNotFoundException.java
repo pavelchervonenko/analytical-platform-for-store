@@ -1,13 +1,15 @@
 package com.storeanalytics.metrics.exception;
 
+import com.storeanalytics.common.exception.BusinessErrorCode;
+import com.storeanalytics.common.exception.BusinessException;
 import java.util.UUID;
 
-public class StoreNotFoundException extends RuntimeException {
+public class StoreNotFoundException extends BusinessException {
 
     private final UUID storeId;
 
     public StoreNotFoundException(UUID storeId) {
-        super("Store was not found: " + storeId);
+        super(BusinessErrorCode.STORE_NOT_FOUND, "Store was not found: " + storeId);
         this.storeId = storeId;
     }
 

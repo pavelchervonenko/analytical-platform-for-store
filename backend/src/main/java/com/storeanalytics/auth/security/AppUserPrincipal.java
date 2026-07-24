@@ -6,6 +6,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.security.core.CredentialsContainer;
 import org.springframework.security.core.GrantedAuthority;
@@ -92,5 +93,17 @@ public final class AppUserPrincipal implements UserDetails, CredentialsContainer
     @Override
     public void eraseCredentials() {
         passwordHash = null;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        return this == other
+                || other instanceof AppUserPrincipal principal
+                && Objects.equals(userId, principal.userId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(userId);
     }
 }

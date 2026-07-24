@@ -1,5 +1,9 @@
 package com.storeanalytics.sync.service;
 
+import com.storeanalytics.audit.service.AuditAction;
+import com.storeanalytics.audit.service.AuditEntityType;
+import com.storeanalytics.audit.service.AuditLogService;
+import com.storeanalytics.audit.service.AuditTarget;
 import com.storeanalytics.common.config.SyncProperties;
 import com.storeanalytics.sync.exception.SyncJobNotFoundException;
 import com.storeanalytics.sync.model.SyncJob;
@@ -9,6 +13,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -27,15 +32,18 @@ public class SyncJobCoordinator {
     private final SyncJobRepository jobRepository;
     private final SyncProperties properties;
     private final Clock clock;
+    private final AuditLogService auditLogService;
 
     public SyncJobCoordinator(
             SyncJobRepository jobRepository,
             SyncProperties properties,
-            Clock clock
+            Clock clock,
+            AuditLogService auditLogService
     ) {
         this.jobRepository = jobRepository;
         this.properties = properties;
         this.clock = clock;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional
@@ -94,10 +102,31 @@ public class SyncJobCoordinator {
     }
 
     @Transactional
-    public SyncJobView cancel(UUID jobId) {
+    public SyncJobView cancel(UUID jobId, UUID actorId) {
         SyncJob job = locked(jobId);
+        SyncJobView before = SyncJobView.from(job);
         job.requestCancellation(clock.instant());
-        return SyncJobView.from(job);
+        SyncJobView after = SyncJobView.from(job);
+        auditLogService.record(
+                actorId,
+                null,
+                AuditAction.SYNC_JOB_CANCELLATION_REQUESTED,
+                new AuditTarget(AuditEntityType.SYNC_JOB, job.getId()),
+                null,
+                cancellationSummary(before),
+                cancellationSummary(after)
+        );
+        return after;
+    }
+
+    private Map<String, Object> cancellationSummary(SyncJobView job) {
+        return Map.of(
+                "status", job.status(),
+                "phase", job.phase(),
+                "cancelRequested", job.cancelRequested(),
+                "completedSteps", job.completedSteps(),
+                "totalRetries", job.totalRetries()
+        );
     }
 
     private void recoverOneExpiredLease(Instant now) {

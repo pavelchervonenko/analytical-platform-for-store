@@ -1,8 +1,11 @@
 package com.storeanalytics.auth.exception;
 
-public class PasswordPolicyViolationException extends RuntimeException {
+import com.storeanalytics.common.exception.BusinessErrorCode;
+import com.storeanalytics.common.exception.BusinessException;
 
-    public PasswordPolicyViolationException(String message) {
-        super(message);
+public class PasswordPolicyViolationException extends BusinessException {
+
+    public PasswordPolicyViolationException(String internalMessage) {
+        super(BusinessErrorCode.PASSWORD_POLICY_VIOLATION, internalMessage);
     }
 }

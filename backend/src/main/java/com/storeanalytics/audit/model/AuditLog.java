@@ -61,10 +61,52 @@ public class AuditLog extends AbstractCreatedEntity {
         this.actorUser = actorUser;
         this.store = store;
         this.action = requireText(action, "action");
-        this.entityType = entityType;
-        this.entityId = entityId;
+        this.entityType = requireText(entityType, "entityType");
+        this.entityId = requireText(entityId, "entityId");
         this.ipAddress = ipAddress;
         this.userAgent = userAgent;
         this.metadata = "{}";
+    }
+
+    public AuditLog(
+            AppUser actorUser,
+            Store store,
+            String action,
+            String entityType,
+            String entityId,
+            String metadata
+    ) {
+        this.actorUser = actorUser;
+        this.store = store;
+        this.action = requireText(action, "action");
+        this.entityType = requireText(entityType, "entityType");
+        this.entityId = requireText(entityId, "entityId");
+        this.ipAddress = null;
+        this.userAgent = null;
+        this.metadata = requireText(metadata, "metadata");
+    }
+
+    public AppUser getActorUser() {
+        return actorUser;
+    }
+
+    public Store getStore() {
+        return store;
+    }
+
+    public String getAction() {
+        return action;
+    }
+
+    public String getEntityType() {
+        return entityType;
+    }
+
+    public String getEntityId() {
+        return entityId;
+    }
+
+    public String getMetadata() {
+        return metadata;
     }
 }

@@ -38,7 +38,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class UserAdministrationIntegrationTest {
 
     private static final String ADMIN_PASSWORD = "admin correct horse battery staple";
-    private static final String MANAGER_PASSWORD = "passw0rd";
+    private static final String MANAGER_PASSWORD = "passw0rd-2026";
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES =

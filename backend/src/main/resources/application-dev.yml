@@ -4,5 +4,13 @@ logging:
     org.springframework.security: INFO
 
 spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/store_analytics}
+    username: ${SPRING_DATASOURCE_USERNAME:store_analytics}
+    password: ${SPRING_DATASOURCE_PASSWORD:change_me}
   jpa:
     show-sql: false
+
+app:
+  security:
+    cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}

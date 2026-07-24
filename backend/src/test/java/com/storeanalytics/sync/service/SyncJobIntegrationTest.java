@@ -143,7 +143,7 @@ class SyncJobIntegrationTest {
         assertThatThrownBy(this::createOneDayJob)
                 .isInstanceOf(ActiveSyncJobException.class);
 
-        SyncJobView cancelled = coordinator.cancel(first.id());
+        SyncJobView cancelled = coordinator.cancel(first.id(), admin.getId());
         assertThat(cancelled.status()).isEqualTo(SyncJobStatus.CANCELLED);
         assertThat(createOneDayJob().status()).isEqualTo(SyncJobStatus.PENDING);
     }

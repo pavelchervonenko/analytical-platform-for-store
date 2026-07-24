@@ -70,6 +70,10 @@ public class ProductCategoryAssignment extends AbstractCreatedEntity {
         this.changeReason = details.changeReason();
     }
 
+    public Product getProduct() {
+        return product;
+    }
+
     public AnalyticsCategory getAnalyticsCategory() {
         return analyticsCategory;
     }
@@ -78,8 +82,20 @@ public class ProductCategoryAssignment extends AbstractCreatedEntity {
         return conditionType;
     }
 
+    public CategoryAssignmentSource getAssignmentSource() {
+        return assignmentSource;
+    }
+
     public String getRuleVersion() {
         return ruleVersion;
+    }
+
+    public Instant getValidFrom() {
+        return validFrom;
+    }
+
+    public String getChangeReason() {
+        return changeReason;
     }
 
     public boolean matches(Product candidateProduct, AnalyticsCategory candidateCategory) {

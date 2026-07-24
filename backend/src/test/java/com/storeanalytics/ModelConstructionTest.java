@@ -13,6 +13,9 @@ import com.storeanalytics.employee.model.EmployeeStoreAssignment;
 import com.storeanalytics.employee.model.EmployeeStoreAssignmentId;
 import com.storeanalytics.integration.connection.model.IntegrationConnection;
 import com.storeanalytics.metrics.model.ReportContent;
+import com.storeanalytics.metrics.model.ReportIntegrity;
+import com.storeanalytics.metrics.model.ReportRevision;
+import com.storeanalytics.metrics.model.ReportType;
 import com.storeanalytics.metrics.model.ReportDefinition;
 import com.storeanalytics.metrics.model.ReportPeriodType;
 import com.storeanalytics.metrics.model.ReportSnapshot;
@@ -185,7 +188,7 @@ class ModelConstructionTest {
         assertThatThrownBy(() -> new ReportSnapshot(
                 null,
                 new ReportDefinition(
-                        "KPI",
+                        ReportType.ANNUAL,
                         ReportPeriodType.CUSTOM,
                         LocalDate.of(2026, 2, 2),
                         LocalDate.of(2026, 2, 1),
@@ -194,13 +197,14 @@ class ModelConstructionTest {
                         "classification-v1"
                 ),
                 new ReportContent(
-                        null,
+                        new ReportIntegrity(null, "0".repeat(64)),
                         "{}",
                         Instant.parse("2026-02-02T00:00:00Z"),
                         null,
                         null,
                         null
-                )
+                ),
+                new ReportRevision(1, null, null, null, 1)
         )).isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -223,7 +227,7 @@ class ModelConstructionTest {
         )).isInstanceOf(IllegalArgumentException.class);
 
         assertThatThrownBy(() -> new ReportContent(
-                null,
+                new ReportIntegrity(null, "0".repeat(64)),
                 "not-json",
                 Instant.parse("2026-02-02T00:00:00Z"),
                 null,

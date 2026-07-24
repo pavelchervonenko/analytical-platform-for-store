@@ -10,10 +10,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.storeanalytics.auth.security.AppUserPrincipal;
 import com.storeanalytics.common.web.ApiExceptionHandler;
 import com.storeanalytics.sync.exception.SalesSyncCapacityException;
 import com.storeanalytics.sync.exception.SalesSyncException;
 import com.storeanalytics.sync.model.SyncStatus;
+import com.storeanalytics.sync.service.ManualSyncAuditService;
 import com.storeanalytics.sync.service.SalesSyncPeriod;
 import com.storeanalytics.sync.service.SalesSyncResult;
 import com.storeanalytics.sync.service.SalesSyncService;
@@ -22,6 +24,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -29,12 +33,19 @@ class SalesSyncControllerTest {
 
     private SalesSyncService salesSyncService;
     private MockMvc mockMvc;
+    private Authentication authentication;
 
     @BeforeEach
     void setUp() {
         salesSyncService = mock(SalesSyncService.class);
+        AppUserPrincipal principal = mock(AppUserPrincipal.class);
+        when(principal.getUserId()).thenReturn(UUID.randomUUID());
+        authentication = new TestingAuthenticationToken(principal, null);
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new SalesSyncController(salesSyncService))
+                .standaloneSetup(new SalesSyncController(
+                        salesSyncService,
+                        mock(ManualSyncAuditService.class)
+                ))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -46,6 +57,7 @@ class SalesSyncControllerTest {
                 .thenReturn(successfulResult(syncRunId));
 
         mockMvc.perform(post("/api/sync/sales")
+                        .principal(authentication)
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {
@@ -110,8 +122,7 @@ class SalesSyncControllerTest {
                         "SALES_SYNC_WINDOW_TOO_LARGE"
                 ))
                 .andExpect(jsonPath("$.message").value(
-                        "Sales window contains 71 records; maximum is 70; sync run: "
-                                + syncRunId
+                        "Sales synchronization window is too large"
                 ));
     }
 
@@ -128,13 +139,14 @@ class SalesSyncControllerTest {
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.code").value("SALES_SYNC_FAILED"))
                 .andExpect(jsonPath("$.message").value(
-                        "Sales synchronization failed; sync run: " + syncRunId
+                        "Sales synchronization failed"
                 ));
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder
             validRequest() {
         return post("/api/sync/sales")
+                .principal(authentication)
                 .contentType(APPLICATION_JSON)
                 .content("""
                         {

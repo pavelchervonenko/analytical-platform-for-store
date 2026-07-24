@@ -40,8 +40,7 @@ class StoreKpiControllerTest {
                 .standaloneSetup(new StoreKpiController(storeKpiService))
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
                 .setControllerAdvice(
-                        new ApiExceptionHandler(),
-                        new MetricsApiExceptionHandler()
+                        new ApiExceptionHandler()
                 )
                 .build();
     }
@@ -96,6 +95,18 @@ class StoreKpiControllerTest {
     }
 
     @Test
+    void rejectsAnalyticsPeriodLongerThan366InclusiveDays() throws Exception {
+        UUID storeId = UUID.randomUUID();
+
+        mockMvc.perform(get("/api/stores/{storeId}/kpi", storeId)
+                        .queryParam("periodStart", "2024-01-01")
+                        .queryParam("periodEnd", "2025-01-01"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"))
+                .andExpect(jsonPath("$.message").value("Request parameters are invalid"));
+    }
+
+    @Test
     void reportsUnknownStore() throws Exception {
         UUID storeId = UUID.randomUUID();
         when(storeKpiService.calculate(any(UUID.class), any(StoreKpiPeriod.class)))
@@ -107,7 +118,7 @@ class StoreKpiControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("STORE_NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value(
-                        "Store was not found: " + storeId
+                        "Store was not found"
                 ));
     }
 

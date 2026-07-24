@@ -4,5 +4,6 @@ public enum ReportStatus {
     DRAFT,
     CALCULATED,
     APPROVED,
-    ARCHIVED
+    ARCHIVED,
+    FINALIZED
 }

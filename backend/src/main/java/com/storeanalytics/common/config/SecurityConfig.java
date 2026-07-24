@@ -1,10 +1,10 @@
 package com.storeanalytics.common.config;
 
-import com.storeanalytics.auth.security.PasswordChangedAuthorizationManager;
-import com.storeanalytics.auth.security.UserSecurityStateFilter;
-import com.storeanalytics.common.security.JsonAccessDeniedHandler;
-import com.storeanalytics.common.security.JsonAuthenticationEntryPoint;
+import java.net.URI;
+import java.time.Duration;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -17,15 +17,19 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+import org.springframework.security.core.session.SessionRegistry;
+import org.springframework.security.core.session.SessionRegistryImpl;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
-import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
-import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRepository;
+import org.springframework.security.web.session.HttpSessionEventPublisher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -38,15 +42,14 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            PasswordChangedAuthorizationManager passwordChanged,
-            JsonAuthenticationEntryPoint authenticationEntryPoint,
-            JsonAccessDeniedHandler accessDeniedHandler,
-            UserSecurityStateFilter userSecurityStateFilter,
-            CsrfTokenRepository csrfTokenRepository
+            SecurityChainComponents components,
+            CsrfTokenRepository csrfTokenRepository,
+            SessionRegistry sessionRegistry,
+            ApplicationSecurityProperties properties
     ) throws Exception {
         AuthorizationManager<RequestAuthorizationContext> adminAccess = AuthorizationManagers.allOf(
                 AuthorityAuthorizationManager.hasRole("ADMIN"),
-                passwordChanged
+                components.passwordChanged()
         );
 
         http
@@ -55,8 +58,8 @@ public class SecurityConfig {
                         .csrfTokenRepository(csrfTokenRepository)
                         .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))
                 .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint(authenticationEntryPoint)
-                        .accessDeniedHandler(accessDeniedHandler)
+                        .authenticationEntryPoint(components.authenticationEntryPoint())
+                        .accessDeniedHandler(components.accessDeniedHandler())
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
@@ -66,13 +69,22 @@ public class SecurityConfig {
                                 "/api/auth/me", "/api/auth/change-password", "/api/auth/logout"
                         ).authenticated()
                         .requestMatchers(
-                                "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**"
+                                "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**",
+                                "/actuator/metrics/**"
                         ).access(adminAccess)
                         .requestMatchers("/api/admin/**", "/api/sync/**").access(adminAccess)
                         .requestMatchers(
                                 "/api/integration-connections/*/product-category-imports"
                         ).access(adminAccess)
-                        .anyRequest().access(passwordChanged)
+                        .requestMatchers("/api/stores/**", "/api/data-quality/**", "/api/system/status")
+                        .access(components.passwordChanged())
+                        .anyRequest().denyAll()
+                )
+                .sessionManagement(session -> session
+                        .maximumSessions(properties.maxConcurrentSessions())
+                        .maxSessionsPreventsLogin(false)
+                        .sessionRegistry(sessionRegistry)
+                        .expiredSessionStrategy(components.expiredSessionStrategy())
                 )
                 .logout(logout -> logout
                         .logoutUrl("/api/auth/logout")
@@ -80,14 +92,20 @@ public class SecurityConfig {
                         .logoutSuccessHandler((request, response, authentication) ->
                                 response.setStatus(HttpStatus.NO_CONTENT.value()))
                 )
-                .addFilterAfter(userSecurityStateFilter, SecurityContextHolderFilter.class);
+                .addFilterAfter(
+                        components.userSecurityStateFilter(),
+                        SecurityContextHolderFilter.class
+                );
 
         return http.build();
     }
 
     @Bean
     PasswordEncoder passwordEncoder() {
-        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+        return new DelegatingPasswordEncoder(
+                "bcrypt",
+                java.util.Map.of("bcrypt", new BCryptPasswordEncoder(12))
+        );
     }
 
     @Bean
@@ -96,8 +114,13 @@ public class SecurityConfig {
     }
 
     @Bean
-    CsrfTokenRepository csrfTokenRepository() {
-        return CookieCsrfTokenRepository.withHttpOnlyFalse();
+    CsrfTokenRepository csrfTokenRepository(ApplicationSecurityProperties properties) {
+        CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        repository.setCookieCustomizer(cookie -> cookie
+                .secure(properties.secureCookies())
+                .sameSite("Lax")
+                .path("/"));
+        return repository;
     }
 
     @Bean
@@ -106,16 +129,62 @@ public class SecurityConfig {
     }
 
     @Bean
+    SessionRegistry sessionRegistry() {
+        return new SessionRegistryImpl();
+    }
+
+    @Bean
+    HttpSessionEventPublisher httpSessionEventPublisher() {
+        return new HttpSessionEventPublisher();
+    }
+
+    @Bean
     CorsConfigurationSource corsConfigurationSource(ApplicationSecurityProperties properties) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(properties.corsAllowedOrigins());
+        configuration.setAllowedOrigins(validateOrigins(properties.corsAllowedOrigins()));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-XSRF-TOKEN"));
-        configuration.setExposedHeaders(List.of("X-XSRF-TOKEN"));
+        configuration.setAllowedHeaders(List.of(
+                "Content-Type", "X-XSRF-TOKEN", "X-Correlation-ID"
+        ));
+        configuration.setExposedHeaders(List.of(
+                "X-XSRF-TOKEN", "X-Correlation-ID"
+        ));
         configuration.setAllowCredentials(true);
+        configuration.setMaxAge(Duration.ofHours(1));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
+    }
+
+    private List<String> validateOrigins(List<String> configuredOrigins) {
+        LinkedHashSet<String> origins = new LinkedHashSet<>();
+        for (String configuredOrigin : configuredOrigins) {
+            String origin = configuredOrigin == null ? "" : configuredOrigin.trim();
+            if (origin.isEmpty() || origin.contains("*")) {
+                throw new IllegalArgumentException("CORS origins must be explicit");
+            }
+            URI uri;
+            try {
+                uri = URI.create(origin);
+            } catch (IllegalArgumentException exception) {
+                throw new IllegalArgumentException("CORS origin is invalid", exception);
+            }
+            String scheme = uri.getScheme();
+            if (scheme == null || uri.getHost() == null || uri.getUserInfo() != null
+                    || uri.getQuery() != null || uri.getFragment() != null
+                    || (uri.getPath() != null && !uri.getPath().isEmpty())) {
+                throw new IllegalArgumentException("CORS origin must contain only scheme and authority");
+            }
+            String normalizedScheme = scheme.toLowerCase(Locale.ROOT);
+            if (!normalizedScheme.equals("http") && !normalizedScheme.equals("https")) {
+                throw new IllegalArgumentException("CORS origin must use HTTP or HTTPS");
+            }
+            origins.add(origin);
+        }
+        if (origins.isEmpty()) {
+            throw new IllegalArgumentException("At least one CORS origin must be configured");
+        }
+        return List.copyOf(origins);
     }
 }

@@ -64,6 +64,6 @@ public class BootstrapAdminRunner implements ApplicationRunner {
                 UserRole.ADMIN
         );
         userRepository.save(administrator);
-        LOGGER.info("Bootstrap administrator created for {}", administrator.getEmail());
+        LOGGER.info("Bootstrap administrator created");
     }
 }

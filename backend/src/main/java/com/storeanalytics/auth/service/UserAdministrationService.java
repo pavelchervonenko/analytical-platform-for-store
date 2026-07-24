@@ -1,5 +1,9 @@
 package com.storeanalytics.auth.service;
 
+import com.storeanalytics.audit.service.AuditAction;
+import com.storeanalytics.audit.service.AuditEntityType;
+import com.storeanalytics.audit.service.AuditLogService;
+import com.storeanalytics.audit.service.AuditTarget;
 import com.storeanalytics.auth.exception.ManagedUserNotFoundException;
 import com.storeanalytics.auth.exception.UserAdministrationConflictException;
 import com.storeanalytics.auth.exception.UserEmailConflictException;
@@ -8,10 +12,12 @@ import com.storeanalytics.auth.model.UserRole;
 import com.storeanalytics.auth.model.UserStoreAccess;
 import com.storeanalytics.auth.repository.AppUserRepository;
 import com.storeanalytics.auth.repository.UserStoreAccessRepository;
+import com.storeanalytics.common.security.SecurityAuditLogger;
 import com.storeanalytics.store.model.Store;
 import com.storeanalytics.store.repository.StoreRepository;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -26,19 +32,25 @@ public class UserAdministrationService {
     private final StoreRepository storeRepository;
     private final PasswordEncoder passwordEncoder;
     private final PasswordPolicy passwordPolicy;
+    private final SecurityAuditLogger securityAuditLogger;
+    private final AuditLogService auditLogService;
 
     public UserAdministrationService(
             AppUserRepository userRepository,
             UserStoreAccessRepository accessRepository,
             StoreRepository storeRepository,
             PasswordEncoder passwordEncoder,
-            PasswordPolicy passwordPolicy
+            PasswordPolicy passwordPolicy,
+            SecurityAuditLogger securityAuditLogger,
+            AuditLogService auditLogService
     ) {
         this.userRepository = userRepository;
         this.accessRepository = accessRepository;
         this.storeRepository = storeRepository;
         this.passwordEncoder = passwordEncoder;
         this.passwordPolicy = passwordPolicy;
+        this.securityAuditLogger = securityAuditLogger;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional(readOnly = true)
@@ -63,7 +75,18 @@ public class UserAdministrationService {
         );
         userRepository.save(user);
         replaceStoreAccesses(user, command.storeIds(), actor);
-        return createView(user);
+        AdminUserView result = createView(user);
+        auditLogService.record(
+                actorId,
+                null,
+                AuditAction.USER_CREATED,
+                new AuditTarget(AuditEntityType.USER, user.getId()),
+                null,
+                null,
+                userSummary(result)
+        );
+        securityAuditLogger.userAdministration("create", actorId, user.getId());
+        return result;
     }
 
     @Transactional
@@ -76,6 +99,7 @@ public class UserAdministrationService {
             );
         }
         protectLastAdministrator(user, command.role(), command.active());
+        Map<String, Object> before = userSummary(createView(user));
         user.updateProfile(command.displayName(), command.role());
         if (command.active()) {
             user.activate();
@@ -85,15 +109,38 @@ public class UserAdministrationService {
         if (command.role() == UserRole.ADMIN) {
             removeStoreAccesses(user.getId());
         }
-        return createView(user);
+        AdminUserView result = createView(user);
+        auditLogService.record(
+                actorId,
+                null,
+                AuditAction.USER_CHANGED,
+                new AuditTarget(AuditEntityType.USER, userId),
+                null,
+                before,
+                userSummary(result)
+        );
+        securityAuditLogger.userAdministration("update", actorId, userId);
+        return result;
     }
 
     @Transactional
     public AdminUserView replaceStoreAccesses(UUID userId, Set<UUID> storeIds, UUID actorId) {
         AppUser user = requireUser(userId);
         AppUser actor = requireUser(actorId);
+        Map<String, Object> before = userSummary(createView(user));
         replaceStoreAccesses(user, storeIds, actor);
-        return createView(user);
+        AdminUserView result = createView(user);
+        auditLogService.record(
+                actorId,
+                null,
+                AuditAction.USER_STORE_ACCESS_CHANGED,
+                new AuditTarget(AuditEntityType.USER, userId),
+                null,
+                before,
+                userSummary(result)
+        );
+        securityAuditLogger.userAdministration("replace_store_access", actorId, userId);
+        return result;
     }
 
     @Transactional
@@ -105,8 +152,20 @@ public class UserAdministrationService {
         }
         passwordPolicy.validate(temporaryPassword);
         AppUser user = requireUser(userId);
+        Map<String, Object> before = userSummary(createView(user));
         user.resetPassword(passwordEncoder.encode(temporaryPassword));
-        return createView(user);
+        AdminUserView result = createView(user);
+        auditLogService.record(
+                actorId,
+                null,
+                AuditAction.USER_PASSWORD_RESET,
+                new AuditTarget(AuditEntityType.USER, userId),
+                null,
+                before,
+                userSummary(result)
+        );
+        securityAuditLogger.userAdministration("reset_password", actorId, userId);
+        return result;
     }
 
     private void replaceStoreAccesses(AppUser user, Set<UUID> requestedStoreIds, AppUser actor) {
@@ -144,7 +203,7 @@ public class UserAdministrationService {
                 && user.isActive()
                 && (newRole != UserRole.ADMIN || !newActive);
         if (removesActiveAdministrator
-                && userRepository.countByRoleAndActiveTrue(UserRole.ADMIN) <= 1) {
+                && userRepository.findAllActiveByRoleForUpdate(UserRole.ADMIN).size() <= 1) {
             throw new UserAdministrationConflictException(
                     "The last active administrator cannot be demoted or deactivated"
             );
@@ -170,6 +229,18 @@ public class UserAdministrationService {
                 storeIds,
                 user.getLastLoginAt(),
                 user.getVersion()
+        );
+    }
+
+    private Map<String, Object> userSummary(AdminUserView user) {
+        return Map.of(
+                "displayName", user.displayName(),
+                "role", user.role(),
+                "active", user.active(),
+                "passwordChangeRequired", user.passwordChangeRequired(),
+                "allStores", user.allStores(),
+                "storeIds", user.storeIds(),
+                "version", user.version()
         );
     }
 

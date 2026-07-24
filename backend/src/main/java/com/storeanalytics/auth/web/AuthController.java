@@ -7,17 +7,19 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import java.util.Comparator;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.session.SessionInformation;
 import org.springframework.security.web.authentication.logout.CookieClearingLogoutHandler;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
-import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfToken;
-import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -30,23 +32,20 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthenticationManager authenticationManager;
-    private final SecurityContextRepository securityContextRepository;
-    private final CsrfTokenRepository csrfTokenRepository;
     private final AuthenticationService authenticationService;
     private final CurrentUserViewService currentUserViewService;
+    private final AuthControllerSecurityComponents security;
 
     public AuthController(
             AuthenticationManager authenticationManager,
-            SecurityContextRepository securityContextRepository,
-            CsrfTokenRepository csrfTokenRepository,
             AuthenticationService authenticationService,
-            CurrentUserViewService currentUserViewService
+            CurrentUserViewService currentUserViewService,
+            AuthControllerSecurityComponents security
     ) {
         this.authenticationManager = authenticationManager;
-        this.securityContextRepository = securityContextRepository;
-        this.csrfTokenRepository = csrfTokenRepository;
         this.authenticationService = authenticationService;
         this.currentUserViewService = currentUserViewService;
+        this.security = security;
     }
 
     @GetMapping("/csrf")
@@ -60,23 +59,46 @@ public class AuthController {
             HttpServletRequest request,
             HttpServletResponse response
     ) {
-        Authentication authentication = authenticationManager.authenticate(
-                UsernamePasswordAuthenticationToken.unauthenticated(
-                        loginRequest.email(),
-                        loginRequest.password()
-                )
+        String clientAddress = request.getRemoteAddr();
+        security.loginThrottleService().checkAllowed(loginRequest.email(), clientAddress);
+
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(
+                    UsernamePasswordAuthenticationToken.unauthenticated(
+                            loginRequest.email(),
+                            loginRequest.password()
+                    )
+            );
+        } catch (AuthenticationException exception) {
+            security.loginThrottleService().recordFailure(loginRequest.email(), clientAddress);
+            security.securityAuditLogger().loginFailed(loginRequest.email(), clientAddress);
+            throw exception;
+        }
+
+        AppUserPrincipal principal = requirePrincipal(authentication);
+        authenticationService.recordSuccessfulLogin(
+                principal.getUserId(),
+                loginRequest.password()
         );
+        security.loginThrottleService().recordSuccess(loginRequest.email());
+
         HttpSession session = request.getSession(true);
         request.changeSessionId();
+        expireOldSessions(principal);
+        security.sessionRegistry().registerNewSession(session.getId(), principal);
 
         SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
         securityContext.setAuthentication(authentication);
         SecurityContextHolder.setContext(securityContext);
-        securityContextRepository.saveContext(securityContext, request, response);
+        security.securityContextRepository().saveContext(
+                securityContext,
+                request,
+                response
+        );
 
-        AppUserPrincipal principal = requirePrincipal(authentication);
-        authenticationService.recordSuccessfulLogin(principal.getUserId());
-        csrfTokenRepository.saveToken(null, request, response);
+        security.csrfTokenRepository().saveToken(null, request, response);
+        security.securityAuditLogger().loginSucceeded(principal.getUserId(), clientAddress);
         return currentUserViewService.create(principal);
     }
 
@@ -99,9 +121,24 @@ public class AuthController {
                 changeRequest.currentPassword(),
                 changeRequest.newPassword()
         );
+        security.securityAuditLogger().passwordChanged(principal.getUserId());
         new SecurityContextLogoutHandler().logout(request, response, authentication);
         new CookieClearingLogoutHandler("JSESSIONID", "XSRF-TOKEN")
                 .logout(request, response, authentication);
+    }
+
+    private void expireOldSessions(AppUserPrincipal principal) {
+        List<SessionInformation> sessions = security.sessionRegistry()
+                .getAllSessions(principal, false)
+                .stream()
+                .sorted(Comparator.comparing(SessionInformation::getLastRequest))
+                .toList();
+        int sessionsToExpire = sessions.size()
+                - security.securityProperties().maxConcurrentSessions()
+                + 1;
+        for (int index = 0; index < sessionsToExpire; index++) {
+            sessions.get(index).expireNow();
+        }
     }
 
     private AppUserPrincipal requirePrincipal(Authentication authentication) {

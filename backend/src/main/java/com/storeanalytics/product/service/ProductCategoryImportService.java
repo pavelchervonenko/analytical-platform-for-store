@@ -1,5 +1,13 @@
 package com.storeanalytics.product.service;
 
+import com.storeanalytics.audit.service.AuditAction;
+import com.storeanalytics.audit.service.AuditEntityType;
+import com.storeanalytics.audit.service.AuditLogService;
+import com.storeanalytics.audit.service.AuditTarget;
+import com.storeanalytics.common.exception.InvalidRequestException;
+import com.storeanalytics.product.exception.ProductClassificationConflictException;
+import com.storeanalytics.auth.model.AppUser;
+import com.storeanalytics.auth.repository.AppUserRepository;
 import com.storeanalytics.integration.connection.model.IntegrationConnection;
 import com.storeanalytics.integration.connection.repository.IntegrationConnectionRepository;
 import com.storeanalytics.product.model.AnalyticsCategory;
@@ -21,6 +29,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
@@ -37,21 +46,32 @@ public class ProductCategoryImportService {
     private final ProductRepository productRepository;
     private final ProductCategoryAssignmentRepository assignmentRepository;
     private final EntityManager entityManager;
+    private final AppUserRepository userRepository;
+    private final AuditLogService auditLogService;
 
     public ProductCategoryImportService(
             IntegrationConnectionRepository connectionRepository,
             ProductRepository productRepository,
             ProductCategoryAssignmentRepository assignmentRepository,
-            EntityManager entityManager
+            EntityManager entityManager,
+            AppUserRepository userRepository,
+            AuditLogService auditLogService
     ) {
         this.connectionRepository = connectionRepository;
         this.productRepository = productRepository;
         this.assignmentRepository = assignmentRepository;
         this.entityManager = entityManager;
+        this.userRepository = userRepository;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional
-    public ProductCategoryImportResult importAssignments(ProductCategoryImportCommand command) {
+    public ProductCategoryImportResult importAssignments(
+            ProductCategoryImportCommand command,
+            UUID actorId
+    ) {
+        AppUser actor = userRepository.findById(actorId)
+                .orElseThrow(() -> new IllegalArgumentException("actor does not exist"));
         IntegrationConnection connection = findLiveSkladConnection(command.connectionKey());
         Map<String, AnalyticsCategory> categories = loadCategories(command.assignments());
         Map<String, Product> products = loadProducts(connection, command.assignments());
@@ -73,7 +93,7 @@ public class ProductCategoryImportService {
         for (ProductCategoryImportEntry entry : command.assignments()) {
             Product product = products.get(entry.externalProductId());
             AnalyticsCategory category = categories.get(entry.categoryCode());
-            CategoryAssignmentDetails details = assignmentDetails(command, entry);
+            CategoryAssignmentDetails details = assignmentDetails(command, entry, actor);
             List<ExistingAssignment> existing = existingAssignments.getOrDefault(
                     product.getId(),
                     List.of()
@@ -84,7 +104,7 @@ public class ProductCategoryImportService {
                     && existing.getFirst().matches(product, category, details)) {
                 unchanged++;
             } else {
-                throw new IllegalStateException(
+                throw new ProductClassificationConflictException(
                         "Product " + entry.externalProductId()
                                 + " already has a conflicting category history"
                 );
@@ -92,7 +112,17 @@ public class ProductCategoryImportService {
         }
 
         if (!newAssignments.isEmpty()) {
-            assignmentRepository.saveAll(newAssignments);
+            List<ProductCategoryAssignment> saved =
+                    assignmentRepository.saveAllAndFlush(newAssignments);
+            saved.forEach(assignment -> auditLogService.record(
+                    actorId,
+                    null,
+                    AuditAction.ANALYTICS_PRODUCT_CLASSIFIED,
+                    new AuditTarget(AuditEntityType.PRODUCT_CATEGORY_ASSIGNMENT, assignment.getId()),
+                    command.changeReason(),
+                    null,
+                    classificationSummary(assignment)
+            ));
         }
         return new ProductCategoryImportResult(
                 command.assignments().size(),
@@ -117,7 +147,7 @@ public class ProductCategoryImportService {
                 .map(ProductCategoryImportEntry::categoryCode)
                 .collect(Collectors.toSet());
         if (requestedCodes.contains(UNMAPPED_CATEGORY_CODE)) {
-            throw new IllegalArgumentException(
+            throw new InvalidRequestException(
                     "UNMAPPED must be represented by the absence of a category assignment"
             );
         }
@@ -138,7 +168,7 @@ public class ProductCategoryImportService {
                 .sorted()
                 .toList();
         if (!missingCodes.isEmpty()) {
-            throw new IllegalArgumentException(
+            throw new InvalidRequestException(
                     "Unknown or inactive analytics categories: " + String.join(", ", missingCodes)
             );
         }
@@ -238,7 +268,8 @@ public class ProductCategoryImportService {
 
     private CategoryAssignmentDetails assignmentDetails(
             ProductCategoryImportCommand command,
-            ProductCategoryImportEntry entry
+            ProductCategoryImportEntry entry,
+            AppUser actor
     ) {
         return new CategoryAssignmentDetails(
                 entry.conditionType(),
@@ -246,8 +277,22 @@ public class ProductCategoryImportService {
                 command.ruleVersion(),
                 command.validFrom(),
                 null,
-                null,
+                actor,
                 command.changeReason()
+        );
+    }
+
+    private Map<String, Object> classificationSummary(
+            ProductCategoryAssignment assignment
+    ) {
+        return Map.of(
+                "productId", assignment.getProduct().getId(),
+                "externalProductId", assignment.getProduct().getExternalId(),
+                "categoryCode", assignment.getAnalyticsCategory().getCode(),
+                "conditionType", assignment.getConditionType(),
+                "assignmentSource", assignment.getAssignmentSource(),
+                "ruleVersion", assignment.getRuleVersion(),
+                "validFrom", assignment.getValidFrom()
         );
     }
 
