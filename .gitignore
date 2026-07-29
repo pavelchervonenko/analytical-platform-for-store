@@ -18,7 +18,12 @@ logs/
 node_modules/
 dist/
 coverage/
+playwright-report/
+test-results/
 __pycache__/
 *.py[cod]
+
+# Customer-derived classification and discovery artifacts are local/confidential.
+outputs/
 
 docker/postgres-data/

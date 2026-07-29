@@ -1,0 +1,10 @@
+.git
+**/.env
+**/.env.*
+**/*.orig
+**/*.rej
+**/*.bak
+**/.gradle
+**/build
+**/node_modules
+**/dist

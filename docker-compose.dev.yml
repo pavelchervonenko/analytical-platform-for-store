@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-store_analytics}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - store_analytics_pgdata:/var/lib/postgresql/data
     healthcheck:
