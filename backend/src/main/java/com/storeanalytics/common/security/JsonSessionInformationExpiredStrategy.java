@@ -1,6 +1,6 @@
 package com.storeanalytics.common.security;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.storeanalytics.common.web.ApiErrorCode;
 import com.storeanalytics.common.web.ApiErrorFactory;
 import com.storeanalytics.common.web.CorrelationId;
@@ -18,9 +18,17 @@ public class JsonSessionInformationExpiredStrategy
         implements SessionInformationExpiredStrategy {
 
     private final ObjectMapper objectMapper;
+    private final ClientAddressResolver clientAddressResolver;
+    private final SecurityAuditLogger securityAuditLogger;
 
-    public JsonSessionInformationExpiredStrategy(ObjectMapper objectMapper) {
+    public JsonSessionInformationExpiredStrategy(
+            ObjectMapper objectMapper,
+            ClientAddressResolver clientAddressResolver,
+            SecurityAuditLogger securityAuditLogger
+    ) {
         this.objectMapper = objectMapper;
+        this.clientAddressResolver = clientAddressResolver;
+        this.securityAuditLogger = securityAuditLogger;
     }
 
     @Override
@@ -28,12 +36,13 @@ public class JsonSessionInformationExpiredStrategy
             throws IOException {
         HttpServletRequest request = event.getRequest();
         HttpServletResponse response = event.getResponse();
+        securityAuditLogger.sessionExpired(clientAddressResolver.resolve(request));
         HttpStatus status = HttpStatus.UNAUTHORIZED;
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setHeader(
                 CorrelationId.HEADER_NAME,
-                CorrelationId.getOrCreate(request)
+                CorrelationId.getOrCreateRequestId(request)
         );
         objectMapper.writeValue(response.getOutputStream(), ApiErrorFactory.create(
                 status,

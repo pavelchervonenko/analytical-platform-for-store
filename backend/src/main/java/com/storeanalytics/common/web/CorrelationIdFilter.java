@@ -5,7 +5,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.util.UUID;
+import java.util.Enumeration;
 import java.util.regex.Pattern;
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
@@ -28,20 +28,45 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        String correlationId = acceptedOrGenerated(request.getHeader(CorrelationId.HEADER_NAME));
-        request.setAttribute(CorrelationId.ATTRIBUTE_NAME, correlationId);
-        response.setHeader(CorrelationId.HEADER_NAME, correlationId);
-        try (MDC.MDCCloseable ignored = MDC.putCloseable(
-                CorrelationId.MDC_KEY, correlationId
+        String requestId = CorrelationId.getOrCreateRequestId(request);
+        String clientHint = validatedClientHint(request);
+        if (clientHint != null) {
+            request.setAttribute(CorrelationId.CLIENT_HINT_ATTRIBUTE_NAME, clientHint);
+        }
+        response.setHeader(CorrelationId.HEADER_NAME, requestId);
+        try (MDC.MDCCloseable ignoredRequestId = MDC.putCloseable(
+                CorrelationId.REQUEST_ID_MDC_KEY, requestId
+        )) {
+            doFilterWithClientHint(request, response, filterChain, clientHint);
+        }
+    }
+
+    private void doFilterWithClientHint(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain,
+            String clientHint
+    ) throws ServletException, IOException {
+        if (clientHint == null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        try (MDC.MDCCloseable ignoredClientHint = MDC.putCloseable(
+                CorrelationId.CLIENT_HINT_MDC_KEY, clientHint
         )) {
             filterChain.doFilter(request, response);
         }
     }
 
-    private String acceptedOrGenerated(String candidate) {
-        if (candidate != null && SAFE_VALUE.matcher(candidate).matches()) {
-            return candidate;
+    private String validatedClientHint(HttpServletRequest request) {
+        Enumeration<String> values = request.getHeaders(CorrelationId.HEADER_NAME);
+        if (values == null || !values.hasMoreElements()) {
+            return null;
         }
-        return UUID.randomUUID().toString();
+        String candidate = values.nextElement();
+        if (values.hasMoreElements() || !SAFE_VALUE.matcher(candidate).matches()) {
+            return null;
+        }
+        return candidate;
     }
 }
