@@ -1,13 +1,14 @@
 import { z } from "zod";
 import { apiClient } from "../api/client";
 import { storeDataStatusSchema } from "../api/contracts";
+import { forwardCompatibleEnum } from "../api/enumSchema";
 
-const healthSchema = z.enum(["OK", "WARNING", "ERROR"]);
-const freshnessSchema = z.enum(["NOT_SYNCED", "CURRENT", "STALE", "SYNCING", "ERROR"]);
-const severitySchema = z.enum(["INFO", "WARNING", "ERROR"]);
+const healthSchema = forwardCompatibleEnum(["OK", "WARNING", "ERROR"]);
+const freshnessSchema = forwardCompatibleEnum(["NOT_SYNCED", "CURRENT", "STALE", "SYNCING", "ERROR"]);
+const severitySchema = forwardCompatibleEnum(["INFO", "WARNING", "ERROR"]);
 
-export const qualityActionSchema = z.enum(["NONE", "WAIT_FOR_SYNC", "RUN_SYNC", "REVIEW_SOURCE_DOCUMENT"]);
-export const periodQualityActionSchema = z.enum([
+export const qualityActionSchema = forwardCompatibleEnum(["NONE", "WAIT_FOR_SYNC", "RUN_SYNC", "REVIEW_SOURCE_DOCUMENT"]);
+export const periodQualityActionSchema = forwardCompatibleEnum([
   "NONE", "WAIT_FOR_SYNC", "RUN_SYNC", "SET_STORE_PLAN", "UPDATE_WORK_SCHEDULE",
   "REVIEW_EMPLOYEE_ELIGIBILITY", "CLASSIFY_PRODUCTS", "PROVIDE_COST_DATA",
   "CALCULATE_PAYROLL", "RECALCULATE_PAYROLL", "FINALIZE_RATING", "REVIEW_DATA_ISSUES"
@@ -30,14 +31,14 @@ const detailSchema = z.object({
   summary: storeSummarySchema,
   dataStatus: storeDataStatusSchema,
   issues: z.array(z.object({
-    key: z.string(), source: z.enum(["SYNCHRONIZATION", "SALES", "RETURNS", "DATA"]), code: z.string(),
+    key: z.string(), source: forwardCompatibleEnum(["SYNCHRONIZATION", "SALES", "RETURNS", "DATA"]), code: z.string(),
     severity: severitySchema, entityType: z.string(), message: z.string(), detectedAt: z.string().nullable(),
     recommendedAction: qualityActionSchema
   }))
 });
 
 const areaSchema = z.object({
-  code: z.enum(["SOURCE_DATA", "STORE_PLAN", "EMPLOYEE_RATING", "PAYROLL"]), status: healthSchema,
+  code: forwardCompatibleEnum(["SOURCE_DATA", "STORE_PLAN", "EMPLOYEE_RATING", "PAYROLL"]), status: healthSchema,
   ready: z.boolean(), issueCount: z.number().int().nonnegative(), errorCount: z.number().int().nonnegative(),
   warningCount: z.number().int().nonnegative(), infoCount: z.number().int().nonnegative()
 });
@@ -51,7 +52,7 @@ const periodSchema = z.object({
     unmappedItemCount: z.number().int().nonnegative(), missingCostItemCount: z.number().int().nonnegative(),
     unexpectedZeroCostItemCount: z.number().int().nonnegative(), openQualityIssueCount: z.number().int().nonnegative()
   }),
-  storePlan: z.object({ planPresent: z.boolean(), inputDataCompleteThroughAsOf: z.boolean(), classificationComplete: z.boolean(), unmappedItemCount: z.number().int().nonnegative(), openQualityIssueCount: z.number().int().nonnegative(), formulaVersion: z.string() }),
+  storePlan: z.object({ planPresent: z.boolean(), inputDataCompleteThroughAsOf: z.boolean(), classificationComplete: z.boolean(), unmappedItemCount: z.number().int().nonnegative(), openQualityIssueCount: z.number().int().nonnegative(), formulaVersion: z.string().nullable() }),
   employeeRating: z.object({ planCoverageComplete: z.boolean(), employeeCount: z.number().int().nonnegative(), eligibleEmployeeCount: z.number().int().nonnegative(), employeeWithShiftCount: z.number().int().nonnegative(), rankedEmployeeCount: z.number().int().nonnegative(), salesWithoutShiftCount: z.number().int().nonnegative(), insufficientScoreCoverageCount: z.number().int().nonnegative(), historyStatus: z.string(), formulaVersion: z.string() }),
   payroll: z.object({ readinessStatus: z.string(), canCalculate: z.boolean(), canApprove: z.boolean(), planPresent: z.boolean(), schemePresent: z.boolean(), salesDayCount: z.number().int().nonnegative(), scheduledDayCount: z.number().int().nonnegative(), unmappedItemCount: z.number().int().nonnegative(), missingCostItemCount: z.number().int().nonnegative(), daysWithoutShift: z.number().int().nonnegative(), calculated: z.boolean(), runStatus: z.string().nullable(), freshness: z.unknown().nullable() }),
   issues: z.array(z.object({ key: z.string(), area: z.string(), code: z.string(), severity: severitySchema, message: z.string(), affectedCount: z.number().int().nullable(), recommendedAction: periodQualityActionSchema })),

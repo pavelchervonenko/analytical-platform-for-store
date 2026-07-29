@@ -1,11 +1,38 @@
 import { z } from "zod";
+import type {
+  ActiveSessionListResponse,
+  CsrfConfigurationResponse,
+  SystemStatusView
+} from "./generated";
+import { forwardCompatibleEnum } from "./enumSchema";
+
+export interface PageResponse<T> {
+  items: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+export const pageResponseSchema = <T extends z.ZodType>(itemSchema: T) => z.object({
+  items: z.array(itemSchema),
+  page: z.number().int().nonnegative(),
+  size: z.number().int().positive(),
+  totalElements: z.number().int().nonnegative(),
+  totalPages: z.number().int().nonnegative(),
+  hasNext: z.boolean(),
+  hasPrevious: z.boolean()
+});
 
 export const apiErrorPayloadSchema = z.object({
   timestamp: z.string(),
   status: z.number().int(),
   code: z.string(),
   message: z.string(),
-  path: z.string()
+  path: z.string(),
+  correlationId: z.string().min(1).max(64)
 });
 
 export type ApiErrorPayload = z.infer<typeof apiErrorPayloadSchema>;
@@ -13,21 +40,42 @@ export type ApiErrorPayload = z.infer<typeof apiErrorPayloadSchema>;
 export const csrfConfigurationSchema = z.object({
   headerName: z.string().min(1),
   cookieName: z.string().min(1)
-});
+}) satisfies z.ZodType<CsrfConfigurationResponse>;
 
 export type CsrfConfiguration = z.infer<typeof csrfConfigurationSchema>;
+
+export const systemStatusSchema = z.object({
+  application: z.string(),
+  version: z.string(),
+  apiContractVersion: z.string().regex(/^[1-9][0-9]*$/u),
+  time: z.string()
+}) satisfies z.ZodType<SystemStatusView>;
+
+export type SystemStatus = z.infer<typeof systemStatusSchema>;
 
 export const currentUserSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
   displayName: z.string(),
-  role: z.union([z.literal("ADMIN"), z.literal("MANAGER")]),
+  role: forwardCompatibleEnum(["ADMIN", "MANAGER"]),
   passwordChangeRequired: z.boolean(),
   allStores: z.boolean(),
   storeIds: z.array(z.string().uuid())
 });
 
 export type CurrentUser = z.infer<typeof currentUserSchema>;
+
+export const activeSessionSchema = z.object({
+  sessionReference: z.string().min(1).max(256),
+  lastSeenAt: z.string().datetime({ offset: true }),
+  current: z.boolean()
+});
+
+export const activeSessionListSchema = z.object({
+  sessions: z.array(activeSessionSchema).max(3)
+}) satisfies z.ZodType<ActiveSessionListResponse>;
+
+export type ActiveSession = z.infer<typeof activeSessionSchema>;
 
 export const storeSummarySchema = z.object({
   id: z.string().uuid(),
@@ -278,6 +326,14 @@ export const employeeShiftSchema = z.object({
 
 export const employeeShiftListSchema = z.array(employeeShiftSchema);
 export type EmployeeShift = z.infer<typeof employeeShiftSchema>;
+
+export const workScheduleDaySchema = z.object({
+  storeId: z.string().uuid(),
+  workDate: z.string(),
+  revision: z.number().int().nonnegative(),
+  shifts: employeeShiftListSchema
+});
+export type WorkScheduleDay = z.infer<typeof workScheduleDaySchema>;
 export interface WorkShiftInput { employeeId: string; workedHours: number; }
 
 const periodQualityIssueSchema = z.object({
@@ -486,8 +542,8 @@ export type EmployeeDirectory = z.infer<typeof employeeDirectorySchema>;
 export type EmployeeCard = z.infer<typeof employeeCardSchema>;
 export type EmployeeRatingSetting = z.infer<typeof employeeRatingSettingSchema>;
 
-const payrollRunStatusSchema = z.enum(["CALCULATED", "APPROVED", "PAID", "UNKNOWN"]).catch("UNKNOWN");
-const payrollFreshnessStatusSchema = z.enum(["CURRENT", "STALE", "UNKNOWN"]).catch("UNKNOWN");
+const payrollRunStatusSchema = forwardCompatibleEnum(["CALCULATED", "APPROVED", "PAID"]);
+const payrollFreshnessStatusSchema = forwardCompatibleEnum(["CURRENT", "STALE"]);
 
 export const payrollPlanResultSchema = z.object({
   revenueTarget: z.number(),
@@ -561,7 +617,7 @@ const payrollShiftIssueSchema = z.object({ workDate: z.string(), fundAmount: z.n
 export const payrollReadinessSchema = z.object({
   storeId: z.string().uuid(),
   periodMonth: z.string(),
-  status: z.enum(["READY", "NEEDS_CORRECTION", "BLOCKED"]).catch("BLOCKED"),
+  status: forwardCompatibleEnum(["READY", "NEEDS_CORRECTION", "BLOCKED"]),
   canCalculate: z.boolean(),
   canApprove: z.boolean(),
   planPresent: z.boolean(),
@@ -673,7 +729,18 @@ export const payrollRunDetailSchema = z.object({
   events: z.array(payrollEventSchema)
 });
 
-export const payrollRunListSchema = z.array(payrollRunSummarySchema);
+export const payrollRunListItemSchema = z.object({
+  id: z.string().uuid(),
+  storeId: z.string().uuid(),
+  periodMonth: z.string(),
+  revision: z.number().int().positive(),
+  supersedesRunId: z.string().uuid().nullable(),
+  revisionReason: z.string().nullable(),
+  status: payrollRunStatusSchema,
+  createdAt: z.string()
+});
+
+export const payrollRunListSchema = pageResponseSchema(payrollRunListItemSchema);
 
 const payrollRevisionSummaryChangeSchema = z.object({
   employeeId: z.string().uuid(), employeeName: z.string(), previousEarnedAmount: z.number(),
@@ -699,6 +766,7 @@ export type PayrollReadiness = z.infer<typeof payrollReadinessSchema>;
 export type PayrollPreview = z.infer<typeof payrollPreviewSchema>;
 export type PayrollPlanResult = z.infer<typeof payrollPlanResultSchema>;
 export type PayrollRunSummary = z.infer<typeof payrollRunSummarySchema>;
+export type PayrollRunListItem = z.infer<typeof payrollRunListItemSchema>;
 export type PayrollRunDetail = z.infer<typeof payrollRunDetailSchema>;
 export type PayrollStatement = z.infer<typeof payrollStatementSchema>;
 export type PayrollDailyPool = z.infer<typeof payrollDailyPoolSchema>;
@@ -714,10 +782,7 @@ const reportActorSchema = z.object({
   displayName: z.string()
 });
 
-const reportCoverageSchema = z.union([
-  z.literal("COMPLETE"),
-  z.literal("PARTIAL_FIRST_YEAR")
-]);
+const reportCoverageSchema = forwardCompatibleEnum(["COMPLETE", "PARTIAL_FIRST_YEAR"]);
 
 const reportHeaderSchema = z.object({
   storeId: z.string().uuid(),
@@ -736,11 +801,11 @@ const reportHeaderSchema = z.object({
 export const reportSummarySchema = z.object({
   id: z.string().uuid(),
   storeId: z.string().uuid(),
-  type: z.union([z.literal("MONTHLY"), z.literal("ANNUAL")]),
+  type: forwardCompatibleEnum(["MONTHLY", "ANNUAL"]),
   periodStart: z.string(),
   periodEnd: z.string(),
   coverage: reportCoverageSchema,
-  status: z.literal("FINALIZED"),
+  status: forwardCompatibleEnum(["FINALIZED"]),
   revision: z.number().int().positive(),
   currentRevision: z.boolean(),
   supersedesReportId: z.string().uuid().nullable(),
@@ -752,7 +817,8 @@ export const reportSummarySchema = z.object({
   finalizedBy: reportActorSchema.nullable()
 });
 
-export const reportSummaryListSchema = z.array(reportSummarySchema);
+export const reportSummaryListSchema = pageResponseSchema(reportSummarySchema);
+export const reportYearsSchema = z.array(z.number().int());
 
 const reportAverageKpiSchema = z.object({
   formulaVersion: z.string(),

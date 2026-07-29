@@ -38,7 +38,7 @@ export function PeriodSelector({ analyticsEnabled }: { analyticsEnabled: boolean
     <details className="period-selector" ref={detailsRef} onToggle={(event) => { if (event.currentTarget.open) resetDraft(); }}>
       <summary aria-label="Выбрать период">
         <CalendarRange size={18} />
-        <span><small>{analyticsEnabled ? "Период аналитики" : "Расчётный месяц"}</small><strong>{analyticsEnabled ? workspace.periodLabel : workspace.month}</strong></span>
+        <span><small>{analyticsEnabled ? "Период аналитики" : "Расчетный месяц"}</small><strong>{analyticsEnabled ? workspace.periodLabel : workspace.month}</strong></span>
         <ChevronDown size={16} />
       </summary>
       <div className="period-popover">

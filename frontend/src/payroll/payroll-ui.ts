@@ -46,12 +46,12 @@ const staleReasonLabels: Record<string, string> = {
 };
 
 const eventLabels: Record<string, string> = {
-  CALCULATED: "Расчёт создан",
+  CALCULATED: "Расчет создан",
   RECALCULATED: "Черновик пересчитан",
   REVISION_CREATED: "Создана новая ревизия",
   ADJUSTMENT_ADDED: "Добавлено удержание",
   ADJUSTMENT_VOIDED: "Удержание отменено",
-  APPROVED: "Расчёт утверждён",
+  APPROVED: "Расчет утвержден",
   PAID: "Выплата отмечена"
 };
 
@@ -70,15 +70,15 @@ export function adjustmentTypeLabel(value: string): string {
 }
 
 export function staleReasonLabel(value: string): string {
-  return staleReasonLabels[value] ?? "Изменился источник расчёта";
+  return staleReasonLabels[value] ?? "Изменился источник расчета";
 }
 
 export function payrollEventLabel(value: string): string {
-  return eventLabels[value] ?? "Событие расчёта";
+  return eventLabels[value] ?? "Событие расчета";
 }
 
 export function comparisonReasonLabel(value: string): string {
-  return comparisonReasonLabels[value] ?? "Изменились данные расчёта";
+  return comparisonReasonLabels[value] ?? "Изменились данные расчета";
 }
 
 export function formatPayrollMoney(value: number | null | undefined, signed = false): string {

@@ -27,5 +27,6 @@ export function describeQualityAction(action: QualityAction, isAdmin: boolean): 
     case "FINALIZE_RATING": return { label: "Зафиксировать рейтинг", route: "/employees" };
     case "REVIEW_DATA_ISSUES":
     case "REVIEW_SOURCE_DOCUMENT": return { label: "Открыть проблемы", route: "/quality", view: "issues" };
+    default: return null;
   }
 }

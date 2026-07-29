@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CalendarCheck2, Check, Clock3, Eraser, Save, UserRoundCheck, UsersRound, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { isApiClientError } from "../api/client";
-import type { EmployeeRatingSetting, EmployeeShift, WorkShiftInput } from "../api/contracts";
-import { getEmployeeRatingSettings, getWorkSchedule, queryKeys, replaceWorkScheduleDay } from "../api/queries";
+import { isApiClientError, type EtaggedResource } from "../api/client";
+import type { EmployeeRatingSetting, EmployeeShift, WorkScheduleDay, WorkShiftInput } from "../api/contracts";
+import { getEmployeeRatingSettings, getWorkSchedule, getWorkScheduleDay, queryKeys, replaceWorkScheduleDay } from "../api/queries";
 import { currentDateInTimeZone, formatDate, formatMonth } from "../shared/date";
 import { formatNumber } from "../shared/format";
 import { QueryError } from "../shared/QueryState";
@@ -29,6 +29,7 @@ function normalizedShifts(shifts: EmployeeShift[]): string {
 function ShiftDayEditor({
   workDate,
   dayShifts,
+  etag,
   settings,
   scheduleKey,
   onClose,
@@ -36,6 +37,7 @@ function ShiftDayEditor({
 }: {
   workDate: string;
   dayShifts: EmployeeShift[];
+  etag: string;
   settings: EmployeeRatingSetting[];
   scheduleKey: readonly unknown[];
   onClose: () => void;
@@ -56,9 +58,9 @@ function ShiftDayEditor({
   }, [dayShifts, settings]);
 
   const mutation = useMutation({
-    mutationFn: (shifts: WorkShiftInput[]) => replaceWorkScheduleDay(storeId, workDate, shifts),
+    mutationFn: (shifts: WorkShiftInput[]) => replaceWorkScheduleDay(storeId, workDate, etag, shifts),
     onSuccess: async (saved) => {
-      queryClient.setQueryData<EmployeeShift[]>(scheduleKey, (current) => [...(current ?? []).filter((shift) => shift.workDate !== workDate), ...saved].sort((left, right) => left.workDate.localeCompare(right.workDate) || left.employeeName.localeCompare(right.employeeName, "ru-RU")));
+      queryClient.setQueryData<EmployeeShift[]>(scheduleKey, (current) => [...(current ?? []).filter((shift) => shift.workDate !== workDate), ...saved.value.shifts].sort((left, right) => left.workDate.localeCompare(right.workDate) || left.employeeName.localeCompare(right.employeeName, "ru-RU")));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.employees(storeId) }),
         queryClient.invalidateQueries({ queryKey: ["stores", storeId, "period-quality"] }),
@@ -73,7 +75,7 @@ function ShiftDayEditor({
   const selectedCount = Object.keys(draft).length;
 
   const requestClose = () => {
-    if (!dirty || window.confirm("Закрыть редактор и потерять несохранённые изменения?")) onClose();
+    if (!dirty || window.confirm("Закрыть редактор и потерять несохраненные изменения?")) onClose();
   };
   const toggle = (employee: RosterEmployee) => {
     setDraft((current) => {
@@ -116,7 +118,7 @@ function ShiftDayEditor({
           const selected = employee.employeeId in draft;
           return <article className={`${selected ? "shift-roster-row--selected" : ""} ${!employee.eligible ? "shift-roster-row--unavailable" : ""}`} key={employee.employeeId}><button className="shift-check" type="button" aria-pressed={selected} disabled={!employee.eligible && !selected} onClick={() => toggle(employee)}><span>{selected && <Check />}</span><i>{employee.displayName.slice(0, 1).toUpperCase()}</i><strong>{employee.displayName}</strong></button><label><span>Часов</span><input type="text" inputMode="decimal" value={draft[employee.employeeId] ?? ""} disabled={!selected || !employee.eligible} onChange={(event) => { setDraft((current) => ({ ...current, [employee.employeeId]: event.target.value })); setErrors((current) => ({ ...current, [employee.employeeId]: "" })); }} aria-invalid={Boolean(errors[employee.employeeId])} /></label>{selected && employee.eligible && <button className="full-shift-button" type="button" onClick={() => setDraft((current) => ({ ...current, [employee.employeeId]: "11" }))}>Полная смена</button>}{!employee.eligible && <small>Недоступен для новых смен</small>}{errors[employee.employeeId] && <p role="alert">{errors[employee.employeeId]}</p>}</article>;
         })}</div>}
-        {mutation.isError && <div className="form-alert" role="alert">{isApiClientError(mutation.error) ? mutation.error.message : "Не удалось сохранить смены. Обновите данные и повторите действие."}</div>}
+        {mutation.isError && <div className="form-alert" role="alert">{isApiClientError(mutation.error) && mutation.error.status === 412 ? "Этот день уже изменен другим пользователем. Закройте редактор и откройте день снова." : isApiClientError(mutation.error) ? mutation.error.message : "Не удалось сохранить смены. Обновите данные и повторите действие."}</div>}
         <footer><div>{dayShifts.length > 0 && <>{clearConfirmation && <span className="clear-confirmation">Очистить весь день?</span>}<button className="button button--ghost button--danger-ghost" type="button" disabled={mutation.isPending} onClick={clear}><Eraser size={15} />{clearConfirmation ? "Подтвердить" : "Очистить день"}</button>{clearConfirmation && <button className="button button--ghost" type="button" onClick={() => setClearConfirmation(false)}>Отмена</button>}</>}</div><button className="button button--primary" type="button" disabled={!dirty || mutation.isPending} onClick={save}><Save size={16} />{mutation.isPending ? "Сохраняем…" : "Сохранить день"}</button></footer>
       </section>
     </div>
@@ -133,8 +135,9 @@ export function SchedulePanel() {
   const scheduleKey = queryKeys.workSchedule(storeId, periodStart, periodEnd);
   const scheduleQuery = useQuery({ queryKey: scheduleKey, queryFn: () => getWorkSchedule(storeId, periodStart, periodEnd) });
   const settingsQuery = useQuery({ queryKey: queryKeys.employeeRatingSettings(storeId), queryFn: () => getEmployeeRatingSettings(storeId), staleTime: 2 * 60_000 });
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<EtaggedResource<WorkScheduleDay> | null>(null);
   const [openingDate, setOpeningDate] = useState<string | null>(null);
+  const [openingError, setOpeningError] = useState<string | null>(null);
   const [lastSavedDate, setLastSavedDate] = useState<string | null>(null);
   const calendar = useMemo(() => buildMonthCalendar(month), [month]);
 
@@ -154,13 +157,21 @@ export function SchedulePanel() {
 
   const openDay = async (date: string) => {
     setOpeningDate(date);
-    const result = await scheduleQuery.refetch();
-    setOpeningDate(null);
-    if (!result.isError) setSelectedDate(date);
+    setOpeningError(null);
+    try {
+      const day = await getWorkScheduleDay(storeId, date);
+      await scheduleQuery.refetch();
+      setSelectedDay(day);
+    } catch (error) {
+      setOpeningError(isApiClientError(error) ? error.message : "Не удалось загрузить выбранный день.");
+    } finally {
+      setOpeningDate(null);
+    }
   };
 
   return (
     <div className="schedule-panel-view">
+      {openingError && <div className="form-alert" role="alert">{openingError}</div>}
       {lastSavedDate && <section className="schedule-saved-banner" role="status"><CalendarCheck2 /><span>Смены за {formatDate(lastSavedDate)} сохранены. Живой рейтинг и готовность зарплаты обновляются.</span><button type="button" onClick={() => setLastSavedDate(null)} aria-label="Скрыть уведомление"><X /></button></section>}
       <section className="schedule-summary-grid" aria-label="Сводка смен"><article><span><CalendarCheck2 /></span><div><small>Дней со сменами</small><strong>{scheduledDays}</strong><p>из {calendar.filter(Boolean).length} дней месяца</p></div></article><article><span><UsersRound /></span><div><small>Записей смен</small><strong>{shifts.length}</strong><p>{activeEmployees} сотрудников доступны</p></div></article><article><span><Clock3 /></span><div><small>Отработано часов</small><strong>{formatNumber(totalHours)}</strong><p>По фактическим часам графика</p></div></article></section>
 
@@ -175,10 +186,10 @@ export function SchedulePanel() {
           const hours = dayShifts.reduce((total, shift) => total + shift.workedHours, 0);
           return <button className={`schedule-day ${date === today ? "schedule-day--today" : ""} ${dayShifts.length ? "schedule-day--filled" : ""}`} type="button" key={date} disabled={openingDate != null} onClick={() => void openDay(date)}><span><strong>{Number(date.slice(-2))}</strong>{date === today && <i>Сегодня</i>}</span>{dayShifts.length ? <><div className="schedule-day__avatars">{dayShifts.slice(0, 3).map((shift) => <i key={shift.id} title={shift.employeeName}>{shift.employeeName.slice(0, 1).toUpperCase()}</i>)}{dayShifts.length > 3 && <i>+{dayShifts.length - 3}</i>}</div><small>{dayShifts.length} чел. · {formatNumber(hours)} ч</small></> : <small>{openingDate === date ? "Обновляем…" : "Нет смен"}</small>}</button>;
         })}</div>
-        <footer className="schedule-calendar-note"><UserRoundCheck /><span>В рейтинг попадает сотрудник, который включён в участие и имеет хотя бы одну смену. Часы используются для показателя выручки за час.</span></footer>
+        <footer className="schedule-calendar-note"><UserRoundCheck /><span>В рейтинг попадает сотрудник, который включен в участие и имеет хотя бы одну смену. Часы используются для показателя выручки за час.</span></footer>
       </section>
 
-      {selectedDate && <ShiftDayEditor key={`${selectedDate}:${(shiftsByDate.get(selectedDate) ?? []).map((shift) => `${shift.id}-${shift.version}`).join("|")}`} workDate={selectedDate} dayShifts={shiftsByDate.get(selectedDate) ?? []} settings={settingsQuery.data} scheduleKey={scheduleKey} onClose={() => setSelectedDate(null)} onSaved={(date) => { setSelectedDate(null); setLastSavedDate(date); }} />}
+      {selectedDay && <ShiftDayEditor key={`${selectedDay.value.workDate}:${selectedDay.etag}`} workDate={selectedDay.value.workDate} dayShifts={selectedDay.value.shifts} etag={selectedDay.etag} settings={settingsQuery.data} scheduleKey={scheduleKey} onClose={() => setSelectedDay(null)} onSaved={(date) => { setSelectedDay(null); setLastSavedDate(date); }} />}
     </div>
   );
 }

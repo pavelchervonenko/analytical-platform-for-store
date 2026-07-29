@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, Clock3, DatabaseZap, RefreshCw, ShieldAlert, TriangleAlert } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router";
 import { useAuth } from "../auth/AuthProvider";
 import { formatDate } from "../shared/date";
 import { formatNumber } from "../shared/format";
@@ -9,9 +9,9 @@ import { useWorkspace } from "../stores/WorkspaceProvider";
 import { describeQualityAction } from "./actions";
 import { getQualityOverview, getStorePeriodQuality, getStoreQuality, qualityKeys, type QualityAction } from "./api";
 
-const statusLabels = { OK: "Готово", WARNING: "Нужно внимание", ERROR: "Есть блокеры" } as const;
-const areaLabels = { SOURCE_DATA: "Исходные данные", STORE_PLAN: "План магазина", EMPLOYEE_RATING: "Рейтинг сотрудников", PAYROLL: "Расчёт зарплаты" } as const;
-const severityLabels = { ERROR: "Ошибка", WARNING: "Предупреждение", INFO: "Информация" } as const;
+const statusLabels = { OK: "Готово", WARNING: "Нужно внимание", ERROR: "Есть блокеры", UNKNOWN: "Неизвестно" } as const;
+const areaLabels = { SOURCE_DATA: "Исходные данные", STORE_PLAN: "План магазина", EMPLOYEE_RATING: "Рейтинг сотрудников", PAYROLL: "Расчет зарплаты", UNKNOWN: "Неизвестное направление" } as const;
+const severityLabels = { ERROR: "Ошибка", WARNING: "Предупреждение", INFO: "Информация", UNKNOWN: "Неизвестно" } as const;
 
 function actionSearch(currentSearch: string, route: string, view?: string): string {
   const params = new URLSearchParams(currentSearch);
@@ -75,7 +75,7 @@ export function QualityPage() {
       <div className="quality-layout">
         <section className="panel quality-issues" id="quality-issues">
           <div className="panel__heading"><div><p className="eyebrow">Выбранный месяц</p><h2>Что требует действия</h2></div><span>{period.issues.length}</span></div>
-          {period.issues.length === 0 ? <div className="panel-empty"><CheckCircle2 size={28} /><strong>Месяц готов</strong><p>Все проверки источников и расчётов пройдены.</p></div> : <div className="quality-issue-list">{period.issues.map((issue) => <article key={issue.key}><span className={`quality-severity quality-severity--${issue.severity.toLowerCase()}`}>{severityLabels[issue.severity]}</span><div><strong>{issue.message}</strong><small>{areaLabels[issue.area as keyof typeof areaLabels] ?? issue.area} · {issue.code}{issue.affectedCount != null ? ` · затронуто ${formatNumber(issue.affectedCount)}` : ""}</small></div><ActionControl action={issue.recommendedAction} refresh={refresh} /></article>)}</div>}
+          {period.issues.length === 0 ? <div className="panel-empty"><CheckCircle2 size={28} /><strong>Месяц готов</strong><p>Все проверки источников и расчетов пройдены.</p></div> : <div className="quality-issue-list">{period.issues.map((issue) => <article key={issue.key}><span className={`quality-severity quality-severity--${issue.severity.toLowerCase()}`}>{severityLabels[issue.severity]}</span><div><strong>{issue.message}</strong><small>{areaLabels[issue.area as keyof typeof areaLabels] ?? issue.area} · {issue.code}{issue.affectedCount != null ? ` · затронуто ${formatNumber(issue.affectedCount)}` : ""}</small></div><ActionControl action={issue.recommendedAction} refresh={refresh} /></article>)}</div>}
         </section>
 
         <aside className="quality-aside">

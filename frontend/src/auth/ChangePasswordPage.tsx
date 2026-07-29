@@ -42,7 +42,6 @@ export function ChangePasswordPage() {
           <ul className="password-rules" aria-label="Требования к паролю">
             <li><CheckCircle2 size={16} />От 12 до 128 символов</li>
             <li><CheckCircle2 size={16} />Не используйте распространенный пароль</li>
-            <li><CheckCircle2 size={16} />До 72 байт в кодировке UTF-8</li>
           </ul>
 
           {error && <div className="form-alert" role="alert">{error}</div>}

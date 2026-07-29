@@ -1,0 +1,32 @@
+.admin-view-tabs { grid-template-columns: repeat(6,minmax(0,1fr)); }
+.admin-job-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.admin-job-detail-button, .admin-job-cancel { display: flex; align-items: center; gap: 5px; border: 0; background: transparent; font-size: 11px; font-weight: 750; }
+.admin-job-detail-button { color: var(--primary); }
+.admin-job-detail-button svg, .admin-job-cancel svg { width: 14px; }
+.sync-job-modal { width: min(100%,720px); }
+.sync-job-details { padding: 20px; }
+.sync-job-details__summary { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; padding: 13px; border-radius: 13px; background: var(--surface-muted); }
+.sync-job-details__summary > div { display: grid; gap: 4px; }
+.sync-job-details__summary strong { font-size: 14px; }
+.sync-job-details__summary small { color: var(--text-faint); font-size: 11px; }
+.sync-job-details dl { display: grid; margin: 0; }
+.sync-job-details dl > div { display: grid; grid-template-columns: 150px minmax(0,1fr); gap: 14px; padding: 11px 0; border-top: 1px solid var(--border); }
+.sync-job-details dt { color: var(--text-muted); font-size: 11px; }
+.sync-job-details dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-size: 12px; font-weight: 700; }
+.category-import-layout { display: grid; grid-template-columns: minmax(0,1fr) 290px; gap: 14px; }
+.category-import-main > .panel__heading > svg { color: var(--primary); }
+.category-import-lead, .category-import-aside > p:not(.eyebrow) { color: var(--text-muted); font-size: 12px; line-height: 1.55; }
+.category-import-form { padding: 12px 0 0; }
+.category-import-form .field small { color: var(--text-faint); font-size: 10px; }
+.category-import-editor textarea { min-height: 300px !important; font: 500 10px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace; tab-size: 2; }
+.category-import-validation { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 11px; font-size: 11px; }
+.category-import-validation svg { width: 16px; flex: 0 0 16px; }
+.category-import-validation.is-valid { color: var(--success); background: var(--success-soft); }
+.category-import-validation.is-invalid { color: var(--danger); background: var(--danger-soft); }
+.category-import-confirm { border: 1px solid var(--border); }
+.category-import-count { color: var(--text-faint); font-size: 11px; }
+.category-import-aside h2 { margin: 5px 0 12px; font-size: 20px; }
+
+@media (max-width: 1100px) { .admin-view-tabs { grid-template-columns: repeat(2,1fr); } .category-import-layout { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .admin-job-actions { justify-content: flex-start; } .category-import-form .admin-form-grid { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .sync-job-details dl > div { grid-template-columns: 1fr; gap: 5px; } }

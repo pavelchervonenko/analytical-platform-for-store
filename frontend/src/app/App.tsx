@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router";
 import { ChangePasswordPage } from "../auth/ChangePasswordPage";
 import { LoginPage } from "../auth/LoginPage";
 import { AdminGate, AnonymousGate, PasswordChangeGate, SessionGate } from "../auth/SessionGates";
@@ -13,6 +13,11 @@ const PayrollPage = lazy(async () => { const module = await import("../payroll/P
 const QualityPage = lazy(async () => { const module = await import("../quality/QualityPage"); return { default: module.QualityPage }; });
 const ReportsPage = lazy(async () => { const module = await import("../reports/ReportsPage"); return { default: module.ReportsPage }; });
 const AdminPage = lazy(async () => { const module = await import("../admin/AdminPage"); return { default: module.AdminPage }; });
+
+const ProfilePage = lazy(async () => { const module = await import("../auth/ProfilePage"); return { default: module.ProfilePage }; });
+const InsightsPreviewPage = lazy(async () => { const module = await import("../insights/InsightsPreviewPage"); return { default: module.InsightsPreviewPage }; });
+const insightsPreviewEnabled = import.meta.env.DEV
+  || import.meta.env.VITE_ENABLE_INSIGHTS_PREVIEW === "true";
 
 function PageLoader() { return <div className="page-loader" aria-live="polite"><span className="spinner" /><span>Загружаем раздел…</span></div>; }
 
@@ -29,6 +34,8 @@ export function App() {
       <Route path="/payroll" element={<PayrollPage />} />
       <Route path="/quality" element={<QualityPage />} />
       <Route path="/reports" element={<ReportsPage />} />
+      <Route path="/profile" element={<ProfilePage />} />
+      <Route path="/insights" element={insightsPreviewEnabled ? <InsightsPreviewPage /> : <Navigate to="/overview" replace />} />
       <Route path="/admin" element={<AdminGate><AdminPage /></AdminGate>} />
     </Route></Route>
     <Route path="*" element={<Navigate to="/overview" replace />} />

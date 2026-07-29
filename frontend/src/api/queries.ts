@@ -1,4 +1,5 @@
 import {
+  activeSessionListSchema,
   attachRateSchema,
   averageKpiSchema,
   categoryKpiSchema,
@@ -9,6 +10,7 @@ import {
   employeeRatingSettingSchema,
   employeeRatingSettingsSchema,
   employeeShiftListSchema,
+  workScheduleDaySchema,
   performancePlanSchema,
   periodQualitySchema,
   planProgressSchema,
@@ -20,10 +22,13 @@ import {
   type PayrollAdjustmentInput,
   reportDetailSchema,
   reportSummaryListSchema,
+  reportYearsSchema,
   storeDataStatusSchema,
   storeKpiSchema,
   storeListSchema,
+  systemStatusSchema,
   type AttachRate,
+  type ActiveSession,
   type AverageKpi,
   type CategoryKpi,
   type CurrentUser,
@@ -32,6 +37,7 @@ import {
   type EmployeeRatingResult,
   type EmployeeRatingSetting,
   type EmployeeShift,
+  type WorkScheduleDay,
   type PerformancePlan,
   type PerformancePlanInput,
   type WorkShiftInput,
@@ -39,8 +45,9 @@ import {
   type PayrollPreview,
   type PayrollReadiness,
   type PayrollRevisionComparison,
+  type PageResponse,
   type PayrollRunDetail,
-  type PayrollRunSummary,
+  type PayrollRunListItem,
   type PayrollVoidAdjustmentInput,
   type PlanProgress,
   type ReportDetail,
@@ -48,13 +55,16 @@ import {
   type ReportType,
   type StoreDataStatus,
   type StoreKpi,
-  type StoreSummary
+  type StoreSummary,
+  type SystemStatus
 } from "./contracts";
-import { apiClient, isApiClientError } from "./client";
+import { apiClient, isApiClientError, type EtaggedResource } from "./client";
 
 export const queryKeys = {
   session: ["session"] as const,
+  activeSessions: ["session", "active"] as const,
   stores: ["stores"] as const,
+  systemStatus: ["system", "status"] as const,
   storeStatus: (storeId: string) => ["stores", storeId, "data-status"] as const,
   storeKpi: (storeId: string, start: string, end: string) => ["stores", storeId, "kpi", start, end] as const,
   categories: (storeId: string, start: string, end: string) => ["stores", storeId, "categories", start, end] as const,
@@ -69,14 +79,17 @@ export const queryKeys = {
   employeeRatingSettings: (storeId: string) => ["stores", storeId, "employees", "settings"] as const,
   performancePlan: (storeId: string, month: string) => ["stores", storeId, "performance-plan", month] as const,
   workSchedule: (storeId: string, start: string, end: string) => ["stores", storeId, "work-schedule", start, end] as const,
+  workScheduleDay: (storeId: string, workDate: string) => ["stores", storeId, "work-schedule-day", workDate] as const,
   payrollReadiness: (storeId: string, month: string) => ["stores", storeId, "payroll", month, "readiness"] as const,
   payrollPreview: (storeId: string, month: string) => ["stores", storeId, "payroll", month, "preview"] as const,
   payrollLatest: (storeId: string, month: string) => ["stores", storeId, "payroll", month, "latest"] as const,
-  payrollRuns: (storeId: string) => ["stores", storeId, "payroll", "runs"] as const,
+  payrollRuns: (storeId: string, month?: string, page?: number) => ["stores", storeId, "payroll", "runs", month, page] as const,
   payrollRun: (storeId: string, runId: string) => ["stores", storeId, "payroll", "run", runId] as const,
   payrollComparison: (storeId: string, previousId: string, currentId: string) => ["stores", storeId, "payroll", "compare", previousId, currentId] as const,
-  reports: (storeId: string, year?: number, type?: ReportType) => ["stores", storeId, "reports", year, type] as const,
-  report: (storeId: string, reportId: string) => ["stores", storeId, "reports", reportId] as const
+  reportArchive: (storeId: string) => ["stores", storeId, "reports"] as const,
+  reports: (storeId: string, year?: number, type?: ReportType, page?: number) => [...queryKeys.reportArchive(storeId), "list", year, type, page] as const,
+  reportYears: (storeId: string) => [...queryKeys.reportArchive(storeId), "years"] as const,
+  report: (storeId: string, reportId: string) => [...queryKeys.reportArchive(storeId), "detail", reportId] as const
 };
 
 function periodQuery(start: string, end: string): string {
@@ -94,8 +107,29 @@ export function getCurrentUser(): Promise<CurrentUser> {
   });
 }
 
+export async function getActiveSessions(): Promise<ActiveSession[]> {
+  const response = await apiClient.request("/api/auth/sessions", {
+    schema: activeSessionListSchema
+  });
+  return response.sessions;
+}
+
+export function revokeActiveSession(sessionReference: string): Promise<void> {
+  return apiClient.request(`/api/auth/sessions/${encodeURIComponent(sessionReference)}`, {
+    method: "DELETE"
+  });
+}
+
+export function revokeOtherSessions(): Promise<void> {
+  return apiClient.request("/api/auth/sessions/others", { method: "DELETE" });
+}
+
 export function getStores(): Promise<StoreSummary[]> {
   return apiClient.request("/api/stores", { schema: storeListSchema });
+}
+
+export function getSystemStatus(): Promise<SystemStatus> {
+  return apiClient.request("/api/system/status", { schema: systemStatusSchema });
 }
 
 export function getStoreStatus(storeId: string): Promise<StoreDataStatus> {
@@ -187,9 +221,12 @@ export function finalizeEmployeeRating(
   });
 }
 
-export async function getPerformancePlan(storeId: string, month: string): Promise<PerformancePlan | null> {
+export async function getPerformancePlan(
+  storeId: string,
+  month: string
+): Promise<EtaggedResource<PerformancePlan> | null> {
   try {
-    return await apiClient.request(`${storePath(storeId)}/performance-plans/${encodeURIComponent(month)}`, {
+    return await apiClient.requestEtagged(`${storePath(storeId)}/performance-plans/${encodeURIComponent(month)}`, {
       schema: performancePlanSchema
     });
   } catch (error) {
@@ -198,9 +235,18 @@ export async function getPerformancePlan(storeId: string, month: string): Promis
   }
 }
 
-export function upsertPerformancePlan(storeId: string, month: string, input: PerformancePlanInput): Promise<PerformancePlan> {
-  return apiClient.request(`${storePath(storeId)}/performance-plans/${encodeURIComponent(month)}`, {
+export function upsertPerformancePlan(
+  storeId: string,
+  month: string,
+  input: PerformancePlanInput,
+  current: EtaggedResource<PerformancePlan> | null
+): Promise<EtaggedResource<PerformancePlan>> {
+  const headers: Record<string, string> = current
+    ? { "If-Match": current.etag }
+    : { "If-None-Match": "*" };
+  return apiClient.requestEtagged(`${storePath(storeId)}/performance-plans/${encodeURIComponent(month)}`, {
     method: "PUT",
+    headers,
     body: input,
     schema: performancePlanSchema
   });
@@ -212,11 +258,23 @@ export function getWorkSchedule(storeId: string, start: string, end: string): Pr
   });
 }
 
-export function replaceWorkScheduleDay(storeId: string, workDate: string, shifts: WorkShiftInput[]): Promise<EmployeeShift[]> {
-  return apiClient.request(`${storePath(storeId)}/work-schedule/${encodeURIComponent(workDate)}`, {
+export function getWorkScheduleDay(storeId: string, workDate: string): Promise<EtaggedResource<WorkScheduleDay>> {
+  return apiClient.requestEtagged(`${storePath(storeId)}/work-schedule/${encodeURIComponent(workDate)}`, {
+    schema: workScheduleDaySchema
+  });
+}
+
+export function replaceWorkScheduleDay(
+  storeId: string,
+  workDate: string,
+  etag: string,
+  shifts: WorkShiftInput[]
+): Promise<EtaggedResource<WorkScheduleDay>> {
+  return apiClient.requestEtagged(`${storePath(storeId)}/work-schedule/${encodeURIComponent(workDate)}`, {
     method: "PUT",
+    headers: { "If-Match": etag },
     body: { shifts },
-    schema: employeeShiftListSchema
+    schema: workScheduleDaySchema
   });
 }
 
@@ -239,12 +297,23 @@ export async function getLatestPayroll(storeId: string, month: string): Promise<
 
 export function calculatePayroll(storeId: string, month: string, revisionReason?: string): Promise<PayrollRunDetail> {
   return apiClient.request(`${storePath(storeId)}/payroll/${encodeURIComponent(month)}/calculate`, {
-    method: "POST", body: revisionReason ? { revisionReason } : undefined, schema: payrollRunDetailSchema
+    method: "POST",
+    body: revisionReason ? { revisionReason } : undefined,
+    idempotencyScope: `payroll:calculate:${storeId}:${month}`,
+    schema: payrollRunDetailSchema
   });
 }
 
-export function getPayrollRuns(storeId: string): Promise<PayrollRunSummary[]> {
-  return apiClient.request(`${storePath(storeId)}/payroll-runs`, { schema: payrollRunListSchema });
+export function getPayrollRuns(
+  storeId: string,
+  month: string,
+  page = 0,
+  size = 100
+): Promise<PageResponse<PayrollRunListItem>> {
+  const query = new URLSearchParams({ month, page: String(page), size: String(size) });
+  return apiClient.request(`${storePath(storeId)}/payroll-runs?${query.toString()}`, {
+    schema: payrollRunListSchema
+  });
 }
 
 export function getPayrollRun(storeId: string, runId: string): Promise<PayrollRunDetail> {
@@ -253,25 +322,37 @@ export function getPayrollRun(storeId: string, runId: string): Promise<PayrollRu
 
 export function addPayrollAdjustment(storeId: string, runId: string, input: PayrollAdjustmentInput): Promise<PayrollRunDetail> {
   return apiClient.request(`${storePath(storeId)}/payroll-runs/${encodeURIComponent(runId)}/adjustments`, {
-    method: "POST", body: input, schema: payrollRunDetailSchema
+    method: "POST",
+    body: input,
+    idempotencyScope: `payroll:adjustment:add:${storeId}:${runId}`,
+    schema: payrollRunDetailSchema
   });
 }
 
 export function voidPayrollAdjustment(storeId: string, runId: string, adjustmentId: string, input: PayrollVoidAdjustmentInput): Promise<PayrollRunDetail> {
   return apiClient.request(`${storePath(storeId)}/payroll-runs/${encodeURIComponent(runId)}/adjustments/${encodeURIComponent(adjustmentId)}/void`, {
-    method: "POST", body: input, schema: payrollRunDetailSchema
+    method: "POST",
+    body: input,
+    idempotencyScope: `payroll:adjustment:void:${storeId}:${runId}:${adjustmentId}`,
+    schema: payrollRunDetailSchema
   });
 }
 
 export function approvePayroll(storeId: string, runId: string, version: number): Promise<PayrollRunDetail> {
   return apiClient.request(`${storePath(storeId)}/payroll-runs/${encodeURIComponent(runId)}/approve`, {
-    method: "POST", body: { version }, schema: payrollRunDetailSchema
+    method: "POST",
+    body: { version },
+    idempotencyScope: `payroll:approve:${storeId}:${runId}`,
+    schema: payrollRunDetailSchema
   });
 }
 
 export function markPayrollPaid(storeId: string, runId: string, version: number): Promise<PayrollRunDetail> {
   return apiClient.request(`${storePath(storeId)}/payroll-runs/${encodeURIComponent(runId)}/paid`, {
-    method: "POST", body: { version }, schema: payrollRunDetailSchema
+    method: "POST",
+    body: { version },
+    idempotencyScope: `payroll:paid:${storeId}:${runId}`,
+    schema: payrollRunDetailSchema
   });
 }
 
@@ -283,14 +364,21 @@ export function comparePayrollRevisions(storeId: string, previousRunId: string, 
 export function getReports(
   storeId: string,
   year?: number,
-  type?: ReportType
-): Promise<ReportSummary[]> {
-  const parameters = new URLSearchParams();
+  type?: ReportType,
+  page = 0,
+  size = 20
+): Promise<PageResponse<ReportSummary>> {
+  const parameters = new URLSearchParams({ page: String(page), size: String(size) });
   if (year != null) parameters.set("year", String(year));
   if (type) parameters.set("type", type);
-  const query = parameters.size > 0 ? `?${parameters.toString()}` : "";
-  return apiClient.request(`${storePath(storeId)}/reports${query}`, {
+  return apiClient.request(`${storePath(storeId)}/reports?${parameters.toString()}`, {
     schema: reportSummaryListSchema
+  });
+}
+
+export function getReportYears(storeId: string): Promise<number[]> {
+  return apiClient.request(`${storePath(storeId)}/reports/years`, {
+    schema: reportYearsSchema
   });
 }
 

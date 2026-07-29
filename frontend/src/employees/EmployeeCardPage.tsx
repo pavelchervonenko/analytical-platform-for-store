@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, BarChart3, CalendarDays, CheckCircle2, CircleDollarSign, Clock3, Info, Link2, Target, Trophy, WalletCards } from "lucide-react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router";
 import { getEmployeeCard, queryKeys } from "../api/queries";
 import { formatDate } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
@@ -108,10 +108,10 @@ export function EmployeeCardPage() {
                 <div><dt>Удержания</dt><dd>{formatMoney(card.payroll.statement.penaltyAmount + card.payroll.statement.inventoryAmount + card.payroll.statement.taxAmount)}</dd></div>
                 <div><dt>Статус</dt><dd>{card.payroll.run.status}</dd></div>
               </dl>
-              {card.payroll.run.freshness.requiresRecalculation && <p className="employee-payroll-warning">Расчёт устарел и требует пересчёта.</p>}
+              {card.payroll.run.freshness.requiresRecalculation && <p className="employee-payroll-warning">Расчет устарел и требует пересчета.</p>}
               <Link className="context-link" to={{ pathname: "/payroll", search: location.search }}>Открыть ведомость</Link>
             </> : <>
-              <h2>{periodMode === "MONTH" ? "Нет расчёта" : "Только за полный месяц"}</h2>
+              <h2>{periodMode === "MONTH" ? "Нет расчета" : "Только за полный месяц"}</h2>
               <p>{periodMode === "MONTH" ? "Для выбранного месяца ведомость сотрудника не рассчитана." : "Выберите календарный месяц, чтобы увидеть начисления и сумму к выплате."}</p>
             </>}
             <small><CheckCircle2 size={13} />Рейтинг не влияет на формулу зарплаты.</small>

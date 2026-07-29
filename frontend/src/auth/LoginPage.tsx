@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Eye, EyeOff, LockKeyhole } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { isApiClientError } from "../api/client";
 import { useAuth } from "./AuthProvider";
 
@@ -50,15 +50,14 @@ export function LoginPage() {
       <section className="auth-intro" aria-label="Store Analytics">
         <div className="auth-brand"><span className="brand-mark">S</span><span>Store Analytics</span></div>
         <div className="auth-intro__copy">
-          <p className="eyebrow">Закрытый кабинет руководителя</p>
-          <h1>Показатели магазина.<br />Без информационного шума.</h1>
-          <p>Продажи, сотрудники, планы и зарплата в одном защищенном рабочем пространстве.</p>
+          <h1>Store Analytics</h1>
         </div>
         <div className="auth-intro__security"><LockKeyhole size={18} /><span>Защищенная серверная сессия</span></div>
       </section>
 
       <section className="auth-panel">
         <form className="auth-card" onSubmit={handleSubmit} noValidate>
+          <div className="auth-brand auth-brand--mobile"><span className="brand-mark">S</span><span>Store Analytics</span></div>
           <div>
             <p className="eyebrow">Добро пожаловать</p>
             <h2>Вход в кабинет</h2>

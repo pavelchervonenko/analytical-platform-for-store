@@ -9,10 +9,16 @@ import {
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const DEFAULT_TIMEOUT_MS = 20_000;
 
+export interface EtaggedResource<T> {
+  value: T;
+  etag: string;
+}
+
 export class ApiClientError extends Error {
   readonly status: number;
   readonly code: string;
   readonly path?: string;
+  readonly correlationId?: string;
   readonly retryAfterSeconds?: number;
 
   constructor(
@@ -21,6 +27,7 @@ export class ApiClientError extends Error {
       status: number;
       code: string;
       path?: string;
+      correlationId?: string;
       retryAfterSeconds?: number;
       cause?: unknown;
     }
@@ -30,6 +37,7 @@ export class ApiClientError extends Error {
     this.status = options.status;
     this.code = options.code;
     this.path = options.path;
+    this.correlationId = options.correlationId;
     this.retryAfterSeconds = options.retryAfterSeconds;
   }
 }
@@ -40,14 +48,39 @@ interface ApiRequestOptions<T> extends Omit<RequestInit, "body" | "credentials" 
   timeoutMs?: number;
   notifyOnUnauthorized?: boolean;
   skipCsrf?: boolean;
+  idempotencyScope?: string;
+  responseObserver?: (response: Response) => void;
+}
+
+interface PendingIdempotencyKey {
+  fingerprint: string;
+  key: string;
+}
+
+export function normalizeApiBaseUrl(
+  configured: string | undefined,
+  production: boolean
+): string {
+  const value = configured?.trim() ?? "";
+  if (!production) return value.replace(/\/$/u, "");
+  if (value === "" || value === "/") return "";
+
+  const normalized = value.replace(/\/+$/u, "");
+  const segments = normalized.slice(1).split("/");
+  if (!/^\/[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*$/u.test(normalized)
+      || segments.some((segment) => segment === "." || segment === "..")) {
+    throw new Error(
+      "Production API base must be an empty or normalized same-origin path prefix"
+    );
+  }
+  return normalized;
 }
 
 function getApiBaseUrl(): string {
-  const configured = import.meta.env.VITE_API_BASE_URL?.trim() ?? "";
-  if (import.meta.env.PROD && /^https?:\/\//u.test(configured)) {
-    throw new Error("Production API base must be same-origin");
-  }
-  return configured.replace(/\/$/u, "");
+  return normalizeApiBaseUrl(
+    import.meta.env.VITE_API_BASE_URL,
+    import.meta.env.PROD
+  );
 }
 
 function readCookie(name: string): string | null {
@@ -79,7 +112,8 @@ function fallbackMessage(status: number): string {
   if (status === 401) return "Сессия завершена. Войдите снова.";
   if (status === 403) return "Недостаточно прав для этого действия.";
   if (status === 404) return "Запрошенные данные не найдены.";
-  if (status === 409) return "Данные уже изменились. Обновите страницу и повторите действие.";
+  if (status === 409 || status === 412) return "Данные уже изменились. Обновите страницу и повторите действие.";
+  if (status === 428) return "Сначала загрузите актуальную версию данных.";
   if (status === 429) return "Слишком много запросов. Попробуйте позже.";
   if (status >= 500) return "Сервис временно недоступен. Попробуйте позже.";
   return "Не удалось выполнить запрос.";
@@ -100,6 +134,7 @@ async function readApiError(response: Response): Promise<ApiErrorPayload | null>
 
 export class ApiClient {
   private csrfConfiguration: CsrfConfiguration | null = null;
+  private readonly pendingIdempotencyKeys = new Map<string, PendingIdempotencyKey>();
   private csrfRequest: Promise<CsrfConfiguration> | null = null;
   private unauthorizedHandler: (() => void) | null = null;
 
@@ -110,6 +145,7 @@ export class ApiClient {
   clearSecurityState(): void {
     this.csrfConfiguration = null;
     this.csrfRequest = null;
+    this.pendingIdempotencyKeys.clear();
   }
 
   async ensureCsrf(): Promise<CsrfConfiguration> {
@@ -142,6 +178,8 @@ export class ApiClient {
       timeoutMs = DEFAULT_TIMEOUT_MS,
       notifyOnUnauthorized = true,
       skipCsrf = false,
+      idempotencyScope,
+      responseObserver,
       ...requestInit
     } = options;
     const method = (requestInit.method ?? "GET").toUpperCase();
@@ -150,6 +188,25 @@ export class ApiClient {
     headers.set("Accept", "application/json");
     if (body !== undefined) {
       headers.set("Content-Type", "application/json");
+    }
+
+    let idempotencyKey: string | undefined;
+    if (idempotencyScope) {
+      if (!UNSAFE_METHODS.has(method)) {
+        throw new Error("Idempotency scope is only valid for unsafe HTTP methods");
+      }
+      const fingerprint = JSON.stringify([method, path, body ?? null]);
+      const pending = this.pendingIdempotencyKeys.get(idempotencyScope);
+      if (pending?.fingerprint === fingerprint) {
+        idempotencyKey = pending.key;
+      } else {
+        idempotencyKey = globalThis.crypto.randomUUID();
+        this.pendingIdempotencyKeys.set(idempotencyScope, {
+          fingerprint,
+          key: idempotencyKey
+        });
+      }
+      headers.set("Idempotency-Key", idempotencyKey);
     }
 
     if (UNSAFE_METHODS.has(method) && !skipCsrf) {
@@ -197,7 +254,11 @@ export class ApiClient {
       externalSignal?.removeEventListener("abort", abortFromExternal);
     }
 
+    responseObserver?.(response);
     if (!response.ok) {
+      if (idempotencyScope && response.status < 500) {
+        this.pendingIdempotencyKeys.delete(idempotencyScope);
+      }
       const payload = await readApiError(response);
       if (response.status === 401 && notifyOnUnauthorized) {
         this.unauthorizedHandler?.();
@@ -206,11 +267,13 @@ export class ApiClient {
         status: response.status,
         code: payload?.code || `HTTP_${response.status}`,
         path: payload?.path,
+        correlationId: payload?.correlationId ?? response.headers.get("X-Correlation-ID") ?? undefined,
         retryAfterSeconds: parseRetryAfter(response.headers.get("Retry-After"))
       });
     }
 
     if (response.status === 204) {
+      if (idempotencyScope) this.pendingIdempotencyKeys.delete(idempotencyScope);
       return undefined as T;
     }
 
@@ -232,7 +295,10 @@ export class ApiClient {
       });
     }
 
-    if (!schema) return json as T;
+    if (!schema) {
+      if (idempotencyScope) this.pendingIdempotencyKeys.delete(idempotencyScope);
+      return json as T;
+    }
     const parsed = schema.safeParse(json);
     if (!parsed.success) {
       throw new ApiClientError("Ответ сервера не соответствует ожидаемому контракту.", {
@@ -241,7 +307,30 @@ export class ApiClient {
         cause: parsed.error
       });
     }
+    if (idempotencyScope) this.pendingIdempotencyKeys.delete(idempotencyScope);
     return parsed.data;
+  }
+
+  async requestEtagged<T>(
+    path: string,
+    options: ApiRequestOptions<T> = {}
+  ): Promise<EtaggedResource<T>> {
+    let etag: string | null = null;
+    const value = await this.request(path, {
+      ...options,
+      responseObserver: (response) => {
+        etag = response.headers.get("ETag");
+        options.responseObserver?.(response);
+      }
+    });
+    const observedEtag = etag as string | null;
+    if (!observedEtag || observedEtag.startsWith("W/") || (!observedEtag.startsWith('"') && observedEtag !== "*")) {
+      throw new ApiClientError("Сервер не вернул обязательную версию ресурса.", {
+        status: 200,
+        code: "ETAG_MISSING"
+      });
+    }
+    return { value, etag: observedEtag };
   }
 }
 

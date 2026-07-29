@@ -3,16 +3,16 @@
 .period-selector > summary::-webkit-details-marker { display: none; }
 .period-selector > summary > svg:first-child { color: var(--primary); }
 .period-selector > summary > span { min-width: 0; display: grid; margin-right: auto; }
-.period-selector > summary small { color: var(--text-faint); font-size: 9px; }
-.period-selector > summary strong { overflow: hidden; margin-top: 3px; font-size: 11px; white-space: nowrap; text-overflow: ellipsis; text-transform: capitalize; }
+.period-selector > summary small { color: var(--text-faint); font-size: 12px; }
+.period-selector > summary strong { overflow: hidden; margin-top: 3px; font-size: 14px; white-space: nowrap; text-overflow: ellipsis; text-transform: capitalize; }
 .period-selector[open] > summary { border-color: rgba(40,91,73,.35); box-shadow: 0 0 0 4px rgba(40,91,73,.08); }
 .period-selector[open] > summary > svg:last-child { transform: rotate(180deg); }
 .period-popover { position: absolute; z-index: 70; top: calc(100% + 9px); left: 0; width: min(390px, calc(100vw - 32px)); padding: 18px; border: 1px solid var(--border); border-radius: 19px; background: var(--surface); box-shadow: 0 22px 55px rgba(20,31,26,.18); }
 .period-popover__heading { display: grid; gap: 5px; }
 .period-popover__heading strong { font-size: 15px; }
-.period-popover__heading small, .period-custom-fields > small, .period-popover .field small { color: var(--text-faint); font-size: 9px; line-height: 1.45; }
+.period-popover__heading small, .period-custom-fields > small, .period-popover .field small { color: var(--text-faint); font-size: 12px; line-height: 1.45; }
 .period-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 15px 0; padding: 4px; border-radius: 12px; background: var(--surface-muted); }
-.period-tabs button { height: 34px; border: 0; border-radius: 9px; color: var(--text-muted); background: transparent; font-size: 10px; font-weight: 750; }
+.period-tabs button { height: 34px; border: 0; border-radius: 9px; color: var(--text-muted); background: transparent; font-size: 13px; font-weight: 750; }
 .period-tabs button.is-active { color: var(--primary); background: var(--surface); box-shadow: var(--shadow-sm); }
 .period-custom-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .period-custom-fields > small { grid-column: 1 / -1; }

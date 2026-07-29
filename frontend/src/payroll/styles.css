@@ -1,18 +1,18 @@
 .payroll-page { padding-bottom: 94px; }
 .payroll-heading-status { min-width: 230px; display: grid; justify-items: end; gap: 4px; }
-.payroll-heading-status small { color: var(--text-faint); font-size: 9px; }
-.payroll-heading-status strong { font-size: 12px; }
+.payroll-heading-status small { color: var(--text-faint); font-size: 12px; }
+.payroll-heading-status strong { font-size: 15px; }
 
 .payroll-workflow { display: grid; grid-template-columns: repeat(5, 1fr); margin: 0 0 14px; padding: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); box-shadow: var(--shadow-sm); list-style: none; }
 .payroll-workflow li { min-height: 68px; display: flex; align-items: center; gap: 10px; padding: 12px 15px; border-right: 1px solid var(--border); }
 .payroll-workflow li:last-child { border: 0; }
 .payroll-workflow li.active { background: var(--primary-soft); box-shadow: inset 0 -3px var(--primary); }
-.payroll-workflow li > span { width: 28px; height: 28px; display: grid; flex: 0 0 28px; place-items: center; border-radius: 50%; color: var(--text-muted); background: var(--surface-muted); font-size: 10px; font-weight: 800; }
+.payroll-workflow li > span { width: 28px; height: 28px; display: grid; flex: 0 0 28px; place-items: center; border-radius: 50%; color: var(--text-muted); background: var(--surface-muted); font-size: 13px; font-weight: 800; }
 .payroll-workflow li.complete > span { color: #fff; background: var(--primary); }
 .payroll-workflow svg { width: 14px; }
 .payroll-workflow div { min-width: 0; display: grid; gap: 3px; }
-.payroll-workflow strong { overflow: hidden; font-size: 10px; white-space: nowrap; text-overflow: ellipsis; }
-.payroll-workflow small { color: var(--text-faint); font-size: 8px; }
+.payroll-workflow strong { overflow: hidden; font-size: 13px; white-space: nowrap; text-overflow: ellipsis; }
+.payroll-workflow small { color: var(--text-faint); font-size: 11px; }
 
 .payroll-readiness { margin-bottom: 14px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); box-shadow: var(--shadow-sm); overflow: hidden; }
 .payroll-readiness--success { border-color: #cfdfd4; }
@@ -25,10 +25,10 @@
 .payroll-readiness--warning .payroll-readiness__icon { color: var(--warning); background: var(--warning-soft); }
 .payroll-readiness--danger .payroll-readiness__icon { color: var(--danger); background: var(--danger-soft); }
 .payroll-readiness > summary div { min-width: 0; }
-.payroll-readiness > summary strong { font-size: 12px; }
-.payroll-readiness > summary p { margin: 4px 0 0; color: var(--text-muted); font-size: 9px; line-height: 1.45; }
-.payroll-readiness > summary b { padding: 7px 10px; border-radius: 10px; color: var(--text-muted); background: var(--surface-muted); font-size: 9px; white-space: nowrap; }
-.payroll-readiness > summary i { color: var(--primary); font-size: 9px; font-style: normal; font-weight: 750; }
+.payroll-readiness > summary strong { font-size: 15px; }
+.payroll-readiness > summary p { margin: 4px 0 0; color: var(--text-muted); font-size: 12px; line-height: 1.45; }
+.payroll-readiness > summary b { padding: 7px 10px; border-radius: 10px; color: var(--text-muted); background: var(--surface-muted); font-size: 12px; white-space: nowrap; }
+.payroll-readiness > summary i { color: var(--primary); font-size: 12px; font-style: normal; font-weight: 750; }
 .payroll-readiness[open] > summary { border-bottom: 1px solid var(--border); }
 .payroll-readiness-detail { display: grid; gap: 14px; padding: 17px; }
 .payroll-check-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
@@ -37,37 +37,37 @@
 .payroll-check-grid article.ok > span:first-child { color: var(--success); background: var(--success-soft); }
 .payroll-check-grid article.error > span:first-child { color: var(--danger); background: var(--danger-soft); }
 .payroll-check-grid article div { min-width: 0; display: grid; gap: 3px; }
-.payroll-check-grid strong { overflow: hidden; font-size: 9px; white-space: nowrap; text-overflow: ellipsis; }
-.payroll-check-grid small { color: var(--text-faint); font-size: 8px; }
-.payroll-check-grid a, .payroll-check-grid article > span:last-child { color: var(--primary); font-size: 8px; font-weight: 750; text-decoration: none; }
+.payroll-check-grid strong { overflow: hidden; font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+.payroll-check-grid small { color: var(--text-faint); font-size: 11px; }
+.payroll-check-grid a, .payroll-check-grid article > span:last-child { color: var(--primary); font-size: 11px; font-weight: 750; text-decoration: none; }
 .payroll-stale-reasons { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 12px; border-radius: 15px; color: var(--warning); background: var(--warning-soft); }
-.payroll-stale-reasons strong { margin-right: 5px; font-size: 9px; }
-.payroll-stale-reasons span { display: inline-flex; align-items: center; gap: 4px; font-size: 8px; }
+.payroll-stale-reasons strong { margin-right: 5px; font-size: 12px; }
+.payroll-stale-reasons span { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; }
 .payroll-stale-reasons svg { width: 12px; }
 .payroll-issue-details { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
-.payroll-issue-details > summary { display: flex; justify-content: space-between; padding: 11px 13px; cursor: pointer; font-size: 9px; font-weight: 750; }
+.payroll-issue-details > summary { display: flex; justify-content: space-between; padding: 11px 13px; cursor: pointer; font-size: 12px; font-weight: 750; }
 .payroll-issue-details > summary span { color: var(--danger); }
 .payroll-issue-details article { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 13px; border-top: 1px solid var(--border); }
 .payroll-issue-details article > span { min-width: 0; display: grid; gap: 3px; }
-.payroll-issue-details strong { font-size: 9px; }
-.payroll-issue-details small { color: var(--text-faint); font-size: 7px; }
-.payroll-issue-details b { font-size: 9px; white-space: nowrap; }
+.payroll-issue-details strong { font-size: 12px; }
+.payroll-issue-details small { color: var(--text-faint); font-size: 10px; }
+.payroll-issue-details b { font-size: 12px; white-space: nowrap; }
 
-.payroll-notice { min-height: 50px; display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 10px 14px; border-radius: 15px; color: var(--success); background: var(--success-soft); font-size: 10px; font-weight: 700; }
+.payroll-notice { min-height: 50px; display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 10px 14px; border-radius: 15px; color: var(--success); background: var(--success-soft); font-size: 13px; font-weight: 700; }
 .payroll-notice button { margin-left: auto; padding: 5px; border: 0; color: inherit; background: transparent; }
 .payroll-tabs { min-height: 64px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 14px; padding: 5px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow-sm); }
-.payroll-tabs button { min-width: 0; display: grid; grid-template-columns: 25px minmax(0, auto); grid-template-rows: auto auto; align-content: center; justify-content: center; column-gap: 8px; padding: 8px 12px; border: 0; border-radius: 15px; color: var(--text-muted); background: transparent; text-align: left; font-size: 10px; font-weight: 750; }
+.payroll-tabs button { min-width: 0; display: grid; grid-template-columns: 25px minmax(0, auto); grid-template-rows: auto auto; align-content: center; justify-content: center; column-gap: 8px; padding: 8px 12px; border: 0; border-radius: 15px; color: var(--text-muted); background: transparent; text-align: left; font-size: 13px; font-weight: 750; }
 .payroll-tabs button svg { grid-row: 1 / 3; align-self: center; width: 18px; }
-.payroll-tabs button span { color: var(--text-faint); font-size: 7px; font-weight: 600; }
+.payroll-tabs button span { color: var(--text-faint); font-size: 10px; font-weight: 600; }
 .payroll-tabs button.active { color: #fff; background: var(--primary); }
 .payroll-tabs button.active span { color: rgba(255,255,255,.65); }
 
 .payroll-summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .payroll-summary-grid > article { min-width: 0; min-height: 142px; display: flex; flex-direction: column; padding: 18px; border: 1px solid var(--border); border-radius: 21px; background: var(--surface); box-shadow: var(--shadow-sm); }
 .payroll-summary-grid > article > span { width: 34px; height: 34px; display: grid; place-items: center; margin-left: auto; border-radius: 50%; color: var(--primary); background: var(--primary-soft); }
-.payroll-summary-grid small { margin-top: -28px; padding-right: 38px; color: var(--text-muted); font-size: 9px; font-weight: 700; }
+.payroll-summary-grid small { margin-top: -28px; padding-right: 38px; color: var(--text-muted); font-size: 12px; font-weight: 700; }
 .payroll-summary-grid strong { overflow: hidden; margin-top: 18px; font-size: clamp(20px, 2.1vw, 30px); letter-spacing: -.045em; white-space: nowrap; text-overflow: ellipsis; }
-.payroll-summary-grid p { margin: auto 0 0; padding-top: 11px; border-top: 1px solid var(--border); color: var(--text-faint); font-size: 8px; }
+.payroll-summary-grid p { margin: auto 0 0; padding-top: 11px; border-top: 1px solid var(--border); color: var(--text-faint); font-size: 11px; }
 .payroll-summary-grid .payroll-summary-card--featured { color: #fff; border-color: transparent; background: linear-gradient(145deg, #376f5d, #285746); }
 .payroll-summary-card--featured > span { color: #fff !important; background: rgba(255,255,255,.13) !important; }
 .payroll-summary-card--featured small, .payroll-summary-card--featured p { color: rgba(255,255,255,.68); }
@@ -81,20 +81,20 @@
 .payroll-plan-card--warning { border-top-color: #d3a04e; }
 .payroll-plan-card header { display: flex; align-items: center; justify-content: space-between; }
 .payroll-plan-card header > span { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 10px; color: var(--primary); background: var(--primary-soft); }
-.payroll-plan-card small { display: block; margin-top: 16px; color: var(--text-faint); font-size: 8px; }
+.payroll-plan-card small { display: block; margin-top: 16px; color: var(--text-faint); font-size: 11px; }
 .payroll-plan-card > strong { display: block; margin-top: 5px; font-size: 24px; letter-spacing: -.04em; }
-.payroll-plan-card > p { margin: 5px 0 13px; color: var(--text-muted); font-size: 8px; }
-.payroll-plan-card footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 11px; border-top: 1px solid var(--border); font-size: 8px; }
+.payroll-plan-card > p { margin: 5px 0 13px; color: var(--text-muted); font-size: 11px; }
+.payroll-plan-card footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 11px; border-top: 1px solid var(--border); font-size: 11px; }
 .payroll-plan-card footer span { color: var(--text-faint); }
-.payroll-plan-card > em { display: block; margin-top: 6px; color: var(--text-faint); font-size: 7px; font-style: normal; }
-.payroll-fund-note { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: var(--surface-muted); font-size: 9px; }
-.payroll-small-button { min-height: 36px; padding-inline: 13px; font-size: 9px; }
+.payroll-plan-card > em { display: block; margin-top: 6px; color: var(--text-faint); font-size: 10px; font-style: normal; }
+.payroll-fund-note { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: var(--surface-muted); font-size: 12px; }
+.payroll-small-button { min-height: 36px; padding-inline: 13px; font-size: 12px; }
 .payroll-table td:not(:first-child) { text-align: right; }
 .payroll-table th:not(:first-child) { text-align: right; }
 .payroll-table td:last-child { width: 40px; min-width: 40px; padding-right: 0; }
 .payroll-employee { display: flex; align-items: center; gap: 9px; }
 .payroll-employee i { width: 34px; height: 34px; display: grid; flex: 0 0 34px; place-items: center; border-radius: 50%; color: var(--primary); background: var(--primary-soft); font-style: normal; font-weight: 800; }
-.payroll-table td > small { display: block; margin-top: 3px; color: var(--text-faint); font-size: 8px; }
+.payroll-table td > small { display: block; margin-top: 3px; color: var(--text-faint); font-size: 11px; }
 .payroll-row-button { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 9px; color: var(--primary); background: var(--primary-soft); }
 .payroll-row-button svg { width: 15px; }
 .negative-value { color: var(--danger) !important; }
@@ -104,7 +104,7 @@
 .payroll-daily-summary article { min-height: 82px; display: flex; align-items: center; gap: 13px; padding: 15px; border: 1px solid var(--border); border-radius: 19px; background: var(--surface); box-shadow: var(--shadow-sm); }
 .payroll-daily-summary svg { width: 34px; height: 34px; padding: 8px; border-radius: 11px; color: var(--primary); background: var(--primary-soft); }
 .payroll-daily-summary span { display: grid; gap: 4px; }
-.payroll-daily-summary small { color: var(--text-faint); font-size: 8px; }
+.payroll-daily-summary small { color: var(--text-faint); font-size: 11px; }
 .payroll-daily-summary strong { font-size: 21px; }
 .payroll-day-list { display: grid; gap: 8px; }
 .payroll-day-list > details { border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
@@ -114,22 +114,22 @@
 .payroll-day-status { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px; color: var(--success); background: var(--success-soft); }
 .payroll-day--warning .payroll-day-status { color: var(--warning); background: var(--warning-soft); }
 .payroll-day-list summary > span:nth-child(2) { display: grid; gap: 3px; }
-.payroll-day-list summary strong { font-size: 10px; }
-.payroll-day-list summary small { color: var(--text-faint); font-size: 8px; }
-.payroll-day-list summary b { font-size: 12px; }
-.payroll-day-list summary i { color: var(--primary); font-size: 8px; font-style: normal; font-weight: 750; text-align: right; }
+.payroll-day-list summary strong { font-size: 13px; }
+.payroll-day-list summary small { color: var(--text-faint); font-size: 11px; }
+.payroll-day-list summary b { font-size: 15px; }
+.payroll-day-list summary i { color: var(--primary); font-size: 11px; font-style: normal; font-weight: 750; text-align: right; }
 .payroll-day-detail { display: grid; gap: 13px; padding: 13px; border-top: 1px solid var(--border); background: var(--surface-muted); }
 .payroll-reward-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .payroll-reward-grid article { display: grid; gap: 4px; padding: 11px; border-radius: 13px; background: var(--surface); }
-.payroll-reward-grid small, .payroll-reward-grid span { color: var(--text-faint); font-size: 7px; }
-.payroll-reward-grid strong { font-size: 12px; }
+.payroll-reward-grid small, .payroll-reward-grid span { color: var(--text-faint); font-size: 10px; }
+.payroll-reward-grid strong { font-size: 15px; }
 .payroll-day-allocations { padding: 12px; border-radius: 14px; background: var(--surface); }
-.payroll-day-allocations h3 { margin: 0 0 8px; font-size: 10px; }
+.payroll-day-allocations h3 { margin: 0 0 8px; font-size: 13px; }
 .payroll-day-allocations > article { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--border); }
 .payroll-day-allocations article span { display: grid; gap: 2px; }
-.payroll-day-allocations strong, .payroll-day-allocations b { font-size: 9px; }
-.payroll-day-allocations small, .payroll-day-allocations > p { color: var(--text-faint); font-size: 7px; }
-.payroll-day-detail > aside { display: flex; gap: 8px; padding: 10px; border-radius: 12px; color: var(--warning); background: var(--warning-soft); font-size: 8px; }
+.payroll-day-allocations strong, .payroll-day-allocations b { font-size: 12px; }
+.payroll-day-allocations small, .payroll-day-allocations > p { color: var(--text-faint); font-size: 10px; }
+.payroll-day-detail > aside { display: flex; gap: 8px; padding: 10px; border-radius: 12px; color: var(--warning); background: var(--warning-soft); font-size: 11px; }
 
 .payroll-audit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .payroll-audit-grid > .panel { align-self: start; }
@@ -138,78 +138,78 @@
 .payroll-adjustment--voided { opacity: .62; background: var(--surface-muted); }
 .payroll-adjustment-list header, .payroll-adjustment-list footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .payroll-adjustment-list header span { display: grid; gap: 3px; }
-.payroll-adjustment-list strong, .payroll-adjustment-list b { font-size: 10px; }
-.payroll-adjustment-list small, .payroll-adjustment-list footer, .payroll-adjustment-list i { color: var(--text-faint); font-size: 7px; font-style: normal; }
-.payroll-adjustment-list p { margin: 9px 0; color: var(--text-muted); font-size: 8px; line-height: 1.45; }
-.payroll-adjustment-list button { display: inline-flex; align-items: center; gap: 4px; padding: 5px 7px; border: 0; border-radius: 8px; color: var(--danger); background: var(--danger-soft); font-size: 7px; font-weight: 750; }
+.payroll-adjustment-list strong, .payroll-adjustment-list b { font-size: 13px; }
+.payroll-adjustment-list small, .payroll-adjustment-list footer, .payroll-adjustment-list i { color: var(--text-faint); font-size: 10px; font-style: normal; }
+.payroll-adjustment-list p { margin: 9px 0; color: var(--text-muted); font-size: 11px; line-height: 1.45; }
+.payroll-adjustment-list button { display: inline-flex; align-items: center; gap: 4px; padding: 5px 7px; border: 0; border-radius: 8px; color: var(--danger); background: var(--danger-soft); font-size: 10px; font-weight: 750; }
 .payroll-adjustment-list button svg { width: 11px; }
-.payroll-adjustment-list aside { margin-top: 8px; padding: 7px; border-radius: 8px; color: var(--text-muted); background: var(--surface); font-size: 7px; }
+.payroll-adjustment-list aside { margin-top: 8px; padding: 7px; border-radius: 8px; color: var(--text-muted); background: var(--surface); font-size: 10px; }
 .payroll-inline-empty { min-height: 110px; display: flex; align-items: center; justify-content: center; gap: 11px; color: var(--text-muted); }
 .payroll-inline-empty > svg { color: var(--primary); }
 .payroll-inline-empty span { display: grid; gap: 4px; }
-.payroll-inline-empty strong { color: var(--text); font-size: 10px; }
-.payroll-inline-empty small { font-size: 8px; }
+.payroll-inline-empty strong { color: var(--text); font-size: 13px; }
+.payroll-inline-empty small { font-size: 11px; }
 .payroll-event-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
 .payroll-event-list li { position: relative; min-height: 49px; display: flex; gap: 10px; }
 .payroll-event-list li:not(:last-child)::after { content: ""; position: absolute; top: 27px; bottom: 0; left: 12px; width: 1px; background: var(--border); }
 .payroll-event-list li > span { position: relative; z-index: 1; width: 25px; height: 25px; display: grid; flex: 0 0 25px; place-items: center; border-radius: 50%; color: var(--success); background: var(--success-soft); }
 .payroll-event-list svg { width: 13px; }
 .payroll-event-list div { display: grid; align-content: start; gap: 4px; padding-top: 4px; }
-.payroll-event-list strong { font-size: 9px; }
-.payroll-event-list small { color: var(--text-faint); font-size: 7px; }
+.payroll-event-list strong { font-size: 12px; }
+.payroll-event-list small { color: var(--text-faint); font-size: 10px; }
 .payroll-revision-list article { min-height: 55px; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 14px; }
-.payroll-revision-list article > span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; color: var(--primary); background: var(--primary-soft); font-size: 9px; font-weight: 800; }
+.payroll-revision-list article > span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; color: var(--primary); background: var(--primary-soft); font-size: 12px; font-weight: 800; }
 .payroll-revision-list div { min-width: 0; display: grid; gap: 3px; }
-.payroll-revision-list strong { font-size: 9px; }
-.payroll-revision-list small { overflow: hidden; color: var(--text-faint); font-size: 7px; white-space: nowrap; text-overflow: ellipsis; }
-.payroll-revision-list time, .payroll-revision-list i { color: var(--text-faint); font-size: 7px; font-style: normal; }
+.payroll-revision-list strong { font-size: 12px; }
+.payroll-revision-list small { overflow: hidden; color: var(--text-faint); font-size: 10px; white-space: nowrap; text-overflow: ellipsis; }
+.payroll-revision-list time, .payroll-revision-list i { color: var(--text-faint); font-size: 10px; font-style: normal; }
 .payroll-revision--current { border-color: #a8c5b3 !important; background: var(--success-soft); }
 .payroll-comparison-totals { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .payroll-comparison-totals article { display: grid; gap: 5px; padding: 12px; border-radius: 14px; background: var(--surface-muted); }
-.payroll-comparison-totals small { color: var(--text-faint); font-size: 7px; }
+.payroll-comparison-totals small { color: var(--text-faint); font-size: 10px; }
 .payroll-comparison-totals strong { font-size: 16px; }
-.payroll-comparison-totals span { color: var(--success); font-size: 8px; font-weight: 750; }
-.payroll-comparison-warning { display: flex; gap: 8px; margin-top: 9px; padding: 10px; border-radius: 12px; color: var(--warning); background: var(--warning-soft); font-size: 8px; }
+.payroll-comparison-totals span { color: var(--success); font-size: 11px; font-weight: 750; }
+.payroll-comparison-warning { display: flex; gap: 8px; margin-top: 9px; padding: 10px; border-radius: 12px; color: var(--warning); background: var(--warning-soft); font-size: 11px; }
 .payroll-change-groups { display: grid; gap: 8px; margin-top: 10px; }
 .payroll-change-groups details { border: 1px solid var(--border); border-radius: 13px; overflow: hidden; }
-.payroll-change-groups summary { display: flex; justify-content: space-between; padding: 10px; cursor: pointer; font-size: 9px; font-weight: 750; }
+.payroll-change-groups summary { display: flex; justify-content: space-between; padding: 10px; cursor: pointer; font-size: 12px; font-weight: 750; }
 .payroll-change-groups summary span { color: var(--primary); }
 .payroll-change-groups article { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border-top: 1px solid var(--border); }
 .payroll-change-groups article span { min-width: 0; display: grid; gap: 3px; }
-.payroll-change-groups strong, .payroll-change-groups b { font-size: 8px; }
-.payroll-change-groups small { color: var(--text-faint); font-size: 6px; line-height: 1.4; }
-.payroll-change-groups > details > p { margin: 0; padding: 11px; border-top: 1px solid var(--border); color: var(--text-faint); font-size: 8px; }
+.payroll-change-groups strong, .payroll-change-groups b { font-size: 11px; }
+.payroll-change-groups small { color: var(--text-faint); font-size: 9px; line-height: 1.4; }
+.payroll-change-groups > details > p { margin: 0; padding: 11px; border-top: 1px solid var(--border); color: var(--text-faint); font-size: 11px; }
 
 .payroll-action-bar { position: fixed; z-index: 25; right: 28px; bottom: 15px; left: calc(var(--sidebar-width) + 22px); min-height: 70px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 13px; border: 1px solid rgba(217,221,214,.9); border-radius: 20px; background: rgba(255,254,250,.94); box-shadow: 0 15px 42px rgba(31,43,36,.16); backdrop-filter: blur(14px); }
 .payroll-action-bar > div { min-width: 0; display: flex; align-items: center; gap: 10px; }
 .payroll-action-bar > div > span { width: 36px; height: 36px; display: grid; flex: 0 0 36px; place-items: center; border-radius: 11px; color: var(--primary); background: var(--primary-soft); }
 .payroll-action-bar > div > div { min-width: 0; display: grid; gap: 3px; }
-.payroll-action-bar strong { font-size: 10px; }
-.payroll-action-bar small { overflow: hidden; color: var(--text-faint); font-size: 8px; white-space: nowrap; text-overflow: ellipsis; }
+.payroll-action-bar strong { font-size: 13px; }
+.payroll-action-bar small { overflow: hidden; color: var(--text-faint); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
 .payroll-action-bar > section { display: flex; gap: 7px; }
-.payroll-action-bar .button { min-height: 42px; padding-inline: 14px; font-size: 9px; }
+.payroll-action-bar .button { min-height: 42px; padding-inline: 14px; font-size: 12px; }
 .payroll-action-bar svg { width: 16px; }
 
 .payroll-modal-overlay, .payroll-sheet-overlay { position: fixed; z-index: 100; inset: 0; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(20,28,24,.48); backdrop-filter: blur(5px); }
 .payroll-modal { width: min(100%, 570px); max-height: calc(100vh - 40px); padding: 24px; overflow: auto; border-radius: 24px; background: var(--surface); box-shadow: var(--shadow-md); }
 .payroll-modal > header, .payroll-sheet > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
 .payroll-modal h2, .payroll-sheet h2 { margin: 0; font-size: 23px; letter-spacing: -.035em; }
-.payroll-modal header p:last-child, .payroll-sheet header span { margin: 7px 0 0; color: var(--text-muted); font-size: 9px; line-height: 1.5; }
+.payroll-modal header p:last-child, .payroll-sheet header span { margin: 7px 0 0; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
 .payroll-modal form { display: grid; gap: 16px; }
 .payroll-modal form > footer, .payroll-modal > footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
-.payroll-field { position: relative; display: grid; gap: 7px; color: var(--text-muted); font-size: 9px; font-weight: 750; }
+.payroll-field { position: relative; display: grid; gap: 7px; color: var(--text-muted); font-size: 12px; font-weight: 750; }
 .payroll-field input, .payroll-field select, .payroll-field textarea { width: 100%; border: 1px solid var(--border); border-radius: 12px; color: var(--text); background: #fff; }
 .payroll-field input, .payroll-field select { height: 44px; padding: 0 12px; }
 .payroll-field textarea { min-height: 92px; padding: 11px 12px; resize: vertical; }
 .payroll-field input:focus, .payroll-field select:focus, .payroll-field textarea:focus { border-color: var(--primary); outline: 0; box-shadow: 0 0 0 4px rgba(40,91,73,.1); }
-.payroll-field > small { justify-self: end; color: var(--text-faint); font-size: 7px; }
-.payroll-field em { color: var(--danger); font-size: 7px; font-style: normal; }
+.payroll-field > small { justify-self: end; color: var(--text-faint); font-size: 10px; }
+.payroll-field em { color: var(--danger); font-size: 10px; font-style: normal; }
 .payroll-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
 .payroll-field--wide { grid-column: 1 / -1; }
 .payroll-input-suffix { position: relative; }
 .payroll-input-suffix input { padding-right: 35px; }
 .payroll-input-suffix i { position: absolute; top: 14px; right: 13px; color: var(--text-faint); font-style: normal; }
-.payroll-dialog-note, .payroll-confirm-note { display: flex; align-items: flex-start; gap: 9px; padding: 11px; border-radius: 13px; color: var(--text-muted); background: var(--surface-muted); font-size: 8px; line-height: 1.5; }
+.payroll-dialog-note, .payroll-confirm-note { display: flex; align-items: flex-start; gap: 9px; padding: 11px; border-radius: 13px; color: var(--text-muted); background: var(--surface-muted); font-size: 11px; line-height: 1.5; }
 .payroll-dialog-note svg { color: var(--warning); }
 .payroll-confirm-note--danger { color: var(--danger); background: var(--danger-soft); }
 .payroll-button--danger { color: #fff; background: var(--danger); }
@@ -217,21 +217,21 @@
 .payroll-sheet-overlay { justify-content: flex-end; padding: 0; }
 .payroll-sheet { width: min(100%, 480px); height: 100%; padding: 26px; overflow: auto; background: var(--surface); box-shadow: var(--shadow-md); }
 .payroll-sheet-total { display: grid; gap: 5px; padding: 17px; border-radius: 17px; color: #fff; background: var(--primary); }
-.payroll-sheet-total small { color: rgba(255,255,255,.65); font-size: 8px; }
+.payroll-sheet-total small { color: rgba(255,255,255,.65); font-size: 11px; }
 .payroll-sheet-total strong { font-size: 28px; }
 .payroll-breakdown { display: grid; gap: 0; margin: 14px 0; }
-.payroll-breakdown div { display: flex; justify-content: space-between; padding: 10px 3px; border-bottom: 1px solid var(--border); font-size: 9px; }
+.payroll-breakdown div { display: flex; justify-content: space-between; padding: 10px 3px; border-bottom: 1px solid var(--border); font-size: 12px; }
 .payroll-breakdown dt { color: var(--text-muted); }
 .payroll-breakdown dd { margin: 0; font-weight: 750; }
 .payroll-breakdown__result { border-bottom: 0 !important; }
-.payroll-sheet h3 { margin: 18px 0 9px; font-size: 11px; }
+.payroll-sheet h3 { margin: 18px 0 9px; font-size: 14px; }
 .payroll-allocation-list { display: grid; gap: 7px; }
 .payroll-allocation-list article { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; border-radius: 12px; background: var(--surface-muted); }
 .payroll-allocation-list span { display: grid; gap: 3px; }
-.payroll-allocation-list strong, .payroll-allocation-list b { font-size: 9px; }
-.payroll-allocation-list small { color: var(--text-faint); font-size: 7px; }
-.payroll-sheet-empty { color: var(--text-faint); font-size: 8px; }
-.payroll-sheet > footer { margin-top: 18px; padding-top: 13px; border-top: 1px solid var(--border); color: var(--text-faint); font-size: 8px; line-height: 1.5; }
+.payroll-allocation-list strong, .payroll-allocation-list b { font-size: 12px; }
+.payroll-allocation-list small { color: var(--text-faint); font-size: 10px; }
+.payroll-sheet-empty { color: var(--text-faint); font-size: 11px; }
+.payroll-sheet > footer { margin-top: 18px; padding-top: 13px; border-top: 1px solid var(--border); color: var(--text-faint); font-size: 11px; line-height: 1.5; }
 
 .payroll-skeleton { display: grid; gap: 14px; }
 .payroll-skeleton--workflow { height: 68px; }
@@ -269,7 +269,7 @@
   .payroll-table thead { display: none; }
   .payroll-table tr { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 11px; margin-top: 10px; padding: 14px; border-radius: 17px; background: var(--surface-muted); }
   .payroll-table td, .payroll-table td:not(:first-child) { width: auto; min-width: 0; display: grid; gap: 4px; padding: 0; border: 0; text-align: left; white-space: normal; }
-  .payroll-table td::before { content: attr(data-label); color: var(--text-faint); font-size: 7px; font-weight: 750; text-transform: uppercase; }
+  .payroll-table td::before { content: attr(data-label); color: var(--text-faint); font-size: 10px; font-weight: 750; text-transform: uppercase; }
   .payroll-table td:first-child { grid-column: 1 / -1; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
   .payroll-table td:first-child::before, .payroll-table td:last-child::before { display: none; }
   .payroll-table td:last-child { position: absolute; top: 15px; right: 14px; }
@@ -292,6 +292,6 @@
   .payroll-reward-grid, .payroll-comparison-totals { grid-template-columns: 1fr; }
   .payroll-revision-list article { grid-template-columns: 34px minmax(0, 1fr) auto; }
   .payroll-revision-list time { grid-column: 2 / 4; }
-  .payroll-action-bar .button { gap: 4px; padding-inline: 5px; font-size: 8px; }
+  .payroll-action-bar .button { gap: 4px; padding-inline: 5px; font-size: 11px; }
   .payroll-action-bar .button svg { width: 14px; }
 }

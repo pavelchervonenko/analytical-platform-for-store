@@ -1,21 +1,24 @@
 import { useQuery } from "@tanstack/react-query";
 import { Archive, CalendarDays, CheckCircle2, FileText, History, ShieldCheck } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { AnnualReportPayload, MonthlyReportPayload, ReportSummary, ReportType } from "../api/contracts";
-import { getReport, getReports, queryKeys } from "../api/queries";
+import { getReport, getReports, getReportYears, queryKeys } from "../api/queries";
 import { formatDate } from "../shared/date";
 import { formatMoney, formatNumber, formatPercent } from "../shared/format";
 import { QueryError } from "../shared/QueryState";
 import { useWorkspace } from "../stores/WorkspaceProvider";
 import "./styles.css";
 
-const typeLabels: Record<ReportType, string> = { MONTHLY: "Месячный", ANNUAL: "Годовой" };
+const typeLabels: Record<ReportType | "UNKNOWN", string> = { MONTHLY: "Месячный", ANNUAL: "Годовой", UNKNOWN: "Неизвестный" };
 
 function periodLabel(report: ReportSummary): string {
   if (report.type === "ANNUAL") {
     return report.coverage === "PARTIAL_FIRST_YEAR"
       ? `${report.periodStart.slice(0, 7)} — ${report.periodEnd.slice(0, 7)}`
       : report.periodEnd.slice(0, 4);
+  }
+  if (report.type === "UNKNOWN") {
+    return `${formatDate(report.periodStart)} — ${formatDate(report.periodEnd)}`;
   }
   return new Date(`${report.periodStart}T00:00:00`).toLocaleDateString("ru-RU", {
     month: "long", year: "numeric"
@@ -73,7 +76,7 @@ function MonthlyView({ report }: { report: MonthlyReportPayload }) {
       <section className="panel"><div className="panel__heading"><div><p className="eyebrow">План магазина</p><h2>Итог месяца</h2></div><span>{report.planProgress.achievedDirectionCount} из {report.planProgress.directions.length}</span></div>
         <div className="report-plan-list">{report.planProgress.directions.map((item) => <div key={item.code}><span><strong>{item.code}</strong><small>{formatMoney(item.actualAmount)} из {formatMoney(item.targetAmount)}</small></span><i className={`status ${item.achieved ? "status--success" : "status--warning"}`}>{item.achieved ? "Выполнен" : "Не выполнен"}</i></div>)}</div>
       </section>
-      <section className="panel"><div className="panel__heading"><div><p className="eyebrow">Средние показатели</p><h2>Контекст отчёта</h2></div></div>
+      <section className="panel"><div className="panel__heading"><div><p className="eyebrow">Средние показатели</p><h2>Контекст отчета</h2></div></div>
         <dl className="report-definition-list"><div><dt>Средний чек</dt><dd>{formatMoney(report.averageKpi.averageReceipt.value)}</dd></div><div><dt>Доп. выручка на телефон</dt><dd>{formatMoney(report.averageKpi.additionalRevenuePerPhone.value)}</dd></div><div><dt>Сотрудников</dt><dd>{employees.length}</dd></div><div><dt>Замечаний качества</dt><dd>{report.quality.issues.length}</dd></div></dl>
       </section>
     </div>
@@ -88,7 +91,7 @@ function AnnualView({ report, openMonth }: { report: AnnualReportPayload; openMo
   const employees = report.employees.map((item) => ({ id: item.employeeId, name: item.employeeName, shifts: item.shiftCount, hours: item.workedHours, revenue: item.netRevenue, earned: item.earnedAmount, payable: item.payableAmount }));
   return <>
     <SummaryCards revenue={report.totals.netRevenue} grossProfit={report.totals.grossProfit} margin={report.totals.marginPercent} payroll={report.totals.payrollPayableAmount} quantity={report.totals.netQuantity} />
-    <section className="panel report-months"><div className="panel__heading"><div><p className="eyebrow">Состав годового отчёта</p><h2>Зафиксированные месяцы</h2></div><span>{report.totals.monthCount}</span></div>
+    <section className="panel report-months"><div className="panel__heading"><div><p className="eyebrow">Состав годового отчета</p><h2>Зафиксированные месяцы</h2></div><span>{report.totals.monthCount}</span></div>
       <div className="report-month-grid">{report.months.map((month) => <button key={month.snapshotId} type="button" onClick={() => openMonth(month.snapshotId)}><CalendarDays size={17} /><span><strong>{new Date(`${month.report.header.periodStart}T00:00:00`).toLocaleDateString("ru-RU", { month: "long" })}</strong><small>Редакция {month.revision} · {formatMoney(month.report.storeKpi.netRevenue)}</small></span></button>)}</div>
     </section>
     <section className="panel report-table-panel"><div className="panel__heading"><div><p className="eyebrow">Сотрудники за год</p><h2>Накопленные фактические показатели</h2></div><span>{employees.length}</span></div><EmployeeTable rows={employees} /></section>
@@ -103,26 +106,37 @@ export function ReportsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [type, setType] = useState<ReportType | "ALL">("ALL");
   const [year, setYear] = useState<number | "ALL">("ALL");
-  const archive = useQuery({ queryKey: queryKeys.reports(selectedStore.id), queryFn: () => getReports(selectedStore.id) });
-  const reports = useMemo(() => archive.data ?? [], [archive.data]);
-  const years = useMemo(() => [...new Set(reports.map((item) => item.periodEnd.slice(0, 4)))].sort().reverse(), [reports]);
-  const filtered = reports.filter((item) => (type === "ALL" || item.type === type) && (year === "ALL" || item.periodEnd.startsWith(String(year))));
-  const effectiveId = selectedId && reports.some((item) => item.id === selectedId) ? selectedId : filtered[0]?.id ?? null;
+  const [page, setPage] = useState(0);
+  const requestedYear = year === "ALL" ? undefined : year;
+  const requestedType = type === "ALL" ? undefined : type;
+  const yearsQuery = useQuery({
+    queryKey: queryKeys.reportYears(selectedStore.id),
+    queryFn: () => getReportYears(selectedStore.id)
+  });
+  const archive = useQuery({
+    queryKey: queryKeys.reports(selectedStore.id, requestedYear, requestedType, page),
+    queryFn: () => getReports(selectedStore.id, requestedYear, requestedType, page)
+  });
+  const reports = archive.data?.items ?? [];
+  const years = yearsQuery.data ?? [];
+  const effectiveId = selectedId && reports.some((item) => item.id === selectedId)
+    ? selectedId
+    : reports[0]?.id ?? null;
   const detail = useQuery({ queryKey: queryKeys.report(selectedStore.id, effectiveId ?? "none"), queryFn: () => getReport(selectedStore.id, effectiveId as string), enabled: effectiveId != null });
 
   if (archive.error) return <QueryError error={archive.error} onRetry={() => void archive.refetch()} />;
   return <div className="reports-page">
-    <header className="page-heading"><div><p className="eyebrow">Неизменяемая история</p><h1>Отчёты</h1><p>Фактические месячные и годовые снимки, сформированные после выплаты зарплаты.</p></div></header>
+    <header className="page-heading"><div><p className="eyebrow">Неизменяемая история</p><h1>Отчеты</h1></div></header>
     <div className="reports-layout">
-      <aside className="panel report-archive"><div className="panel__heading"><div><p className="eyebrow">Архив</p><h2>Сохранённые отчёты</h2></div><span>{filtered.length}</span></div>
-        <div className="report-filters"><label>Тип<select value={type} onChange={(event) => setType(event.target.value as ReportType | "ALL")}><option value="ALL">Все</option><option value="MONTHLY">Месячные</option><option value="ANNUAL">Годовые</option></select></label><label>Год<select value={year} onChange={(event) => setYear(event.target.value === "ALL" ? "ALL" : Number(event.target.value))}><option value="ALL">Все</option>{years.map((item) => <option value={item} key={item}>{item}</option>)}</select></label></div>
-        {archive.isPending ? <div className="report-loading"><span className="spinner" />Загружаем архив…</div> : filtered.length === 0 ? <div className="panel-empty"><Archive /><strong>Отчётов пока нет</strong><p>Месячный отчёт появится автоматически после перевода payroll в PAID.</p></div> : <div className="report-archive-list">{filtered.map((item) => <ArchiveItem key={item.id} report={item} active={item.id === effectiveId} select={() => setSelectedId(item.id)} />)}</div>}
+      <aside className="panel report-archive"><div className="panel__heading"><div><p className="eyebrow">Архив</p><h2>Сохраненные отчеты</h2></div><span>{archive.data?.totalElements ?? 0}</span></div>
+        <div className="report-filters"><label>Тип<select value={type} onChange={(event) => { setType(event.target.value as ReportType | "ALL"); setSelectedId(null); setPage(0); }}><option value="ALL">Все</option><option value="MONTHLY">Месячные</option><option value="ANNUAL">Годовые</option></select></label><label>Год<select value={year} onChange={(event) => { setYear(event.target.value === "ALL" ? "ALL" : Number(event.target.value)); setSelectedId(null); setPage(0); }}><option value="ALL">Все</option>{years.map((item) => <option value={item} key={item}>{item}</option>)}</select></label></div>
+        {archive.isPending ? <div className="report-loading"><span className="spinner" />Загружаем архив…</div> : reports.length === 0 ? <div className="panel-empty"><Archive /><strong>Отчетов пока нет</strong></div> : <><div className="report-archive-list">{reports.map((item) => <ArchiveItem key={item.id} report={item} active={item.id === effectiveId} select={() => setSelectedId(item.id)} />)}</div><footer className="report-pagination"><button className="button button--ghost" type="button" disabled={!archive.data?.hasPrevious} onClick={() => { setSelectedId(null); setPage((value) => Math.max(0, value - 1)); }}>Назад</button><span>{page + 1} из {archive.data?.totalPages ?? 1}</span><button className="button button--ghost" type="button" disabled={!archive.data?.hasNext} onClick={() => { setSelectedId(null); setPage((value) => value + 1); }}>Далее</button></footer></>}
       </aside>
       <main className="report-view">
-        {detail.isPending && effectiveId && <div className="panel report-loading"><span className="spinner" />Проверяем целостность отчёта…</div>}
+        {detail.isPending && effectiveId && <div className="panel report-loading"><span className="spinner" />Проверяем целостность отчета…</div>}
         {detail.error && <QueryError error={detail.error} onRetry={() => void detail.refetch()} />}
-        {detail.data && <><header className="report-title"><div><span className="report-title__icon">{detail.data.report.type === "ANNUAL" ? <Archive /> : <FileText />}</span><div><p className="eyebrow">{typeLabels[detail.data.report.type]} отчёт</p><h2>{periodLabel(detail.data.report)}</h2><p>{detail.data.report.coverage === "PARTIAL_FIRST_YEAR" ? "Частичный первый календарный год" : `${formatDate(detail.data.report.periodStart)} — ${formatDate(detail.data.report.periodEnd)}`}</p></div></div>{detail.data.report.revisionReason && <span className="report-revision-reason"><History size={15} />{detail.data.report.revisionReason}</span>}</header><Provenance report={detail.data.report} />{detail.data.monthly && <MonthlyView report={detail.data.monthly} />}{detail.data.annual && <AnnualView report={detail.data.annual} openMonth={setSelectedId} />}</>}
-        {!effectiveId && !archive.isPending && <section className="panel report-welcome"><CheckCircle2 size={30} /><h2>Архив готов к накоплению</h2><p>Здесь появятся финализированные отчёты. Динамическая аналитика на главном экране продолжит рассчитываться независимо.</p></section>}
+        {detail.data && <><header className="report-title"><div><span className="report-title__icon">{detail.data.report.type === "ANNUAL" ? <Archive /> : <FileText />}</span><div><p className="eyebrow">{typeLabels[detail.data.report.type]} отчет</p><h2>{periodLabel(detail.data.report)}</h2><p>{detail.data.report.coverage === "PARTIAL_FIRST_YEAR" ? "Частичный первый календарный год" : `${formatDate(detail.data.report.periodStart)} — ${formatDate(detail.data.report.periodEnd)}`}</p></div></div>{detail.data.report.revisionReason && <span className="report-revision-reason"><History size={15} />{detail.data.report.revisionReason}</span>}</header><Provenance report={detail.data.report} />{detail.data.monthly && <MonthlyView report={detail.data.monthly} />}{detail.data.annual && <AnnualView report={detail.data.annual} openMonth={(id) => { setType("MONTHLY"); setYear("ALL"); setSelectedId(id); }} />}</>}
+        {!effectiveId && !archive.isPending && <section className="panel report-welcome"><CheckCircle2 size={30} /><h2>Архив готов к накоплению</h2></section>}
       </main>
     </div>
   </div>;

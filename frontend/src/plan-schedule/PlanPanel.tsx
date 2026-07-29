@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, CircleDollarSign, Pencil, Plus, Save, Target, TrendingUp, X } from "lucide-react";
 import { useState } from "react";
+import { isApiClientError } from "../api/client";
 import type { PerformancePlan, PlanDirection } from "../api/contracts";
 import { getPerformancePlan, getPlanProgress, queryKeys, upsertPerformancePlan } from "../api/queries";
 import { formatDate } from "../shared/date";
@@ -71,9 +72,10 @@ export function PlanPanel() {
   const [draft, setDraft] = useState<PlanDraftState | null>(null);
 
   const mutation = useMutation({
-    mutationFn: (input: NonNullable<ReturnType<typeof validatePlanForm>["data"]>) => upsertPerformancePlan(storeId, month, input),
-    onSuccess: async (plan) => {
-      queryClient.setQueryData(queryKeys.performancePlan(storeId, month), plan);
+    mutationFn: (input: NonNullable<ReturnType<typeof validatePlanForm>["data"]>) => upsertPerformancePlan(storeId, month, input, planQuery.data ?? null),
+    onSuccess: async (saved) => {
+      queryClient.setQueryData(queryKeys.performancePlan(storeId, month), saved);
+      const plan = saved.value;
       setDraft({ key: `${storeId}:${month}:${plan.version}`, values: valuesFromPlan(plan), errors: {}, editing: false });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["stores", storeId, "plan-progress"] }),
@@ -81,6 +83,9 @@ export function PlanPanel() {
         queryClient.invalidateQueries({ queryKey: ["stores", storeId, "period-quality"] }),
         queryClient.invalidateQueries({ queryKey: ["stores", storeId, "payroll"] })
       ]);
+    },
+    onError: (error) => {
+      if (isApiClientError(error) && error.status === 412) void planQuery.refetch();
     }
   });
 
@@ -90,7 +95,7 @@ export function PlanPanel() {
     return <QueryError error={failed.error} onRetry={() => void Promise.all([planQuery.refetch(), progressQuery.refetch()])} />;
   }
 
-  const plan = planQuery.data;
+  const plan = planQuery.data?.value ?? null;
   const progress = progressQuery.data;
   const draftKey = `${storeId}:${month}:${plan?.version ?? "new"}`;
   const form = draft?.key === draftKey ? draft : { key: draftKey, values: valuesFromPlan(plan), errors: {}, editing: plan == null };
@@ -110,23 +115,23 @@ export function PlanPanel() {
 
   return (
     <div className="plan-panel-view">
-      {progress && (!progress.dataQuality.completeThroughAsOf || !progress.dataQuality.classificationComplete) ? <section className="plan-quality-warning"><AlertTriangle /><div><strong>Показатели требуют осторожной интерпретации</strong><p>{!progress.dataQuality.completeThroughAsOf ? "Синхронизация ещё не подтвердила данные до даты среза. " : ""}{!progress.dataQuality.classificationComplete ? `Есть неклассифицированные позиции: ${progress.dataQuality.unmappedItemCount}.` : ""}</p></div></section> : null}
+      {progress && (!progress.dataQuality.completeThroughAsOf || !progress.dataQuality.classificationComplete) ? <section className="plan-quality-warning"><AlertTriangle /><div><strong>Показатели требуют осторожной интерпретации</strong><p>{!progress.dataQuality.completeThroughAsOf ? "Синхронизация еще не подтвердила данные до даты среза. " : ""}{!progress.dataQuality.classificationComplete ? `Есть неклассифицированные позиции: ${progress.dataQuality.unmappedItemCount}.` : ""}</p></div></section> : null}
 
       {progress && <>
-        <section className="plan-progress-heading"><div><p className="eyebrow">Выполнение на {formatDate(progress.asOfDate)}</p><h2>{progress.achievedDirectionCount} из 4 направлений выполнено</h2><p>{progress.remainingDays > 0 ? `До конца месяца ${progress.remainingDays} дн.` : "Месяц завершён."}</p></div><span className={`plan-progress-score ${progress.allDirectionsAchieved ? "plan-progress-score--success" : ""}`}><strong>{progress.achievedDirectionCount}/4</strong><small>{progress.allDirectionsAchieved ? "Все цели достигнуты" : "Требуют контроля"}</small></span></section>
+        <section className="plan-progress-heading"><div><p className="eyebrow">Выполнение на {formatDate(progress.asOfDate)}</p><h2>{progress.achievedDirectionCount} из 4 направлений выполнено</h2><p>{progress.remainingDays > 0 ? `До конца месяца ${progress.remainingDays} дн.` : "Месяц завершен."}</p></div><span className={`plan-progress-score ${progress.allDirectionsAchieved ? "plan-progress-score--success" : ""}`}><strong>{progress.achievedDirectionCount}/4</strong><small>{progress.allDirectionsAchieved ? "Все цели достигнуты" : "Требуют контроля"}</small></span></section>
         {progress.focusDirections.length > 0 && <section className="plan-focus-banner"><Target /><div><strong>Фокус руководителя</strong><p>{progress.focusDirections.map((code) => directionLabels[code] ?? code).join(" · ")}</p></div></section>}
         <section className="plan-direction-grid" aria-label="Направления плана">{progress.directions.map((direction) => <DirectionCard direction={direction} key={direction.code} />)}</section>
       </>}
 
       <section className="panel plan-settings-panel">
-        <div className="panel__heading"><div><p className="eyebrow">Общий месячный план</p><h2>{plan ? "Целевые показатели магазина" : "План ещё не задан"}</h2></div>{plan && !editing && <button className="button button--ghost" type="button" onClick={() => setDraft({ ...form, editing: true })}><Pencil size={15} />Изменить</button>}</div>
+        <div className="panel__heading"><div><p className="eyebrow">Общий месячный план</p><h2>{plan ? "Целевые показатели магазина" : "План еще не задан"}</h2></div>{plan && !editing && <button className="button button--ghost" type="button" onClick={() => setDraft({ ...form, editing: true })}><Pencil size={15} />Изменить</button>}</div>
         {!editing && plan ? <div className="plan-current-values"><article><small>Выручка</small><strong>{formatMoney(plan.revenueTarget)}</strong></article><article><small>Аксессуары</small><strong>{formatPercent(plan.accessoryShareTarget)}</strong></article><article><small>Услуги</small><strong>{formatPercent(plan.serviceShareTarget)}</strong></article><article><small>Доп. выручка</small><strong>{formatPercent(plan.additionalShareTarget)}</strong></article></div> : <>
           {!plan && <div className="plan-empty-intro"><span><Plus /></span><div><strong>Заполните четыре цели на месяц</strong><p>План один для всего магазина. Персональные планы сотрудников не создаются.</p></div></div>}
           <div className="plan-form"><PlanField label="План выручки" suffix="₽" value={values.revenueTarget} error={errors.revenueTarget} onChange={(value) => updateValue("revenueTarget", value)} /><PlanField label="Доля аксессуаров" suffix="%" value={values.accessoryShareTarget} error={errors.accessoryShareTarget} onChange={(value) => updateValue("accessoryShareTarget", value)} /><PlanField label="Доля услуг" suffix="%" value={values.serviceShareTarget} error={errors.serviceShareTarget} onChange={(value) => updateValue("serviceShareTarget", value)} /><PlanField label="Доля доп. выручки" suffix="%" value={values.additionalShareTarget} error={errors.additionalShareTarget} onChange={(value) => updateValue("additionalShareTarget", value)} /></div>
-          {mutation.isError && <div className="form-alert" role="alert">Не удалось сохранить план. Проверьте значения и повторите действие.</div>}
+          {mutation.isError && <div className="form-alert" role="alert">{isApiClientError(mutation.error) && mutation.error.status === 412 ? "План уже изменен другим пользователем. Загружена актуальная версия — проверьте значения повторно." : "Не удалось сохранить план. Проверьте значения и повторите действие."}</div>}
           <div className="plan-form-actions">{plan && <button className="button button--ghost" type="button" disabled={mutation.isPending} onClick={cancel}><X size={15} />Отмена</button>}<button className="button button--primary" type="button" disabled={mutation.isPending} onClick={submit}><Save size={15} />{mutation.isPending ? "Сохраняем…" : plan ? "Сохранить изменения" : "Создать план"}</button></div>
         </>}
-        {plan && <footer className="plan-settings-meta"><CheckCircle2 size={14} /><span>Последнее обновление: {new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short", timeZone: selectedStore.timezone }).format(new Date(plan.updatedAt))}. Версия {plan.version} хранится для аудита и не отправляется при сохранении.</span></footer>}
+        {plan && <footer className="plan-settings-meta"><CheckCircle2 size={14} /><span>Последнее обновление: {new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short", timeZone: selectedStore.timezone }).format(new Date(plan.updatedAt))}. Версия {plan.version} защищает изменения от перезаписи в другой вкладке.</span></footer>}
       </section>
     </div>
   );

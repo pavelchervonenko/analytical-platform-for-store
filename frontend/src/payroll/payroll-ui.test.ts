@@ -41,6 +41,6 @@ describe("payroll UI helpers", () => {
   it("uses safe labels for future enum variants", () => {
     expect(adjustmentTypeLabel("INVENTORY")).toBe("Инвентаризация");
     expect(adjustmentTypeLabel("FUTURE_TYPE")).toBe("Другое удержание");
-    expect(comparisonReasonLabel("FUTURE_REASON")).toBe("Изменились данные расчёта");
+    expect(comparisonReasonLabel("FUTURE_REASON")).toBe("Изменились данные расчета");
   });
 });

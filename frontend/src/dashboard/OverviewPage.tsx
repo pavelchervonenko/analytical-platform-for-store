@@ -72,18 +72,16 @@ function MetricCard({
   value,
   icon,
   children,
-  featured = false,
-  highlighted = false
+  featured = false
 }: {
   label: string;
   value: string;
   icon: ReactNode;
   children?: ReactNode;
   featured?: boolean;
-  highlighted?: boolean;
 }) {
   return (
-    <article className={`metric-card ${featured ? "metric-card--featured" : ""} ${highlighted ? "metric-card--highlighted" : ""}`}>
+    <article className={`metric-card ${featured ? "metric-card--featured" : ""}`}>
       <div className="metric-card__heading"><span>{label}</span><i>{icon}</i></div>
       <strong className="metric-card__value">{value}</strong>
       {children}
@@ -189,7 +187,7 @@ export function OverviewPage() {
 
         <PlanCard direction={revenueDirection} />
 
-        <MetricCard label="Маржа" value={formatPercent(kpi?.marginPercent)} icon={<TrendingUp size={19} />} highlighted>
+        <MetricCard label="Маржа" value={formatPercent(kpi?.marginPercent)} icon={<TrendingUp size={19} />}>
           <div className="metric-card__meta">{kpi?.dataQuality.completeCostData ? <span className="quality-ok"><CheckCircle2 size={14} />Себестоимость полная</span> : <span className="quality-warning"><AlertCircle size={14} />Неполные данные</span>}</div>
           <div className="metric-card__foot"><span>Валовая прибыль</span><strong>{formatMoney(kpi?.grossProfit)}</strong></div>
         </MetricCard>
@@ -207,7 +205,7 @@ export function OverviewPage() {
 
       <div className="overview-grid">
         <section className="panel groups-panel">
-          <div className="panel__heading"><div><p className="eyebrow">Структура продаж</p><h2>Бизнес-группы</h2></div><span>Группы пересекаются и не суммируются</span></div>
+          <div className="panel__heading"><div><p className="eyebrow">Структура продаж</p><h2>Бизнес-группы</h2></div></div>
           <div className="group-list">
             {categories?.groups.map((group) => {
               const info = groupLabels[group.groupCode] ?? { label: group.groupName, icon: <Package size={18} /> };

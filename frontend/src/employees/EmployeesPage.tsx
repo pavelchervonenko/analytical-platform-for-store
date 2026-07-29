@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowRight, Check, Filter, History, LockKeyhole, Search, Trophy, UserCheck, Users } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router";
 import { isApiClientError } from "../api/client";
 import type { EmployeeRatingEntry, EmployeeRatingSetting } from "../api/contracts";
 import {
@@ -12,7 +12,7 @@ import {
   queryKeys,
   updateEmployeeRatingSetting
 } from "../api/queries";
-import { currentDateInTimeZone, formatDate, formatMonth } from "../shared/date";
+import { currentDateInTimeZone, formatDate } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
 import { QueryError } from "../shared/QueryState";
 import { useWorkspace } from "../stores/WorkspaceProvider";
@@ -43,7 +43,7 @@ function EmployeesSkeleton() {
 }
 
 export function EmployeesPage() {
-  const { selectedStore, month, periodStart, periodEnd } = useWorkspace();
+  const { selectedStore, periodStart, periodEnd } = useWorkspace();
   const location = useLocation();
   const queryClient = useQueryClient();
   const storeId = selectedStore.id;
@@ -144,14 +144,14 @@ export function EmployeesPage() {
   return (
     <div className="employees-page">
       <header className="page-heading employees-heading">
-        <div><p className="eyebrow">{selectedStore.name}</p><h1>Сотрудники и рейтинг</h1><p>Серверный рейтинг, динамика и рабочие показатели за {formatMonth(month)}.</p></div>
+        <div><p className="eyebrow">{selectedStore.name}</p><h1>Сотрудники и рейтинг</h1></div>
         <div className="employees-heading__actions">
-          <span className={`rating-history-badge rating-history-badge--${isFinalized ? "finalized" : isLive ? "live" : "unknown"}`}>{isFinalized ? <LockKeyhole size={15} /> : isLive ? <History size={15} /> : <AlertTriangle size={15} />}{isFinalized ? "Зафиксирован" : isLive ? "Живой расчёт" : "Статус неизвестен"}</span>
+          <span className={`rating-history-badge rating-history-badge--${isFinalized ? "finalized" : isLive ? "live" : "unknown"}`}>{isFinalized ? <LockKeyhole size={15} /> : isLive ? <History size={15} /> : <AlertTriangle size={15} />}{isFinalized ? "Зафиксирован" : isLive ? "Живой расчет" : "Статус неизвестен"}</span>
           {canFinalize && <button className="button button--primary" type="button" onClick={() => setFinalizeDialogOpen(true)}><LockKeyhole size={17} />Зафиксировать период</button>}
         </div>
       </header>
 
-      {isFinalized && <section className="rating-snapshot-banner"><LockKeyhole size={18} /><div><strong>Исторический снимок защищён от изменений</strong><p>Зафиксировал {rating.history.finalizedByName ?? "пользователь"}{rating.history.finalizedAt ? ` · ${new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short", timeZone: selectedStore.timezone }).format(new Date(rating.history.finalizedAt))}` : ""}. Новые продажи, смены и настройки его не изменят.</p></div></section>}
+      {isFinalized && <section className="rating-snapshot-banner"><LockKeyhole size={18} /><div><strong>Исторический снимок защищен от изменений</strong><p>Зафиксировал {rating.history.finalizedByName ?? "пользователь"}{rating.history.finalizedAt ? ` · ${new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short", timeZone: selectedStore.timezone }).format(new Date(rating.history.finalizedAt))}` : ""}. Новые продажи, смены и настройки его не изменят.</p></div></section>}
 
       {(settingMutation.isError || finalizeMutation.isError) && (
         <div className="form-alert" role="alert">{isApiClientError(settingMutation.error ?? finalizeMutation.error) ? (settingMutation.error ?? finalizeMutation.error as Error).message : "Не удалось сохранить изменение. Обновите данные и повторите действие."}</div>

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 import type { StoreSummary } from "../api/contracts";
 import { getStores, queryKeys } from "../api/queries";
 import {
@@ -60,7 +60,13 @@ function periodLabel(mode: AnalyticsPeriodMode, start: string, end: string, mont
   return `${formatDateShort(start)} — ${formatDateShort(end)}`;
 }
 
-export function WorkspaceProvider({ children }: { children: ReactNode }) {
+export function WorkspaceProvider({
+  children,
+  emptyState
+}: {
+  children: ReactNode;
+  emptyState?: ReactNode;
+}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const storesQuery = useQuery({ queryKey: queryKeys.stores, queryFn: getStores, staleTime: 5 * 60_000 });
 
@@ -100,7 +106,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   if (storesQuery.isPending) return <main className="workspace-state" aria-live="polite"><span className="spinner" /><p>Загружаем доступные магазины…</p></main>;
   if (storesQuery.isError) return <main className="workspace-state"><h1>Не удалось загрузить магазины</h1><p>Проверьте соединение или доступ учетной записи.</p><button className="button button--primary" type="button" onClick={() => void storesQuery.refetch()}>Повторить</button></main>;
-  if (!selectedStore || !month) return <main className="workspace-state"><h1>Нет доступных магазинов</h1><p>Администратор еще не назначил вам активный магазин.</p></main>;
+  if (!selectedStore || !month) return emptyState ?? (
+    <main className="workspace-state"><h1>Нет доступных магазинов</h1>
+      <p>Администратор еще не назначил вам активный магазин.</p></main>
+  );
 
   const value: WorkspaceContextValue = {
     stores,

@@ -9,6 +9,7 @@ visual reference and is not imported by this application.
 - React Router for client routes;
 - TanStack Query for server state and request deduplication;
 - Zod validation at the backend transport boundary;
+- generated transport types from the versioned backend OpenAPI artifact;
 - cookie session with an in-memory CSRF configuration; no bearer token or session storage.
 
 ## Application boundaries
@@ -19,16 +20,22 @@ visual reference and is not imported by this application.
   analytics ranges never change the meaning of monthly workflows.
 - `/quality` maps corrections only from stable backend `recommendedAction` values. Unsupported
   mutations, such as manual cost repair, remain explicit diagnostics instead of fake controls.
+- `/reports` reads immutable monthly and annual snapshots with server-side year/type filters;
+  report revisions and payload totals are displayed exactly as returned by the backend.
 - `/admin` is role-gated in the router and split into users/access, durable synchronization jobs,
-  immutable scheme versions and effective-dated payroll classification. Backend authorization is
-  still authoritative for every request.
+  guarded manual synchronization, report archive recovery, immutable scheme versions,
+  effective-dated payroll classification and the bootstrap category import. Backend authorization
+  remains authoritative for every request.
 - Query keys contain every store, period, month or resource identifier that affects server state.
   Mutations invalidate dependent authoritative queries instead of recalculating business data in
   the browser.
 
+- Safe API errors retain the backend correlation ID for support diagnostics; raw proxy and server
+  details are never rendered.
+
 ## Development
 
-Use Node.js 20.19 or newer. From `frontend/`:
+Use Node.js 22.22 or newer. From `frontend/`:
 
 ```bash
 npm ci
@@ -44,6 +51,44 @@ origin so the CSRF cookie can be read and sent safely.
 ```bash
 npm run check
 ```
+
+The regular check first regenerates transport types into a temporary directory and rejects drift
+from `src/api/generated/`.
+
+For browser smoke checks, install Chromium once and run the E2E suite against a running backend:
+
+```bash
+npm run e2e:install
+E2E_ADMIN_EMAIL=... E2E_ADMIN_PASSWORD=... npm run e2e
+```
+
+Add `E2E_MANAGER_EMAIL` and `E2E_MANAGER_PASSWORD` to verify the negative role boundary. Secrets
+must come from the shell or the CI secret store; they are never kept in repository files. Without
+credentials, Playwright still verifies the anonymous route guard. Set `E2E_BASE_URL` to test an
+already deployed same-origin environment; otherwise Playwright starts the local production preview
+on `127.0.0.1:4174`, which proxies `/api` to `DEV_API_TARGET`.
+
+Failure artifacts contain screenshots and traces but no video. Treat them as access-controlled CI
+artifacts because rendered business data can be sensitive.
+
+When the backend contract changes intentionally:
+
+```bash
+./gradlew -p backend generateOpenApi
+cp backend/build/openapi/current.json contracts/openapi/current.json
+cd frontend
+npm run contracts:generate
+npm run check
+```
+
+Released files under `contracts/openapi/baselines/` are immutable. A compatible change updates
+only `current.json`; an intentional incompatible change creates a new versioned baseline and
+updates `ApiContractVersion.CURRENT`. Run `./gradlew -p backend checkOpenApiCompatibility` from
+the repository root to verify both backend artifact drift and breaking changes.
+
+React Router is pinned to 8.3.0, the first release patched for `GHSA-qwww-vcr4-c8h2`.
+Dependency audit is part of production readiness and must remain free of high-severity runtime
+findings.
 
 The browser never calls LiveSklad. Business formulas, ranks, payroll totals and quality statuses
 remain backend-owned authoritative values.

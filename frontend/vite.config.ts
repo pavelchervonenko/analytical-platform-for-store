@@ -1,6 +1,11 @@
+import { readFileSync } from "node:fs";
 import { defineConfig } from "vitest/config";
 import { loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+
+const packageVersion = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8")
+) as { version: string };
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -11,8 +16,12 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    define: {
+      __FRONTEND_BUILD_VERSION__: JSON.stringify(packageVersion.version)
+    },
     plugins: [react()],
     test: {
+      include: ["src/**/*.test.{ts,tsx}"],
       environment: "jsdom",
       setupFiles: "./src/test/setup.ts",
       css: true
@@ -32,7 +41,14 @@ export default defineConfig(({ mode }) => {
     preview: {
       host: "127.0.0.1",
       port: 4174,
-      strictPort: true
+      strictPort: true,
+      proxy: {
+        "/api": {
+          target: apiTarget,
+          changeOrigin: false,
+          secure: true
+        }
+      }
     },
     build: {
       sourcemap: false,
