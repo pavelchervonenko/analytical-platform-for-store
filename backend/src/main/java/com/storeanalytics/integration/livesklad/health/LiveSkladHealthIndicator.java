@@ -1,10 +1,13 @@
 package com.storeanalytics.integration.livesklad.health;
 
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthIndicator;
+import com.storeanalytics.common.config.ApplicationRole;
+import com.storeanalytics.common.config.ConditionalOnApplicationRole;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnApplicationRole({ApplicationRole.WORKER, ApplicationRole.COMBINED})
 public class LiveSkladHealthIndicator implements HealthIndicator {
 
     private final LiveSkladAvailabilityProbe probe;

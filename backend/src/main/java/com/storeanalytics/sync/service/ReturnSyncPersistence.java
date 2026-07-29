@@ -1,8 +1,8 @@
 package com.storeanalytics.sync.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladCashItemPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladCashRegisterPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladCashTransactionPayload;
@@ -14,6 +14,8 @@ import com.storeanalytics.product.model.ProductCategoryAssignment;
 import com.storeanalytics.product.model.ProductConditionType;
 import com.storeanalytics.product.model.ProductDetails;
 import com.storeanalytics.product.model.ProductSourceKind;
+import com.storeanalytics.product.service.LiveSkladProductIdentityResolver;
+import com.storeanalytics.product.service.LiveSkladProductIdentityResolver.ResolutionKind;
 import com.storeanalytics.quality.model.DataQualityIssue;
 import com.storeanalytics.quality.model.DataQualitySeverity;
 import com.storeanalytics.quality.model.DataQualityStatus;
@@ -35,6 +37,8 @@ import com.storeanalytics.sync.model.RawRecordVersion;
 import com.storeanalytics.sync.model.SourceSystem;
 import com.storeanalytics.sync.model.SyncRun;
 import com.storeanalytics.sync.support.JsonPayloadHasher;
+import com.storeanalytics.sync.support.PreparedRawPayload;
+import com.storeanalytics.sync.support.RawPayloadProfile;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -63,6 +67,7 @@ public class ReturnSyncPersistence {
 
     private final ReturnReferenceRepositories referenceRepositories;
     private final ReturnFactRepositories factRepositories;
+    private final LiveSkladProductIdentityResolver identityResolver;
     private final JsonPayloadHasher payloadHasher;
     private final ObjectMapper objectMapper;
     private final Clock clock;
@@ -71,6 +76,7 @@ public class ReturnSyncPersistence {
     public ReturnSyncPersistence(
             ReturnReferenceRepositories referenceRepositories,
             ReturnFactRepositories factRepositories,
+            LiveSkladProductIdentityResolver identityResolver,
             JsonPayloadHasher payloadHasher,
             ObjectMapper objectMapper,
             Clock clock,
@@ -78,6 +84,7 @@ public class ReturnSyncPersistence {
     ) {
         this.referenceRepositories = referenceRepositories;
         this.factRepositories = factRepositories;
+        this.identityResolver = identityResolver;
         this.payloadHasher = payloadHasher;
         this.objectMapper = objectMapper;
         this.clock = clock;
@@ -158,7 +165,8 @@ public class ReturnSyncPersistence {
                     }
                     data.add(item.rawPayload().deepCopy());
                 });
-        String hash = payloadHasher.sha256(wrapper);
+        PreparedRawPayload preparedDictionary = payloadHasher.prepare(RawPayloadProfile.CASH_ITEM_DICTIONARY, wrapper);
+        String hash = preparedDictionary.sha256();
         RawRecordVersion rawVersion = factRepositories.rawRecords()
                 .findCompanyRecordVersion(
                         syncRun.getConnection().getId(),
@@ -168,12 +176,16 @@ public class ReturnSyncPersistence {
                         hash
                 )
                 .map(existing -> {
-                    existing.markSeen(syncRun, now);
+                    existing.markSeenWithRetainedPayload(
+                            syncRun,
+                            now,
+                            preparedDictionary.json()
+                    );
                     return existing;
                 })
                 .orElseGet(() -> factRepositories.rawRecords().save(
                         RawRecordVersion.pendingCashItems(
-                                payloadHasher.serialize(wrapper),
+                                preparedDictionary.json(),
                                 hash,
                                 syncRun,
                                 now
@@ -201,7 +213,9 @@ public class ReturnSyncPersistence {
                         "LiveSklad cash register is inconsistent"
                 );
             }
-            String hash = payloadHasher.sha256(source.rawPayload());
+            PreparedRawPayload preparedRegister =
+                    payloadHasher.prepare(RawPayloadProfile.CASH_REGISTER, source.rawPayload());
+            String hash = preparedRegister.sha256();
             RawRecordVersion rawVersion = factRepositories.rawRecords()
                     .findStoreRecordVersion(
                             syncRun.getConnection().getId(),
@@ -212,14 +226,18 @@ public class ReturnSyncPersistence {
                             hash
                     )
                     .map(existing -> {
-                        existing.markSeen(syncRun, context.now());
+                        existing.markSeenWithRetainedPayload(
+                                syncRun,
+                                context.now(),
+                                preparedRegister.json()
+                        );
                         return existing;
                     })
                     .orElseGet(() -> factRepositories.rawRecords().save(
                             RawRecordVersion.pendingCashRegister(
                                     store,
                                     source.externalId(),
-                                    payloadHasher.serialize(source.rawPayload()),
+                                    preparedRegister.json(),
                                     hash,
                                     syncRun,
                                     context.now()
@@ -457,7 +475,8 @@ public class ReturnSyncPersistence {
         } else {
             combined.set("detail", source.detail().rawPayload().deepCopy());
         }
-        String hash = payloadHasher.sha256(combined);
+        PreparedRawPayload preparedReturn = payloadHasher.prepare(RawPayloadProfile.RETURN_DOCUMENT, combined);
+        String hash = preparedReturn.sha256();
         return factRepositories.rawRecords().findStoreRecordVersion(
                 syncRun.getConnection().getId(),
                 store.getId(),
@@ -466,13 +485,17 @@ public class ReturnSyncPersistence {
                 source.externalId(),
                 hash
         ).map(existing -> {
-            existing.markSeen(syncRun, now);
+            existing.markSeenWithRetainedPayload(
+                    syncRun,
+                    now,
+                    preparedReturn.json()
+            );
             return existing;
         }).orElseGet(() -> factRepositories.rawRecords().save(
                 RawRecordVersion.pendingReturn(
                         store,
                         source.externalId(),
-                        payloadHasher.serialize(combined),
+                        preparedReturn.json(),
                         hash,
                         sourceUpdatedAt(source),
                         syncRun,
@@ -626,26 +649,17 @@ public class ReturnSyncPersistence {
             }
             return cached;
         }
-        Optional<Product> existing = referenceRepositories.products()
-                .findByConnectionIdAndExternalId(
-                        context.syncRun().getConnection().getId(),
-                        source.productExternalId()
+        LiveSkladProductIdentityResolver.ProductIdentityResolution resolution =
+                identityResolver.resolveObservedProduct(
+                        context.syncRun().getConnection(),
+                        source.productExternalId(),
+                        details
                 );
-        Product product;
-        if (existing.isEmpty()) {
-            product = referenceRepositories.products().save(
-                    Product.fromLiveSklad(
-                            context.syncRun().getConnection(),
-                            source.productExternalId(),
-                            details
-                    )
-            );
+        Product product = resolution.product();
+        if (resolution.kind() == ResolutionKind.CREATED) {
             context.result().productsCreated++;
-        } else {
-            product = existing.get();
-            if (product.updateFromLiveSklad(details)) {
-                context.result().productsUpdated++;
-            }
+        } else if (resolution.kind() == ResolutionKind.UPDATED) {
+            context.result().productsUpdated++;
         }
         context.productCache().put(source.productExternalId(), product);
         return product;

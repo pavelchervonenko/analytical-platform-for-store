@@ -11,6 +11,7 @@ public record SyncProperties(
         Duration leaseDuration,
         Duration retryInitialDelay,
         Duration retryMaxDelay,
+        Duration retryAbsoluteMaxDelay,
         int incrementalOverlapDays,
         int maximumBackfillDays,
         ZoneId reportingZone
@@ -20,6 +21,7 @@ public record SyncProperties(
         java.util.Objects.requireNonNull(leaseDuration, "leaseDuration");
         java.util.Objects.requireNonNull(retryInitialDelay, "retryInitialDelay");
         java.util.Objects.requireNonNull(retryMaxDelay, "retryMaxDelay");
+        java.util.Objects.requireNonNull(retryAbsoluteMaxDelay, "retryAbsoluteMaxDelay");
         java.util.Objects.requireNonNull(reportingZone, "reportingZone");
         if (windowSize.compareTo(Duration.ofMinutes(15)) < 0
                 || windowSize.compareTo(Duration.ofDays(31)) > 0) {
@@ -36,6 +38,12 @@ public record SyncProperties(
         if (retryInitialDelay.isZero() || retryInitialDelay.isNegative()
                 || retryMaxDelay.compareTo(retryInitialDelay) < 0) {
             throw new IllegalArgumentException("sync retry delays are invalid");
+        }
+        if (retryAbsoluteMaxDelay.compareTo(retryMaxDelay) < 0
+                || retryAbsoluteMaxDelay.compareTo(Duration.ofDays(7)) > 0) {
+            throw new IllegalArgumentException(
+                    "sync retryAbsoluteMaxDelay must be between retryMaxDelay and 7 days"
+            );
         }
         if (incrementalOverlapDays < 1 || incrementalOverlapDays > 31) {
             throw new IllegalArgumentException(

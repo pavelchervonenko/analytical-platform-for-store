@@ -1,6 +1,7 @@
 package com.storeanalytics.salary.web;
 
 import com.storeanalytics.auth.security.AppUserPrincipal;
+import com.storeanalytics.common.web.PageResponse;
 import com.storeanalytics.salary.model.PayrollSchemeDefinition;
 import com.storeanalytics.salary.service.PayrollConfigurationService;
 import com.storeanalytics.salary.service.PayrollSchemeView;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -27,8 +29,11 @@ public class PayrollConfigurationController {
     }
 
     @GetMapping("/payroll-schemes")
-    List<PayrollSchemeView> schemes() {
-        return configurationService.schemes();
+    PageResponse<PayrollSchemeView> schemes(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return configurationService.schemes(page, size);
     }
 
     @PostMapping("/payroll-schemes")

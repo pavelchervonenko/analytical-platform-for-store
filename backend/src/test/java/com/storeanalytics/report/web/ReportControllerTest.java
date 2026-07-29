@@ -7,8 +7,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.storeanalytics.common.web.ApiExceptionHandler;
+import com.storeanalytics.common.web.PageResponse;
 import com.storeanalytics.metrics.model.ReportStatus;
 import com.storeanalytics.metrics.model.ReportType;
 import com.storeanalytics.report.exception.ReportNotFoundException;
@@ -22,7 +23,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -34,11 +35,13 @@ class ReportControllerTest {
     @BeforeEach
     void setUp() {
         service = mock(ReportQueryService.class);
-        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+        JsonMapper objectMapper = JsonMapper.builder()
+                .findAndAddModules()
+                .build();
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new ReportController(service))
                 .setControllerAdvice(new ApiExceptionHandler())
-                .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
+                .setMessageConverters(new JacksonJsonHttpMessageConverter(objectMapper))
                 .build();
     }
 
@@ -64,19 +67,22 @@ class ReportControllerTest {
                 Instant.parse("2026-08-02T10:00:00Z"),
                 new ReportActorView(UUID.randomUUID(), "Manager")
         );
-        when(service.list(storeId, 2026, ReportType.MONTHLY)).thenReturn(List.of(report));
+        when(service.list(storeId, 2026, ReportType.MONTHLY, 0, 20))
+                .thenReturn(new PageResponse<>(List.of(report), 0, 20, 1, 1, false, false));
 
         mockMvc.perform(get("/api/stores/{storeId}/reports", storeId)
                         .queryParam("year", "2026")
                         .queryParam("type", "MONTHLY"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(reportId.toString()))
-                .andExpect(jsonPath("$[0].type").value("MONTHLY"))
-                .andExpect(jsonPath("$[0].status").value("FINALIZED"))
-                .andExpect(jsonPath("$[0].revision").value(2))
-                .andExpect(jsonPath("$[0].currentRevision").value(true))
-                .andExpect(jsonPath("$[0].revisionReason").value("Corrected payroll"));
-        verify(service).list(storeId, 2026, ReportType.MONTHLY);
+                .andExpect(jsonPath("$.items[0].id").value(reportId.toString()))
+                .andExpect(jsonPath("$.items[0].type").value("MONTHLY"))
+                .andExpect(jsonPath("$.items[0].status").value("FINALIZED"))
+                .andExpect(jsonPath("$.items[0].revision").value(2))
+                .andExpect(jsonPath("$.items[0].currentRevision").value(true))
+                .andExpect(jsonPath("$.items[0].revisionReason").value("Corrected payroll"))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.hasNext").value(false));
+        verify(service).list(storeId, 2026, ReportType.MONTHLY, 0, 20);
     }
 
     @Test

@@ -12,6 +12,8 @@ import com.storeanalytics.auth.model.UserRole;
 import com.storeanalytics.auth.model.UserStoreAccess;
 import com.storeanalytics.auth.repository.AppUserRepository;
 import com.storeanalytics.auth.repository.UserStoreAccessRepository;
+import com.storeanalytics.common.web.PageParameters;
+import com.storeanalytics.common.web.PageResponse;
 import com.storeanalytics.common.security.SecurityAuditLogger;
 import com.storeanalytics.store.model.Store;
 import com.storeanalytics.store.repository.StoreRepository;
@@ -20,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,10 +58,26 @@ public class UserAdministrationService {
     }
 
     @Transactional(readOnly = true)
-    public List<AdminUserView> findAll() {
-        return userRepository.findAllByOrderByDisplayNameAsc().stream()
-                .map(this::createView)
-                .toList();
+    public PageResponse<AdminUserView> findAll(int page, int size) {
+        var users = userRepository.findAdminPage(
+                new PageParameters(page, size).pageable(Sort.unsorted())
+        );
+        Map<UUID, List<UUID>> storeIdsByUser = accessRepository
+                .findAllByIdUserIdIn(users.stream().map(AppUser::getId).toList())
+                .stream()
+                .collect(Collectors.groupingBy(
+                        access -> access.getId().getUserId(),
+                        Collectors.mapping(
+                                access -> access.getId().getStoreId(),
+                                Collectors.collectingAndThen(
+                                        Collectors.toList(),
+                                        ids -> ids.stream().sorted().toList()
+                                )
+                        )
+                ));
+        return PageResponse.from(users.map(user -> createView(
+                user, storeIdsByUser.getOrDefault(user.getId(), List.of())
+        )));
     }
 
     @Transactional
@@ -211,13 +231,15 @@ public class UserAdministrationService {
     }
 
     private AdminUserView createView(AppUser user) {
+        List<UUID> storeIds = accessRepository.findAllByIdUserId(user.getId()).stream()
+                .map(access -> access.getId().getStoreId())
+                .sorted()
+                .toList();
+        return createView(user, storeIds);
+    }
+
+    private AdminUserView createView(AppUser user, List<UUID> assignedStoreIds) {
         boolean allStores = user.getRole() == UserRole.ADMIN;
-        List<UUID> storeIds = allStores
-                ? List.of()
-                : accessRepository.findAllByIdUserId(user.getId()).stream()
-                        .map(access -> access.getId().getStoreId())
-                        .sorted()
-                        .toList();
         return new AdminUserView(
                 user.getId(),
                 user.getEmail(),
@@ -226,7 +248,7 @@ public class UserAdministrationService {
                 user.isActive(),
                 user.isPasswordChangeRequired(),
                 allStores,
-                storeIds,
+                allStores ? List.of() : assignedStoreIds,
                 user.getLastLoginAt(),
                 user.getVersion()
         );

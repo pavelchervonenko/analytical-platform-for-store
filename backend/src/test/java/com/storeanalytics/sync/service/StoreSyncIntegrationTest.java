@@ -3,9 +3,9 @@ package com.storeanalytics.sync.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import com.storeanalytics.auth.model.UserRole;
 import com.storeanalytics.employee.model.Employee;
 import com.storeanalytics.employee.repository.EmployeeRepository;
@@ -83,7 +83,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -93,7 +93,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class StoreSyncIntegrationTest {
 
     @Container
-    private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
+    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     @Autowired
     private StoreSyncService storeSyncService;
@@ -184,9 +184,9 @@ class StoreSyncIntegrationTest {
                 Integer.class
         );
 
-        assertThat(tableCount).isEqualTo(37);
-        assertThat(entityManagerFactory.getMetamodel().getEntities()).hasSize(36);
-        assertThat(applicationContext.getBeanNamesForType(JpaRepository.class)).hasSize(36);
+        assertThat(tableCount).isEqualTo(43);
+        assertThat(entityManagerFactory.getMetamodel().getEntities()).hasSize(39);
+        assertThat(applicationContext.getBeanNamesForType(JpaRepository.class)).hasSize(39);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM integration_connections WHERE connection_key = 'livesklad-default'",
                 Integer.class
@@ -199,7 +199,7 @@ class StoreSyncIntegrationTest {
                   AND NOT tgisinternal
                 """,
                 Integer.class
-        )).isEqualTo(19);
+        )).isEqualTo(23);
     }
 
     @Test
@@ -210,7 +210,13 @@ class StoreSyncIntegrationTest {
                 SELECT table_name, column_name
                 FROM information_schema.columns
                 WHERE table_schema = 'public'
-                  AND table_name NOT IN ('flyway_schema_history', 'auth_login_throttles')
+                  AND table_name NOT IN (
+                      'flyway_schema_history',
+                      'auth_login_throttles',
+                      'audit_retention_holds',
+                      'store_product_inventory_daily',
+                      'store_product_inventory_monthly'
+                  )
                 ORDER BY table_name, ordinal_position
                 """,
                 resultSet -> {
@@ -757,6 +763,52 @@ class StoreSyncIntegrationTest {
     }
 
     @Test
+    void persistsOnlyTheApprovedRawStoreFields() throws IOException {
+        List<LiveSkladStorePayload> stores = new ArrayList<>(readFixture());
+        LiveSkladStorePayload original = stores.getFirst();
+        ObjectNode vendorPayload = (ObjectNode) original.rawPayload().deepCopy();
+        vendorPayload.put("ownerEmail", "private@example.com");
+        vendorPayload.put("accessToken", "must-not-be-retained");
+        stores.set(0, new LiveSkladStorePayload(
+                original.externalId(),
+                original.name(),
+                original.address(),
+                original.color(),
+                vendorPayload
+        ));
+        fakeClient.setStores(stores);
+
+        storeSyncService.synchronize();
+
+        String retainedPayload = jdbcTemplate.queryForObject(
+                """
+                SELECT payload::text
+                FROM raw_record_versions
+                WHERE entity_type = 'STORE' AND external_id = ?
+                """,
+                String.class,
+                original.externalId()
+        );
+        assertThat(retainedPayload)
+                .contains(original.externalId(), original.name(), original.address())
+                .doesNotContain(
+                        "ownerEmail",
+                        "private@example.com",
+                        "accessToken",
+                        "must-not-be-retained"
+                );
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT payload_policy_version
+                FROM raw_record_versions
+                WHERE entity_type = 'STORE' AND external_id = ?
+                """,
+                Integer.class,
+                original.externalId()
+        )).isEqualTo(1);
+    }
+
+    @Test
     void synchronizesStoresIdempotentlyAndCreatesNewRawVersionOnlyForChangedPayload()
             throws IOException {
         StoreSyncResult first = storeSyncService.synchronize();
@@ -778,7 +830,7 @@ class StoreSyncIntegrationTest {
 
         List<LiveSkladStorePayload> changedStores = new ArrayList<>(readFixture());
         LiveSkladStorePayload original = changedStores.getFirst();
-        ObjectNode changedRaw = original.rawPayload().deepCopy();
+        ObjectNode changedRaw = (ObjectNode) original.rawPayload().deepCopy();
         changedRaw.put("name", "Fixture North Updated");
         changedStores.set(0, new LiveSkladStorePayload(
                 original.externalId(),
@@ -1424,10 +1476,10 @@ class StoreSyncIntegrationTest {
             List<LiveSkladStorePayload> stores = new ArrayList<>();
             for (JsonNode node : root.path("data")) {
                 stores.add(new LiveSkladStorePayload(
-                        node.path("id").textValue(),
-                        node.path("name").textValue(),
-                        node.path("address").textValue(),
-                        node.path("color").textValue(),
+                        node.path("id").stringValue(),
+                        node.path("name").stringValue(),
+                        node.path("address").stringValue(),
+                        node.path("color").stringValue(),
                         node.deepCopy()
                 ));
             }
@@ -1446,8 +1498,8 @@ class StoreSyncIntegrationTest {
                 List<LiveSkladEmployeePayload> employees = new ArrayList<>();
                 for (JsonNode node : root.path(storeId)) {
                     employees.add(new LiveSkladEmployeePayload(
-                            node.path("id").textValue(),
-                            node.path("name").textValue(),
+                            node.path("id").stringValue(),
+                            node.path("name").stringValue(),
                             node.deepCopy()
                     ));
                 }

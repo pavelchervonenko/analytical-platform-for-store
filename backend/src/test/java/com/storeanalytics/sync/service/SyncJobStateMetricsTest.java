@@ -7,6 +7,9 @@ import static org.mockito.Mockito.when;
 import com.storeanalytics.sync.model.SyncJobStatus;
 import com.storeanalytics.sync.repository.SyncJobRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 
 class SyncJobStateMetricsTest {
@@ -16,7 +19,17 @@ class SyncJobStateMetricsTest {
         SyncJobRepository repository = mock(SyncJobRepository.class);
         when(repository.countByStatus(SyncJobStatus.FAILED)).thenReturn(3L);
         when(repository.countByStatus(SyncJobStatus.WAITING_RETRY)).thenReturn(2L);
-        SyncJobStateMetrics metrics = new SyncJobStateMetrics(repository);
+        when(repository.countExpiredLeases(
+                SyncJobStatus.RUNNING,
+                Instant.parse("2026-07-25T12:00:00Z")
+        )).thenReturn(1L);
+        SyncJobStateMetrics metrics = new SyncJobStateMetrics(
+                repository,
+                Clock.fixed(
+                        Instant.parse("2026-07-25T12:00:00Z"),
+                        ZoneOffset.UTC
+                )
+        );
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         metrics.bindTo(registry);
 
@@ -30,5 +43,9 @@ class SyncJobStateMetricsTest {
                 .tag("status", "retrying")
                 .gauge()
                 .value()).isEqualTo(2);
+        assertThat(registry.get(SyncJobStateMetrics.JOBS_METRIC)
+                .tag("status", "expired_lease")
+                .gauge()
+                .value()).isEqualTo(1);
     }
 }

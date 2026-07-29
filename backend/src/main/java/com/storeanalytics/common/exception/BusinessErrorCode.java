@@ -78,9 +78,29 @@ public enum BusinessErrorCode {
             "LOGIN_THROTTLED", BusinessErrorType.RATE_LIMITED,
             "Too many login attempts; try again later"
     ),
+    CURRENT_SESSION_REQUIRES_LOGOUT(
+            "CURRENT_SESSION_REQUIRES_LOGOUT", BusinessErrorType.CONFLICT,
+            "Use logout to end the current browser session"
+    ),
     ACTIVE_SYNC_JOB_EXISTS(
             "ACTIVE_SYNC_JOB_EXISTS", BusinessErrorType.CONFLICT,
             "An active synchronization job already exists"
+    ),
+    ACTIVE_REPORT_BACKFILL_JOB_EXISTS(
+            "ACTIVE_REPORT_BACKFILL_JOB_EXISTS", BusinessErrorType.CONFLICT,
+            "An active report backfill job already exists"
+    ),
+    REPORT_BACKFILL_IDEMPOTENCY_CONFLICT(
+            "REPORT_BACKFILL_IDEMPOTENCY_CONFLICT", BusinessErrorType.CONFLICT,
+            "Idempotency key belongs to another report backfill request"
+    ),
+    IDEMPOTENCY_KEY_CONFLICT(
+            "IDEMPOTENCY_KEY_CONFLICT", BusinessErrorType.CONFLICT,
+            "Idempotency key was already used for another request"
+    ),
+    REPORT_BACKFILL_JOB_NOT_FOUND(
+            "REPORT_BACKFILL_JOB_NOT_FOUND", BusinessErrorType.NOT_FOUND,
+            "Report backfill job was not found"
     ),
     SYNC_JOB_NOT_FOUND(
             "SYNC_JOB_NOT_FOUND", BusinessErrorType.NOT_FOUND,

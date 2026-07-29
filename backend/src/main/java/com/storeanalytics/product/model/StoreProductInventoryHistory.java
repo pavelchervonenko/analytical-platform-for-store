@@ -44,8 +44,8 @@ public class StoreProductInventoryHistory extends AbstractCreatedEntity {
     @Column(name = "source_updated_at")
     private Instant sourceUpdatedAt;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "sync_run_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sync_run_id")
     private SyncRun syncRun;
 
     @JdbcTypeCode(SqlTypes.JSON)

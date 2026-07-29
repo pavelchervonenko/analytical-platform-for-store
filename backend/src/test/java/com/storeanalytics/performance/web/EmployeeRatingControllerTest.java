@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.storeanalytics.auth.security.AppUserPrincipal;
 import com.storeanalytics.common.web.ApiExceptionHandler;
 import com.storeanalytics.metrics.exception.StoreNotFoundException;
@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -42,12 +42,14 @@ class EmployeeRatingControllerTest {
     void setUp() {
         ratingService = mock(EmployeeRatingQueryService.class);
         finalizationService = mock(EmployeeRatingFinalizationService.class);
-        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+        JsonMapper objectMapper = JsonMapper.builder()
+                .findAndAddModules()
+                .build();
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new EmployeeRatingController(
                         ratingService, finalizationService
                 ))
-                .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
+                .setMessageConverters(new JacksonJsonHttpMessageConverter(objectMapper))
                 .setControllerAdvice(
                         new ApiExceptionHandler()
                 )

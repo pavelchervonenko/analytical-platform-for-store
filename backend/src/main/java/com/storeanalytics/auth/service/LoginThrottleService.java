@@ -2,7 +2,7 @@ package com.storeanalytics.auth.service;
 
 import com.storeanalytics.auth.exception.LoginThrottledException;
 import com.storeanalytics.common.config.LoginThrottleProperties;
-import com.storeanalytics.common.security.SecurityAuditLogger;
+import com.storeanalytics.common.security.ClientAddress;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -85,7 +84,7 @@ public class LoginThrottleService {
     }
 
     @Transactional(readOnly = true)
-    public void checkAllowed(String email, String clientAddress) {
+    public void checkAllowed(String email, ClientAddress clientAddress) {
         Instant now = Instant.now(clock);
         Instant blockedUntil = List.of(
                         blockedUntil(EMAIL_SCOPE, emailKey(email), now),
@@ -101,7 +100,7 @@ public class LoginThrottleService {
     }
 
     @Transactional
-    public void recordFailure(String email, String clientAddress) {
+    public void recordFailure(String email, ClientAddress clientAddress) {
         Instant now = Instant.now(clock);
         recordFailure(
                 EMAIL_SCOPE,
@@ -128,7 +127,6 @@ public class LoginThrottleService {
         );
     }
 
-    @Scheduled(cron = "${app.security.login-throttle.cleanup-cron:0 0 4 * * *}")
     @Transactional
     public void removeExpiredEntries() {
         Instant cutoff = Instant.now(clock).minus(properties.retention());
@@ -176,11 +174,12 @@ public class LoginThrottleService {
 
     private String emailKey(String email) {
         String normalized = email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
-        return SecurityAuditLogger.pseudonym("email:" + normalized);
+        return LoginThrottleKeyHasher.hash("email", normalized);
     }
 
-    private String ipKey(String clientAddress) {
-        String normalized = clientAddress == null ? "" : clientAddress.trim().toLowerCase(Locale.ROOT);
-        return SecurityAuditLogger.pseudonym("ip:" + normalized);
+    private String ipKey(ClientAddress clientAddress) {
+        return LoginThrottleKeyHasher.hash(
+                "ip", clientAddress.throttleKey()
+        );
     }
 }

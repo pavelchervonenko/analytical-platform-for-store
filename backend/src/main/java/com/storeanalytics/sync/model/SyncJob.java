@@ -12,24 +12,18 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.UUID;
-import org.hibernate.annotations.UuidGenerator;
 
 @Entity
 @Table(name = "sync_jobs")
 public class SyncJob extends AbstractMutableEntity {
 
     private static final Duration MINIMUM_WINDOW = Duration.ofMinutes(15);
-
-    @Id
-    @UuidGenerator
-    private UUID id;
+    private static final int MAXIMUM_ERROR_SUMMARY_LENGTH = 300;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "connection_id", nullable = false)
@@ -201,7 +195,7 @@ public class SyncJob extends AbstractMutableEntity {
             Instant now
     ) {
         requireOwnedRunningJob(owner);
-        errorSummary = requireText(summary, "summary");
+        errorSummary = boundedSummary(summary);
         attemptCount++;
         totalRetries++;
         clearLease();
@@ -262,6 +256,12 @@ public class SyncJob extends AbstractMutableEntity {
         finishedAt = now;
         errorSummary = null;
     }
+    private String boundedSummary(String summary) {
+        String value = requireText(summary, "summary");
+        return value.length() <= MAXIMUM_ERROR_SUMMARY_LENGTH
+                ? value : value.substring(0, MAXIMUM_ERROR_SUMMARY_LENGTH);
+    }
+
 
     private void requireOwnedRunningJob(String owner) {
         require(status == SyncJobStatus.RUNNING, "sync job must be running");
@@ -272,10 +272,6 @@ public class SyncJob extends AbstractMutableEntity {
     private void clearLease() {
         leaseOwner = null;
         leaseUntil = null;
-    }
-
-    public UUID getId() {
-        return id;
     }
 
     public IntegrationConnection getConnection() {

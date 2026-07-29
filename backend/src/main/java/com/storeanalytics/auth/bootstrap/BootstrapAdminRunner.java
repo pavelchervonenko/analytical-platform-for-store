@@ -1,69 +1,44 @@
 package com.storeanalytics.auth.bootstrap;
 
-import com.storeanalytics.auth.model.AppUser;
-import com.storeanalytics.auth.model.UserRole;
-import com.storeanalytics.auth.repository.AppUserRepository;
-import com.storeanalytics.auth.service.PasswordPolicy;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.storeanalytics.common.security.SecurityAuditLogger;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 @Component
 public class BootstrapAdminRunner implements ApplicationRunner {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(BootstrapAdminRunner.class);
-
     private final BootstrapAdminProperties properties;
-    private final AppUserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final PasswordPolicy passwordPolicy;
+    private final BootstrapAdminService bootstrapAdminService;
+    private final SecurityAuditLogger securityAuditLogger;
 
     public BootstrapAdminRunner(
             BootstrapAdminProperties properties,
-            AppUserRepository userRepository,
-            PasswordEncoder passwordEncoder,
-            PasswordPolicy passwordPolicy
+            BootstrapAdminService bootstrapAdminService,
+            SecurityAuditLogger securityAuditLogger
     ) {
         this.properties = properties;
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.passwordPolicy = passwordPolicy;
+        this.bootstrapAdminService = bootstrapAdminService;
+        this.securityAuditLogger = securityAuditLogger;
     }
 
     @Override
-    @Transactional
     public void run(ApplicationArguments arguments) {
-        boolean hasEmail = StringUtils.hasText(properties.email());
-        boolean hasPassword = StringUtils.hasText(properties.password());
-        if (!hasEmail && !hasPassword) {
+        if (!properties.configured()) {
             return;
         }
-        if (!hasEmail || !hasPassword) {
-            throw new IllegalStateException(
-                    "Both bootstrap admin email and password must be configured"
+        properties.validateCompleteConfiguration();
+        BootstrapAdminOutcome outcome =
+                bootstrapAdminService.createIfDatabaseIsEmpty(properties);
+        switch (outcome.status()) {
+            case CREATED -> securityAuditLogger.bootstrapAdministratorCreated(
+                    outcome.userId()
+            );
+            case USERS_EXIST ->
+                    securityAuditLogger.bootstrapAdministratorSkipped();
+            default -> throw new IllegalStateException(
+                    "Unknown bootstrap administrator outcome"
             );
         }
-        if (userRepository.count() > 0) {
-            LOGGER.info("Bootstrap administrator was not created because application users already exist");
-            return;
-        }
-
-        passwordPolicy.validate(properties.password());
-        String displayName = StringUtils.hasText(properties.displayName())
-                ? properties.displayName()
-                : "Administrator";
-        AppUser administrator = new AppUser(
-                properties.email(),
-                passwordEncoder.encode(properties.password()),
-                displayName,
-                UserRole.ADMIN
-        );
-        userRepository.save(administrator);
-        LOGGER.info("Bootstrap administrator created");
     }
 }

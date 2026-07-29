@@ -51,6 +51,19 @@ public class StorePlanProgressService {
         this.clock = clock;
     }
 
+
+    @Transactional(readOnly = true)
+    public java.util.Optional<StorePlanProgressView> find(
+            UUID storeId,
+            YearMonth month,
+            LocalDate asOfDate
+    ) {
+        if (planService.find(storeId, month).isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(calculate(storeId, month, asOfDate));
+    }
+
     @Transactional(readOnly = true)
     public StorePlanProgressView calculate(
             UUID storeId,

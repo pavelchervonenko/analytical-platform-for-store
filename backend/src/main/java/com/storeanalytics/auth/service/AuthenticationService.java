@@ -4,10 +4,10 @@ import com.storeanalytics.auth.exception.InvalidCurrentPasswordException;
 import com.storeanalytics.auth.exception.PasswordPolicyViolationException;
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.auth.repository.AppUserRepository;
+import com.storeanalytics.auth.security.NfcPasswordEncoder;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,13 +15,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthenticationService {
 
     private final AppUserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final NfcPasswordEncoder passwordEncoder;
     private final PasswordPolicy passwordPolicy;
     private final Clock clock;
 
     public AuthenticationService(
             AppUserRepository userRepository,
-            PasswordEncoder passwordEncoder,
+            NfcPasswordEncoder passwordEncoder,
             PasswordPolicy passwordPolicy,
             Clock clock
     ) {
@@ -34,7 +34,7 @@ public class AuthenticationService {
     @Transactional
     public void recordSuccessfulLogin(UUID userId, String authenticatedPassword) {
         AppUser user = requireUser(userId);
-        if (passwordEncoder.upgradeEncoding(user.getPasswordHash())) {
+        if (passwordEncoder.requiresUpgradeAfterSuccessfulMatch(authenticatedPassword, user.getPasswordHash())) {
             user.upgradePasswordHash(passwordEncoder.encode(authenticatedPassword));
         }
         user.recordSuccessfulLogin(Instant.now(clock));
@@ -47,7 +47,9 @@ public class AuthenticationService {
             throw new InvalidCurrentPasswordException();
         }
         passwordPolicy.validate(newPassword);
-        if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+        if (PasswordCanonicalizer.canonicalize(currentPassword)
+                .equals(PasswordCanonicalizer.canonicalize(newPassword))
+                || passwordEncoder.matches(newPassword, user.getPasswordHash())) {
             throw new PasswordPolicyViolationException("New password must differ from the current password");
         }
         user.changePassword(passwordEncoder.encode(newPassword));

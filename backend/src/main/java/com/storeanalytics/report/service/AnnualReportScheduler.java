@@ -1,5 +1,8 @@
 package com.storeanalytics.report.service;
 
+import com.storeanalytics.common.config.ApplicationRole;
+import com.storeanalytics.common.config.BackgroundSchedulingConfiguration;
+import com.storeanalytics.common.config.ConditionalOnApplicationRole;
 import com.storeanalytics.store.model.Store;
 import com.storeanalytics.store.repository.StoreRepository;
 import java.time.Clock;
@@ -13,6 +16,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnApplicationRole({ApplicationRole.WORKER, ApplicationRole.COMBINED})
 @ConditionalOnProperty(
         prefix = "app.reports",
         name = "annual-scheduling-enabled",
@@ -39,7 +43,8 @@ class AnnualReportScheduler {
 
     @Scheduled(
             cron = "${app.reports.annual-cron:0 30 4 * * *}",
-            zone = "${app.reports.zone:Europe/Kaliningrad}"
+            zone = "${app.reports.zone:Europe/Kaliningrad}",
+            scheduler = BackgroundSchedulingConfiguration.ANNUAL_REPORT_SCHEDULER
     )
     void finalizeEligibleYears() {
         for (Store store : storeRepository.findAllByActiveTrue()) {

@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.performance.model.EmployeeRatingSnapshot;
 import com.storeanalytics.store.model.Store;
@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 class EmployeeRatingSnapshotCodecTest {
 
     private final EmployeeRatingSnapshotCodec codec = new EmployeeRatingSnapshotCodec(
-            new ObjectMapper().findAndRegisterModules()
+            new ObjectMapper().rebuild().findAndAddModules().build()
     );
 
     @Test

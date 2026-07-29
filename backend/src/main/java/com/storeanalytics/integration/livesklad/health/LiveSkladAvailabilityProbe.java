@@ -1,5 +1,8 @@
 package com.storeanalytics.integration.livesklad.health;
 
+import com.storeanalytics.common.config.ApplicationRole;
+import com.storeanalytics.common.config.BackgroundSchedulingConfiguration;
+import com.storeanalytics.common.config.ConditionalOnApplicationRole;
 import com.storeanalytics.common.config.LiveSkladProperties;
 import com.storeanalytics.integration.livesklad.client.LiveSkladClient;
 import java.time.Clock;
@@ -11,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 @Component
+@ConditionalOnApplicationRole({ApplicationRole.WORKER, ApplicationRole.COMBINED})
 public class LiveSkladAvailabilityProbe {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(
@@ -40,7 +44,9 @@ public class LiveSkladAvailabilityProbe {
 
     @Scheduled(
             initialDelayString = "${app.observability.livesklad-initial-delay:30s}",
-            fixedDelayString = "${app.observability.livesklad-refresh-delay:1m}"
+            fixedDelayString = "${app.observability.livesklad-refresh-delay:1m}",
+            scheduler = BackgroundSchedulingConfiguration
+                    .LIVESKLAD_PROBE_SCHEDULER
     )
     public void probe() {
         if (!configured()) {

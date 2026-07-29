@@ -17,10 +17,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -32,8 +33,8 @@ class ProductCategoryImportIntegrationTest {
     private static final String RULE_VERSION = "customer-approved-2026-07-20-v1";
 
     @Container
-    private static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:16-alpine");
+    private static final PostgreSQLContainer POSTGRES =
+            new PostgreSQLContainer("postgres:16-alpine");
 
     @Autowired
     private ProductCategoryImportService importService;
@@ -101,6 +102,87 @@ class ProductCategoryImportIntegrationTest {
                 """,
                 Timestamp.class
         ).toInstant()).isEqualTo(VALID_FROM);
+    }
+
+    @Test
+    void permitsOnlyOneTimeClaimOfProvisionalLiveSkladIdentity() {
+        importAssignments(command(List.of(
+                entry(
+                        "4310",
+                        "Cable",
+                        "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE
+                )
+        )));
+
+        assertThat(jdbcTemplate.update(
+                """
+                UPDATE products
+                SET external_id = 'nomenclature-4310',
+                    source_kind = 'PRODUCT'
+                WHERE external_id = '4310'
+                """
+        )).isOne();
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT category.code
+                FROM product_category_assignments assignment
+                JOIN products product ON product.id = assignment.product_id
+                JOIN analytics_categories category
+                  ON category.id = assignment.analytics_category_id
+                WHERE product.external_id = 'nomenclature-4310'
+                """,
+                String.class
+        )).isEqualTo("CHARGER_CABLE");
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                """
+                UPDATE products
+                SET external_id = 'different-identity'
+                WHERE external_id = 'nomenclature-4310'
+                """
+        )).isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("source identity cannot be changed");
+    }
+
+    @Test
+    void resolvesApprovedCatalogIdentifierByLiveSkladProductCode() {
+        jdbcTemplate.update(
+                """
+                INSERT INTO products (
+                    connection_id, source_system, external_id, code, name, source_kind
+                )
+                SELECT id, 'LIVESKLAD', 'nomenclature-4310', '4310',
+                       'LiveSklad Cable', 'PRODUCT'
+                FROM integration_connections
+                WHERE connection_key = 'livesklad-default'
+                """
+        );
+
+        ProductCategoryImportResult result = importAssignments(command(List.of(
+                entry(
+                        "4310",
+                        "Approved Cable",
+                        "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE
+                )
+        )));
+
+        assertThat(result).isEqualTo(
+                new ProductCategoryImportResult(1, 0, 1, 0)
+        );
+        assertThat(count("products")).isOne();
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT category.code
+                FROM product_category_assignments assignment
+                JOIN products product ON product.id = assignment.product_id
+                JOIN analytics_categories category
+                  ON category.id = assignment.analytics_category_id
+                WHERE product.external_id = 'nomenclature-4310'
+                """,
+                String.class
+        )).isEqualTo("CHARGER_CABLE");
     }
 
     @Test

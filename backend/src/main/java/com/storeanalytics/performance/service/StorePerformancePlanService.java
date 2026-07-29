@@ -2,12 +2,15 @@ package com.storeanalytics.performance.service;
 
 import static com.storeanalytics.common.validation.ModelValidation.requireNonNull;
 
-import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.audit.service.AuditAction;
 import com.storeanalytics.audit.service.AuditEntityType;
 import com.storeanalytics.audit.service.AuditLogService;
 import com.storeanalytics.audit.service.AuditTarget;
+import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.auth.repository.AppUserRepository;
+import com.storeanalytics.common.exception.PreconditionFailedException;
+import com.storeanalytics.common.exception.PreconditionRequiredException;
+import com.storeanalytics.common.web.StrongEtag;
 import com.storeanalytics.metrics.exception.StoreNotFoundException;
 import com.storeanalytics.performance.exception.PerformancePlanNotFoundException;
 import com.storeanalytics.performance.model.StorePerformancePlan;
@@ -60,20 +63,38 @@ public class StorePerformancePlanService {
                 ));
     }
 
+
+    @Transactional(readOnly = true)
+    public java.util.Optional<StorePerformancePlanView> find(
+            UUID storeId,
+            YearMonth month
+    ) {
+        UUID validatedStoreId = requireStore(storeId).getId();
+        LocalDate planMonth = requireNonNull(month, "month").atDay(1);
+        return planRepository.findByStoreIdAndPlanMonth(
+                validatedStoreId,
+                planMonth
+        ).map(this::toView);
+    }
+
     @Transactional
     public StorePerformancePlanView upsert(
             UUID storeId,
             YearMonth month,
             StorePlanTargets targets,
+            String ifMatch,
+            String ifNoneMatch,
             UUID actorId
     ) {
-        Store store = requireStore(storeId);
+        Store store = requireStoreForUpdate(storeId);
         AppUser actor = userRepository.findById(requireNonNull(actorId, "actorId"))
                 .orElseThrow(() -> new IllegalArgumentException("actor does not exist"));
         LocalDate planMonth = requireNonNull(month, "month").atDay(1);
         StorePerformancePlan existing = planRepository
                 .findByStoreIdAndPlanMonth(store.getId(), planMonth)
                 .orElse(null);
+        requirePrecondition(existing, ifMatch, ifNoneMatch);
+
         Map<String, Object> before = existing == null ? null : planSummary(existing);
         StorePerformancePlan plan;
         if (existing == null) {
@@ -93,6 +114,11 @@ public class StorePerformancePlanService {
                 planSummary(saved)
         );
         return toView(saved);
+    }
+
+    public static String etag(StorePerformancePlanView plan) {
+        requireNonNull(plan, "plan");
+        return StrongEtag.of("performance-plan", plan.id(), plan.version());
     }
 
     @Transactional(readOnly = true)
@@ -167,9 +193,50 @@ public class StorePerformancePlanService {
         );
     }
 
+    private void requirePrecondition(
+            StorePerformancePlan existing,
+            String ifMatch,
+            String ifNoneMatch
+    ) {
+        if (existing == null) {
+            if (ifNoneMatch == null || ifNoneMatch.isBlank()) {
+                throw new PreconditionRequiredException(
+                        "If-None-Match is required to create a performance plan"
+                );
+            }
+            if (ifMatch != null || !"*".equals(ifNoneMatch.trim())) {
+                throw new PreconditionFailedException(
+                        "Performance plan already has a different state"
+                );
+            }
+            return;
+        }
+
+        if (ifMatch == null || ifMatch.isBlank()) {
+            throw new PreconditionRequiredException(
+                    "If-Match is required to update a performance plan"
+            );
+        }
+        if (ifNoneMatch != null || !planEtag(existing).equals(ifMatch.trim())) {
+            throw new PreconditionFailedException(
+                    "Performance plan was changed by another user"
+            );
+        }
+    }
+
+    private String planEtag(StorePerformancePlan plan) {
+        return StrongEtag.of("performance-plan", plan.getId(), plan.getVersion());
+    }
+
     private Store requireStore(UUID storeId) {
         UUID validated = requireNonNull(storeId, "storeId");
         return storeRepository.findById(validated)
+                .orElseThrow(() -> new StoreNotFoundException(validated));
+    }
+
+    private Store requireStoreForUpdate(UUID storeId) {
+        UUID validated = requireNonNull(storeId, "storeId");
+        return storeRepository.findByIdForUpdate(validated)
                 .orElseThrow(() -> new StoreNotFoundException(validated));
     }
 

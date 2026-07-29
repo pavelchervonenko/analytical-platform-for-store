@@ -1,6 +1,9 @@
 logging:
+  structured:
+    format:
+      console: ${LOG_STRUCTURED_FORMAT:ecs}
   pattern:
-    correlation: "[correlationId=%X{correlationId:-none}] "
+    correlation: "[requestId=%X{request.id:-none} clientCorrelationId=%X{client.correlation_id:-none}] "
 
 spring:
   application:
@@ -11,6 +14,16 @@ spring:
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      pool-name: store-analytics-${app.runtime.role}
+      maximum-pool-size: ${app.resources.database.maximum-pool-size}
+      minimum-idle: ${app.resources.database.minimum-idle}
+      connection-timeout: ${app.resources.database.connection-timeout-ms}
+      validation-timeout: ${app.resources.database.validation-timeout-ms}
+      idle-timeout: ${app.resources.database.idle-timeout-ms}
+      max-lifetime: ${app.resources.database.max-lifetime-ms}
+      keepalive-time: ${app.resources.database.keepalive-time-ms}
+      initialization-fail-timeout: ${app.resources.database.initialization-fail-timeout-ms}
   jpa:
     open-in-view: false
     hibernate:
@@ -22,16 +35,34 @@ spring:
   task:
     scheduling:
       pool:
-        size: 4
+        size: 1
       thread-name-prefix: store-analytics-scheduler-
       shutdown:
         await-termination: true
         await-termination-period: 30s
+  lifecycle:
+    timeout-per-shutdown-phase: 45s
   flyway:
     enabled: true
     locations: classpath:db/migration
 
 server:
+  shutdown: graceful
+  forward-headers-strategy: none
+  max-http-request-header-size: ${app.resources.http.max-request-header-size}
+  tomcat:
+    connection-timeout: ${app.resources.http.connection-timeout}
+    keep-alive-timeout: ${app.resources.http.keep-alive-timeout}
+    max-connections: ${app.resources.http.max-connections}
+    accept-count: ${app.resources.http.accept-count}
+    max-http-form-post-size: ${app.resources.http.max-form-post-size}
+    max-swallow-size: ${app.resources.http.max-swallow-size}
+    max-keep-alive-requests: ${app.resources.http.max-keep-alive-requests}
+    max-parameter-count: ${app.resources.http.max-parameter-count}
+    threads:
+      max: ${app.resources.http.max-threads}
+      min-spare: ${app.resources.http.min-spare-threads}
+      max-queue-capacity: ${app.resources.http.max-queue-capacity}
   servlet:
     session:
       timeout: 30m
@@ -42,19 +73,29 @@ server:
 
 management:
   endpoints:
+    access:
+      default: none
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
+      access: read-only
       show-details: never
       probes:
         enabled: true
+        add-additional-paths: true
       group:
         liveness:
           include: livenessState
         readiness:
-          include: readinessState,db,flywayReadiness
+          include: readinessState,db,schemaVersionReadiness
+    info:
+      access: read-only
+    metrics:
+      access: read-only
+    prometheus:
+      access: read-only
   info:
     defaults:
       enabled: false
@@ -75,17 +116,62 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+      role: ${app.runtime.role}
 
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
 app:
+  runtime:
+    role: ${APP_RUNTIME_ROLE:COMBINED}
+  migration:
+    lock-timeout: ${MIGRATION_LOCK_TIMEOUT:5s}
+    statement-timeout: ${MIGRATION_STATEMENT_TIMEOUT:10m}
+    lock-retry-count: ${MIGRATION_LOCK_RETRY_COUNT:10}
+  resources:
+    http:
+      max-request-header-size: ${HTTP_MAX_REQUEST_HEADER_SIZE:8KB}
+      max-request-body-size: ${HTTP_MAX_REQUEST_BODY_SIZE:2MB}
+      max-form-post-size: ${HTTP_MAX_FORM_POST_SIZE:2MB}
+      max-swallow-size: ${HTTP_MAX_SWALLOW_SIZE:2MB}
+      connection-timeout: ${HTTP_CONNECTION_TIMEOUT:10s}
+      keep-alive-timeout: ${HTTP_KEEP_ALIVE_TIMEOUT:20s}
+      max-connections: ${HTTP_MAX_CONNECTIONS:512}
+      accept-count: ${HTTP_ACCEPT_COUNT:100}
+      max-threads: ${HTTP_MAX_THREADS:64}
+      min-spare-threads: ${HTTP_MIN_SPARE_THREADS:8}
+      max-queue-capacity: ${HTTP_MAX_QUEUE_CAPACITY:128}
+      max-keep-alive-requests: ${HTTP_MAX_KEEP_ALIVE_REQUESTS:100}
+      max-parameter-count: ${HTTP_MAX_PARAMETER_COUNT:256}
+    database:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
+      connection-timeout-ms: ${DB_POOL_CONNECTION_TIMEOUT_MS:5000}
+      validation-timeout-ms: ${DB_POOL_VALIDATION_TIMEOUT_MS:3000}
+      idle-timeout-ms: ${DB_POOL_IDLE_TIMEOUT_MS:600000}
+      max-lifetime-ms: ${DB_POOL_MAX_LIFETIME_MS:1800000}
+      keepalive-time-ms: ${DB_POOL_KEEPALIVE_TIME_MS:120000}
+      initialization-fail-timeout-ms: ${DB_POOL_INITIALIZATION_FAIL_TIMEOUT_MS:1}
+  idempotency:
+    ttl: ${IDEMPOTENCY_TTL:24h}
+    cleanup-batch-size: ${IDEMPOTENCY_CLEANUP_BATCH_SIZE:1000}
+    cleanup-cron: ${IDEMPOTENCY_CLEANUP_CRON:0 15 4 * * *}
+  release:
+    id: ${RELEASE_ID:}
+    image-digest: ${IMAGE_DIGEST:}
   security:
     cors-allowed-origins: ${CORS_ALLOWED_ORIGINS}
     secure-cookies: ${SESSION_COOKIE_SECURE:false}
     session-absolute-timeout: ${SESSION_ABSOLUTE_TIMEOUT:12h}
     max-concurrent-sessions: ${MAX_CONCURRENT_SESSIONS:3}
+    client-ip:
+      trusted-proxy-cidrs: ${TRUSTED_PROXY_CIDRS:}
+    telemetry:
+      pseudonym-key: ${SECURITY_TELEMETRY_PSEUDONYM_KEY}
+      pseudonym-key-id: ${SECURITY_TELEMETRY_PSEUDONYM_KEY_ID:v1}
+    break-glass:
+      user-ids: ${BREAK_GLASS_USER_IDS:}
     login-throttle:
       email-max-failures: ${LOGIN_EMAIL_MAX_FAILURES:5}
       ip-max-failures: ${LOGIN_IP_MAX_FAILURES:30}
@@ -105,7 +191,20 @@ app:
     require-https: ${LIVESKLAD_REQUIRE_HTTPS:false}
     connect-timeout: ${LIVESKLAD_CONNECT_TIMEOUT:5s}
     read-timeout: ${LIVESKLAD_READ_TIMEOUT:30s}
+    payload-limits:
+      max-response-size: ${LIVESKLAD_MAX_RESPONSE_SIZE:2MB}
+      max-document-length: ${LIVESKLAD_MAX_DOCUMENT_LENGTH:2097152}
+      max-token-count: ${LIVESKLAD_MAX_TOKEN_COUNT:100000}
+      max-nesting-depth: ${LIVESKLAD_MAX_NESTING_DEPTH:64}
+      max-string-length: ${LIVESKLAD_MAX_STRING_LENGTH:65536}
+      max-name-length: ${LIVESKLAD_MAX_NAME_LENGTH:256}
+      max-number-length: ${LIVESKLAD_MAX_NUMBER_LENGTH:128}
+      max-raw-payload-size: ${LIVESKLAD_MAX_RAW_PAYLOAD_SIZE:4MB}
+      max-collection-records: ${LIVESKLAD_MAX_COLLECTION_RECORDS:1000}
+      max-positions-per-document: ${LIVESKLAD_MAX_POSITIONS_PER_DOCUMENT:1000}
   observability:
+    prometheus:
+      token: ${PROMETHEUS_SCRAPE_TOKEN:}
     state-initial-delay: ${OBSERVABILITY_STATE_INITIAL_DELAY:30s}
     state-refresh-delay: ${OBSERVABILITY_STATE_REFRESH_DELAY:1m}
     payroll-refresh-delay: ${OBSERVABILITY_PAYROLL_REFRESH_DELAY:5m}
@@ -122,10 +221,45 @@ app:
     lease-duration: ${SYNC_LEASE_DURATION:2h}
     retry-initial-delay: ${SYNC_RETRY_INITIAL_DELAY:1m}
     retry-max-delay: ${SYNC_RETRY_MAX_DELAY:15m}
+    retry-absolute-max-delay: ${SYNC_RETRY_ABSOLUTE_MAX_DELAY:1d}
     incremental-overlap-days: ${SYNC_INCREMENTAL_OVERLAP_DAYS:3}
     maximum-backfill-days: ${SYNC_MAXIMUM_BACKFILL_DAYS:730}
     reporting-zone: ${SYNC_REPORTING_ZONE:Europe/Kaliningrad}
+  maintenance:
+    retention:
+      scheduling-enabled: ${RETENTION_SCHEDULING_ENABLED:true}
+      deletion-enabled: ${RETENTION_DELETION_ENABLED:false}
+      deletion-authorization:
+        policy-approval-reference: ${RETENTION_POLICY_APPROVAL_REFERENCE:UNAPPROVED}
+        backup-checkpoint-reference: ${RETENTION_BACKUP_CHECKPOINT_REFERENCE:UNVERIFIED}
+        restore-tested-at: ${RETENTION_RESTORE_TESTED_AT:1970-01-01T00:00:00Z}
+        maximum-restore-test-age: ${RETENTION_MAXIMUM_RESTORE_TEST_AGE:90d}
+      cron: ${RETENTION_CRON:0 30 3 * * *}
+      delete-batch-size: ${RETENTION_DELETE_BATCH_SIZE:10000}
+      rollup-batch-size: ${RETENTION_ROLLUP_BATCH_SIZE:1000}
+      normalized-raw-retention: ${RETENTION_NORMALIZED_RAW:180d}
+      problem-raw-retention: ${RETENTION_PROBLEM_RAW:365d}
+      successful-sync-run-retention: ${RETENTION_SUCCESSFUL_SYNC_RUN:90d}
+      unsuccessful-sync-run-retention: ${RETENTION_UNSUCCESSFUL_SYNC_RUN:365d}
+      successful-sync-job-retention: ${RETENTION_SUCCESSFUL_SYNC_JOB:90d}
+      unsuccessful-sync-job-retention: ${RETENTION_UNSUCCESSFUL_SYNC_JOB:180d}
+      closed-quality-issue-retention: ${RETENTION_CLOSED_QUALITY_ISSUE:365d}
+      detailed-inventory-retention: ${RETENTION_DETAILED_INVENTORY:P13M}
+      daily-inventory-retention: ${RETENTION_DAILY_INVENTORY:P3Y}
+      zone: ${RETENTION_ZONE:Europe/Kaliningrad}
+      audit:
+        security-retention: ${RETENTION_AUDIT_SECURITY:P5Y}
+        business-retention: ${RETENTION_AUDIT_BUSINESS:P3Y}
+        operational-retention: ${RETENTION_AUDIT_OPERATIONAL:P1Y}
   reports:
     annual-scheduling-enabled: ${REPORTS_ANNUAL_SCHEDULING_ENABLED:true}
     annual-cron: ${REPORTS_ANNUAL_CRON:0 30 4 * * *}
     zone: ${REPORTS_SCHEDULING_ZONE:Europe/Kaliningrad}
+    backfill:
+      worker-enabled: ${REPORT_BACKFILL_WORKER_ENABLED:true}
+      worker-delay: ${REPORT_BACKFILL_WORKER_DELAY:5s}
+      max-attempts: ${REPORT_BACKFILL_MAX_ATTEMPTS:3}
+      lease-duration: ${REPORT_BACKFILL_LEASE_DURATION:30m}
+      retry-initial-delay: ${REPORT_BACKFILL_RETRY_INITIAL_DELAY:30s}
+      retry-max-delay: ${REPORT_BACKFILL_RETRY_MAX_DELAY:15m}
+      max-active-jobs: ${REPORT_BACKFILL_MAX_ACTIVE_JOBS:20}

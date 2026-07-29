@@ -1,7 +1,7 @@
 package com.storeanalytics.performance.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.storeanalytics.performance.model.EmployeeRatingSnapshot;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -21,7 +21,7 @@ class EmployeeRatingSnapshotCodec {
     String encode(EmployeeRatingResult result) {
         try {
             return objectMapper.writeValueAsString(result);
-        } catch (JsonProcessingException exception) {
+        } catch (JacksonException exception) {
             throw new IllegalStateException("employee rating snapshot could not be created");
         }
     }
@@ -60,7 +60,7 @@ class EmployeeRatingSnapshotCodec {
                     snapshot.getFinalizedBy().getId(),
                     snapshot.getFinalizedByName()
             ));
-        } catch (JsonProcessingException | NullPointerException exception) {
+        } catch (JacksonException | NullPointerException exception) {
             throw corrupted();
         }
     }

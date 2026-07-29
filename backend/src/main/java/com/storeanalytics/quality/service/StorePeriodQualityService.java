@@ -6,7 +6,6 @@ import com.storeanalytics.common.exception.InvalidRequestException;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.metrics.service.StoreKpiResult;
 import com.storeanalytics.metrics.service.StoreKpiService;
-import com.storeanalytics.performance.exception.PerformancePlanNotFoundException;
 import com.storeanalytics.performance.service.EmployeeRatingEntry;
 import com.storeanalytics.performance.service.EmployeeRatingHistoryStatus;
 import com.storeanalytics.performance.service.EmployeeRatingQueryService;
@@ -33,6 +32,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -69,7 +69,7 @@ public class StorePeriodQualityService {
         this.clock = clock;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public StorePeriodQualityView inspect(
             UUID storeId,
             YearMonth month,
@@ -260,34 +260,35 @@ public class StorePeriodQualityService {
             PeriodSourceDataQualityView sourceData,
             List<PeriodQualityIssueView> issues
     ) {
-        try {
-            StorePlanProgressView progress = planProgressService.calculate(storeId, month, asOf);
+        java.util.Optional<StorePlanProgressView> progress =
+                planProgressService.find(storeId, month, asOf);
+        if (progress.isPresent()) {
+            StorePlanProgressView value = progress.get();
             return new PeriodPlanQualityView(
                     true,
-                    progress.dataQuality().completeThroughAsOf(),
-                    progress.dataQuality().classificationComplete(),
-                    progress.dataQuality().unmappedItemCount(),
-                    progress.dataQuality().openQualityIssueCount(),
-                    progress.formulaVersion()
-            );
-        } catch (PerformancePlanNotFoundException exception) {
-            issues.add(issue(
-                    PeriodQualityAreaCode.STORE_PLAN,
-                    "STORE_PLAN_MISSING",
-                    DataQualitySeverity.ERROR,
-                    "The store plan is not configured for the requested month",
-                    null,
-                    PeriodQualityAction.SET_STORE_PLAN
-            ));
-            return new PeriodPlanQualityView(
-                    false,
-                    sourceData.completeThroughAsOf(),
-                    sourceData.classificationComplete(),
-                    sourceData.unmappedItemCount(),
-                    sourceData.openQualityIssueCount(),
-                    null
+                    value.dataQuality().completeThroughAsOf(),
+                    value.dataQuality().classificationComplete(),
+                    value.dataQuality().unmappedItemCount(),
+                    value.dataQuality().openQualityIssueCount(),
+                    value.formulaVersion()
             );
         }
+        issues.add(issue(
+                PeriodQualityAreaCode.STORE_PLAN,
+                "STORE_PLAN_MISSING",
+                DataQualitySeverity.ERROR,
+                "The store plan is not configured for the requested month",
+                null,
+                PeriodQualityAction.SET_STORE_PLAN
+        ));
+        return new PeriodPlanQualityView(
+                false,
+                sourceData.completeThroughAsOf(),
+                sourceData.classificationComplete(),
+                sourceData.unmappedItemCount(),
+                sourceData.openQualityIssueCount(),
+                null
+        );
     }
 
     private PeriodRatingQualityView rating(

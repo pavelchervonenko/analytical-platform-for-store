@@ -88,8 +88,8 @@ public class SalesDocument extends AbstractMutableEntity {
     @JoinColumn(name = "raw_record_version_id")
     private RawRecordVersion rawRecordVersion;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "last_sync_run_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "last_sync_run_id")
     private SyncRun lastSyncRun;
 
     @JdbcTypeCode(SqlTypes.JSON)

@@ -108,13 +108,22 @@ public class SyncJobService {
         ) || hasActiveJob(connection)) {
             return Optional.empty();
         }
-        return Optional.of(create(
+        SyncJobView created = create(
                 connection,
                 null,
                 SyncJobType.INCREMENTAL,
                 start,
                 end
-        ));
+        );
+        auditLogService.recordSystem(
+                null,
+                AuditAction.SCHEDULED_SYNC_STARTED,
+                new AuditTarget(AuditEntityType.SYNC_JOB, created.id()),
+                null,
+                null,
+                jobSummary(created)
+        );
+        return Optional.of(created);
     }
 
     @Transactional(readOnly = true)

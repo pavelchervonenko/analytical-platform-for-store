@@ -29,6 +29,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PayrollBulkClassificationService {
 
+    public static final int MAXIMUM_ASSIGNMENTS = 500;
+    public static final int MAXIMUM_REASON_LENGTH = 2_000;
+
     private final ProductRepository productRepository;
     private final ProductPayrollCategoryAssignmentRepository assignmentRepository;
     private final AppUserRepository userRepository;
@@ -58,11 +61,21 @@ public class PayrollBulkClassificationService {
             throw new InvalidRequestException("validFrom must be the first day of a month");
         }
         String validatedReason = requireText(reason, "reason");
+        if (validatedReason.length() > MAXIMUM_REASON_LENGTH) {
+            throw new InvalidRequestException(
+                    "reason must contain no more than 2000 characters"
+            );
+        }
         List<PayrollProductCategoryChange> validatedChanges = List.copyOf(
                 requireNonNull(changes, "assignments")
         );
         if (validatedChanges.isEmpty()) {
             throw new InvalidRequestException("assignments must not be empty");
+        }
+        if (validatedChanges.size() > MAXIMUM_ASSIGNMENTS) {
+            throw new InvalidRequestException(
+                    "assignments must contain no more than 500 entries"
+            );
         }
         AppUser actor = userRepository.findById(requireNonNull(actorId, "actorId"))
                 .orElseThrow(() -> new IllegalStateException("actor does not exist"));

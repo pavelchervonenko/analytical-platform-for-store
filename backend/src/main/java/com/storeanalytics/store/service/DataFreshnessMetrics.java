@@ -1,5 +1,8 @@
 package com.storeanalytics.store.service;
 
+import com.storeanalytics.common.config.ApplicationRole;
+import com.storeanalytics.common.config.BackgroundSchedulingConfiguration;
+import com.storeanalytics.common.config.ConditionalOnApplicationRole;
 import com.storeanalytics.store.repository.DataFreshnessRepository;
 import com.storeanalytics.store.repository.DataFreshnessSnapshot;
 import io.micrometer.core.instrument.Gauge;
@@ -16,6 +19,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnApplicationRole({ApplicationRole.WORKER, ApplicationRole.COMBINED})
 public class DataFreshnessMetrics implements MeterBinder {
 
     static final String AGE_METRIC = "storeanalytics.data.freshness.age";
@@ -56,7 +60,8 @@ public class DataFreshnessMetrics implements MeterBinder {
 
     @Scheduled(
             initialDelayString = "${app.observability.state-initial-delay:30s}",
-            fixedDelayString = "${app.observability.state-refresh-delay:1m}"
+            fixedDelayString = "${app.observability.state-refresh-delay:1m}",
+            scheduler = BackgroundSchedulingConfiguration.METRICS_SCHEDULER
     )
     public void refresh() {
         try {

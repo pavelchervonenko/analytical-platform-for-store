@@ -36,7 +36,7 @@ class UserAdministrationServiceConcurrencyTest {
                 mock(UserStoreAccessRepository.class),
                 mock(StoreRepository.class),
                 mock(PasswordEncoder.class),
-                new PasswordPolicy(),
+                new PasswordPolicy(password -> false),
                 mock(SecurityAuditLogger.class),
                 mock(com.storeanalytics.audit.service.AuditLogService.class)
         );

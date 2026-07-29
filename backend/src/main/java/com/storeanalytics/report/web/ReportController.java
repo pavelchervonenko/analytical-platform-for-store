@@ -1,5 +1,6 @@
 package com.storeanalytics.report.web;
 
+import com.storeanalytics.common.web.PageResponse;
 import com.storeanalytics.metrics.model.ReportType;
 import com.storeanalytics.report.service.ReportDetailView;
 import com.storeanalytics.report.service.ReportQueryService;
@@ -25,12 +26,20 @@ public class ReportController {
 
     @GetMapping
     @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
-    List<ReportSummaryView> list(
+    PageResponse<ReportSummaryView> list(
             @PathVariable UUID storeId,
             @RequestParam(required = false) Integer year,
-            @RequestParam(required = false) ReportType type
+            @RequestParam(required = false) ReportType type,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
     ) {
-        return reportQueryService.list(storeId, year, type);
+        return reportQueryService.list(storeId, year, type, page, size);
+    }
+
+    @GetMapping("/years")
+    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    List<Integer> years(@PathVariable UUID storeId) {
+        return reportQueryService.years(storeId);
     }
 
     @GetMapping("/{reportId}")

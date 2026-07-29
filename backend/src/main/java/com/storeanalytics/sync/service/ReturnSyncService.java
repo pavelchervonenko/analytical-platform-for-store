@@ -8,6 +8,7 @@ import com.storeanalytics.integration.livesklad.dto.LiveSkladCashRegisterPayload
 import com.storeanalytics.integration.livesklad.dto.LiveSkladCashTransactionPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladReturnDetailPayload;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladHttpException;
 import com.storeanalytics.store.model.Store;
 import com.storeanalytics.store.repository.StoreRepository;
 import com.storeanalytics.sync.exception.ReturnSyncCapacityException;
@@ -29,12 +30,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 @Service
 public class ReturnSyncService {
 
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(ReturnSyncService.class);
     private static final String LIVESKLAD_CONNECTION_KEY = "livesklad-default";
     private static final String RETURN_CASH_ITEM_TYPE = "saleReturn";
     private static final int MAX_DETAILS_PER_RUN = 70;
@@ -168,13 +174,14 @@ public class ReturnSyncService {
         } catch (ReturnSyncCapacityException exception) {
             throw exception;
         } catch (RuntimeException exception) {
+            String failureSummary = failureSummary(exception);
             failSyncRun(
                     syncRun,
                     fetched,
-                    "Return synchronization failed: "
-                            + exception.getClass().getSimpleName(),
+                    failureSummary,
                     exception instanceof LiveSkladException
             );
+            logFailure(syncRun.getId(), exception);
             throw new ReturnSyncException(syncRun.getId(), exception);
         }
     }
@@ -322,6 +329,91 @@ public class ReturnSyncService {
                     "LiveSklad return cash transaction is outside the requested period"
             );
         }
+    }
+
+    private String failureSummary(RuntimeException exception) {
+        String summary = "Return synchronization failed: "
+                + exception.getClass().getSimpleName();
+        if (exception instanceof LiveSkladHttpException httpException) {
+            return summary + " (HTTP " + httpException.getStatusCode() + ")";
+        }
+        return summary;
+    }
+
+    private void logFailure(UUID syncRunId, RuntimeException exception) {
+        if (exception instanceof LiveSkladHttpException httpException) {
+            LOGGER.warn(
+                    "Return sync run {} failed during {} with upstream HTTP {}",
+                    syncRunId,
+                    httpException.getOperation(),
+                    httpException.getStatusCode()
+            );
+            return;
+        }
+        Throwable cause = exception.getCause();
+        LOGGER.warn(
+                "Return sync run {} failed during {} because {} with {} (cause {})",
+                syncRunId,
+                safeFailureStage(exception),
+                safeFailureReason(exception),
+                exception.getClass().getSimpleName(),
+                cause == null ? "none" : cause.getClass().getSimpleName()
+        );
+    }
+
+    private String safeFailureStage(RuntimeException exception) {
+        if (!(exception instanceof LiveSkladException)) {
+            return "local-processing";
+        }
+        String message = exception.getMessage();
+        if (message == null) {
+            return "upstream-response";
+        }
+        if (message.startsWith("LiveSklad cash item")) {
+            return "cash-items";
+        }
+        if (message.startsWith("LiveSklad cash register")) {
+            return "cash-registers";
+        }
+        if (message.startsWith("LiveSklad cash transaction")) {
+            return "cash-transactions";
+        }
+        if (message.startsWith("LiveSklad return")) {
+            return "return-detail";
+        }
+        if (message.startsWith("LiveSklad authentication")) {
+            return "authentication";
+        }
+        if (message.startsWith("LiveSklad API")) {
+            return "request-budget";
+        }
+        return "upstream-response";
+    }
+
+    private String safeFailureReason(RuntimeException exception) {
+        String message = exception.getMessage();
+        if (!(exception instanceof LiveSkladException) || message == null) {
+            return "unexpected-processing-error";
+        }
+        if (message.contains("request failed")) {
+            return "request-or-decoding-failed";
+        }
+        if (message.contains("does not contain data")) {
+            return "response-data-missing";
+        }
+        if (message.contains("incomplete")) {
+            return "response-data-incomplete";
+        }
+        if (message.contains("duplicate")) {
+            return "duplicate-source-identity";
+        }
+        if (message.contains("belongs to another")) {
+            return "source-relation-mismatch";
+        }
+        if (message.contains("pagination exceeded")) {
+            return "pagination-safety-limit";
+        }
+        return "unexpected-upstream-contract";
     }
 
     private IntegrationConnection activeLiveSkladConnection() {

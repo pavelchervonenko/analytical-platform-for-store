@@ -3,14 +3,16 @@ package com.storeanalytics.audit.service;
 import static com.storeanalytics.common.validation.ModelValidation.requireNonNull;
 import static com.storeanalytics.common.validation.ModelValidation.requireText;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.storeanalytics.audit.model.AuditLog;
+import com.storeanalytics.audit.model.AuditRetention;
 import com.storeanalytics.audit.repository.AuditLogRepository;
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.store.model.Store;
 import jakarta.persistence.EntityManager;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.temporal.TemporalAccessor;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -18,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,14 +39,24 @@ public class AuditLogService {
     private final EntityManager entityManager;
     private final ObjectMapper objectMapper;
 
+    private final ApplicationEventPublisher eventPublisher;
+    private final AuditRetentionPolicy retentionPolicy;
+    private final Clock clock;
+
     public AuditLogService(
             AuditLogRepository repository,
             EntityManager entityManager,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            AuditRetentionPolicy retentionPolicy,
+            ApplicationEventPublisher eventPublisher,
+            Clock clock
     ) {
         this.repository = repository;
         this.entityManager = entityManager;
         this.objectMapper = objectMapper;
+        this.retentionPolicy = retentionPolicy;
+        this.eventPublisher = eventPublisher;
+        this.clock = clock;
     }
 
     @Transactional
@@ -58,16 +71,24 @@ public class AuditLogService {
     ) {
         UUID actorId = requireNonNull(actorUserId, "actorUserId");
         AuditTarget validatedTarget = requireNonNull(target, "target");
+        AuditAction validatedAction = requireNonNull(action, "action");
+        AuditRetention retention = retentionPolicy.retention(validatedAction, clock.instant());
+        String targetId = requireNonNull(
+                validatedTarget.entityId(), "entityId").toString();
         AppUser actor = entityManager.getReference(AppUser.class, actorId);
         Store store = storeId == null
                 ? null : entityManager.getReference(Store.class, storeId);
         repository.save(new AuditLog(
                 actor,
                 store,
-                requireNonNull(action, "action").name(),
+                validatedAction.name(),
                 requireText(validatedTarget.entityType(), "entityType"),
-                requireNonNull(validatedTarget.entityId(), "entityId").toString(),
-                metadata(reason, before, after)
+                targetId,
+                metadata(reason, before, after),
+                retention
+        ));
+        eventPublisher.publishEvent(new AuditMonitoringEvent(
+                validatedAction, actorId, targetId
         ));
     }
 
@@ -81,15 +102,23 @@ public class AuditLogService {
             Map<String, ?> after
     ) {
         AuditTarget validatedTarget = requireNonNull(target, "target");
+        AuditAction validatedAction = requireNonNull(action, "action");
+        AuditRetention retention = retentionPolicy.retention(validatedAction, clock.instant());
+        String targetId = requireNonNull(
+                validatedTarget.entityId(), "entityId").toString();
         Store store = storeId == null
                 ? null : entityManager.getReference(Store.class, storeId);
         repository.save(new AuditLog(
                 null,
                 store,
-                requireNonNull(action, "action").name(),
+                validatedAction.name(),
                 requireText(validatedTarget.entityType(), "entityType"),
-                requireNonNull(validatedTarget.entityId(), "entityId").toString(),
-                metadata(reason, before, after)
+                targetId,
+                metadata(reason, before, after),
+                retention
+        ));
+        eventPublisher.publishEvent(new AuditMonitoringEvent(
+                validatedAction, null, targetId
         ));
     }
 
@@ -115,7 +144,7 @@ public class AuditLogService {
                 throw new IllegalArgumentException("audit metadata is too large");
             }
             return json;
-        } catch (JsonProcessingException exception) {
+        } catch (JacksonException exception) {
             throw new IllegalStateException("audit metadata cannot be serialized", exception);
         }
     }

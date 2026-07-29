@@ -3,6 +3,7 @@ package com.storeanalytics.auth.repository;
 import com.storeanalytics.auth.model.UserStoreAccess;
 import com.storeanalytics.auth.model.UserStoreAccessId;
 import com.storeanalytics.store.model.Store;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,6 +15,8 @@ public interface UserStoreAccessRepository extends JpaRepository<UserStoreAccess
     boolean existsByIdUserIdAndIdStoreId(UUID userId, UUID storeId);
 
     List<UserStoreAccess> findAllByIdUserId(UUID userId);
+
+    List<UserStoreAccess> findAllByIdUserIdIn(Collection<UUID> userIds);
 
     @Query("""
             select access.store from UserStoreAccess access

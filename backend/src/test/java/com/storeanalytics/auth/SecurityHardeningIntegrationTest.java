@@ -11,12 +11,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.auth.model.UserRole;
 import com.storeanalytics.auth.repository.AppUserRepository;
+import com.storeanalytics.auth.service.LoginThrottleKeyHasher;
 import com.storeanalytics.sync.service.SyncJobStateMetrics;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.micrometer.metrics.test.autoconfigure.AutoConfigureMetrics;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -27,21 +29,28 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+    "app.observability.prometheus.token="
+            + "prometheus-integration-test-token",
+    "app.security.client-ip.trusted-proxy-cidrs=127.0.0.1/32"
+})
+@AutoConfigureMetrics
 @AutoConfigureMockMvc
 @Testcontainers(disabledWithoutDocker = true)
 class SecurityHardeningIntegrationTest {
 
     private static final String EMAIL = "security@example.com";
     private static final String PASSWORD = "correct horse battery staple";
+    private static final String PROMETHEUS_TOKEN =
+            "prometheus-integration-test-token";
 
     @Container
-    private static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:16-alpine");
+    private static final PostgreSQLContainer POSTGRES =
+            new PostgreSQLContainer("postgres:16-alpine");
 
     @Autowired
     private MockMvc mockMvc;
@@ -88,6 +97,33 @@ class SecurityHardeningIntegrationTest {
     }
 
     @Test
+    void ignoresSpoofedAddressesBeforeNearestUntrustedHop() throws Exception {
+        loginFrom(
+                "spoof-test@example.com",
+                "wrong password",
+                "198.51.100.99, 203.0.113.15"
+        ).andExpect(status().isUnauthorized());
+
+        assertThat(ipThrottleRows("203.0.113.15")).isEqualTo(1);
+        assertThat(ipThrottleRows("198.51.100.99")).isZero();
+    }
+
+    @Test
+    void preservesSharedNatFailuresAfterSuccessfulLogin() throws Exception {
+        String sharedAddress = "198.51.100.30";
+        loginFrom("nat-one@example.com", "wrong password", sharedAddress)
+                .andExpect(status().isUnauthorized());
+        loginFrom("nat-two@example.com", "wrong password", sharedAddress)
+                .andExpect(status().isUnauthorized());
+
+        createUser();
+        loginFrom(EMAIL, PASSWORD, sharedAddress)
+                .andExpect(status().isOk());
+
+        assertThat(ipFailureCount(sharedAddress)).isEqualTo(2);
+    }
+
+    @Test
     void deniesAuthenticatedRequestsToUnlistedApiRoutes() throws Exception {
         createUser();
         MockHttpSession session = session(login(EMAIL, PASSWORD));
@@ -101,6 +137,7 @@ class SecurityHardeningIntegrationTest {
     void expiresOldestSessionWhenConcurrentSessionLimitIsExceeded() throws Exception {
         createUser();
         MockHttpSession firstSession = session(login(EMAIL, PASSWORD));
+        Thread.sleep(10);
         session(login(EMAIL, PASSWORD));
         session(login(EMAIL, PASSWORD));
         session(login(EMAIL, PASSWORD));
@@ -119,11 +156,45 @@ class SecurityHardeningIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"));
 
+        mockMvc.perform(get("/livez"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
+
+        mockMvc.perform(get("/readyz"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
+
         mockMvc.perform(get("/actuator/info"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.build.name").value("backend"))
                 .andExpect(jsonPath("$.build.version").value("0.1.0-SNAPSHOT"))
+                .andExpect(jsonPath("$.release.runtimeRole").value("COMBINED"))
+                .andExpect(jsonPath("$.release.schemaVersion").value("19"))
                 .andExpect(jsonPath("$.git").doesNotExist());
+    }
+
+    @Test
+    void protectsPrometheusScrapeWithDedicatedBearerToken() throws Exception {
+        mockMvc.perform(get("/actuator/prometheus"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string(
+                        HttpHeaders.WWW_AUTHENTICATE,
+                        "Bearer"
+                ));
+
+        mockMvc.perform(get("/actuator/prometheus")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer wrong-token"))
+                .andExpect(status().isUnauthorized());
+
+        MvcResult result = mockMvc.perform(get("/actuator/prometheus")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + PROMETHEUS_TOKEN
+                        ))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(result.getResponse().getContentAsString())
+                .contains("storeanalytics_release_info");
     }
 
     @Test
@@ -151,14 +222,50 @@ class SecurityHardeningIntegrationTest {
 
     private org.springframework.test.web.servlet.ResultActions login(String email, String password)
             throws Exception {
+        return loginFrom(email, password, null);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions loginFrom(
+            String email,
+            String password,
+            String forwardedFor
+    ) throws Exception {
         Cookie csrfCookie = csrfCookie();
-        return mockMvc.perform(post("/api/auth/login")
+        var request = post("/api/auth/login")
                 .cookie(csrfCookie)
                 .header("X-XSRF-TOKEN", csrfCookie.getValue())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"email":"%s","password":"%s"}
-                        """.formatted(email, password)));
+                        """.formatted(email, password));
+        if (forwardedFor != null) {
+            request.header("X-Forwarded-For", forwardedFor);
+        }
+        return mockMvc.perform(request);
+    }
+
+    private int ipFailureCount(String address) {
+        return jdbcTemplate.queryForObject(
+                """
+                SELECT failure_count
+                FROM auth_login_throttles
+                WHERE scope = 'IP' AND identifier_hash = ?
+                """,
+                Integer.class,
+                LoginThrottleKeyHasher.hash("ip", address)
+        );
+    }
+
+    private int ipThrottleRows(String address) {
+        return jdbcTemplate.queryForObject(
+                """
+                SELECT count(*)
+                FROM auth_login_throttles
+                WHERE scope = 'IP' AND identifier_hash = ?
+                """,
+                Integer.class,
+                LoginThrottleKeyHasher.hash("ip", address)
+        );
     }
 
     private Cookie csrfCookie() throws Exception {

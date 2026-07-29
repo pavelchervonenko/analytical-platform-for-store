@@ -1,6 +1,6 @@
 package com.storeanalytics.integration.livesklad.dto;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 public record LiveSkladEmployeePayload(
         String externalId,

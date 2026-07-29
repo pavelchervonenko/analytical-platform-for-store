@@ -136,8 +136,37 @@ public class Product extends AbstractMutableEntity {
         return changed;
     }
 
+    public boolean isProvisionalCatalogIdentity() {
+        return sourceSystem == SourceSystem.LIVESKLAD
+                && connection != null
+                && sourceKind == ProductSourceKind.UNKNOWN
+                && Objects.equals(externalId, code);
+    }
+
+    public boolean claimLiveSkladIdentity(
+            String liveSkladExternalId,
+            ProductDetails details
+    ) {
+        requireNonNull(details, "details");
+        require(isProvisionalCatalogIdentity(),
+                "only a provisional catalog product can claim an identity");
+        require(details.code() != null && details.code().equals(code),
+                "LiveSklad product code must match the provisional identity");
+        String validatedExternalId = requireText(
+                liveSkladExternalId,
+                "liveSkladExternalId"
+        );
+        boolean identityChanged = !externalId.equals(validatedExternalId);
+        externalId = validatedExternalId;
+        return updateFromLiveSklad(details) || identityChanged;
+    }
+
     public String getExternalId() {
         return externalId;
+    }
+
+    public String getCode() {
+        return code;
     }
 
     public String getName() {

@@ -1,7 +1,7 @@
 package com.storeanalytics.sync.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import com.storeanalytics.employee.model.Employee;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladSaleDetailPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladSalePositionPayload;
@@ -12,6 +12,8 @@ import com.storeanalytics.product.model.ProductCategoryAssignment;
 import com.storeanalytics.product.model.ProductConditionType;
 import com.storeanalytics.product.model.ProductDetails;
 import com.storeanalytics.product.model.ProductSourceKind;
+import com.storeanalytics.product.service.LiveSkladProductIdentityResolver;
+import com.storeanalytics.product.service.LiveSkladProductIdentityResolver.ResolutionKind;
 import com.storeanalytics.quality.model.DataQualityIssue;
 import com.storeanalytics.quality.model.DataQualitySeverity;
 import com.storeanalytics.quality.model.DataQualityStatus;
@@ -32,6 +34,8 @@ import com.storeanalytics.sync.model.SourceSystem;
 import com.storeanalytics.sync.model.SyncRun;
 import com.storeanalytics.store.model.Store;
 import com.storeanalytics.sync.support.JsonPayloadHasher;
+import com.storeanalytics.sync.support.PreparedRawPayload;
+import com.storeanalytics.sync.support.RawPayloadProfile;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -58,6 +62,7 @@ public class SalesSyncPersistence {
 
     private final SalesReferenceRepositories referenceRepositories;
     private final SalesFactRepositories factRepositories;
+    private final LiveSkladProductIdentityResolver identityResolver;
     private final JsonPayloadHasher payloadHasher;
     private final ObjectMapper objectMapper;
     private final Clock clock;
@@ -66,6 +71,7 @@ public class SalesSyncPersistence {
     public SalesSyncPersistence(
             SalesReferenceRepositories referenceRepositories,
             SalesFactRepositories factRepositories,
+            LiveSkladProductIdentityResolver identityResolver,
             JsonPayloadHasher payloadHasher,
             ObjectMapper objectMapper,
             Clock clock,
@@ -73,6 +79,7 @@ public class SalesSyncPersistence {
     ) {
         this.referenceRepositories = referenceRepositories;
         this.factRepositories = factRepositories;
+        this.identityResolver = identityResolver;
         this.payloadHasher = payloadHasher;
         this.objectMapper = objectMapper;
         this.clock = clock;
@@ -146,7 +153,8 @@ public class SalesSyncPersistence {
         ObjectNode combinedPayload = objectMapper.createObjectNode();
         combinedPayload.set("list", summary.rawPayload().deepCopy());
         combinedPayload.set("detail", detail.rawPayload().deepCopy());
-        String hash = payloadHasher.sha256(combinedPayload);
+        PreparedRawPayload preparedPayload = payloadHasher.prepare(RawPayloadProfile.SALE_DOCUMENT, combinedPayload);
+        String hash = preparedPayload.sha256();
         Instant sourceUpdatedAt = detail.sourceUpdatedAt() == null
                 ? detail.occurredAt() : detail.sourceUpdatedAt();
         RawRecordVersion rawVersion = factRepositories.rawRecords().findStoreRecordVersion(
@@ -157,13 +165,17 @@ public class SalesSyncPersistence {
                 summary.externalId(),
                 hash
         ).map(existing -> {
-            existing.markSeen(syncRun, now);
+            existing.markSeenWithRetainedPayload(
+                    syncRun,
+                    now,
+                    preparedPayload.json()
+            );
             return existing;
         }).orElseGet(() -> factRepositories.rawRecords().save(
                 RawRecordVersion.pendingSale(
                         store,
                         summary.externalId(),
-                        payloadHasher.serialize(combinedPayload),
+                        preparedPayload.json(),
                         hash,
                         sourceUpdatedAt,
                         syncRun,
@@ -384,23 +396,17 @@ public class SalesSyncPersistence {
             return cached;
         }
 
-        Optional<Product> existing = referenceRepositories.products().findByConnectionIdAndExternalId(
-                syncRun.getConnection().getId(),
-                source.productExternalId()
-        );
-        Product product;
-        if (existing.isEmpty()) {
-            product = referenceRepositories.products().save(Product.fromLiveSklad(
+        LiveSkladProductIdentityResolver.ProductIdentityResolution resolution =
+                identityResolver.resolveObservedProduct(
                     syncRun.getConnection(),
                     source.productExternalId(),
                     productDetails(source, observedAt)
-            ));
+                );
+        Product product = resolution.product();
+        if (resolution.kind() == ResolutionKind.CREATED) {
             result.productsCreated++;
-        } else {
-            product = existing.get();
-            if (product.updateFromLiveSklad(productDetails(source, observedAt))) {
-                result.productsUpdated++;
-            }
+        } else if (resolution.kind() == ResolutionKind.UPDATED) {
+            result.productsUpdated++;
         }
         cache.put(source.productExternalId(), product);
         return product;

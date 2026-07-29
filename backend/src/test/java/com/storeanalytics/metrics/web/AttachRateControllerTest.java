@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.storeanalytics.common.web.ApiExceptionHandler;
 import com.storeanalytics.metrics.exception.StoreNotFoundException;
 import com.storeanalytics.metrics.service.AttachRateDataQuality;
@@ -26,7 +26,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -38,10 +38,12 @@ class AttachRateControllerTest {
     @BeforeEach
     void setUp() {
         attachRateService = mock(AttachRateService.class);
-        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+        JsonMapper objectMapper = JsonMapper.builder()
+                .findAndAddModules()
+                .build();
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new AttachRateController(attachRateService))
-                .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
+                .setMessageConverters(new JacksonJsonHttpMessageConverter(objectMapper))
                 .setControllerAdvice(
                         new ApiExceptionHandler()
                 )

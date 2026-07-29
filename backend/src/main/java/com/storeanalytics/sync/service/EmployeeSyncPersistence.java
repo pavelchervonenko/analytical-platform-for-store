@@ -14,6 +14,8 @@ import com.storeanalytics.sync.model.SyncRun;
 import com.storeanalytics.sync.repository.RawRecordVersionRepository;
 import com.storeanalytics.sync.repository.SyncRunRepository;
 import com.storeanalytics.sync.support.JsonPayloadHasher;
+import com.storeanalytics.sync.support.PreparedRawPayload;
+import com.storeanalytics.sync.support.RawPayloadProfile;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
@@ -72,7 +74,8 @@ public class EmployeeSyncPersistence {
             );
         }
 
-        String hash = payloadHasher.sha256(source.rawPayload());
+        PreparedRawPayload preparedPayload = payloadHasher.prepare(RawPayloadProfile.EMPLOYEE, source.rawPayload());
+        String hash = preparedPayload.sha256();
         Optional<RawRecordVersion> existingVersion = rawRecordRepository.findStoreRecordVersion(
                 syncRun.getConnection().getId(),
                 store.getId(),
@@ -84,12 +87,16 @@ public class EmployeeSyncPersistence {
         RawRecordVersion rawVersion;
         if (existingVersion.isPresent()) {
             rawVersion = existingVersion.get();
-            rawVersion.markSeen(syncRun, now);
+            rawVersion.markSeenWithRetainedPayload(
+                    syncRun,
+                    now,
+                    preparedPayload.json()
+            );
         } else {
             rawVersion = RawRecordVersion.pendingEmployee(
                     store,
                     source.externalId(),
-                    payloadHasher.serialize(source.rawPayload()),
+                    preparedPayload.json(),
                     hash,
                     syncRun,
                     now

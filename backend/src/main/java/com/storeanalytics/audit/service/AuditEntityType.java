@@ -18,6 +18,7 @@ public final class AuditEntityType {
     public static final String SYNC_JOB = "SYNC_JOB";
     public static final String REPORT_SNAPSHOT = "REPORT_SNAPSHOT";
     public static final String REPORT_BACKFILL = "REPORT_BACKFILL";
+    public static final String DATA_RETENTION_RUN = "DATA_RETENTION_RUN";
 
     private AuditEntityType() {
     }

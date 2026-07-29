@@ -25,6 +25,8 @@ import org.hibernate.type.SqlTypes;
 @Table(name = "raw_record_versions")
 public class RawRecordVersion {
 
+    public static final int RETAINED_PAYLOAD_POLICY_VERSION = 1;
+
     @Id
     @UuidGenerator
     private UUID id;
@@ -54,6 +56,9 @@ public class RawRecordVersion {
     @Column(name = "payload_hash", nullable = false, length = 64)
     private String payloadHash;
 
+    @Column(name = "payload_policy_version", nullable = false)
+    private int payloadPolicyVersion;
+
     @Column(name = "source_updated_at")
     private Instant sourceUpdatedAt;
 
@@ -63,12 +68,12 @@ public class RawRecordVersion {
     @Column(name = "last_seen_at", nullable = false)
     private Instant lastSeenAt;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "first_sync_run_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "first_sync_run_id")
     private SyncRun firstSyncRun;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "last_sync_run_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "last_sync_run_id")
     private SyncRun lastSyncRun;
 
     @Enumerated(EnumType.STRING)
@@ -194,6 +199,7 @@ public class RawRecordVersion {
         version.externalId = descriptor.externalId();
         version.payload = requireJson(payload, "payload");
         version.payloadHash = payloadHash;
+        version.payloadPolicyVersion = RETAINED_PAYLOAD_POLICY_VERSION;
         version.sourceUpdatedAt = descriptor.sourceUpdatedAt();
         version.firstSeenAt = requireNonNull(now, "now");
         version.lastSeenAt = now;
@@ -214,6 +220,20 @@ public class RawRecordVersion {
         Instant seenAt = requireNonNull(now, "now");
         lastSyncRun = validatedRun;
         lastSeenAt = seenAt.isBefore(firstSeenAt) ? firstSeenAt : seenAt;
+    }
+
+    public void markSeenWithRetainedPayload(
+            SyncRun syncRun,
+            Instant now,
+            String retainedPayload
+    ) {
+        markSeen(syncRun, now);
+        payload = requireJson(retainedPayload, "retainedPayload");
+        payloadPolicyVersion = RETAINED_PAYLOAD_POLICY_VERSION;
+    }
+
+    public int getPayloadPolicyVersion() {
+        return payloadPolicyVersion;
     }
 
     public void markNormalized(Instant now) {

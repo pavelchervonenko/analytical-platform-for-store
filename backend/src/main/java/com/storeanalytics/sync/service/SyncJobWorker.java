@@ -1,8 +1,14 @@
 package com.storeanalytics.sync.service;
 
+import com.storeanalytics.common.config.ApplicationRole;
+import com.storeanalytics.common.config.ConditionalOnApplicationRole;
 import com.storeanalytics.common.config.SyncProperties;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladHttpException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladPayloadRejectedException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladRateLimitException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladTransportException;
+import com.storeanalytics.sync.config.SyncWorkerSchedulingConfiguration;
 import com.storeanalytics.sync.exception.ReturnSyncCapacityException;
 import com.storeanalytics.sync.exception.SalesSyncCapacityException;
 import java.time.Duration;
@@ -16,6 +22,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnApplicationRole({ApplicationRole.WORKER, ApplicationRole.COMBINED})
 @ConditionalOnProperty(
         prefix = "app.sync",
         name = "worker-enabled",
@@ -41,7 +48,10 @@ public class SyncJobWorker {
         this.properties = properties;
     }
 
-    @Scheduled(fixedDelayString = "${app.sync.worker-delay:5s}")
+    @Scheduled(
+            fixedDelayString = "${app.sync.worker-delay:5s}",
+            scheduler = SyncWorkerSchedulingConfiguration.SYNC_WORKER_SCHEDULER
+    )
     public void processNextStep() {
         Optional<SyncJobClaim> candidate = coordinator.claimNext(workerId);
         if (candidate.isEmpty()) {
@@ -77,11 +87,11 @@ public class SyncJobWorker {
     }
 
     private void handleFailure(SyncJobClaim claim, RuntimeException exception) {
-        boolean retryable = contains(exception, LiveSkladException.class)
-                || contains(exception, TransientDataAccessException.class);
-        Duration delay = retryDelay(claim.attemptCount(), exception);
+        boolean retryable = isRetryableFailure(exception);
+        Duration delay = retryDelay(claim, exception);
+        String errorCode = failureCode(exception);
         String summary = "Synchronization phase " + claim.phase()
-                + " failed: " + exception.getClass().getSimpleName();
+                + " failed: " + errorCode;
         coordinator.retryOrFail(
                 claim.jobId(),
                 workerId,
@@ -89,32 +99,123 @@ public class SyncJobWorker {
                 retryable,
                 delay
         );
+
+        LiveSkladHttpException httpFailure = find(
+                exception,
+                LiveSkladHttpException.class
+        );
+        LiveSkladRateLimitException rateLimit = find(
+                exception,
+                LiveSkladRateLimitException.class
+        );
+        String operation = httpFailure != null
+                ? httpFailure.getOperation()
+                : rateLimit == null ? null : rateLimit.getOperation();
+        Integer status = httpFailure != null
+                ? Integer.valueOf(httpFailure.getStatusCode())
+                : rateLimit == null
+                        ? null
+                        : Integer.valueOf(rateLimit.getStatusCode());
         LOGGER.warn(
-                "Synchronization job {} phase {} failed with {}; retryable={}",
+                "Synchronization job {} phase {} failed with {}; "
+                        + "upstreamOperation={}; upstreamStatus={}; retryable={}",
                 claim.jobId(),
                 claim.phase(),
-                exception.getClass().getSimpleName(),
+                errorCode,
+                operation,
+                status,
                 retryable
         );
     }
 
-    private Duration retryDelay(int attemptCount, Throwable exception) {
-        Duration delay = properties.retryInitialDelay().multipliedBy(
-                1L << Math.min(attemptCount, 20)
+    private Duration retryDelay(SyncJobClaim claim, Throwable exception) {
+        Duration localDelay = properties.retryInitialDelay().multipliedBy(
+                1L << Math.min(claim.attemptCount(), 20)
         );
-        if (delay.compareTo(properties.retryMaxDelay()) > 0) {
-            delay = properties.retryMaxDelay();
+        if (localDelay.compareTo(properties.retryMaxDelay()) > 0) {
+            localDelay = properties.retryMaxDelay();
         }
         LiveSkladRateLimitException rateLimit = find(
                 exception,
                 LiveSkladRateLimitException.class
         );
-        if (rateLimit != null && rateLimit.getRetryAfter().compareTo(delay) > 0) {
-            return rateLimit.getRetryAfter();
-        }
-        return delay;
+        Duration minimumDelay = rateLimit != null
+                && rateLimit.getRetryAfter().compareTo(localDelay) > 0
+                ? rateLimit.getRetryAfter() : localDelay;
+        Duration cappedDelay = minimumDelay.compareTo(
+                properties.retryAbsoluteMaxDelay()
+        ) > 0 ? properties.retryAbsoluteMaxDelay() : minimumDelay;
+        return addDeterministicJitter(claim, cappedDelay);
     }
 
+    private Duration addDeterministicJitter(
+            SyncJobClaim claim,
+            Duration delay
+    ) {
+        long remainingMillis = properties.retryAbsoluteMaxDelay()
+                .minus(delay)
+                .toMillis();
+        long maximumJitterMillis = Math.min(
+                delay.toMillis() / 5,
+                remainingMillis
+        );
+        if (maximumJitterMillis <= 0) {
+            return delay;
+        }
+        long seed = claim.jobId().getMostSignificantBits()
+                ^ claim.jobId().getLeastSignificantBits()
+                ^ Integer.toUnsignedLong(claim.attemptCount() + 1);
+        long jitterMillis = Math.floorMod(seed, maximumJitterMillis + 1);
+        return delay.plusMillis(jitterMillis);
+    }
+
+    private boolean isRetryableFailure(Throwable exception) {
+        if (contains(exception, LiveSkladPayloadRejectedException.class)) {
+            return false;
+        }
+        if (contains(exception, LiveSkladRateLimitException.class)
+                || contains(exception, LiveSkladTransportException.class)) {
+            return true;
+        }
+        LiveSkladHttpException httpFailure = find(
+                exception,
+                LiveSkladHttpException.class
+        );
+        if (httpFailure != null) {
+            return httpFailure.isRetryable();
+        }
+        return contains(exception, TransientDataAccessException.class);
+    }
+
+    private String failureCode(Throwable exception) {
+        LiveSkladPayloadRejectedException rejected = find(
+                exception,
+                LiveSkladPayloadRejectedException.class
+        );
+        if (rejected != null) {
+            return "LIVESKLAD_PAYLOAD_" + rejected.getReason();
+        }
+        if (contains(exception, LiveSkladRateLimitException.class)) {
+            return "LIVESKLAD_RATE_LIMIT";
+        }
+        LiveSkladHttpException httpFailure = find(
+                exception,
+                LiveSkladHttpException.class
+        );
+        if (httpFailure != null) {
+            return "LIVESKLAD_HTTP_" + httpFailure.getStatusCode();
+        }
+        if (contains(exception, LiveSkladTransportException.class)) {
+            return "LIVESKLAD_TRANSPORT";
+        }
+        if (contains(exception, LiveSkladException.class)) {
+            return "LIVESKLAD_PERMANENT";
+        }
+        if (contains(exception, TransientDataAccessException.class)) {
+            return "TRANSIENT_DATABASE";
+        }
+        return exception.getClass().getSimpleName();
+    }
     private boolean contains(Throwable failure, Class<? extends Throwable> type) {
         return find(failure, type) != null;
     }

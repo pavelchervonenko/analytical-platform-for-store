@@ -11,6 +11,7 @@ import com.storeanalytics.auth.model.UserRole;
 import com.storeanalytics.auth.model.UserStoreAccess;
 import com.storeanalytics.auth.repository.AppUserRepository;
 import com.storeanalytics.auth.repository.UserStoreAccessRepository;
+import com.storeanalytics.common.web.ApiContractVersion;
 import com.storeanalytics.performance.model.StorePerformancePlan;
 import com.storeanalytics.performance.model.StorePlanTargets;
 import com.storeanalytics.performance.repository.StorePerformancePlanRepository;
@@ -22,14 +23,18 @@ import com.storeanalytics.store.model.Store;
 import com.storeanalytics.store.model.StoreSchedule;
 import com.storeanalytics.store.repository.StoreRepository;
 import jakarta.servlet.http.Cookie;
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
@@ -38,7 +43,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -50,8 +55,8 @@ class StoreDataStatusSecurityIntegrationTest {
     private static final String PASSWORD = "correct horse battery staple";
 
     @Container
-    private static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:16-alpine");
+    private static final PostgreSQLContainer POSTGRES =
+            new PostgreSQLContainer("postgres:16-alpine");
 
     @Autowired
     private MockMvc mockMvc;
@@ -228,8 +233,11 @@ class StoreDataStatusSecurityIntegrationTest {
         createUser("admin-openapi@example.com", UserRole.ADMIN);
         MockHttpSession adminSession = login("admin-openapi@example.com");
 
-        mockMvc.perform(get("/v3/api-docs").session(adminSession))
+        MvcResult openApiResult = mockMvc.perform(
+                        get("/v3/api-docs").session(adminSession)
+                )
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.info.version").value(ApiContractVersion.CURRENT))
                 .andExpect(jsonPath("$.paths['/api/data-quality/summary']").exists())
                 .andExpect(jsonPath(
                         "$.paths['/api/stores/{storeId}/data-quality']"
@@ -293,11 +301,49 @@ class StoreDataStatusSecurityIntegrationTest {
                         "$.components.schemas.WorkScheduleShiftRequest.properties.workedHours"
                 ).exists())
                 .andExpect(jsonPath(
+                        "$.paths['/api/stores/{storeId}/performance-plans/{month}']"
+                                + ".get.responses['200'].headers.ETag"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.paths['/api/stores/{storeId}/work-schedule/{workDate}']"
+                                + ".get.responses['200'].headers.ETag"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.paths['/api/stores/{storeId}/work-schedule/{workDate}']"
+                                + ".put.parameters[?(@.name == 'If-Match' && @.required == true)]"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.paths['/api/admin/reports/backfill'].post.parameters"
+                                + "[?(@.name == 'Idempotency-Key' && @.required == true)]"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.components.schemas.WorkScheduleDayView.properties.revision"
+                ).exists())
+                .andExpect(jsonPath(
                         "$.components.schemas.PayrollPreviewAllocationView.properties.workedHours"
                 ).exists())
                 .andExpect(jsonPath(
                         "$.components.schemas.PayrollDailyAllocationView.properties.workedHours"
-                ).exists());
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.components.schemas.SystemStatusView.properties.apiContractVersion"
+                ).exists())
+                .andReturn();
+        writeOpenApiArtifact(openApiResult);
+    }
+
+    private void writeOpenApiArtifact(MvcResult result) throws IOException {
+        String configuredOutput = System.getProperty("openapi.output", "").trim();
+        if (configuredOutput.isEmpty()) {
+            return;
+        }
+        Path output = Path.of(configuredOutput).toAbsolutePath().normalize();
+        Files.createDirectories(output.getParent());
+        Files.writeString(
+                output,
+                result.getResponse().getContentAsString(),
+                StandardCharsets.UTF_8
+        );
     }
 
     private MockHttpSession login(String email) throws Exception {

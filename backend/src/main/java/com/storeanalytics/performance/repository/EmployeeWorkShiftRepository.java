@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface EmployeeWorkShiftRepository extends JpaRepository<EmployeeWorkShift, UUID> {
@@ -13,6 +14,13 @@ public interface EmployeeWorkShiftRepository extends JpaRepository<EmployeeWorkS
             UUID storeId,
             LocalDate periodStart,
             LocalDate periodEnd
+    );
+
+    List<EmployeeWorkShift> findAllByStoreIdAndWorkDateBetweenOrderByWorkDateAscEmployeeFullNameAsc(
+            UUID storeId,
+            LocalDate periodStart,
+            LocalDate periodEnd,
+            Pageable pageable
     );
 
     List<EmployeeWorkShift> findAllByStoreIdAndWorkDate(UUID storeId, LocalDate workDate);

@@ -1,8 +1,13 @@
 package com.storeanalytics.integration.livesklad.client;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.StreamReadConstraints;
+import tools.jackson.core.json.JsonFactory;
+import tools.jackson.core.exc.StreamConstraintsException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import com.storeanalytics.common.config.LiveSkladPayloadLimitsProperties;
 import com.storeanalytics.common.config.LiveSkladProperties;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladCashItemPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladCashRegisterPayload;
@@ -15,20 +20,28 @@ import com.storeanalytics.integration.livesklad.dto.LiveSkladSalePositionPayload
 import com.storeanalytics.integration.livesklad.dto.LiveSkladSaleSummaryPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladStorePayload;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladHttpException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladPayloadRejectedException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladPayloadRejectedException.Reason;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladRateLimitException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladTransportException;
+import com.storeanalytics.integration.livesklad.observability.LiveSkladPayloadRejectionMetrics;
 import java.math.BigDecimal;
-import java.net.http.HttpClient;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.StringUtils;
@@ -41,6 +54,8 @@ public class HttpLiveSkladClient implements LiveSkladClient {
 
     private static final Duration TOKEN_REFRESH_SKEW = Duration.ofSeconds(30);
     private static final Duration MAX_TOKEN_CACHE_TTL = Duration.ofDays(1);
+    private static final Duration DEFAULT_RETRY_AFTER = Duration.ofMinutes(15);
+    private static final Duration MAX_RETRY_AFTER = Duration.ofDays(1);
     private static final int MAX_ACCESS_TOKEN_LENGTH = 4096;
     private static final int EMPLOYEE_PAGE_SIZE = 50;
     private static final int MAX_EMPLOYEE_PAGES = 100;
@@ -48,9 +63,12 @@ public class HttpLiveSkladClient implements LiveSkladClient {
     private static final int MAX_SALES_PAGES = 200;
 
     private final LiveSkladProperties properties;
+    private final LiveSkladPayloadLimitsProperties payloadLimits;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
     private final LiveSkladRequestBudget requestBudget;
+    private final LiveSkladPayloadRejectionMetrics rejectionMetrics;
+    private final Clock clock;
     private static final int CASH_PAGE_SIZE = 50;
     private static final int MAX_CASH_PAGES = 200;
     private volatile CachedToken cachedToken;
@@ -60,7 +78,30 @@ public class HttpLiveSkladClient implements LiveSkladClient {
             LiveSkladProperties properties,
             ObjectMapper objectMapper
     ) {
-        this(builder, properties, objectMapper, Clock.systemUTC());
+        this(
+                builder,
+                properties,
+                objectMapper,
+                LiveSkladPayloadLimitsProperties.defaults(),
+                Clock.systemUTC(),
+                LiveSkladPayloadRejectionMetrics.noop()
+        );
+    }
+
+    HttpLiveSkladClient(
+            RestClient.Builder builder,
+            LiveSkladProperties properties,
+            ObjectMapper objectMapper,
+            LiveSkladPayloadLimitsProperties payloadLimits
+    ) {
+        this(
+                builder,
+                properties,
+                objectMapper,
+                payloadLimits,
+                Clock.systemUTC(),
+                LiveSkladPayloadRejectionMetrics.noop()
+        );
     }
 
     @Autowired
@@ -68,12 +109,23 @@ public class HttpLiveSkladClient implements LiveSkladClient {
             RestClient.Builder builder,
             LiveSkladProperties properties,
             ObjectMapper objectMapper,
-            Clock clock
+            LiveSkladPayloadLimitsProperties payloadLimits,
+            Clock clock,
+            LiveSkladPayloadRejectionMetrics rejectionMetrics
     ) {
         this.properties = properties;
+        this.payloadLimits = payloadLimits;
         this.objectMapper = objectMapper;
         this.requestBudget = new LiveSkladRequestBudget(clock);
-        this.restClient = buildRestClient(builder, properties);
+        this.rejectionMetrics = rejectionMetrics;
+        this.clock = clock;
+        this.restClient = buildRestClient(
+                builder,
+                properties,
+                objectMapper,
+                payloadLimits,
+                rejectionMetrics
+        );
     }
 
     @Override
@@ -88,7 +140,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
             invalidateToken(token);
             return retryStoresAfterAuthenticationFailure();
         } catch (RestClientException exception) {
-            throw new LiveSkladException("LiveSklad stores request failed", exception);
+            throw translate("LiveSklad stores request failed", exception);
         }
     }
 
@@ -107,7 +159,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
             invalidateToken(token);
             return retryEmployeesAfterAuthenticationFailure(storeExternalId);
         } catch (RestClientException exception) {
-            throw new LiveSkladException("LiveSklad employees request failed", exception);
+            throw translate("LiveSklad employees request failed", exception);
         }
     }
 
@@ -132,7 +184,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                     periodEnd
             );
         } catch (RestClientException exception) {
-            throw new LiveSkladException("LiveSklad sales request failed", exception);
+            throw translate("LiveSklad sales request failed", exception);
         }
     }
 
@@ -151,7 +203,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
             invalidateToken(token);
             return retrySaleDetailAfterAuthenticationFailure(saleExternalId);
         } catch (RestClientException exception) {
-            throw new LiveSkladException("LiveSklad sale detail request failed", exception);
+            throw translate("LiveSklad sale detail request failed", exception);
         }
     }
 
@@ -227,13 +279,13 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                         retryException
                 );
             } catch (RestClientException retryException) {
-                throw new LiveSkladException(
+                throw translate(
                         failureMessage + " after token refresh",
                         retryException
                 );
             }
         } catch (RestClientException exception) {
-            throw new LiveSkladException(failureMessage, exception);
+            throw translate(failureMessage, exception);
         }
     }
 
@@ -250,7 +302,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                     exception
             );
         } catch (RestClientException exception) {
-            throw new LiveSkladException(
+            throw translate(
                     "LiveSklad sales request failed after token refresh",
                     exception
             );
@@ -268,7 +320,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                     exception
             );
         } catch (RestClientException exception) {
-            throw new LiveSkladException(
+            throw translate(
                     "LiveSklad sale detail request failed after token refresh",
                     exception
             );
@@ -303,6 +355,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                         "LiveSklad sales response does not contain data"
                 );
             }
+            validateCollectionSize(response.data(), "sales");
             requestBudget.observe(response.remainRequest(), response.expireDate());
 
             for (JsonNode payload : response.data()) {
@@ -356,6 +409,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                 SaleDetailDto.class
         );
         validateSaleDetail(detail);
+        validatePositionCount(detail.positions(), "sale");
         Set<String> positionIds = new HashSet<>();
         List<LiveSkladSalePositionPayload> positions = new ArrayList<>();
         for (JsonNode payload : detail.positions()) {
@@ -444,6 +498,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                     "LiveSklad cash registers response does not contain data"
             );
         }
+        validateCollectionSize(response.data(), "cash registers");
         requestBudget.observe(response.remainRequest(), response.expireDate());
         List<LiveSkladCashRegisterPayload> registers = new ArrayList<>();
         Set<String> registerIds = new HashSet<>();
@@ -498,6 +553,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                         "LiveSklad cash transactions response does not contain data"
                 );
             }
+            validateCollectionSize(response.data(), "cash transactions");
             requestBudget.observe(response.remainRequest(), response.expireDate());
             for (JsonNode payload : response.data()) {
                 CashTransactionDto transaction = objectMapper.convertValue(
@@ -572,6 +628,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
         );
         validateReturnDetail(detail, returnExternalId);
         Set<String> positionIds = new HashSet<>();
+        validatePositionCount(detail.positions(), "return");
         List<LiveSkladReturnPositionPayload> positions = new ArrayList<>();
         for (JsonNode payload : detail.positions()) {
             ReturnPositionDto position = objectMapper.convertValue(
@@ -627,6 +684,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                     "LiveSklad " + resource + " response does not contain data"
             );
         }
+        validateCollectionSize(data.size(), resource);
         List<JsonNode> result = new ArrayList<>();
         data.forEach(result::add);
         return result;
@@ -637,7 +695,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
     }
 
     private String textValue(JsonNode value) {
-        return value == null || value.isNull() ? null : value.asText();
+        return value == null || value.isNull() ? null : value.asString();
     }
 
     private List<LiveSkladEmployeePayload> retryEmployeesAfterAuthenticationFailure(
@@ -651,7 +709,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                     exception
             );
         } catch (RestClientException exception) {
-            throw new LiveSkladException(
+            throw translate(
                     "LiveSklad employees request failed after token refresh",
                     exception
             );
@@ -680,6 +738,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                         "LiveSklad employees response does not contain data"
                 );
             }
+            validateCollectionSize(response.data(), "employees");
             requestBudget.observe(response.remainRequest(), response.expireDate());
 
             for (JsonNode payload : response.data()) {
@@ -707,7 +766,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
         } catch (RestClientResponseException exception) {
             throw translate("LiveSklad stores request failed after token refresh", exception);
         } catch (RestClientException exception) {
-            throw new LiveSkladException("LiveSklad stores request failed after token refresh", exception);
+            throw translate("LiveSklad stores request failed after token refresh", exception);
         }
     }
 
@@ -720,6 +779,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
         if (response == null || response.data() == null) {
             throw new LiveSkladException("LiveSklad stores response does not contain data");
         }
+        validateCollectionSize(response.data(), "stores");
         requestBudget.observe(response.remainRequest(), response.expireDate());
 
         List<LiveSkladStorePayload> stores = new ArrayList<>();
@@ -772,7 +832,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
         } catch (RestClientResponseException exception) {
             throw translate("LiveSklad authentication failed", exception);
         } catch (RestClientException exception) {
-            throw new LiveSkladException("LiveSklad authentication failed", exception);
+            throw translate("LiveSklad authentication failed", exception);
         }
     }
 
@@ -811,16 +871,128 @@ public class HttpLiveSkladClient implements LiveSkladClient {
         int status = exception.getStatusCode().value();
         if (status == 429) {
             return new LiveSkladRateLimitException(
-                    message + ": request limit exceeded",
-                    Duration.ofMinutes(15)
+                    message,
+                    retryAfter(exception)
             );
         }
-        return new LiveSkladException(message + ": HTTP " + status);
+        return new LiveSkladHttpException(message, status);
+    }
+
+    private LiveSkladException translate(
+            String message,
+            RestClientException exception
+    ) {
+        LiveSkladPayloadRejectedException rejected = findCause(
+                exception,
+                LiveSkladPayloadRejectedException.class
+        );
+        if (rejected != null) {
+            return rejected;
+        }
+        if (findCause(
+                exception,
+                LiveSkladResponseGuard.ResponseSizeLimitIOException.class
+        ) != null) {
+            return payloadRejected(
+                    Reason.RESPONSE_TOO_LARGE,
+                    message + ": response exceeds the configured byte limit",
+                    exception
+            );
+        }
+        if (findCause(exception, StreamConstraintsException.class) != null) {
+            return payloadRejected(
+                    Reason.JSON_COMPLEXITY,
+                    message + ": JSON exceeds the configured complexity limit",
+                    exception
+            );
+        }
+        return new LiveSkladTransportException(message, exception);
+    }
+
+    private Duration retryAfter(RestClientResponseException exception) {
+        HttpHeaders headers = exception.getResponseHeaders();
+        String value = headers == null
+                ? null
+                : headers.getFirst(HttpHeaders.RETRY_AFTER);
+        if (!StringUtils.hasText(value)) {
+            return DEFAULT_RETRY_AFTER;
+        }
+        try {
+            long seconds = Long.parseLong(value.trim());
+            if (seconds < 0) {
+                return DEFAULT_RETRY_AFTER;
+            }
+            return boundRetryAfter(Duration.ofSeconds(seconds));
+        } catch (NumberFormatException ignored) {
+            // Retry-After may instead contain an RFC 1123 timestamp.
+        }
+        try {
+            Instant retryAt = ZonedDateTime.parse(
+                    value.trim(),
+                    DateTimeFormatter.RFC_1123_DATE_TIME
+            ).toInstant();
+            Duration delay = Duration.between(clock.instant(), retryAt);
+            return boundRetryAfter(delay.isNegative() ? Duration.ZERO : delay);
+        } catch (DateTimeParseException ignored) {
+            return DEFAULT_RETRY_AFTER;
+        }
+    }
+
+    private Duration boundRetryAfter(Duration candidate) {
+        if (candidate.compareTo(MAX_RETRY_AFTER) > 0) {
+            return MAX_RETRY_AFTER;
+        }
+        return candidate;
+    }
+    private LiveSkladPayloadRejectedException payloadRejected(
+            Reason reason,
+            String message,
+            Throwable cause
+    ) {
+        rejectionMetrics.record(reason);
+        return new LiveSkladPayloadRejectedException(reason, message, cause);
+    }
+
+    private <T extends Throwable> T findCause(Throwable failure, Class<T> type) {
+        Throwable current = failure;
+        while (current != null) {
+            if (type.isInstance(current)) {
+                return type.cast(current);
+            }
+            current = current.getCause();
+        }
+        return null;
     }
 
     private void requireText(String value, String fieldName) {
         if (!StringUtils.hasText(value)) {
             throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+    }
+
+    private void validateCollectionSize(List<?> records, String resource) {
+        validateCollectionSize(records.size(), resource);
+    }
+
+    private void validateCollectionSize(int count, String resource) {
+        if (count > payloadLimits.maxCollectionRecords()) {
+            throw payloadRejected(
+                    Reason.COLLECTION_RECORD_COUNT,
+                    "LiveSklad " + resource
+                            + " response exceeds the record count limit",
+                    null
+            );
+        }
+    }
+
+    private void validatePositionCount(List<?> positions, String resource) {
+        if (positions.size() > payloadLimits.maxPositionsPerDocument()) {
+            throw payloadRejected(
+                    Reason.DOCUMENT_POSITION_COUNT,
+                    "LiveSklad " + resource
+                            + " detail exceeds the position count limit",
+                    null
+            );
         }
     }
 
@@ -841,7 +1013,6 @@ public class HttpLiveSkladClient implements LiveSkladClient {
     private void validateCashItem(CashItemDto item) {
         if (!StringUtils.hasText(item.id())
                 || !StringUtils.hasText(item.name())
-                || !StringUtils.hasText(item.type())
                 || item.isIncome() == null) {
             throw new LiveSkladException(
                     "LiveSklad cash item identity is incomplete"
@@ -1070,22 +1241,65 @@ public class HttpLiveSkladClient implements LiveSkladClient {
         }
     }
 
-    private RestClient buildRestClient(RestClient.Builder builder, LiveSkladProperties clientProperties) {
+    private RestClient buildRestClient(
+            RestClient.Builder builder,
+            LiveSkladProperties clientProperties,
+            ObjectMapper applicationObjectMapper,
+            LiveSkladPayloadLimitsProperties payloadLimits,
+            LiveSkladPayloadRejectionMetrics rejectionMetrics
+    ) {
+        JsonMapper liveSkladObjectMapper = constrainedObjectMapper(
+                applicationObjectMapper,
+                payloadLimits
+        );
+        RestClient.Builder configuredBuilder = builder.clone()
+                .configureMessageConverters(converters ->
+                        converters.withJsonConverter(
+                                new JacksonJsonHttpMessageConverter(
+                                        liveSkladObjectMapper
+                                )
+                        )
+                )
+                .defaultHeader(HttpHeaders.ACCEPT_ENCODING, "identity")
+                .requestInterceptor(new LiveSkladResponseGuard(
+                        payloadLimits.maxResponseBytes(),
+                        rejectionMetrics
+                ));
         if (!StringUtils.hasText(clientProperties.baseUrl())) {
-            return builder.build();
+            return configuredBuilder.build();
         }
-        HttpClient httpClient = HttpClient.newBuilder()
-                .connectTimeout(clientProperties.connectTimeout())
-                .build();
-        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        SimpleClientHttpRequestFactory requestFactory =
+                new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(clientProperties.connectTimeout());
         requestFactory.setReadTimeout(clientProperties.readTimeout());
-        return builder
+        return configuredBuilder
                 .baseUrl(stripTrailingSlash(clientProperties.baseUrl()))
                 .requestFactory(requestFactory)
                 .requestInterceptor((request, body, execution) -> {
                     requestBudget.beforeRequest();
                     return execution.execute(request, body);
                 })
+                .build();
+    }
+
+    private JsonMapper constrainedObjectMapper(
+            ObjectMapper applicationObjectMapper,
+            LiveSkladPayloadLimitsProperties payloadLimits
+    ) {
+        JsonFactory jsonFactory = JsonFactory.builder()
+                .streamReadConstraints(
+                        StreamReadConstraints.builder()
+                                .maxDocumentLength(payloadLimits.maxDocumentLength())
+                                .maxTokenCount(payloadLimits.maxTokenCount())
+                                .maxNestingDepth(payloadLimits.maxNestingDepth())
+                                .maxStringLength(payloadLimits.maxStringLength())
+                                .maxNameLength(payloadLimits.maxNameLength())
+                                .maxNumberLength(payloadLimits.maxNumberLength())
+                                .build()
+                )
+                .build();
+        return JsonMapper.builder(jsonFactory)
+                .addModules(applicationObjectMapper.registeredModules())
                 .build();
     }
 

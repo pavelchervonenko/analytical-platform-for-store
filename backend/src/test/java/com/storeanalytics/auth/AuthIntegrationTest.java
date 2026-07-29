@@ -1,16 +1,20 @@
 package com.storeanalytics.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.storeanalytics.audit.repository.AuditLogRepository;
+import com.storeanalytics.audit.service.AuditAction;
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.auth.model.UserRole;
 import com.storeanalytics.auth.model.UserStoreAccess;
 import com.storeanalytics.auth.repository.AppUserRepository;
 import com.storeanalytics.auth.repository.UserStoreAccessRepository;
+import com.storeanalytics.common.web.ApiContractVersion;
 import com.storeanalytics.store.model.Store;
 import com.storeanalytics.store.model.StoreSchedule;
 import com.storeanalytics.store.repository.StoreRepository;
@@ -20,16 +24,20 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.mock.web.MockHttpSession;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -40,13 +48,18 @@ class AuthIntegrationTest {
 
     private static final String PASSWORD = "correct horse battery staple";
     private static final String NEW_PASSWORD = "passw0rd-2026";
+    private static final UUID BREAK_GLASS_USER_ID =
+            UUID.fromString("4fe56874-f1d7-4ca5-97be-09809f2f53fb");
 
     @Container
-    private static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:16-alpine");
+    private static final PostgreSQLContainer POSTGRES =
+            new PostgreSQLContainer("postgres:16-alpine");
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Autowired
     private AppUserRepository userRepository;
@@ -59,12 +72,22 @@ class AuthIntegrationTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+    @Autowired
+    private AuditLogRepository auditLogRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
 
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add(
+                "app.security.break-glass.user-ids",
+                () -> BREAK_GLASS_USER_ID.toString()
+        );
     }
 
     @BeforeEach
@@ -92,6 +115,32 @@ class AuthIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("manager@example.com"));
         assertThat(loginResult.getResponse().getContentAsString()).doesNotContain(PASSWORD);
+    }
+
+    @Test
+    void migratesLegacyNonNfcPasswordHashAfterSuccessfulLogin() throws Exception {
+        String decomposedPassword = "Cafe\u0301 password 2026";
+        String nfcPassword = "Caf\u00e9 password 2026";
+        String legacyHash = "{bcrypt}"
+                + new BCryptPasswordEncoder(12).encode(decomposedPassword);
+        AppUser user = new AppUser(
+                "unicode@example.com",
+                legacyHash,
+                "Unicode User",
+                UserRole.MANAGER
+        );
+        user.changePassword(legacyHash);
+        user = userRepository.saveAndFlush(user);
+
+        login(user.getEmail(), decomposedPassword)
+                .andExpect(status().isOk());
+
+        AppUser migratedUser = userRepository.findById(user.getId()).orElseThrow();
+        assertThat(migratedUser.getPasswordHash()).isNotEqualTo(legacyHash);
+        assertThat(passwordEncoder.matches(nfcPassword, migratedUser.getPasswordHash()))
+                .isTrue();
+        login(user.getEmail(), nfcPassword)
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -143,7 +192,10 @@ class AuthIntegrationTest {
                 .andExpect(jsonPath("$.passwordChangeRequired").value(false))
                 .andReturn();
         mockMvc.perform(get("/api/system/status").session(session(secondLogin)))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.apiContractVersion").value(
+                        ApiContractVersion.CURRENT
+                ));
     }
 
     @Test
@@ -156,6 +208,36 @@ class AuthIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
     }
+    @Test
+    void persistsAuditForConfiguredBreakGlassAccountLogin() throws Exception {
+        jdbcTemplate.update(
+                """
+                INSERT INTO app_users (
+                    id, email, password_hash, display_name, role, is_active,
+                    password_change_required, security_version
+                )
+                VALUES (?, ?, ?, ?, 'ADMIN', true, false, 0)
+                """,
+                BREAK_GLASS_USER_ID,
+                "break-glass@example.com",
+                passwordEncoder.encode(PASSWORD),
+                "Emergency Administrator"
+        );
+
+        login("break-glass@example.com", PASSWORD)
+                .andExpect(status().isOk());
+
+        assertThat(auditLogRepository.findAll()).anySatisfy(audit -> {
+            assertThat(audit.getAction()).isEqualTo(
+                    AuditAction.BREAK_GLASS_LOGIN_SUCCEEDED.name()
+            );
+            assertThat(audit.getActorUser().getId())
+                    .isEqualTo(BREAK_GLASS_USER_ID);
+            assertThat(audit.getEntityId())
+                    .isEqualTo(BREAK_GLASS_USER_ID.toString());
+        });
+    }
+
 
     @Test
     void restrictsAdministrativeEndpointToAdministrator() throws Exception {
@@ -194,6 +276,101 @@ class AuthIntegrationTest {
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].id").value(assignedStore.getId().toString()))
                 .andExpect(jsonPath("$[1].id").value(deniedStore.getId().toString()));
+    }
+
+    @Test
+    void listsOpaqueSessionsAndRevokesOneOrAllOtherSessions() throws Exception {
+        createUser("sessions@example.com", UserRole.MANAGER, false);
+        MvcResult firstLogin = login("sessions@example.com", PASSWORD)
+                .andExpect(status().isOk())
+                .andReturn();
+        MvcResult secondLogin = login("sessions@example.com", PASSWORD)
+                .andExpect(status().isOk())
+                .andReturn();
+        MockHttpSession firstSession = session(firstLogin);
+        MockHttpSession secondSession = session(secondLogin);
+
+        MvcResult listResult = mockMvc.perform(get("/api/auth/sessions")
+                        .session(secondSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sessions.length()").value(2))
+                .andExpect(jsonPath("$.sessions[0].current").value(true))
+                .andExpect(jsonPath("$.sessions[0].lastSeenAt").exists())
+                .andExpect(jsonPath("$.sessions[0].sessionId").doesNotExist())
+                .andReturn();
+        String body = listResult.getResponse().getContentAsString();
+        JsonNode sessions = objectMapper.readTree(body).path("sessions");
+        String currentReference = sessions.get(0)
+                .path("sessionReference")
+                .asString();
+        String otherReference = sessions.get(1)
+                .path("sessionReference")
+                .asString();
+        assertThat(currentReference).matches("h1_[0-9a-f]{24}")
+                .isNotIn(firstSession.getId(), secondSession.getId());
+        assertThat(otherReference).matches("h1_[0-9a-f]{24}")
+                .isNotIn(firstSession.getId(), secondSession.getId());
+        assertThat(body)
+                .doesNotContain("remoteAddress")
+                .doesNotContain("userAgent");
+
+        mockMvc.perform(get("/api/auth/sessions"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
+        mockMvc.perform(delete(
+                        "/api/auth/sessions/{sessionReference}",
+                        otherReference
+                ).session(secondSession))
+                .andExpect(status().isForbidden());
+
+        Cookie secondCsrf = csrfCookie(secondSession);
+        mockMvc.perform(delete("/api/auth/sessions/{sessionReference}", otherReference)
+                        .session(secondSession)
+                        .cookie(secondCsrf)
+                        .header("X-XSRF-TOKEN", secondCsrf.getValue()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/auth/me").session(firstSession))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SESSION_EXPIRED"));
+        mockMvc.perform(get("/api/auth/me").session(secondSession))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(delete(
+                        "/api/auth/sessions/{sessionReference}",
+                        "h1_000000000000000000000000"
+                )
+                        .session(secondSession)
+                        .cookie(secondCsrf)
+                        .header("X-XSRF-TOKEN", secondCsrf.getValue()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(delete(
+                        "/api/auth/sessions/{sessionReference}",
+                        currentReference
+                )
+                        .session(secondSession)
+                        .cookie(secondCsrf)
+                        .header("X-XSRF-TOKEN", secondCsrf.getValue()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(
+                        "CURRENT_SESSION_REQUIRES_LOGOUT"
+                ));
+
+        MvcResult thirdLogin = login("sessions@example.com", PASSWORD)
+                .andExpect(status().isOk())
+                .andReturn();
+        MockHttpSession thirdSession = session(thirdLogin);
+        mockMvc.perform(delete("/api/auth/sessions/others")
+                        .session(secondSession)
+                        .cookie(secondCsrf)
+                        .header("X-XSRF-TOKEN", secondCsrf.getValue()))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/api/auth/me").session(thirdSession))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SESSION_EXPIRED"));
+        mockMvc.perform(get("/api/auth/sessions").session(secondSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sessions.length()").value(1))
+                .andExpect(jsonPath("$.sessions[0].current").value(true));
     }
 
     private org.springframework.test.web.servlet.ResultActions login(String email, String password)

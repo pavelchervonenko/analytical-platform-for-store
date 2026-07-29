@@ -1,5 +1,8 @@
 package com.storeanalytics.salary.service;
 
+import com.storeanalytics.common.config.ApplicationRole;
+import com.storeanalytics.common.config.BackgroundSchedulingConfiguration;
+import com.storeanalytics.common.config.ConditionalOnApplicationRole;
 import com.storeanalytics.salary.model.PayrollRun;
 import com.storeanalytics.salary.model.PayrollRunStatus;
 import com.storeanalytics.salary.repository.PayrollRunRepository;
@@ -17,6 +20,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
+@ConditionalOnApplicationRole({ApplicationRole.WORKER, ApplicationRole.COMBINED})
 public class PayrollRunMetrics implements MeterBinder {
 
     static final String RUNS_METRIC = "storeanalytics.payroll.runs";
@@ -48,7 +52,8 @@ public class PayrollRunMetrics implements MeterBinder {
 
     @Scheduled(
             initialDelayString = "${app.observability.state-initial-delay:30s}",
-            fixedDelayString = "${app.observability.payroll-refresh-delay:5m}"
+            fixedDelayString = "${app.observability.payroll-refresh-delay:5m}",
+            scheduler = BackgroundSchedulingConfiguration.METRICS_SCHEDULER
     )
     @Transactional(readOnly = true)
     public void refresh() {

@@ -2,9 +2,10 @@ package com.storeanalytics.performance.repository;
 
 import com.storeanalytics.performance.model.RatingScheme;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RatingSchemeRepository extends JpaRepository<RatingScheme, UUID> {
@@ -13,7 +14,7 @@ public interface RatingSchemeRepository extends JpaRepository<RatingScheme, UUID
             LocalDate effectiveDate
     );
 
-    List<RatingScheme> findAllByOrderByEffectiveFromDesc();
+    Page<RatingScheme> findAllByOrderByEffectiveFromDescIdDesc(Pageable pageable);
 
     boolean existsByCode(String code);
 

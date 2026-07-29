@@ -2,9 +2,9 @@ package com.storeanalytics.integration.livesklad.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 import com.storeanalytics.common.config.LiveSkladProperties;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladCashItemPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladCashRegisterPayload;
@@ -35,7 +35,7 @@ class HttpLiveSkladClientTest {
 
     private static final String ACCESS_TOKEN = "fixture-access-token";
 
-    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+    private final ObjectMapper objectMapper = new ObjectMapper().rebuild().findAndAddModules().build();
     private final AtomicInteger authRequests = new AtomicInteger();
     private final AtomicInteger storeRequests = new AtomicInteger();
     private final AtomicInteger employeeRequests = new AtomicInteger();
@@ -228,10 +228,12 @@ class HttpLiveSkladClientTest {
         LiveSkladReturnDetailPayload detail =
                 client.fetchReturnDetail("return-http-fixture");
 
-        assertThat(cashItems).singleElement().satisfies(item -> {
-            assertThat(item.sourceType()).isEqualTo("saleReturn");
-            assertThat(item.income()).isFalse();
-        });
+        assertThat(cashItems).hasSize(4);
+        assertThat(cashItems)
+                .extracting(LiveSkladCashItemPayload::sourceType)
+                .containsExactly("saleReturn", null, null, "futureType");
+        assertThat(cashItems.getFirst().income()).isFalse();
+        assertThat(cashItems.get(1).income()).isTrue();
         assertThat(registers).singleElement().satisfies(register -> {
             assertThat(register.externalId())
                     .isEqualTo("register-http-fixture");
@@ -394,6 +396,26 @@ class HttpLiveSkladClientTest {
                       "type": "saleReturn",
                       "isIncome": false,
                       "isBalance": true
+                    },
+                    {
+                      "id": "cash-item-without-type",
+                      "name": "Manual adjustment",
+                      "isIncome": true,
+                      "isBalance": false
+                    },
+                    {
+                      "id": "cash-item-null-type",
+                      "name": "Null type adjustment",
+                      "type": null,
+                      "isIncome": true,
+                      "isBalance": false
+                    },
+                    {
+                      "id": "cash-item-future-type",
+                      "name": "Future adjustment",
+                      "type": "futureType",
+                      "isIncome": false,
+                      "isBalance": false
                     }
                   ]
                 }

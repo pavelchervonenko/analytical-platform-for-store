@@ -5,8 +5,8 @@ import com.storeanalytics.auth.service.AdminUserView;
 import com.storeanalytics.auth.service.CreateUserCommand;
 import com.storeanalytics.auth.service.UpdateUserCommand;
 import com.storeanalytics.auth.service.UserAdministrationService;
+import com.storeanalytics.common.web.PageResponse;
 import jakarta.validation.Valid;
-import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -30,8 +31,11 @@ public class UserAdministrationController {
     }
 
     @GetMapping
-    List<AdminUserResponse> findAll() {
-        return administrationService.findAll().stream().map(this::toResponse).toList();
+    PageResponse<AdminUserResponse> findAll(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return administrationService.findAll(page, size).map(this::toResponse);
     }
 
     @PostMapping

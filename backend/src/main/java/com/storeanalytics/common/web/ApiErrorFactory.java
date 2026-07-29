@@ -31,7 +31,7 @@ public final class ApiErrorFactory {
                 code,
                 message,
                 request.getRequestURI(),
-                CorrelationId.getOrCreate(request)
+                CorrelationId.getOrCreateRequestId(request)
         );
     }
 

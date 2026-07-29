@@ -61,5 +61,15 @@ public interface SyncJobRepository extends JpaRepository<SyncJob, UUID> {
 
     long countByStatus(SyncJobStatus status);
 
+    @Query("""
+            select count(job) from SyncJob job
+            where job.status = :status
+              and job.leaseUntil < :now
+            """)
+    long countExpiredLeases(
+            @Param("status") SyncJobStatus status,
+            @Param("now") Instant now
+    );
+
     List<SyncJob> findAllByOrderByCreatedAtDesc(Pageable pageable);
 }

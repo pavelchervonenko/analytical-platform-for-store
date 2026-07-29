@@ -31,6 +31,7 @@ public class SystemInfoController {
         return new SystemStatusView(
                 APPLICATION_NAME,
                 build == null ? "development" : build.getVersion(),
+                ApiContractVersion.CURRENT,
                 Instant.now(clock)
         );
     }

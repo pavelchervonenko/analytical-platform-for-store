@@ -9,11 +9,16 @@ import com.storeanalytics.audit.service.AuditTarget;
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.auth.repository.AppUserRepository;
 import com.storeanalytics.common.exception.InvalidRequestException;
+import com.storeanalytics.common.exception.PreconditionFailedException;
+import com.storeanalytics.common.exception.PreconditionRequiredException;
+import com.storeanalytics.common.web.StrongEtag;
 import com.storeanalytics.employee.model.EmployeeStoreAssignment;
 import com.storeanalytics.employee.repository.EmployeeStoreAssignmentRepository;
 import com.storeanalytics.metrics.exception.StoreNotFoundException;
 import com.storeanalytics.performance.model.EmployeeWorkShift;
+import com.storeanalytics.performance.model.WorkScheduleDayRevision;
 import com.storeanalytics.performance.repository.EmployeeWorkShiftRepository;
+import com.storeanalytics.performance.repository.WorkScheduleDayRevisionRepository;
 import com.storeanalytics.store.model.Store;
 import com.storeanalytics.store.repository.StoreRepository;
 import java.math.BigDecimal;
@@ -26,13 +31,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class WorkScheduleService {
 
+    public static final int MAXIMUM_RANGE_DAYS = 31;
+    public static final int MAXIMUM_RESULT_ITEMS = 10_000;
+    public static final int MAXIMUM_SHIFTS_PER_DAY = 500;
+
     private final EmployeeWorkShiftRepository shiftRepository;
+    private final WorkScheduleDayRevisionRepository revisionRepository;
     private final EmployeeStoreAssignmentRepository assignmentRepository;
     private final StoreRepository storeRepository;
     private final AppUserRepository userRepository;
@@ -40,12 +51,14 @@ public class WorkScheduleService {
 
     public WorkScheduleService(
             EmployeeWorkShiftRepository shiftRepository,
+            WorkScheduleDayRevisionRepository revisionRepository,
             EmployeeStoreAssignmentRepository assignmentRepository,
             StoreRepository storeRepository,
             AppUserRepository userRepository,
             AuditLogService auditLogService
     ) {
         this.shiftRepository = shiftRepository;
+        this.revisionRepository = revisionRepository;
         this.assignmentRepository = assignmentRepository;
         this.storeRepository = storeRepository;
         this.userRepository = userRepository;
@@ -64,24 +77,56 @@ public class WorkScheduleService {
         if (end.isBefore(start)) {
             throw new InvalidRequestException("periodEnd must not be before periodStart");
         }
-        return shiftRepository
+        if (end.toEpochDay() - start.toEpochDay() >= MAXIMUM_RANGE_DAYS) {
+            throw new InvalidRequestException(
+                    "work schedule period must not exceed 31 inclusive days"
+            );
+        }
+        List<EmployeeWorkShift> shifts = shiftRepository
                 .findAllByStoreIdAndWorkDateBetweenOrderByWorkDateAscEmployeeFullNameAsc(
-                        storeId, start, end
-                ).stream()
+                        storeId,
+                        start,
+                        end,
+                        PageRequest.of(0, MAXIMUM_RESULT_ITEMS + 1)
+                );
+        if (shifts.size() > MAXIMUM_RESULT_ITEMS) {
+            throw new InvalidRequestException(
+                    "work schedule result exceeds 10000 items; narrow the period"
+            );
+        }
+        return shifts.stream()
                 .filter(EmployeeWorkShift::isActive)
                 .map(this::toView)
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public WorkScheduleDayView getDay(UUID storeId, LocalDate workDate) {
+        UUID validatedStoreId = requireStore(storeId);
+        LocalDate date = requireNonNull(workDate, "workDate");
+        long revision = revisionRepository.findByStoreIdAndWorkDate(validatedStoreId, date)
+                .map(WorkScheduleDayRevision::getRevision)
+                .orElse(0L);
+        List<EmployeeShiftView> shifts = activeDayShifts(validatedStoreId, date);
+        return new WorkScheduleDayView(validatedStoreId, date, revision, shifts);
+    }
+
     @Transactional
-    public List<EmployeeShiftView> replaceDay(
+    public WorkScheduleDayView replaceDay(
             UUID storeId,
             LocalDate workDate,
             List<WorkShiftInput> shifts,
+            String ifMatch,
             UUID actorId
     ) {
         Store store = requireStoreForUpdate(storeId);
         LocalDate date = requireNonNull(workDate, "workDate");
+        WorkScheduleDayRevision currentRevision = revisionRepository
+                .findByStoreIdAndWorkDate(store.getId(), date)
+                .orElse(null);
+        long previousRevision = currentRevision == null ? 0L : currentRevision.getRevision();
+        requireCurrentEtag(ifMatch, store.getId(), date, previousRevision);
+
         Map<UUID, BigDecimal> requested = requestedShifts(shifts);
         Set<UUID> requestedIds = requested.keySet();
         AppUser actor = userRepository.findById(requireNonNull(actorId, "actorId"))
@@ -107,7 +152,9 @@ public class WorkScheduleService {
         shiftRepository.findAllByStoreIdAndWorkDate(store.getId(), date).forEach(
                 shift -> existing.put(shift.getEmployee().getId(), shift)
         );
-        Map<String, Object> before = scheduleSummary(date, existing.values());
+        Map<String, Object> before = scheduleSummary(
+                date, previousRevision, existing.values()
+        );
         existing.values().forEach(shift -> {
             if (requestedIds.contains(shift.getEmployee().getId())) {
                 shift.setWorkedHours(requested.get(shift.getEmployee().getId()), actor);
@@ -130,6 +177,15 @@ public class WorkScheduleService {
             }
         }
         shiftRepository.flush();
+
+        WorkScheduleDayRevision nextRevision;
+        if (currentRevision == null) {
+            nextRevision = new WorkScheduleDayRevision(store, date, actor);
+        } else {
+            currentRevision.advance(actor);
+            nextRevision = currentRevision;
+        }
+        WorkScheduleDayRevision savedRevision = revisionRepository.saveAndFlush(nextRevision);
         List<EmployeeShiftView> result = existing.values().stream()
                 .filter(EmployeeWorkShift::isActive)
                 .sorted((left, right) -> left.getEmployee().getFullName()
@@ -143,13 +199,47 @@ public class WorkScheduleService {
                 new AuditTarget(AuditEntityType.WORK_SCHEDULE_DAY, store.getId() + ":" + date),
                 null,
                 before,
-                scheduleSummary(date, existing.values())
+                scheduleSummary(date, savedRevision.getRevision(), existing.values())
         );
-        return result;
+        return new WorkScheduleDayView(
+                store.getId(), date, savedRevision.getRevision(), result
+        );
+    }
+
+    public static String etag(UUID storeId, LocalDate workDate, long revision) {
+        return StrongEtag.of("work-schedule-day", storeId, workDate, revision);
+    }
+
+    private void requireCurrentEtag(
+            String ifMatch,
+            UUID storeId,
+            LocalDate workDate,
+            long revision
+    ) {
+        if (ifMatch == null || ifMatch.isBlank()) {
+            throw new PreconditionRequiredException(
+                    "If-Match is required for work schedule replacement"
+            );
+        }
+        if (!etag(storeId, workDate, revision).equals(ifMatch.trim())) {
+            throw new PreconditionFailedException(
+                    "Work schedule day was changed by another user"
+            );
+        }
+    }
+
+    private List<EmployeeShiftView> activeDayShifts(UUID storeId, LocalDate workDate) {
+        return shiftRepository.findAllByStoreIdAndWorkDate(storeId, workDate).stream()
+                .filter(EmployeeWorkShift::isActive)
+                .sorted((left, right) -> left.getEmployee().getFullName()
+                        .compareToIgnoreCase(right.getEmployee().getFullName()))
+                .map(this::toView)
+                .toList();
     }
 
     private Map<String, Object> scheduleSummary(
             LocalDate date,
+            long revision,
             Collection<EmployeeWorkShift> shifts
     ) {
         List<Map<String, Object>> active = shifts.stream()
@@ -161,11 +251,16 @@ public class WorkScheduleService {
                         "workedHours", shift.getWorkedHours()
                 ))
                 .toList();
-        return Map.of("workDate", date, "shifts", active);
+        return Map.of("workDate", date, "revision", revision, "shifts", active);
     }
 
     private Map<UUID, BigDecimal> requestedShifts(List<WorkShiftInput> shifts) {
         List<WorkShiftInput> validated = requireNonNull(shifts, "shifts");
+        if (validated.size() > MAXIMUM_SHIFTS_PER_DAY) {
+            throw new InvalidRequestException(
+                    "shifts must contain no more than 500 entries"
+            );
+        }
         Map<UUID, BigDecimal> result = new LinkedHashMap<>();
         for (WorkShiftInput shift : validated) {
             WorkShiftInput input = requireNonNull(shift, "shift");
@@ -180,10 +275,12 @@ public class WorkScheduleService {
         return result;
     }
 
-    private Store requireStore(UUID storeId) {
+    private UUID requireStore(UUID storeId) {
         UUID validated = requireNonNull(storeId, "storeId");
-        return storeRepository.findById(validated)
-                .orElseThrow(() -> new StoreNotFoundException(validated));
+        if (!storeRepository.existsById(validated)) {
+            throw new StoreNotFoundException(validated);
+        }
+        return validated;
     }
 
     private Store requireStoreForUpdate(UUID storeId) {

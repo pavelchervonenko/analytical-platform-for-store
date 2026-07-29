@@ -1,13 +1,14 @@
 package com.storeanalytics.salary.web;
 
 import com.storeanalytics.auth.security.AppUserPrincipal;
+import com.storeanalytics.common.web.PageResponse;
 import com.storeanalytics.salary.service.AddPayrollAdjustmentCommand;
 import com.storeanalytics.salary.service.PayrollManagementService;
 import com.storeanalytics.salary.service.PayrollRunDetailView;
-import com.storeanalytics.salary.service.PayrollRunSummaryView;
+import com.storeanalytics.salary.service.PayrollRunListItemView;
+import com.storeanalytics.salary.service.VoidPayrollAdjustmentCommand;
 import jakarta.validation.Valid;
 import java.time.YearMonth;
-import java.util.List;
 import java.util.UUID;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,8 +17,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/api/stores")
@@ -35,13 +38,15 @@ public class PayrollController {
             @PathVariable UUID storeId,
             @PathVariable @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,
             @RequestBody(required = false) PayrollCalculateRequest request,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
             Authentication authentication
     ) {
         return payrollService.calculate(
                 storeId,
                 month,
                 request == null ? null : request.revisionReason(),
-                principal(authentication).getUserId()
+                principal(authentication).getUserId(),
+                idempotencyKey
         );
     }
 
@@ -56,8 +61,14 @@ public class PayrollController {
 
     @GetMapping("/{storeId}/payroll-runs")
     @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
-    List<PayrollRunSummaryView> list(@PathVariable UUID storeId) {
-        return payrollService.list(storeId);
+    PageResponse<PayrollRunListItemView> list(
+            @PathVariable UUID storeId,
+            @RequestParam(required = false)
+            @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return payrollService.list(storeId, month, page, size);
     }
 
     @GetMapping("/{storeId}/payroll-runs/{runId}")
@@ -75,6 +86,7 @@ public class PayrollController {
             @PathVariable UUID storeId,
             @PathVariable UUID runId,
             @Valid @RequestBody PayrollAdjustmentRequest request,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
             Authentication authentication
     ) {
         return payrollService.addAdjustment(new AddPayrollAdjustmentCommand(
@@ -86,7 +98,7 @@ public class PayrollController {
                 request.reason(),
                 request.runVersion(),
                 principal(authentication).getUserId()
-        ));
+        ), idempotencyKey);
     }
 
     @PostMapping("/{storeId}/payroll-runs/{runId}/adjustments/{adjustmentId}/void")
@@ -96,16 +108,20 @@ public class PayrollController {
             @PathVariable UUID runId,
             @PathVariable UUID adjustmentId,
             @Valid @RequestBody PayrollVoidAdjustmentRequest request,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
             Authentication authentication
     ) {
         return payrollService.voidAdjustment(
-                storeId,
-                runId,
-                adjustmentId,
-                request.reason(),
-                request.runVersion(),
-                request.adjustmentVersion(),
-                principal(authentication).getUserId()
+                new VoidPayrollAdjustmentCommand(
+                        storeId,
+                        runId,
+                        adjustmentId,
+                        request.reason(),
+                        request.runVersion(),
+                        request.adjustmentVersion(),
+                        principal(authentication).getUserId()
+                ),
+                idempotencyKey
         );
     }
 
@@ -115,10 +131,15 @@ public class PayrollController {
             @PathVariable UUID storeId,
             @PathVariable UUID runId,
             @Valid @RequestBody PayrollTransitionRequest request,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
             Authentication authentication
     ) {
         return payrollService.approve(
-                storeId, runId, request.version(), principal(authentication).getUserId()
+                storeId,
+                runId,
+                request.version(),
+                principal(authentication).getUserId(),
+                idempotencyKey
         );
     }
 
@@ -128,10 +149,15 @@ public class PayrollController {
             @PathVariable UUID storeId,
             @PathVariable UUID runId,
             @Valid @RequestBody PayrollTransitionRequest request,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
             Authentication authentication
     ) {
         return payrollService.markPaid(
-                storeId, runId, request.version(), principal(authentication).getUserId()
+                storeId,
+                runId,
+                request.version(),
+                principal(authentication).getUserId(),
+                idempotencyKey
         );
     }
 

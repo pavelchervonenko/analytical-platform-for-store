@@ -6,6 +6,7 @@ import com.storeanalytics.audit.service.AuditLogService;
 import com.storeanalytics.audit.service.AuditTarget;
 import com.storeanalytics.common.exception.InvalidRequestException;
 import com.storeanalytics.product.exception.ProductClassificationConflictException;
+import com.storeanalytics.product.exception.ProductIdentityConflictException;
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.auth.repository.AppUserRepository;
 import com.storeanalytics.integration.connection.model.IntegrationConnection;
@@ -15,10 +16,7 @@ import com.storeanalytics.product.model.CategoryAssignmentDetails;
 import com.storeanalytics.product.model.CategoryAssignmentSource;
 import com.storeanalytics.product.model.Product;
 import com.storeanalytics.product.model.ProductCategoryAssignment;
-import com.storeanalytics.product.model.ProductDetails;
-import com.storeanalytics.product.model.ProductSourceKind;
 import com.storeanalytics.product.repository.ProductCategoryAssignmentRepository;
-import com.storeanalytics.product.repository.ProductRepository;
 import com.storeanalytics.sync.model.SourceSystem;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
@@ -43,7 +41,7 @@ public class ProductCategoryImportService {
     private static final String UNMAPPED_CATEGORY_CODE = "UNMAPPED";
 
     private final IntegrationConnectionRepository connectionRepository;
-    private final ProductRepository productRepository;
+    private final LiveSkladProductIdentityResolver identityResolver;
     private final ProductCategoryAssignmentRepository assignmentRepository;
     private final EntityManager entityManager;
     private final AppUserRepository userRepository;
@@ -51,14 +49,14 @@ public class ProductCategoryImportService {
 
     public ProductCategoryImportService(
             IntegrationConnectionRepository connectionRepository,
-            ProductRepository productRepository,
+            LiveSkladProductIdentityResolver identityResolver,
             ProductCategoryAssignmentRepository assignmentRepository,
             EntityManager entityManager,
             AppUserRepository userRepository,
             AuditLogService auditLogService
     ) {
         this.connectionRepository = connectionRepository;
-        this.productRepository = productRepository;
+        this.identityResolver = identityResolver;
         this.assignmentRepository = assignmentRepository;
         this.entityManager = entityManager;
         this.userRepository = userRepository;
@@ -74,16 +72,21 @@ public class ProductCategoryImportService {
                 .orElseThrow(() -> new IllegalArgumentException("actor does not exist"));
         IntegrationConnection connection = findLiveSkladConnection(command.connectionKey());
         Map<String, AnalyticsCategory> categories = loadCategories(command.assignments());
-        Map<String, Product> products = loadProducts(connection, command.assignments());
-
-        List<Product> newProducts = createMissingProducts(
-                connection,
-                command.assignments(),
-                products
-        );
-        if (!newProducts.isEmpty()) {
-            productRepository.saveAllAndFlush(newProducts);
+        Map<String, String> productNames = new HashMap<>();
+        command.assignments().forEach(entry -> productNames.put(
+                entry.externalProductId(),
+                entry.productName()
+        ));
+        LiveSkladProductIdentityResolver.CatalogResolution catalog;
+        try {
+            catalog = identityResolver.resolveCatalogReferences(
+                    connection,
+                    productNames
+            );
+        } catch (ProductIdentityConflictException exception) {
+            throw new InvalidRequestException(exception.getMessage(), exception);
         }
+        Map<String, Product> products = catalog.productsByIdentifier();
 
         Map<java.util.UUID, List<ExistingAssignment>> existingAssignments =
                 loadExistingAssignments(products.values());
@@ -126,7 +129,7 @@ public class ProductCategoryImportService {
         }
         return new ProductCategoryImportResult(
                 command.assignments().size(),
-                newProducts.size(),
+                catalog.createdCount(),
                 newAssignments.size(),
                 unchanged
         );
@@ -173,56 +176,6 @@ public class ProductCategoryImportService {
             );
         }
         return categories;
-    }
-
-    private Map<String, Product> loadProducts(
-            IntegrationConnection connection,
-            List<ProductCategoryImportEntry> assignments
-    ) {
-        Set<String> externalIds = assignments.stream()
-                .map(ProductCategoryImportEntry::externalProductId)
-                .collect(Collectors.toSet());
-        return entityManager.createQuery(
-                        """
-                        SELECT product
-                        FROM Product product
-                        WHERE product.connection.id = :connectionId
-                          AND product.externalId IN :externalIds
-                        """,
-                        Product.class
-                )
-                .setParameter("connectionId", connection.getId())
-                .setParameter("externalIds", externalIds)
-                .getResultStream()
-                .collect(Collectors.toMap(Product::getExternalId, Function.identity()));
-    }
-
-    private List<Product> createMissingProducts(
-            IntegrationConnection connection,
-            List<ProductCategoryImportEntry> assignments,
-            Map<String, Product> products
-    ) {
-        List<Product> created = new ArrayList<>();
-        for (ProductCategoryImportEntry entry : assignments) {
-            if (products.containsKey(entry.externalProductId())) {
-                continue;
-            }
-            Product product = Product.fromLiveSklad(
-                    connection,
-                    entry.externalProductId(),
-                    new ProductDetails(
-                            null,
-                            null,
-                            null,
-                            entry.productName(),
-                            ProductSourceKind.UNKNOWN,
-                            null
-                    )
-            );
-            products.put(entry.externalProductId(), product);
-            created.add(product);
-        }
-        return created;
     }
 
     private Map<java.util.UUID, List<ExistingAssignment>> loadExistingAssignments(

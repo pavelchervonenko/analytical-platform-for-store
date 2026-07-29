@@ -5,6 +5,7 @@ import java.time.Instant;
 public record SystemStatusView(
         String application,
         String version,
+        String apiContractVersion,
         Instant time
 ) {
 }

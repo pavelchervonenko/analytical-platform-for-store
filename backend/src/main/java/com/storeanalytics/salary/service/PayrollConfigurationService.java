@@ -8,6 +8,8 @@ import com.storeanalytics.audit.service.AuditLogService;
 import com.storeanalytics.audit.service.AuditTarget;
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.auth.repository.AppUserRepository;
+import com.storeanalytics.common.web.PageParameters;
+import com.storeanalytics.common.web.PageResponse;
 import com.storeanalytics.product.model.Product;
 import com.storeanalytics.product.repository.ProductRepository;
 import com.storeanalytics.salary.model.PayrollCategoryCode;
@@ -23,6 +25,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,10 +53,11 @@ public class PayrollConfigurationService {
     }
 
     @Transactional(readOnly = true)
-    public List<PayrollSchemeView> schemes() {
-        return schemeRepository.findAllByOrderByEffectiveFromDesc().stream()
-                .map(this::schemeView)
-                .toList();
+    public PageResponse<PayrollSchemeView> schemes(int page, int size) {
+        return PageResponse.from(schemeRepository
+                .findAllByOrderByEffectiveFromDescIdDesc(
+                        new PageParameters(page, size).pageable(Sort.unsorted())
+                ).map(this::schemeView));
     }
 
     @Transactional
@@ -70,7 +74,7 @@ public class PayrollConfigurationService {
         if (schemeRepository.existsByEffectiveFrom(date)) {
             throw new PayrollSchemeConflictException("payroll scheme date already exists");
         }
-        schemeRepository.findAllByOrderByEffectiveFromDesc().stream().findFirst()
+        schemeRepository.findFirstByOrderByEffectiveFromDesc()
                 .filter(latest -> !date.isAfter(latest.getEffectiveFrom()))
                 .ifPresent(latest -> {
                     throw new PayrollSchemeConflictException(

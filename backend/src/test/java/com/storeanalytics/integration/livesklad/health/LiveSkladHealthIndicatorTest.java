@@ -14,7 +14,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.actuate.health.Status;
+import org.springframework.boot.health.contributor.Status;
 
 class LiveSkladHealthIndicatorTest {
 
@@ -49,7 +49,7 @@ class LiveSkladHealthIndicatorTest {
         );
 
         probe.probe();
-        org.springframework.boot.actuate.health.Health health =
+        org.springframework.boot.health.contributor.Health health =
                 new LiveSkladHealthIndicator(probe).health();
 
         assertThat(health.getStatus()).isEqualTo(Status.DOWN);

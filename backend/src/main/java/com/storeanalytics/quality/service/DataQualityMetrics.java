@@ -1,5 +1,8 @@
 package com.storeanalytics.quality.service;
 
+import com.storeanalytics.common.config.ApplicationRole;
+import com.storeanalytics.common.config.BackgroundSchedulingConfiguration;
+import com.storeanalytics.common.config.ConditionalOnApplicationRole;
 import com.storeanalytics.quality.model.DataQualityStatus;
 import com.storeanalytics.quality.repository.DataQualityIssueRepository;
 import io.micrometer.core.instrument.Gauge;
@@ -12,6 +15,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnApplicationRole({ApplicationRole.WORKER, ApplicationRole.COMBINED})
 public class DataQualityMetrics implements MeterBinder {
 
     static final String ISSUES_METRIC = "storeanalytics.quality.issues";
@@ -39,7 +43,8 @@ public class DataQualityMetrics implements MeterBinder {
 
     @Scheduled(
             initialDelayString = "${app.observability.state-initial-delay:30s}",
-            fixedDelayString = "${app.observability.state-refresh-delay:1m}"
+            fixedDelayString = "${app.observability.state-refresh-delay:1m}",
+            scheduler = BackgroundSchedulingConfiguration.METRICS_SCHEDULER
     )
     public void refresh() {
         try {

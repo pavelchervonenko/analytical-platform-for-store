@@ -1,15 +1,17 @@
 package com.storeanalytics.report.service;
 
+import com.storeanalytics.common.exception.InvalidRequestException;
+import com.storeanalytics.common.web.PageParameters;
+import com.storeanalytics.common.web.PageResponse;
 import com.storeanalytics.metrics.model.ReportSnapshot;
 import com.storeanalytics.metrics.model.ReportStatus;
 import com.storeanalytics.metrics.model.ReportType;
 import com.storeanalytics.metrics.repository.ReportSnapshotRepository;
+import com.storeanalytics.metrics.repository.ReportSummaryProjection;
 import com.storeanalytics.report.exception.ReportNotFoundException;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,45 +30,29 @@ public class ReportQueryService {
     }
 
     @Transactional(readOnly = true)
-    public List<ReportSummaryView> list(
+    public PageResponse<ReportSummaryView> list(
             UUID storeId,
             Integer year,
-            ReportType type
+            ReportType type,
+            int page,
+            int size
     ) {
-        List<ReportSnapshot> reports = repository
-                .findAllByStoreIdOrderByPeriodEndDescRevisionDesc(storeId)
-                .stream()
-                .filter(report -> report.getStatus() == ReportStatus.FINALIZED)
-                .filter(report -> year == null || report.getPeriodEnd().getYear() == year)
-                .filter(report -> type == null || report.getReportType() == type)
-                .toList();
-        Map<ReportPeriodKey, Integer> latestRevisions = new HashMap<>();
-        reports.forEach(report -> latestRevisions.merge(
-                new ReportPeriodKey(
-                        report.getReportType(),
-                        report.getPeriodStart(),
-                        report.getPeriodEnd()
-                ),
-                report.getRevision(),
-                Math::max
-        ));
-        return reports.stream()
-                .map(report -> summary(
-                        report,
-                        report.getRevision() == latestRevisions.get(new ReportPeriodKey(
-                                report.getReportType(),
-                                report.getPeriodStart(),
-                                report.getPeriodEnd()
-                        ))
-                ))
-                .sorted(Comparator.comparing(
-                        ReportSummaryView::periodEnd,
-                        Comparator.reverseOrder()
-                ).thenComparing(
-                        ReportSummaryView::revision,
-                        Comparator.reverseOrder()
-                ))
-                .toList();
+        validateYear(year);
+        PageParameters parameters = new PageParameters(page, size);
+        LocalDateRange range = yearRange(year);
+        return PageResponse.from(repository.findArchiveSummaries(
+                storeId,
+                range.start(),
+                range.end(),
+                type == null ? List.of(ReportType.values()) : List.of(type),
+                ReportStatus.FINALIZED,
+                parameters.pageable(Sort.unsorted())
+        ).map(this::summary));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Integer> years(UUID storeId) {
+        return repository.findFinalizedYears(storeId);
     }
 
     @Transactional(readOnly = true)
@@ -75,21 +61,46 @@ public class ReportQueryService {
                 .filter(candidate -> candidate.getStatus() == ReportStatus.FINALIZED)
                 .filter(candidate -> candidate.getStore().getId().equals(storeId))
                 .orElseThrow(() -> new ReportNotFoundException(reportId));
-        boolean current = repository
-                .findFirstByStoreIdAndReportTypeAndPeriodStartAndPeriodEndAndStatusOrderByRevisionDesc(
+        boolean current = !repository
+                .existsByStoreIdAndReportTypeAndPeriodStartAndPeriodEndAndStatusAndRevisionGreaterThan(
                         storeId,
                         report.getReportType(),
                         report.getPeriodStart(),
                         report.getPeriodEnd(),
-                        ReportStatus.FINALIZED
-                )
-                .map(latest -> latest.getId().equals(report.getId()))
-                .orElse(false);
+                        ReportStatus.FINALIZED,
+                        report.getRevision()
+                );
         ReportSummaryView summary = summary(report, current);
         if (report.getReportType() == ReportType.MONTHLY) {
             return new ReportDetailView(summary, codec.decodeMonthly(report), null);
         }
         return new ReportDetailView(summary, null, codec.decodeAnnual(report));
+    }
+
+    private ReportSummaryView summary(ReportSummaryProjection report) {
+        ReportActorView actor = report.getFinalizedById() == null
+                ? null : new ReportActorView(
+                        report.getFinalizedById(),
+                        report.getFinalizedByDisplayName()
+                );
+        return new ReportSummaryView(
+                report.getId(),
+                report.getStoreId(),
+                report.getType(),
+                report.getPeriodStart(),
+                report.getPeriodEnd(),
+                coverage(report.getType(), report.getPeriodStart()),
+                report.getStatus(),
+                report.getRevision(),
+                Boolean.TRUE.equals(report.getCurrentRevision()),
+                report.getSupersedesReportId(),
+                report.getRevisionReason(),
+                report.getPayrollRunId(),
+                report.getTemplateVersion(),
+                report.getSchemaVersion(),
+                report.getFinalizedAt(),
+                actor
+        );
     }
 
     private ReportSummaryView summary(ReportSnapshot report, boolean current) {
@@ -118,13 +129,45 @@ public class ReportQueryService {
     }
 
     private ReportCoverageStatus coverage(ReportSnapshot report) {
-        return report.getReportType() == ReportType.ANNUAL
-                && report.getPeriodStart().getMonthValue() != 1
+        return coverage(report.getReportType(), report.getPeriodStart());
+    }
+
+    private ReportCoverageStatus coverage(
+            ReportType type,
+            java.time.LocalDate periodStart
+    ) {
+        return type == ReportType.ANNUAL && periodStart.getMonthValue() != 1
                 ? ReportCoverageStatus.PARTIAL_FIRST_YEAR
                 : ReportCoverageStatus.COMPLETE;
     }
 
+    private void validateYear(Integer year) {
+        if (year != null && (year < 2000 || year > 2100)) {
+            throw new InvalidRequestException(
+                    "report year is outside supported range"
+            );
+        }
+    }
+
+    private LocalDateRange yearRange(Integer year) {
+        return year == null
+                ? new LocalDateRange(
+                        java.time.LocalDate.of(1, 1, 1),
+                        java.time.LocalDate.of(9999, 12, 31)
+                )
+                : new LocalDateRange(
+                        java.time.LocalDate.of(year, 1, 1),
+                        java.time.LocalDate.of(year, 12, 31)
+                );
+    }
+
     private UUID id(ReportSnapshot report) {
         return report == null ? null : report.getId();
+    }
+
+    private record LocalDateRange(
+            java.time.LocalDate start,
+            java.time.LocalDate end
+    ) {
     }
 }

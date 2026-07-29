@@ -2,11 +2,14 @@ package com.storeanalytics.common.web;
 
 import com.storeanalytics.common.exception.BusinessErrorType;
 import com.storeanalytics.common.exception.BusinessException;
+import com.storeanalytics.common.exception.PreconditionFailedException;
+import com.storeanalytics.common.exception.PreconditionRequiredException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -16,6 +19,7 @@ import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -59,12 +63,23 @@ public class ApiExceptionHandler {
             HttpMessageNotReadableException exception,
             HttpServletRequest request
     ) {
+        if (hasPayloadTooLargeCause(exception)) {
+            return payloadTooLarge(request);
+        }
         return error(
                 HttpStatus.BAD_REQUEST,
                 ApiErrorCode.MALFORMED_REQUEST,
                 "Request body is missing or malformed",
                 request
         );
+    }
+
+    @ExceptionHandler(RequestBodyTooLargeException.class)
+    ResponseEntity<ApiError> handlePayloadTooLarge(
+            RequestBodyTooLargeException exception,
+            HttpServletRequest request
+    ) {
+        return payloadTooLarge(request);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
@@ -93,6 +108,19 @@ public class ApiExceptionHandler {
         );
     }
 
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    ResponseEntity<ApiError> handleMissingHeader(
+            MissingRequestHeaderException exception,
+            HttpServletRequest request
+    ) {
+        return error(
+                HttpStatus.BAD_REQUEST,
+                ApiErrorCode.MISSING_PARAMETER,
+                "A required request header is missing",
+                request
+        );
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     ResponseEntity<ApiError> handleAccessDenied(
             AccessDeniedException exception,
@@ -114,6 +142,32 @@ public class ApiExceptionHandler {
         return error(
                 HttpStatus.CONFLICT,
                 ApiErrorCode.CONCURRENT_MODIFICATION,
+                "The resource was changed; reload and retry",
+                request
+        );
+    }
+
+    @ExceptionHandler(PreconditionRequiredException.class)
+    ResponseEntity<ApiError> handlePreconditionRequired(
+            PreconditionRequiredException exception,
+            HttpServletRequest request
+    ) {
+        return error(
+                HttpStatus.PRECONDITION_REQUIRED,
+                ApiErrorCode.PRECONDITION_REQUIRED,
+                "A current resource precondition is required",
+                request
+        );
+    }
+
+    @ExceptionHandler(PreconditionFailedException.class)
+    ResponseEntity<ApiError> handlePreconditionFailed(
+            PreconditionFailedException exception,
+            HttpServletRequest request
+    ) {
+        return error(
+                HttpStatus.PRECONDITION_FAILED,
+                ApiErrorCode.PRECONDITION_FAILED,
                 "The resource was changed; reload and retry",
                 request
         );
@@ -163,10 +217,10 @@ public class ApiExceptionHandler {
             Exception exception,
             HttpServletRequest request
     ) {
-        String correlationId = CorrelationId.getOrCreate(request);
+        String requestId = CorrelationId.getOrCreateRequestId(request);
         LOGGER.error(
-                "Unhandled request failure correlationId={} method={} path={}",
-                correlationId,
+                "Unhandled request failure requestId={} method={} path={}",
+                requestId,
                 request.getMethod(),
                 request.getRequestURI(),
                 exception
@@ -190,10 +244,34 @@ public class ApiExceptionHandler {
         );
     }
 
+    private ResponseEntity<ApiError> payloadTooLarge(HttpServletRequest request) {
+        HttpStatus status = HttpStatus.CONTENT_TOO_LARGE;
+        return ResponseEntity.status(status)
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .header("X-Content-Type-Options", "nosniff")
+                .body(ApiErrorFactory.create(
+                        status,
+                        ApiErrorCode.PAYLOAD_TOO_LARGE,
+                        "Request body is too large",
+                        request
+                ));
+    }
+
+    private boolean hasPayloadTooLargeCause(Throwable exception) {
+        Throwable current = exception;
+        while (current != null) {
+            if (current instanceof RequestBodyTooLargeException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
     private HttpStatus status(BusinessErrorType type) {
         return switch (type) {
             case INVALID_REQUEST -> HttpStatus.BAD_REQUEST;
-            case UNPROCESSABLE -> HttpStatus.UNPROCESSABLE_ENTITY;
+            case UNPROCESSABLE -> HttpStatus.UNPROCESSABLE_CONTENT;
             case NOT_FOUND -> HttpStatus.NOT_FOUND;
             case CONFLICT -> HttpStatus.CONFLICT;
             case RATE_LIMITED -> HttpStatus.TOO_MANY_REQUESTS;

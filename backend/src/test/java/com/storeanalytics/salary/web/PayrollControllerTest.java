@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.storeanalytics.auth.security.AppUserPrincipal;
 import com.storeanalytics.common.web.ApiExceptionHandler;
 import com.storeanalytics.salary.exception.PayrollSourceDataChangedException;
@@ -23,7 +23,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -36,10 +36,12 @@ class PayrollControllerTest {
     @BeforeEach
     void setUp() {
         payrollService = mock(PayrollManagementService.class);
-        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+        JsonMapper objectMapper = JsonMapper.builder()
+                .findAndAddModules()
+                .build();
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new PayrollController(payrollService))
-                .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
+                .setMessageConverters(new JacksonJsonHttpMessageConverter(objectMapper))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -51,8 +53,13 @@ class PayrollControllerTest {
         UUID employeeId = UUID.randomUUID();
         UUID actorId = UUID.randomUUID();
         PayrollRunDetailView detail = emptyDetail();
-        when(payrollService.calculate(storeId, YearMonth.of(2026, 7), null, actorId))
-                .thenReturn(detail);
+        when(payrollService.calculate(
+                storeId,
+                YearMonth.of(2026, 7),
+                null,
+                actorId,
+                "payroll-calculate-1234"
+        )).thenReturn(detail);
         AddPayrollAdjustmentCommand command = new AddPayrollAdjustmentCommand(
                 storeId,
                 runId,
@@ -63,10 +70,12 @@ class PayrollControllerTest {
                 3,
                 actorId
         );
-        when(payrollService.addAdjustment(command)).thenReturn(detail);
+        when(payrollService.addAdjustment(command, "payroll-adjustment-1234"))
+                .thenReturn(detail);
 
         mockMvc.perform(post("/api/stores/{storeId}/payroll/{month}/calculate", storeId, "2026-07")
                         .principal(authentication(actorId))
+                        .header("Idempotency-Key", "payroll-calculate-1234")
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
 
@@ -75,6 +84,7 @@ class PayrollControllerTest {
                         storeId,
                         runId
                 ).principal(authentication(actorId))
+                        .header("Idempotency-Key", "payroll-adjustment-1234")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -87,8 +97,14 @@ class PayrollControllerTest {
                                 """.formatted(employeeId)))
                 .andExpect(status().isOk());
 
-        verify(payrollService).calculate(storeId, YearMonth.of(2026, 7), null, actorId);
-        verify(payrollService).addAdjustment(command);
+        verify(payrollService).calculate(
+                storeId,
+                YearMonth.of(2026, 7),
+                null,
+                actorId,
+                "payroll-calculate-1234"
+        );
+        verify(payrollService).addAdjustment(command, "payroll-adjustment-1234");
     }
 
     @Test
@@ -102,6 +118,7 @@ class PayrollControllerTest {
                         storeId,
                         runId
                 ).principal(authentication(UUID.randomUUID()))
+                        .header("Idempotency-Key", "invalid-adjustment-1234")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -121,7 +138,9 @@ class PayrollControllerTest {
         UUID storeId = UUID.randomUUID();
         UUID runId = UUID.randomUUID();
         UUID actorId = UUID.randomUUID();
-        when(payrollService.approve(storeId, runId, 4, actorId))
+        when(payrollService.approve(
+                storeId, runId, 4, actorId, "payroll-approve-1234"
+        ))
                 .thenThrow(new PayrollSourceDataChangedException(List.of(
                         PayrollStaleReason.SALES_DATA_CHANGED
                 )));
@@ -131,10 +150,25 @@ class PayrollControllerTest {
                         storeId,
                         runId
                 ).principal(authentication(actorId))
+                        .header("Idempotency-Key", "payroll-approve-1234")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"version\":4}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("PAYROLL_SOURCE_DATA_CHANGED"));
+    }
+
+    @Test
+    void requiresIdempotencyKeyForPayrollCommands() throws Exception {
+        UUID storeId = UUID.randomUUID();
+
+        mockMvc.perform(post(
+                        "/api/stores/{storeId}/payroll/{month}/calculate",
+                        storeId,
+                        "2026-07"
+                ).principal(authentication(UUID.randomUUID()))
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MISSING_PARAMETER"));
     }
 
     private PayrollRunDetailView emptyDetail() {

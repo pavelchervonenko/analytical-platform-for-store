@@ -12,6 +12,10 @@ import com.storeanalytics.employee.model.EmployeeStoreAssignment;
 import com.storeanalytics.employee.model.EmployeeStoreAssignmentId;
 import com.storeanalytics.employee.repository.EmployeeStoreAssignmentRepository;
 import com.storeanalytics.common.exception.InvalidRequestException;
+import com.storeanalytics.common.idempotency.IdempotencyRequest;
+import com.storeanalytics.common.idempotency.IdempotencyService;
+import com.storeanalytics.common.web.PageParameters;
+import com.storeanalytics.common.web.PageResponse;
 import com.storeanalytics.salary.exception.PayrollAdjustmentNotFoundException;
 import com.storeanalytics.report.service.MonthlyReportFinalizationService;
 import com.storeanalytics.salary.exception.PayrollMonthNotCalculatedException;
@@ -31,14 +35,15 @@ import com.storeanalytics.salary.repository.PayrollAdjustmentRepository;
 import com.storeanalytics.salary.repository.PayrollDailyAllocationRepository;
 import com.storeanalytics.salary.repository.PayrollDailyPoolRepository;
 import com.storeanalytics.salary.repository.PayrollEventRepository;
+import com.storeanalytics.salary.repository.PayrollRunListProjection;
 import com.storeanalytics.salary.repository.PayrollRunRepository;
 import com.storeanalytics.salary.repository.PayrollStatementRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.YearMonth;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,6 +62,7 @@ public class PayrollManagementService {
     private final EmployeeStoreAssignmentRepository assignmentRepository;
     private final AppUserRepository userRepository;
     private final PayrollSnapshotStore snapshotStore;
+    private final IdempotencyService idempotencyService;
     private final Clock clock;
     private final AuditLogService auditLogService;
 
@@ -81,12 +87,33 @@ public class PayrollManagementService {
         this.reportFinalizationService = support.reportFinalization();
         this.userRepository = userRepository;
         this.snapshotStore = snapshotStore;
+        this.idempotencyService = support.idempotency();
         this.clock = support.clock();
         this.auditLogService = support.auditLog();
     }
 
     @Transactional
     public PayrollRunDetailView calculate(
+            UUID storeId,
+            YearMonth month,
+            String revisionReason,
+            UUID actorId,
+            String idempotencyKey
+    ) {
+        return idempotencyService.execute(
+                actorId,
+                idempotencyKey,
+                new IdempotencyRequest(
+                        "PAYROLL_CALCULATE",
+                        "store/" + storeId + "/payroll/" + month,
+                        new PayrollCalculateFingerprint(revisionReason)
+                ),
+                PayrollRunDetailView.class,
+                () -> calculateOnce(storeId, month, revisionReason, actorId)
+        );
+    }
+
+    private PayrollRunDetailView calculateOnce(
             UUID storeId,
             YearMonth month,
             String revisionReason,
@@ -115,15 +142,50 @@ public class PayrollManagementService {
     }
 
     @Transactional(readOnly = true)
-    public List<PayrollRunSummaryView> list(UUID storeId) {
+    public PageResponse<PayrollRunListItemView> list(
+            UUID storeId,
+            YearMonth month,
+            int page,
+            int size
+    ) {
         UUID validatedStoreId = requireNonNull(storeId, "storeId");
-        return runRepository.findAllByStoreIdOrderByPeriodMonthDescRevisionDesc(validatedStoreId)
-                .stream().map(this::summary).toList();
+        PageParameters parameters = new PageParameters(page, size);
+        LocalDateRange range = monthRange(month);
+        return PageResponse.from(runRepository.findListItems(
+                validatedStoreId,
+                range.start(),
+                range.end(),
+                parameters.pageable(Sort.unsorted())
+        ).map(this::listItem));
     }
 
     @Transactional
-    public PayrollRunDetailView addAdjustment(AddPayrollAdjustmentCommand command) {
+    public PayrollRunDetailView addAdjustment(
+            AddPayrollAdjustmentCommand command,
+            String idempotencyKey
+    ) {
         AddPayrollAdjustmentCommand validated = requireNonNull(command, "command");
+        return idempotencyService.execute(
+                validated.actorId(),
+                idempotencyKey,
+                new IdempotencyRequest(
+                        "PAYROLL_ADJUSTMENT_ADD",
+                        "store/" + validated.storeId()
+                                + "/payroll-run/" + validated.runId(),
+                        new PayrollAdjustmentFingerprint(
+                                validated.employeeId(),
+                                validated.type(),
+                                validated.amount(),
+                                validated.reason(),
+                                validated.version()
+                        )
+                ),
+                PayrollRunDetailView.class,
+                () -> addAdjustmentOnce(validated)
+        );
+    }
+
+    private PayrollRunDetailView addAdjustmentOnce(AddPayrollAdjustmentCommand validated) {
         UUID storeId = validated.storeId();
         UUID runId = validated.runId();
         UUID employeeId = validated.employeeId();
@@ -168,6 +230,42 @@ public class PayrollManagementService {
 
     @Transactional
     public PayrollRunDetailView voidAdjustment(
+            VoidPayrollAdjustmentCommand command,
+            String idempotencyKey
+    ) {
+        VoidPayrollAdjustmentCommand validated = requireNonNull(command, "command");
+        UUID storeId = validated.storeId();
+        UUID runId = validated.runId();
+        UUID adjustmentId = validated.adjustmentId();
+        String reason = validated.reason();
+        long runVersion = validated.runVersion();
+        long adjustmentVersion = validated.adjustmentVersion();
+        UUID actorId = validated.actorId();
+        return idempotencyService.execute(
+                actorId,
+                idempotencyKey,
+                new IdempotencyRequest(
+                        "PAYROLL_ADJUSTMENT_VOID",
+                        "store/" + storeId + "/payroll-run/" + runId
+                                + "/adjustment/" + adjustmentId,
+                        new PayrollVoidAdjustmentFingerprint(
+                                reason, runVersion, adjustmentVersion
+                        )
+                ),
+                PayrollRunDetailView.class,
+                () -> voidAdjustmentOnce(
+                        storeId,
+                        runId,
+                        adjustmentId,
+                        reason,
+                        runVersion,
+                        adjustmentVersion,
+                        actorId
+                )
+        );
+    }
+
+    private PayrollRunDetailView voidAdjustmentOnce(
             UUID storeId,
             UUID runId,
             UUID adjustmentId,
@@ -219,6 +317,26 @@ public class PayrollManagementService {
             UUID storeId,
             UUID runId,
             long version,
+            UUID actorId,
+            String idempotencyKey
+    ) {
+        return idempotencyService.execute(
+                actorId,
+                idempotencyKey,
+                new IdempotencyRequest(
+                        "PAYROLL_APPROVE",
+                        "store/" + storeId + "/payroll-run/" + runId,
+                        new PayrollTransitionFingerprint(version)
+                ),
+                PayrollRunDetailView.class,
+                () -> approveOnce(storeId, runId, version, actorId)
+        );
+    }
+
+    private PayrollRunDetailView approveOnce(
+            UUID storeId,
+            UUID runId,
+            long version,
             UUID actorId
     ) {
         PayrollRun run = requireLatestRun(requireRun(storeId, runId));
@@ -251,6 +369,26 @@ public class PayrollManagementService {
 
     @Transactional
     public PayrollRunDetailView markPaid(
+            UUID storeId,
+            UUID runId,
+            long version,
+            UUID actorId,
+            String idempotencyKey
+    ) {
+        return idempotencyService.execute(
+                actorId,
+                idempotencyKey,
+                new IdempotencyRequest(
+                        "PAYROLL_MARK_PAID",
+                        "store/" + storeId + "/payroll-run/" + runId,
+                        new PayrollTransitionFingerprint(version)
+                ),
+                PayrollRunDetailView.class,
+                () -> markPaidOnce(storeId, runId, version, actorId)
+        );
+    }
+
+    private PayrollRunDetailView markPaidOnce(
             UUID storeId,
             UUID runId,
             long version,
@@ -359,6 +497,30 @@ public class PayrollManagementService {
                         .stream().map(this::statement).toList(),
                 eventRepository.findAllByPayrollRunIdOrderByCreatedAt(runId)
                         .stream().map(this::event).toList()
+        );
+    }
+
+    private LocalDateRange monthRange(YearMonth month) {
+        return month == null
+                ? new LocalDateRange(
+                        java.time.LocalDate.of(1, 1, 1),
+                        java.time.LocalDate.of(9999, 12, 31)
+                )
+                : new LocalDateRange(month.atDay(1), month.atEndOfMonth());
+    }
+
+    private PayrollRunListItemView listItem(
+            PayrollRunListProjection run
+    ) {
+        return new PayrollRunListItemView(
+                run.getId(),
+                run.getStoreId(),
+                run.getPeriodMonth(),
+                run.getRevision(),
+                run.getSupersedesRunId(),
+                run.getRevisionReason(),
+                run.getStatus(),
+                run.getCreatedAt()
         );
     }
 
@@ -488,5 +650,33 @@ public class PayrollManagementService {
 
     private UUID id(com.storeanalytics.common.persistence.AbstractCreatedEntity entity) {
         return entity == null ? null : entity.getId();
+    }
+
+    private record PayrollCalculateFingerprint(String revisionReason) {
+    }
+
+    private record PayrollAdjustmentFingerprint(
+            UUID employeeId,
+            PayrollAdjustmentType type,
+            BigDecimal amount,
+            String reason,
+            long runVersion
+    ) {
+    }
+
+    private record PayrollVoidAdjustmentFingerprint(
+            String reason,
+            long runVersion,
+            long adjustmentVersion
+    ) {
+    }
+
+    private record PayrollTransitionFingerprint(long version) {
+    }
+
+    private record LocalDateRange(
+            java.time.LocalDate start,
+            java.time.LocalDate end
+    ) {
     }
 }

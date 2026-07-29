@@ -1,5 +1,8 @@
 package com.storeanalytics.common.config;
 
+import com.storeanalytics.auth.security.NfcPasswordEncoder;
+import com.storeanalytics.common.observability.PrometheusScrapeAuthorizationFilter;
+
 import java.net.URI;
 import java.time.Duration;
 import java.util.LinkedHashSet;
@@ -13,16 +16,20 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.authorization.AuthorizationManagers;
 import org.springframework.security.authorization.AuthorityAuthorizationManager;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.core.session.SessionRegistry;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
@@ -40,6 +47,31 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     @Bean
+    @Order(1)
+    SecurityFilterChain prometheusSecurityFilterChain(
+            HttpSecurity http,
+            PrometheusScrapeProperties properties
+    ) throws Exception {
+        http
+                .securityMatcher("/actuator/prometheus")
+                .csrf(AbstractHttpConfigurer::disable)
+                .requestCache(AbstractHttpConfigurer::disable)
+                .securityContext(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(
+                        SessionCreationPolicy.STATELESS
+                ))
+                .authorizeHttpRequests(requests -> requests
+                        .anyRequest().permitAll()
+                )
+                .addFilterBefore(
+                        new PrometheusScrapeAuthorizationFilter(properties),
+                        AuthorizationFilter.class
+                );
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             SecurityChainComponents components,
@@ -62,11 +94,12 @@ public class SecurityConfig {
                         .accessDeniedHandler(components.accessDeniedHandler())
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
+                        .requestMatchers("/actuator/health/**", "/actuator/info", "/livez", "/readyz").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/csrf", "/api/auth/login").permitAll()
                         .requestMatchers(
-                                "/api/auth/me", "/api/auth/change-password", "/api/auth/logout"
+                                "/api/auth/me", "/api/auth/change-password", "/api/auth/logout",
+                                "/api/auth/sessions", "/api/auth/sessions/**"
                         ).authenticated()
                         .requestMatchers(
                                 "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**",
@@ -101,11 +134,12 @@ public class SecurityConfig {
     }
 
     @Bean
-    PasswordEncoder passwordEncoder() {
-        return new DelegatingPasswordEncoder(
+    NfcPasswordEncoder passwordEncoder() {
+        PasswordEncoder delegate = new DelegatingPasswordEncoder(
                 "bcrypt",
                 java.util.Map.of("bcrypt", new BCryptPasswordEncoder(12))
         );
+        return new NfcPasswordEncoder(delegate);
     }
 
     @Bean

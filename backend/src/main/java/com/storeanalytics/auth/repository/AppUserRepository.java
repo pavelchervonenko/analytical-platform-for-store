@@ -6,6 +6,8 @@ import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -19,7 +21,12 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
 
     long countByRoleAndActiveTrue(UserRole role);
 
-    List<AppUser> findAllByOrderByDisplayNameAsc();
+    @Query("""
+            select user
+            from AppUser user
+            order by lower(user.displayName), user.id
+            """)
+    Page<AppUser> findAdminPage(Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

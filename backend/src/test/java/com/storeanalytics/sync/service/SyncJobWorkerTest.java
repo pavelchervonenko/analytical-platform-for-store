@@ -11,6 +11,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.storeanalytics.common.config.SyncProperties;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladHttpException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladPayloadRejectedException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladPayloadRejectedException.Reason;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladRateLimitException;
 import com.storeanalytics.sync.exception.SalesSyncCapacityException;
 import com.storeanalytics.sync.exception.SalesSyncException;
@@ -42,6 +45,7 @@ class SyncJobWorkerTest {
                 Duration.ofHours(2),
                 Duration.ofMinutes(1),
                 Duration.ofMinutes(15),
+                Duration.ofDays(1),
                 3,
                 730,
                 ZoneId.of("Europe/Kaliningrad")
@@ -107,8 +111,106 @@ class SyncJobWorkerTest {
                 delay.capture()
         );
         assertThat(summary.getValue())
-                .isEqualTo("Synchronization phase SALES failed: SalesSyncException")
+                .isEqualTo("Synchronization phase SALES failed: LIVESKLAD_RATE_LIMIT")
                 .doesNotContain("sensitive");
-        assertThat(delay.getValue()).isEqualTo(Duration.ofMinutes(10));
+        assertThat(delay.getValue()).isBetween(
+                Duration.ofMinutes(10), Duration.ofMinutes(12)
+        );
+    }
+
+    @Test
+    void doesNotRetryRejectedUpstreamPayload() {
+        when(coordinator.claimNext(anyString())).thenReturn(Optional.of(claim));
+        when(executionService.execute(claim)).thenThrow(new SalesSyncException(
+                UUID.randomUUID(),
+                new LiveSkladPayloadRejectedException(
+                        Reason.RAW_PAYLOAD_TOO_LARGE,
+                        "safe rejection"
+                )
+        ));
+
+        worker.processNextStep();
+
+        verify(coordinator).retryOrFail(
+                eq(jobId),
+                anyString(),
+                anyString(),
+                eq(false),
+                any()
+        );
+    }
+
+    @Test
+    void doesNotRetryPermanentUpstreamHttpFailure() {
+        when(coordinator.claimNext(anyString())).thenReturn(Optional.of(claim));
+        when(executionService.execute(claim)).thenThrow(new SalesSyncException(
+                UUID.randomUUID(),
+                new LiveSkladHttpException("Fetch sales", 401)
+        ));
+        ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);
+
+        worker.processNextStep();
+
+        verify(coordinator).retryOrFail(
+                eq(jobId),
+                anyString(),
+                summary.capture(),
+                eq(false),
+                any()
+        );
+        assertThat(summary.getValue())
+                .isEqualTo("Synchronization phase SALES failed: "
+                        + "LIVESKLAD_HTTP_401")
+                .doesNotContain("Fetch sales");
+    }
+
+    @Test
+    void retriesTransientUpstreamServerFailure() {
+        when(coordinator.claimNext(anyString())).thenReturn(Optional.of(claim));
+        when(executionService.execute(claim)).thenThrow(new SalesSyncException(
+                UUID.randomUUID(),
+                new LiveSkladHttpException("Fetch sales", 503)
+        ));
+        ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Duration> delay = ArgumentCaptor.forClass(Duration.class);
+
+        worker.processNextStep();
+
+        verify(coordinator).retryOrFail(
+                eq(jobId),
+                anyString(),
+                summary.capture(),
+                eq(true),
+                delay.capture()
+        );
+        assertThat(delay.getValue()).isBetween(
+                Duration.ofMinutes(1), Duration.ofSeconds(72)
+        );
+        assertThat(summary.getValue())
+                .isEqualTo("Synchronization phase SALES failed: "
+                        + "LIVESKLAD_HTTP_503");
+    }
+    @Test
+    void capsExcessiveSourceRetryWindowAtConfiguredAbsoluteMaximum() {
+        when(coordinator.claimNext(anyString())).thenReturn(Optional.of(claim));
+        when(executionService.execute(claim)).thenThrow(new SalesSyncException(
+                UUID.randomUUID(),
+                new LiveSkladRateLimitException(
+                        "safe upstream rate limit",
+                        Duration.ofDays(2)
+                )
+        ));
+        ArgumentCaptor<Duration> delay = ArgumentCaptor.forClass(Duration.class);
+
+        worker.processNextStep();
+
+        verify(coordinator).retryOrFail(
+                eq(jobId),
+                anyString(),
+                anyString(),
+                eq(true),
+                delay.capture()
+        );
+        assertThat(delay.getValue()).isEqualTo(Duration.ofDays(1));
     }
 }

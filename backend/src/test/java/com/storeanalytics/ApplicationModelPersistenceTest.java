@@ -4,9 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.storeanalytics.audit.model.AuditLog;
+import com.storeanalytics.audit.model.AuditRetention;
+import com.storeanalytics.audit.model.AuditRetentionClass;
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.auth.model.UserRole;
 import com.storeanalytics.auth.model.UserStoreAccess;
+import com.storeanalytics.common.idempotency.IdempotencyRequest;
+import com.storeanalytics.common.idempotency.IdempotencyService;
 import com.storeanalytics.employee.model.Employee;
 import com.storeanalytics.employee.model.EmployeeStoreAssignment;
 import com.storeanalytics.metrics.model.AnnualReportMonth;
@@ -20,10 +24,12 @@ import com.storeanalytics.metrics.model.ReportType;
 import com.storeanalytics.metrics.model.ReportPeriodType;
 import com.storeanalytics.metrics.model.ReportSnapshot;
 import com.storeanalytics.metrics.model.ReportStatus;
+import com.storeanalytics.metrics.repository.ReportSnapshotRepository;
 import com.storeanalytics.performance.model.EmployeeWorkShift;
 import com.storeanalytics.performance.model.EmployeeRatingSnapshot;
 import com.storeanalytics.performance.model.StorePerformancePlan;
 import com.storeanalytics.performance.model.StorePlanTargets;
+import com.storeanalytics.performance.model.WorkScheduleDayRevision;
 import com.storeanalytics.product.model.AnalyticsCategory;
 import com.storeanalytics.product.model.AnalyticsCategoryKind;
 import com.storeanalytics.product.model.AnalyticsCategoryRules;
@@ -64,6 +70,8 @@ import com.storeanalytics.salary.model.PayrollEvent;
 import com.storeanalytics.salary.model.PayrollEventType;
 import com.storeanalytics.salary.model.PayrollPlanResult;
 import com.storeanalytics.salary.model.PayrollRun;
+import com.storeanalytics.report.model.ReportBackfillJob;
+import com.storeanalytics.report.model.ReportBackfillJobDefinition;
 import com.storeanalytics.salary.model.PayrollRunDefinition;
 import com.storeanalytics.salary.model.PayrollRunQuality;
 import com.storeanalytics.salary.model.PayrollScheme;
@@ -72,6 +80,7 @@ import com.storeanalytics.salary.model.PayrollSourceFingerprint;
 import com.storeanalytics.salary.model.PayrollStatement;
 import com.storeanalytics.salary.model.PayrollStatementAmounts;
 import com.storeanalytics.salary.model.ProductPayrollCategoryAssignment;
+import com.storeanalytics.salary.repository.PayrollRunRepository;
 import com.storeanalytics.store.model.CashRegister;
 import com.storeanalytics.store.model.Store;
 import com.storeanalytics.sync.model.RawRecordVersion;
@@ -85,21 +94,22 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.OptimisticLockException;
 import jakarta.persistence.metamodel.EntityType;
 import java.math.BigDecimal;
-import java.net.InetAddress;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import java.util.UUID;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -108,14 +118,23 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class ApplicationModelPersistenceTest {
 
     @Container
-    private static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:16-alpine");
+    private static final PostgreSQLContainer POSTGRES =
+            new PostgreSQLContainer("postgres:16-alpine");
 
     @Autowired
     private EntityManager entityManager;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private IdempotencyService idempotencyService;
+
+    @Autowired
+    private ReportSnapshotRepository reportSnapshotRepository;
+
+    @Autowired
+    private PayrollRunRepository payrollRunRepository;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -137,6 +156,17 @@ class ApplicationModelPersistenceTest {
         persistRelationships(graph, now, businessDate);
         persistFactsAndOperations(graph, now, businessDate);
         persistPayroll(graph, businessDate);
+        idempotencyService.execute(
+                graph.user.getId(),
+                "model-persistence-receipt",
+                new IdempotencyRequest(
+                        "MODEL_PERSISTENCE_TEST",
+                        "model/persistence",
+                        List.of("receipt")
+                ),
+                ModelPersistenceResult.class,
+                () -> new ModelPersistenceResult("stored")
+        );
         updateMutableEntities(graph, now);
         graph.syncRun.complete(1, 1, 0, 0, now.plusSeconds(1));
         entityManager.flush();
@@ -144,6 +174,34 @@ class ApplicationModelPersistenceTest {
         assertDbManagedTimestampsAreSynchronized(graph);
         entityManager.clear();
         assertEveryEntityWasPersisted();
+
+        var archive = reportSnapshotRepository.findArchiveSummaries(
+                graph.store.getId(),
+                LocalDate.of(2026, 1, 1),
+                LocalDate.of(2026, 12, 31),
+                List.of(ReportType.values()),
+                ReportStatus.FINALIZED,
+                PageRequest.of(0, 20)
+        );
+        assertThat(archive.getTotalElements()).isEqualTo(2);
+        assertThat(archive.getContent())
+                .extracting(report -> report.getType())
+                .containsExactly(ReportType.ANNUAL, ReportType.MONTHLY);
+        assertThat(archive.getContent())
+                .allSatisfy(report -> assertThat(report.getCurrentRevision()).isTrue());
+        assertThat(reportSnapshotRepository.findFinalizedYears(graph.store.getId()))
+                .containsExactly(2026);
+
+        var payrollRuns = payrollRunRepository.findListItems(
+                graph.store.getId(),
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 31),
+                PageRequest.of(0, 20)
+        );
+        assertThat(payrollRuns.getContent()).singleElement().satisfies(run -> {
+            assertThat(run.getPeriodMonth()).isEqualTo(LocalDate.of(2026, 7, 1));
+            assertThat(run.getStatus()).isEqualTo(com.storeanalytics.salary.model.PayrollRunStatus.PAID);
+        });
     }
 
     @Test
@@ -270,6 +328,16 @@ class ApplicationModelPersistenceTest {
                 ),
                 now
         );
+        graph.reportBackfillJob = ReportBackfillJob.create(
+                new ReportBackfillJobDefinition(
+                        graph.store,
+                        graph.user,
+                        "model-request-1234",
+                        2025,
+                        3
+                ),
+                now
+        );
         graph.syncRun = SyncRun.startStoreSync(graph.connection, now);
         graph.employee = Employee.fromLiveSklad(
                 graph.connection, "employee-model-test", "Model Employee", now
@@ -310,6 +378,7 @@ class ApplicationModelPersistenceTest {
         entityManager.persist(graph.store);
         entityManager.persist(graph.user);
         entityManager.persist(graph.syncJob);
+        entityManager.persist(graph.reportBackfillJob);
         entityManager.persist(graph.syncRun);
         entityManager.persist(graph.employee);
         entityManager.persist(cashRegister);
@@ -342,6 +411,9 @@ class ApplicationModelPersistenceTest {
         );
         EmployeeWorkShift workShift = new EmployeeWorkShift(
                 graph.store, graph.employee, businessDate, graph.user
+        );
+        WorkScheduleDayRevision scheduleRevision = new WorkScheduleDayRevision(
+                graph.store, businessDate, graph.user
         );
         EmployeeRatingSnapshot ratingSnapshot = new EmployeeRatingSnapshot(
                 graph.store,
@@ -390,6 +462,7 @@ class ApplicationModelPersistenceTest {
         entityManager.persist(graph.employeeStoreAssignment);
         entityManager.persist(performancePlan);
         entityManager.persist(workShift);
+        entityManager.persist(scheduleRevision);
         entityManager.persist(ratingSnapshot);
         entityManager.persist(graph.rawRecord);
         entityManager.persist(graph.categoryAssignment);
@@ -501,8 +574,11 @@ class ApplicationModelPersistenceTest {
                 "MODEL_PERSISTED",
                 "PRODUCT",
                 "product-model-test",
-                InetAddress.getLoopbackAddress(),
-                "integration-test"
+                "{}",
+                new AuditRetention(
+                        AuditRetentionClass.BUSINESS,
+                        now.plus(Duration.ofDays(1_095))
+                )
         );
         SyncRun failedRun = SyncRun.startStoreSync(graph.connection, now);
         failedRun.fail(0, "Expected model test failure", now.plusSeconds(1));
@@ -782,7 +858,7 @@ class ApplicationModelPersistenceTest {
     }
 
     private void assertEveryEntityWasPersisted() {
-        assertThat(entityManager.getMetamodel().getEntities()).hasSize(36);
+        assertThat(entityManager.getMetamodel().getEntities()).hasSize(39);
         for (EntityType<?> entityType : entityManager.getMetamodel().getEntities()) {
             Long count = entityManager.createQuery(
                     "select count(entity) from " + entityType.getName() + " entity",
@@ -794,12 +870,16 @@ class ApplicationModelPersistenceTest {
         }
     }
 
+    private record ModelPersistenceResult(String status) {
+    }
+
     private static final class ModelGraph {
 
         private IntegrationConnection connection;
         private Store store;
         private AppUser user;
         private SyncJob syncJob;
+        private ReportBackfillJob reportBackfillJob;
         private SyncRun syncRun;
         private Employee employee;
         private SourceProductGroup sourceGroup;

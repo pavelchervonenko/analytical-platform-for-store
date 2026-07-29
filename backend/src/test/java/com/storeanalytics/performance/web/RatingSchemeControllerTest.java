@@ -10,10 +10,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
 import com.storeanalytics.auth.security.AppUserPrincipal;
 import com.storeanalytics.common.web.ApiExceptionHandler;
+import com.storeanalytics.common.web.PageResponse;
 import com.storeanalytics.performance.model.RatingSchemeDefinition;
 import com.storeanalytics.performance.service.RatingSchemeService;
 import com.storeanalytics.performance.exception.RatingSchemeConflictException;
@@ -26,7 +27,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -39,12 +40,13 @@ class RatingSchemeControllerTest {
     @BeforeEach
     void setUp() {
         schemeService = mock(RatingSchemeService.class);
-        ObjectMapper objectMapper = new ObjectMapper()
-                .findAndRegisterModules()
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        JsonMapper objectMapper = JsonMapper.builder()
+                .findAndAddModules()
+                .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .build();
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new RatingSchemeController(schemeService))
-                .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
+                .setMessageConverters(new JacksonJsonHttpMessageConverter(objectMapper))
                 .setControllerAdvice(
                         new ApiExceptionHandler()
                 )
@@ -55,7 +57,8 @@ class RatingSchemeControllerTest {
     void listsAndCreatesImmutableSchemeVersion() throws Exception {
         UUID actorId = UUID.randomUUID();
         RatingSchemeView view = view(actorId);
-        when(schemeService.findAll()).thenReturn(List.of(view));
+        when(schemeService.findAll(0, 20))
+                .thenReturn(new PageResponse<>(List.of(view), 0, 20, 1, 1, false, false));
         when(schemeService.create(
                 eq("employee-rating-v2"),
                 eq(LocalDate.of(2026, 8, 1)),
@@ -65,7 +68,8 @@ class RatingSchemeControllerTest {
 
         mockMvc.perform(get("/api/admin/rating-schemes"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].code").value("employee-rating-v2"));
+                .andExpect(jsonPath("$.items[0].code").value("employee-rating-v2"))
+                .andExpect(jsonPath("$.totalElements").value(1));
 
         mockMvc.perform(post("/api/admin/rating-schemes")
                         .principal(authentication(actorId))

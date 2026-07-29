@@ -8,15 +8,17 @@ import com.storeanalytics.audit.service.AuditLogService;
 import com.storeanalytics.audit.service.AuditTarget;
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.auth.repository.AppUserRepository;
+import com.storeanalytics.common.web.PageParameters;
+import com.storeanalytics.common.web.PageResponse;
 import com.storeanalytics.performance.exception.RatingSchemeConflictException;
 import com.storeanalytics.performance.exception.RatingSchemeNotFoundException;
 import com.storeanalytics.performance.model.RatingScheme;
 import com.storeanalytics.performance.model.RatingSchemeDefinition;
 import com.storeanalytics.performance.repository.RatingSchemeRepository;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,10 +40,11 @@ public class RatingSchemeService {
     }
 
     @Transactional(readOnly = true)
-    public List<RatingSchemeView> findAll() {
-        return schemeRepository.findAllByOrderByEffectiveFromDesc().stream()
-                .map(this::toView)
-                .toList();
+    public PageResponse<RatingSchemeView> findAll(int page, int size) {
+        return PageResponse.from(schemeRepository
+                .findAllByOrderByEffectiveFromDescIdDesc(
+                        new PageParameters(page, size).pageable(Sort.unsorted())
+                ).map(this::toView));
     }
 
     @Transactional

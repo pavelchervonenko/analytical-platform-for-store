@@ -10,6 +10,8 @@ import com.storeanalytics.sync.model.SyncRun;
 import com.storeanalytics.sync.repository.RawRecordVersionRepository;
 import com.storeanalytics.sync.repository.SyncRunRepository;
 import com.storeanalytics.sync.support.JsonPayloadHasher;
+import com.storeanalytics.sync.support.PreparedRawPayload;
+import com.storeanalytics.sync.support.RawPayloadProfile;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
@@ -48,7 +50,8 @@ public class StoreSyncPersistence {
         validate(source);
         Instant now = clock.instant();
         SyncRun syncRun = syncRunRepository.getReferenceById(syncRunId);
-        String hash = payloadHasher.sha256(source.rawPayload());
+        PreparedRawPayload preparedPayload = payloadHasher.prepare(RawPayloadProfile.STORE, source.rawPayload());
+        String hash = preparedPayload.sha256();
         Optional<RawRecordVersion> existingVersion = rawRecordRepository.findCompanyRecordVersion(
                 syncRun.getConnection().getId(),
                 SourceSystem.LIVESKLAD.name(),
@@ -59,14 +62,18 @@ public class StoreSyncPersistence {
         RawRecordVersion rawVersion;
         if (existingVersion.isPresent()) {
             rawVersion = existingVersion.get();
-            rawVersion.markSeen(syncRun, now);
+            rawVersion.markSeenWithRetainedPayload(
+                    syncRun,
+                    now,
+                    preparedPayload.json()
+            );
             if (rawVersion.isNormalized()) {
                 return StoreWriteResult.SKIPPED;
             }
         } else {
             rawVersion = RawRecordVersion.pendingStore(
                     source.externalId(),
-                    payloadHasher.serialize(source.rawPayload()),
+                    preparedPayload.json(),
                     hash,
                     syncRun,
                     now

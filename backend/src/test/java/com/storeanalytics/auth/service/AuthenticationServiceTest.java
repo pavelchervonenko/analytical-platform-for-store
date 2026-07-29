@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.auth.model.UserRole;
+import com.storeanalytics.auth.security.NfcPasswordEncoder;
 import com.storeanalytics.auth.repository.AppUserRepository;
 import java.time.Clock;
 import java.util.Optional;
@@ -25,15 +26,16 @@ class AuthenticationServiceTest {
                 UserRole.MANAGER
         );
         AppUserRepository repository = mock(AppUserRepository.class);
-        PasswordEncoder encoder = mock(PasswordEncoder.class);
+        PasswordEncoder delegate = mock(PasswordEncoder.class);
+        NfcPasswordEncoder encoder = new NfcPasswordEncoder(delegate);
         when(repository.findById(userId)).thenReturn(Optional.of(user));
-        when(encoder.upgradeEncoding("{bcrypt}legacy")).thenReturn(true);
-        when(encoder.encode("authenticated password")).thenReturn("{bcrypt}strong");
+        when(delegate.upgradeEncoding("{bcrypt}legacy")).thenReturn(true);
+        when(delegate.encode("authenticated password")).thenReturn("{bcrypt}strong");
 
         AuthenticationService service = new AuthenticationService(
                 repository,
                 encoder,
-                new PasswordPolicy(),
+                new PasswordPolicy(password -> false),
                 Clock.systemUTC()
         );
 

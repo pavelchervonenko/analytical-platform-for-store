@@ -1,7 +1,7 @@
 plugins {
     id("java")
     id("checkstyle")
-    id("org.springframework.boot") version "3.5.16"
+    id("org.springframework.boot") version "4.1.0"
     id("io.spring.dependency-management") version "1.1.7"
     // id("org.sonarqube") version "7.2.3.7755"
     id("jacoco")
@@ -32,17 +32,21 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-validation")
-    implementation("org.springframework.boot:spring-boot-starter-web")
-    implementation("org.flywaydb:flyway-core")
+    implementation("org.springframework.boot:spring-boot-starter-webmvc")
+    implementation("org.springframework.boot:spring-boot-starter-restclient")
+    implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.9")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3")
 
+    runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testImplementation("org.springframework.security:spring-security-test")
-    testImplementation("org.testcontainers:junit-jupiter")
-    testImplementation("org.testcontainers:postgresql")
+    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-actuator-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-security-test")
+    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+    testImplementation("org.testcontainers:testcontainers-postgresql")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -52,9 +56,69 @@ springBoot {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    maxHeapSize = "768m"
+    maxParallelForks = 1
+    forkEvery = 50
     System.getenv("DOCKER_API_VERSION")?.let {
         systemProperty("api.version", it)
     }
+}
+
+val operatorScriptSecurityTest by tasks.registering(Exec::class) {
+    group = "verification"
+    description = "Runs URL, dotenv, output and artifact security tests for operator scripts."
+    workingDir(rootDir)
+    commandLine("bash", "scripts/tests/security-hardening-test.sh")
+}
+
+val gradleSupplyChainIntegrityTest by tasks.registering(Exec::class) {
+    group = "verification"
+    description = "Verifies Gradle wrapper and dependency trust roots without network access."
+    workingDir(rootDir)
+    commandLine("python3", "scripts/tests/verify-gradle-supply-chain.py")
+}
+
+tasks.named("test") {
+    dependsOn(operatorScriptSecurityTest)
+}
+
+val generatedOpenApi = layout.buildDirectory.file("openapi/current.json")
+
+tasks.register<Test>("generateOpenApi") {
+    group = "verification"
+    description = "Generates the authenticated API OpenAPI artifact using an ephemeral test admin."
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching(
+            "com.storeanalytics.store.web.StoreDataStatusSecurityIntegrationTest"
+                    + ".administratorOpenApiContainsStableFrontendSchemas"
+        )
+    }
+    systemProperty("openapi.output", generatedOpenApi.get().asFile.absolutePath)
+    outputs.file(generatedOpenApi)
+}
+
+val checkOpenApiCompatibility by tasks.registering(Exec::class) {
+    group = "verification"
+    description = "Checks the generated OpenAPI artifact for drift and breaking changes."
+    dependsOn("generateOpenApi")
+    workingDir(rootDir)
+    commandLine(
+        "node",
+        "scripts/check-openapi-compatibility.mjs",
+        "--baseline",
+        "contracts/openapi/baselines/v9.json",
+        "--committed",
+        "contracts/openapi/current.json",
+        "--generated",
+        generatedOpenApi.get().asFile.absolutePath
+    )
+}
+
+tasks.named("check") {
+    dependsOn(checkOpenApiCompatibility, gradleSupplyChainIntegrityTest)
 }
 
 checkstyle {

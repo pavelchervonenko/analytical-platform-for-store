@@ -148,7 +148,7 @@ class StorePeriodQualityServiceTest {
         when(planQuality.classificationComplete()).thenReturn(true);
         when(progress.dataQuality()).thenReturn(planQuality);
         when(progress.formulaVersion()).thenReturn("store-plan-progress-v1");
-        when(planProgressService.calculate(STORE_ID, MONTH, AS_OF)).thenReturn(progress);
+        when(planProgressService.find(STORE_ID, MONTH, AS_OF)).thenReturn(Optional.of(progress));
 
         EmployeeRatingQueryService ratingQueryService = mock(EmployeeRatingQueryService.class);
         EmployeeRatingResult rating = mock(EmployeeRatingResult.class);

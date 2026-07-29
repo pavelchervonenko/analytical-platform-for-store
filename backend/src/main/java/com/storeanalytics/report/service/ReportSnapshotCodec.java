@@ -1,7 +1,7 @@
 package com.storeanalytics.report.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import com.storeanalytics.metrics.model.ReportSnapshot;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -40,7 +40,7 @@ class ReportSnapshotCodec {
     private String serialize(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException exception) {
+        } catch (JacksonException exception) {
             throw new IllegalStateException("report snapshot could not be created", exception);
         }
     }
@@ -48,7 +48,7 @@ class ReportSnapshotCodec {
     private <T> T deserialize(String payload, Class<T> type) {
         try {
             return objectMapper.readValue(payload, type);
-        } catch (JsonProcessingException exception) {
+        } catch (JacksonException exception) {
             throw corrupted(exception);
         }
     }
