@@ -126,7 +126,7 @@ services:
     extra_hosts:
       - "${DB_CERT_HOST}:${DB_HOST_ADDRESS}"
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9090/readyz"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/readyz"]
       interval: 15s
       timeout: 5s
       retries: 12
@@ -222,7 +222,7 @@ services:
     extra_hosts:
       - "${DB_CERT_HOST}:${DB_HOST_ADDRESS}"
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9091/readyz"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8081/readyz"]
       interval: 15s
       timeout: 5s
       retries: 12
