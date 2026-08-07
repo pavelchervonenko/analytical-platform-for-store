@@ -1,0 +1,38 @@
+groups:
+  - name: daily-store-pulse
+    interval: 1m
+    rules:
+      - alert: DailyStorePulsePlanningFailed
+        expr: >-
+          sum by (application) (
+            increase(storeanalytics_notification_daily_pulse_plans{
+              outcome="failed",role=~"WORKER|COMBINED"
+            }[10m])
+          ) > 0
+        labels:
+          severity: critical
+          owner: developer
+          subsystem: daily-store-pulse
+        annotations:
+          summary: Daily store summary planning failed
+          description: >-
+            Check worker logs, source-data freshness and PostgreSQL connectivity.
+            Store metrics and recipient message content must not be copied into alerts.
+
+      - alert: DailyStorePulseNotCreated
+        expr: >-
+          time() - max by (application) (
+            storeanalytics_notification_daily_pulse_last_event_timestamp{
+              role=~"WORKER|COMBINED"
+            }
+          ) > 108000
+        for: 15m
+        labels:
+          severity: warning
+          owner: developer
+          subsystem: daily-store-pulse
+        annotations:
+          summary: No new daily store summary was created for 30 hours
+          description: >-
+            Apply this rule only where daily pulses are enabled and an active store
+            is expected. Verify synchronization coverage and the configured local send window.

@@ -1,0 +1,73 @@
+groups:
+  - name: llm-analysis-pipeline
+    interval: 1m
+    rules:
+      - alert: LlmAnalysisFailedJobsPresent
+        expr: >-
+          max by (application) (
+            storeanalytics_interpretation_llm_jobs{
+              status=~"failed|validation_failed",role=~"WORKER|COMBINED"
+            }
+          ) > 0
+        for: 2m
+        labels:
+          severity: critical
+          owner: developer
+          subsystem: llm-analysis
+        annotations:
+          summary: LLM analysis job requires operator action
+          description: >-
+            At least one LLM analysis job reached FAILED or VALIDATION_FAILED.
+            Inspect structured logs by job_id, snapshot_id and phase.
+
+      - alert: LlmAnalysisExpiredLeasePresent
+        expr: >-
+          max by (application) (
+            storeanalytics_interpretation_llm_jobs{
+              status="expired_lease",role=~"WORKER|COMBINED"
+            }
+          ) > 0
+        for: 1m
+        labels:
+          severity: critical
+          owner: developer
+          subsystem: llm-analysis
+        annotations:
+          summary: LLM analysis worker lease expired
+          description: >-
+            Check worker health, provider latency, database connectivity and
+            heartbeat scheduler isolation.
+
+      - alert: LlmAnalysisDeadlineExceeded
+        expr: >-
+          max by (application) (
+            storeanalytics_interpretation_llm_jobs{
+              status="deadline_exceeded",role=~"WORKER|COMBINED"
+            }
+          ) > 0
+        for: 2m
+        labels:
+          severity: critical
+          owner: developer
+          subsystem: llm-analysis
+        annotations:
+          summary: LLM analysis exceeded its generation deadline
+          description: >-
+            Correlate the event with provider latency, retry pressure and worker restarts.
+
+      - alert: LlmAnalysisPendingBacklog
+        expr: >-
+          max by (application) (
+            storeanalytics_interpretation_llm_jobs{
+              status="pending",role=~"WORKER|COMBINED"
+            }
+          ) > 0
+        for: 10m
+        labels:
+          severity: warning
+          owner: developer
+          subsystem: llm-analysis
+        annotations:
+          summary: LLM analysis pending queue is not draining
+          description: >-
+            Verify that the generation worker is enabled and able to claim jobs.

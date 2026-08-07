@@ -1,0 +1,164 @@
+groups:
+  - name: telegram-delivery
+    interval: 1m
+    rules:
+      - alert: TelegramDeliveryMetricsMissing
+        expr: >-
+          absent(
+            storeanalytics_notification_delivery_state{
+              channel="TELEGRAM",role=~"WORKER|COMBINED"
+            }
+          )
+        for: 5m
+        labels:
+          severity: critical
+          owner: developer
+          subsystem: telegram-delivery
+        annotations:
+          summary: Telegram delivery worker metrics are missing
+          description: >-
+            Verify worker health, Prometheus scrape authorization and that the
+            production worker role is running the expected release.
+
+      - alert: TelegramDeliveryUnknownOutcomePresent
+        expr: >-
+          max by (application) (
+            storeanalytics_notification_delivery_state{
+              channel="TELEGRAM",status="unknown_outcome",role=~"WORKER|COMBINED"
+            }
+          ) > 0
+        for: 1m
+        labels:
+          severity: critical
+          owner: developer
+          subsystem: telegram-delivery
+        annotations:
+          summary: Telegram delivery has an unknown provider outcome
+          description: >-
+            Do not retry automatically. Telegram may already have accepted the
+            message. Inspect the admin delivery view and attempt timeline.
+
+      - alert: TelegramDeliveryExpiredLeasePresent
+        expr: >-
+          max by (application) (
+            storeanalytics_notification_delivery_state{
+              channel="TELEGRAM",status="expired_lease",role=~"WORKER|COMBINED"
+            }
+          ) > 0
+        for: 1m
+        labels:
+          severity: critical
+          owner: developer
+          subsystem: telegram-delivery
+        annotations:
+          summary: Telegram delivery worker lease expired
+          description: >-
+            Check worker health, database connectivity and whether a provider
+            attempt started before deciding on recovery.
+
+      - alert: TelegramDeliveryAuthenticationFailure
+        expr: >-
+          max by (application) (
+            storeanalytics_notification_delivery_state{
+              channel="TELEGRAM",status="authentication_retry",role=~"WORKER|COMBINED"
+            }
+          ) > 0
+        for: 2m
+        labels:
+          severity: critical
+          owner: developer
+          subsystem: telegram-delivery
+        annotations:
+          summary: Telegram Bot API authentication is failing
+          description: >-
+            Verify the configured bot token and credential rotation. Do not
+            expose the token or request URI in alerts or diagnostics.
+
+      - alert: TelegramDeliveryPermanentFailurePresent
+        expr: >-
+          max by (application) (
+            storeanalytics_notification_delivery_state{
+              channel="TELEGRAM",status="permanent_failed",role=~"WORKER|COMBINED"
+            }
+          ) > 0
+        for: 2m
+        labels:
+          severity: warning
+          owner: developer
+          subsystem: telegram-delivery
+        annotations:
+          summary: Telegram delivery reached permanent failure
+          description: >-
+            Inspect the safe error code in the admin delivery view. Never copy
+            message text or Telegram identifiers into the incident channel.
+
+      - alert: TelegramBotBlockedByRecipient
+        expr: >-
+          max by (application) (
+            storeanalytics_notification_delivery_state{
+              channel="TELEGRAM",status="blocked_subscription",role=~"WORKER|COMBINED"
+            }
+          ) > 0
+        for: 5m
+        labels:
+          severity: warning
+          owner: developer
+          subsystem: telegram-delivery
+        annotations:
+          summary: A recipient blocked the Telegram bot
+          description: >-
+            Ask the responsible user to unblock and relink the bot through the
+            dashboard. A developer must not edit Telegram IDs manually.
+
+      - alert: TelegramDeliveryPendingBacklog
+        expr: >-
+          max by (application) (
+            storeanalytics_notification_delivery_state{
+              channel="TELEGRAM",status="ready_pending",role=~"WORKER|COMBINED"
+            }
+          ) > 0
+        for: 10m
+        labels:
+          severity: warning
+          owner: developer
+          subsystem: telegram-delivery
+        annotations:
+          summary: Telegram pending queue is not draining
+          description: >-
+            Verify worker scheduling, feature flags, database connectivity and
+            the authentication circuit state.
+
+      - alert: TelegramDeliveryRetryBacklog
+        expr: >-
+          max by (application) (
+            storeanalytics_notification_delivery_state{
+              channel="TELEGRAM",status="ready_retry",role=~"WORKER|COMBINED"
+            }
+          ) > 0
+        for: 30m
+        labels:
+          severity: warning
+          owner: developer
+          subsystem: telegram-delivery
+        annotations:
+          summary: Telegram retry queue is not draining
+          description: >-
+            Inspect safe provider failure categories, retry_after pressure and
+            the delivery expiration boundary.
+
+      - alert: TelegramDeliveryAuthenticationCircuitOpened
+        expr: >-
+          sum by (application) (
+            increase(storeanalytics_notification_delivery_total{
+              channel="TELEGRAM",outcome="circuit_open",role=~"WORKER|COMBINED"
+            }[10m])
+          ) > 0
+        labels:
+          severity: warning
+          owner: developer
+          subsystem: telegram-delivery
+        annotations:
+          summary: Telegram authentication circuit breaker opened
+          description: >-
+            The worker is deliberately pausing provider calls after an
+            authentication failure. Verify credentials before the cooldown ends.

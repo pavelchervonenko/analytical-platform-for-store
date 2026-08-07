@@ -1,0 +1,74 @@
+groups:
+  - name: weekly-snapshot-pipeline
+    interval: 1m
+    rules:
+      - alert: WeeklySnapshotFailedJobsPresent
+        expr: >-
+          max by (application) (
+            storeanalytics_interpretation_snapshot_jobs{
+              status="failed",role=~"WORKER|COMBINED"
+            }
+          ) > 0
+        for: 2m
+        labels:
+          severity: critical
+          owner: developer
+          subsystem: weekly-snapshot
+        annotations:
+          summary: Weekly snapshot job requires operator action
+          description: >-
+            At least one weekly snapshot job is in terminal FAILED state.
+            Inspect structured logs by job_id and error_code before retrying.
+
+      - alert: WeeklySnapshotExpiredLeasePresent
+        expr: >-
+          max by (application) (
+            storeanalytics_interpretation_snapshot_jobs{
+              status="expired_lease",role=~"WORKER|COMBINED"
+            }
+          ) > 0
+        for: 1m
+        labels:
+          severity: critical
+          owner: developer
+          subsystem: weekly-snapshot
+        annotations:
+          summary: Weekly snapshot worker lease has expired
+          description: >-
+            A RUNNING weekly snapshot job has an expired lease. Check worker
+            health, database connectivity and heartbeat scheduler isolation.
+
+      - alert: WeeklySnapshotLeaseRecovered
+        expr: >-
+          sum by (application) (
+            increase(storeanalytics_interpretation_snapshot_job_events_total{
+              event="expired_lease_recovered",role=~"WORKER|COMBINED"
+            }[10m])
+          ) > 0
+        labels:
+          severity: warning
+          owner: developer
+          subsystem: weekly-snapshot
+        annotations:
+          summary: Weekly snapshot lease was recovered
+          description: >-
+            The worker recovered an expired lease during the last ten minutes.
+            Correlate the event with restarts, timeouts and heartbeat failures.
+
+      - alert: WeeklySnapshotRetryBacklog
+        expr: >-
+          max by (application) (
+            storeanalytics_interpretation_snapshot_jobs{
+              status="retrying",role=~"WORKER|COMBINED"
+            }
+          ) > 0
+        for: 30m
+        labels:
+          severity: warning
+          owner: developer
+          subsystem: weekly-snapshot
+        annotations:
+          summary: Weekly snapshot retry queue is not draining
+          description: >-
+            At least one weekly snapshot job has remained retryable for thirty
+            minutes. Inspect error_code, source sync state and database health.

@@ -4,6 +4,7 @@ WORKDIR /workspace
 COPY gradlew ./
 COPY gradle ./gradle
 COPY settings.gradle.kts build.gradle.kts ./
+COPY docs ./docs
 COPY backend ./backend
 
 RUN --mount=type=cache,target=/root/.gradle ./gradlew :backend:bootJar --no-daemon
