@@ -19,9 +19,28 @@ die() {
 [[ "$(id -u)" -eq 0 ]] || die 'run as root'
 [[ -f "${IMAGE_ARCHIVE}" ]] || die "image archive not found: ${IMAGE_ARCHIVE}"
 
-for command_name in docker gzip openssl curl pg_dump pg_restore gpg aws; do
+for command_name in docker gzip openssl curl pg_dump pg_restore gpg; do
   command -v "${command_name}" >/dev/null 2>&1 || die "missing command: ${command_name}"
 done
+
+if ! command -v aws >/dev/null 2>&1; then
+  readonly source_aws_venv='/home/pavel/.local/share/pipx/venvs/awscli'
+  readonly target_aws_venv='/opt/store-analytics/awscli'
+  [[ -x "${source_aws_venv}/bin/python" ]] \
+    || die 'verified user AWS CLI virtualenv is missing'
+  printf 'Installing a root-owned copy of the verified AWS CLI virtualenv\n'
+  install -d -o root -g root -m 0755 "${target_aws_venv}"
+  cp -a "${source_aws_venv}/." "${target_aws_venv}/"
+  chown -R root:root "${target_aws_venv}"
+  cat >/usr/local/bin/aws <<'AWS_WRAPPER'
+#!/bin/sh
+exec /opt/store-analytics/awscli/bin/python -m awscli "$@"
+AWS_WRAPPER
+  chown root:root /usr/local/bin/aws
+  chmod 0755 /usr/local/bin/aws
+fi
+command -v aws >/dev/null 2>&1 || die 'system AWS CLI installation failed'
+aws --version
 
 "${SOURCE_DIR}/bin/install-host.sh"
 
