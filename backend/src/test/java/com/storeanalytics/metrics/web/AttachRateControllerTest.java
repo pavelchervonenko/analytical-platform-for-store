@@ -63,13 +63,15 @@ class AttachRateControllerTest {
                 .andExpect(jsonPath("$.storeId").value(storeId.toString()))
                 .andExpect(jsonPath("$.periodStart").value("2026-07-01"))
                 .andExpect(jsonPath("$.periodEnd").value("2026-07-31"))
-                .andExpect(jsonPath("$.formulaVersion").value("attach-rate-v1"))
+                .andExpect(jsonPath("$.formulaVersion").value("attach-rate-v2"))
                 .andExpect(jsonPath("$.dataQuality.unmatchedNumeratorItemCount").value(1))
                 .andExpect(jsonPath("$.rates[0].metricCode").value("CASE_APPLE_IPHONE"))
                 .andExpect(jsonPath("$.rates[0].denominatorCode").value("IPHONE"))
-                .andExpect(jsonPath("$.rates[0].numeratorQuantity").value(2.000))
-                .andExpect(jsonPath("$.rates[0].denominatorQuantity").value(3.000))
-                .andExpect(jsonPath("$.rates[0].ratePerHundred").value(66.7));
+                .andExpect(jsonPath("$.rates[0].numeratorReceiptCount").value(2))
+                .andExpect(jsonPath("$.rates[0].denominatorReceiptCount").value(3))
+                .andExpect(jsonPath("$.rates[0].numeratorQuantity").value(2))
+                .andExpect(jsonPath("$.rates[0].denominatorQuantity").value(3))
+                .andExpect(jsonPath("$.rates[0].ratePerHundred").value(67));
 
         ArgumentCaptor<StoreKpiPeriod> period =
                 ArgumentCaptor.forClass(StoreKpiPeriod.class);
@@ -118,15 +120,15 @@ class AttachRateControllerTest {
                 storeId,
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 31),
-                "attach-rate-v1",
+                "attach-rate-v2",
                 new AttachRateDataQuality(1, 0, 0),
                 List.of(new AttachRateEntry(
                         "CASE_APPLE_IPHONE",
                         "CASE_APPLE_IPHONE",
                         AttachDenominatorCode.IPHONE,
-                        new BigDecimal("2.000"),
-                        new BigDecimal("3.000"),
-                        new BigDecimal("66.7")
+                        new BigDecimal("2"),
+                        new BigDecimal("3"),
+                        new BigDecimal("67")
                 ))
         );
     }

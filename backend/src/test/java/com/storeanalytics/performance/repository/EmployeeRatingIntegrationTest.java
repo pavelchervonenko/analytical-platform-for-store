@@ -86,6 +86,30 @@ class EmployeeRatingIntegrationTest {
         addItem(graph, firstSale, "first-service", "SETUP_SERVICE", "3.000", "15.00");
         UUID secondSale = addSale(graph, secondEmployee, "second-sale", "600.00");
         addItem(graph, secondSale, "second-phone", "IPHONE_NEW_ASIS", "3.000", "600.00");
+        for (int receipt = 2; receipt <= 3; receipt++) {
+            UUID extraFirstSale = addSale(
+                    graph, firstEmployee, "first-sale-" + receipt, "0.00"
+            );
+            addItem(
+                    graph, extraFirstSale, "first-phone-" + receipt,
+                    "IPHONE_NEW_ASIS", "1.000", "0.00"
+            );
+            addItem(
+                    graph, extraFirstSale, "first-case-" + receipt,
+                    "CASE_APPLE_IPHONE", "1.000", "0.00"
+            );
+            addItem(
+                    graph, extraFirstSale, "first-service-" + receipt,
+                    "SETUP_SERVICE", "1.000", "0.00"
+            );
+            UUID extraSecondSale = addSale(
+                    graph, secondEmployee, "second-sale-" + receipt, "0.00"
+            );
+            addItem(
+                    graph, extraSecondSale, "second-phone-" + receipt,
+                    "IPHONE_NEW_ASIS", "1.000", "0.00"
+            );
+        }
 
         EmployeeRatingResult result = ratingService.calculate(
                 graph.storeId(), new StoreKpiPeriod(PERIOD_START, PERIOD_END)
@@ -105,8 +129,8 @@ class EmployeeRatingIntegrationTest {
         assertThat(first.attachRates()).hasSize(12);
         assertThat(first.attachRates()).anySatisfy(rate -> {
             assertThat(rate.metricCode()).isEqualTo("CASE_APPLE_IPHONE");
-            assertThat(rate.denominatorQuantity()).isEqualByComparingTo("3.000");
-            assertThat(rate.ratePercent()).isEqualByComparingTo("100.0");
+            assertThat(rate.denominatorReceiptCount()).isEqualByComparingTo("3");
+            assertThat(rate.ratePercent()).isEqualByComparingTo("100");
             assertThat(rate.includedInScore()).isTrue();
         });
 

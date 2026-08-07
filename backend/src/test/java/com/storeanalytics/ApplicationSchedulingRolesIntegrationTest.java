@@ -5,6 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.storeanalytics.common.config.ApplicationRole;
 import com.storeanalytics.common.config.ApplicationRuntimeProperties;
 import com.storeanalytics.common.config.BackgroundSchedulingConfiguration;
+import com.storeanalytics.interpretation.config.LlmAnalysisPlanningSchedulingConfiguration;
+import com.storeanalytics.interpretation.config.WeeklySnapshotPlanningSchedulingConfiguration;
+import com.storeanalytics.interpretation.config.WeeklySnapshotSchedulingConfiguration;
+import com.storeanalytics.notification.config.NotificationFanoutSchedulingConfiguration;
 import com.storeanalytics.report.config.ReportBackfillSchedulingConfiguration;
 import com.storeanalytics.sync.config.SyncWorkerSchedulingConfiguration;
 import java.util.Map;
@@ -30,6 +34,12 @@ class ApplicationSchedulingRolesIntegrationTest {
             BackgroundSchedulingConfiguration.METRICS_SCHEDULER,
             BackgroundSchedulingConfiguration.CLEANUP_SCHEDULER,
             ReportBackfillSchedulingConfiguration.REPORT_BACKFILL_SCHEDULER,
+            LlmAnalysisPlanningSchedulingConfiguration
+                    .LLM_ANALYSIS_PLANNING_SCHEDULER,
+            WeeklySnapshotPlanningSchedulingConfiguration.SNAPSHOT_PLANNING_SCHEDULER,
+            WeeklySnapshotSchedulingConfiguration.SNAPSHOT_WORKER_SCHEDULER,
+            WeeklySnapshotSchedulingConfiguration.SNAPSHOT_HEARTBEAT_SCHEDULER,
+            NotificationFanoutSchedulingConfiguration.NOTIFICATION_FANOUT_SCHEDULER,
             SyncWorkerSchedulingConfiguration.SYNC_WORKER_SCHEDULER
     );
 
@@ -101,6 +111,16 @@ class ApplicationSchedulingRolesIntegrationTest {
                         "--app.sync.schedule-enabled=true",
                         "--app.reports.annual-scheduling-enabled=true",
                         "--app.reports.backfill.worker-enabled=true",
+                        "--app.interpretation.snapshot-enabled=true",
+                        "--app.interpretation.snapshot-planner.enabled=true",
+                        "--app.interpretation.snapshot-worker.enabled=true",
+                        "--app.interpretation.generation-enabled=true",
+                        "--app.interpretation.generation-planner.enabled=true",
+                        "--app.notification.telegram.enabled=true",
+                        "--app.notification.telegram.fanout-enabled=true",
+                        "--app.llm.yandex.folder-id=startup-test-folder",
+                        "--app.llm.yandex.api-key=startup-test-api-key",
+                        "--app.llm.yandex.model-uri=gpt://startup-test-folder/yandexgpt-5.1",
                         "--app.maintenance.retention.scheduling-enabled=true",
                         "--app.observability.state-initial-delay=24h",
                         "--app.observability.livesklad-initial-delay=24h",

@@ -19,5 +19,5 @@ public record CategoryKpiAggregate(
         long includedItemCount,
         long missingCostItemCount,
         long unexpectedZeroCostItemCount
-) {
+) implements CategoryMetricValues {
 }

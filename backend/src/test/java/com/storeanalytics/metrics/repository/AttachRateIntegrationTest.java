@@ -57,7 +57,7 @@ class AttachRateIntegrationTest {
     }
 
     @Test
-    void countsOnlySameDocumentAdditionsAgainstAllRelevantDevices() {
+    void countsEachSaleReceiptOncePerMetricAndDenominator() {
         TestGraph graph = createGraph();
 
         UUID iphoneWithAdditions = addSale(graph, "iphone-with-additions", PERIOD_START);
@@ -101,21 +101,46 @@ class AttachRateIntegrationTest {
         AttachRateResult result = attachRateService.calculate(graph.storeId(), period());
 
         assertThat(result.rates()).hasSize(12);
-        assertRate(result, "CASE_APPLE_IPHONE", "2.000", "2.000", "100.0");
-        assertRate(result, "CHARGER_CABLE", "1.000", "3.000", "33.3");
-        assertRate(result, "CASE_SAMSUNG", "1.000", "1.000", "100.0");
-        assertRate(result, "ACCESSORY_PODS_WATCH", "1.000", "3.000", "33.3");
-        assertRate(result, "ACCESSORY_IPAD_MAC", "2.000", "2.000", "100.0");
-        assertRate(result, "PREMIUM_PROTECTION", "2.000", "5.000", "40.0");
-        assertRate(result, "WARRANTY_GENERIC_NEW", "1.000", "5.000", "20.0");
-        assertRate(result, "WARRANTY_GENERIC_USED", "1.000", "3.000", "33.3");
+        assertRate(result, "CASE_APPLE_IPHONE", "1", "2", "50");
+        assertRate(result, "CHARGER_CABLE", "1", "3", "33");
+        assertRate(result, "CASE_SAMSUNG", "1", "1", "100");
+        assertRate(result, "ACCESSORY_PODS_WATCH", "1", "2", "50");
+        assertRate(result, "ACCESSORY_IPAD_MAC", "1", "2", "50");
+        assertRate(result, "PREMIUM_PROTECTION", "1", "4", "25");
+        assertRate(result, "WARRANTY_GENERIC_NEW", "1", "4", "25");
+        assertRate(result, "WARRANTY_GENERIC_USED", "1", "3", "33");
         assertThat(result.dataQuality().unmatchedNumeratorItemCount()).isEqualTo(2);
         assertThat(result.dataQuality().ambiguousWarrantyItemCount()).isZero();
         assertThat(result.dataQuality().unknownDeviceConditionItemCount()).isZero();
     }
 
     @Test
-    void appliesReturnsUsingOriginalSaleAsAttachContext() {
+    void includesUsedPhonesInAccessoryBasesAndSeparatesUsedWarranty() {
+        TestGraph graph = createGraph();
+
+        UUID usedPhone = addSale(graph, "used-phone", PERIOD_START);
+        addItem(graph, usedPhone, "phone", "IPHONE_USED", "1.000", "USED");
+        addItem(graph, usedPhone, "case", "CASE_APPLE_IPHONE", "1.000", "NOT_APPLICABLE");
+        addItem(graph, usedPhone, "charger", "CHARGER_CABLE", "1.000", "NOT_APPLICABLE");
+        addItem(graph, usedPhone, "film", "FILM_PHONE", "1.000", "NOT_APPLICABLE");
+        addItem(graph, usedPhone, "setup", "SETUP_SERVICE", "1.000", "NOT_APPLICABLE");
+        addItem(graph, usedPhone, "warranty", "WARRANTY_GENERIC", "1.000", "NOT_APPLICABLE");
+
+        AttachRateResult result = attachRateService.calculate(graph.storeId(), period());
+
+        assertRate(result, "CASE_APPLE_IPHONE", "1", "1", "100");
+        assertRate(result, "CHARGER_CABLE", "1", "1", "100");
+        assertRate(result, "FILM_PHONE", "1", "1", "100");
+        assertRate(result, "SETUP_SERVICE", "1", "1", "100");
+        assertRate(result, "WARRANTY_GENERIC_USED", "1", "1", "100");
+        AttachRateEntry newWarranty = rate(result, "WARRANTY_GENERIC_NEW");
+        assertThat(newWarranty.numeratorReceiptCount()).isEqualByComparingTo("0");
+        assertThat(newWarranty.denominatorReceiptCount()).isEqualByComparingTo("0");
+        assertThat(newWarranty.ratePerHundred()).isNull();
+    }
+
+    @Test
+    void excludesReturnsFromReceiptBasedAttachRate() {
         TestGraph graph = createGraph();
         UUID historicalSale = addSale(graph, "historical-sale", PERIOD_START.minusDays(10));
         addItem(graph, historicalSale, "iphone", "IPHONE_NEW_ASIS", "1.000", "NEW");
@@ -126,14 +151,14 @@ class AttachRateIntegrationTest {
         addItem(graph, currentSale, "cases", "CASE_APPLE_IPHONE", "2.000", "NOT_APPLICABLE");
 
         UUID caseReturn = addReturn(graph, "case-return", PERIOD_START.plusDays(1), historicalSale);
-        addItem(graph, caseReturn, "case", "CASE_APPLE_IPHONE", "1.000", "NOT_APPLICABLE");
+        addItem(graph, caseReturn, "case", "CASE_APPLE_IPHONE", "2.000", "NOT_APPLICABLE");
 
         UUID deviceReturn = addReturn(graph, "device-return", PERIOD_START.plusDays(2), currentSale);
-        addItem(graph, deviceReturn, "iphone", "IPHONE_NEW_ASIS", "1.000", "NEW");
+        addItem(graph, deviceReturn, "iphone", "IPHONE_NEW_ASIS", "2.000", "NEW");
 
         AttachRateResult result = attachRateService.calculate(graph.storeId(), period());
 
-        assertRate(result, "CASE_APPLE_IPHONE", "1.000", "1.000", "100.0");
+        assertRate(result, "CASE_APPLE_IPHONE", "1", "1", "100");
         assertThat(result.dataQuality().unmatchedNumeratorItemCount()).isZero();
     }
 
@@ -161,11 +186,11 @@ class AttachRateIntegrationTest {
 
         AttachRateResult result = attachRateService.calculate(graph.storeId(), period());
 
-        assertThat(rate(result, "WARRANTY_GENERIC_NEW").numeratorQuantity())
+        assertThat(rate(result, "WARRANTY_GENERIC_NEW").numeratorReceiptCount())
                 .isEqualByComparingTo("0.000");
-        assertThat(rate(result, "WARRANTY_GENERIC_USED").numeratorQuantity())
+        assertThat(rate(result, "WARRANTY_GENERIC_USED").numeratorReceiptCount())
                 .isEqualByComparingTo("0.000");
-        assertThat(rate(result, "PREMIUM_PROTECTION").numeratorQuantity())
+        assertThat(rate(result, "PREMIUM_PROTECTION").numeratorReceiptCount())
                 .isEqualByComparingTo("0.000");
         assertThat(result.dataQuality().unmatchedNumeratorItemCount()).isEqualTo(2);
         assertThat(result.dataQuality().ambiguousWarrantyItemCount()).isOne();
@@ -331,8 +356,8 @@ class AttachRateIntegrationTest {
             String rate
     ) {
         AttachRateEntry entry = rate(result, metricCode);
-        assertThat(entry.numeratorQuantity()).isEqualByComparingTo(numerator);
-        assertThat(entry.denominatorQuantity()).isEqualByComparingTo(denominator);
+        assertThat(entry.numeratorReceiptCount()).isEqualByComparingTo(numerator);
+        assertThat(entry.denominatorReceiptCount()).isEqualByComparingTo(denominator);
         assertThat(entry.ratePerHundred()).isEqualByComparingTo(rate);
     }
 

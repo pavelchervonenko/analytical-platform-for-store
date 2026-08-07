@@ -125,6 +125,94 @@ springdoc:
 app:
   runtime:
     role: ${APP_RUNTIME_ROLE:COMBINED}
+  interpretation:
+    snapshot-enabled: ${INTERPRETATION_SNAPSHOT_ENABLED:false}
+    generation-enabled: ${INTERPRETATION_GENERATION_ENABLED:false}
+    publication-enabled: ${INTERPRETATION_PUBLICATION_ENABLED:false}
+    availability:
+      preparation-sla: ${INTERPRETATION_AVAILABILITY_PREPARATION_SLA:5m}
+      refresh-interval: ${INTERPRETATION_AVAILABILITY_REFRESH_INTERVAL:15s}
+      target-ready-time: ${INTERPRETATION_AVAILABILITY_TARGET_READY_TIME:08:00}
+    snapshot-worker:
+      enabled: ${INTERPRETATION_SNAPSHOT_WORKER_ENABLED:false}
+      worker-delay: ${INTERPRETATION_SNAPSHOT_WORKER_DELAY:5s}
+      lease-duration: ${INTERPRETATION_SNAPSHOT_LEASE_DURATION:10m}
+      heartbeat-interval: ${INTERPRETATION_SNAPSHOT_HEARTBEAT_INTERVAL:1m}
+      retry-initial-delay: ${INTERPRETATION_SNAPSHOT_RETRY_INITIAL_DELAY:30s}
+      retry-max-delay: ${INTERPRETATION_SNAPSHOT_RETRY_MAX_DELAY:15m}
+    snapshot-planner:
+      enabled: ${INTERPRETATION_SNAPSHOT_PLANNER_ENABLED:false}
+      scan-delay: ${INTERPRETATION_SNAPSHOT_PLANNER_SCAN_DELAY:1m}
+      revision-window: ${INTERPRETATION_SNAPSHOT_REVISION_WINDOW:72h}
+      batch-size: ${INTERPRETATION_SNAPSHOT_PLANNER_BATCH_SIZE:25}
+      max-attempts: ${INTERPRETATION_SNAPSHOT_JOB_MAX_ATTEMPTS:5}
+    generation-planner:
+      enabled: ${INTERPRETATION_GENERATION_PLANNER_ENABLED:false}
+      scan-delay: ${INTERPRETATION_GENERATION_PLANNER_SCAN_DELAY:1m}
+      batch-size: ${INTERPRETATION_GENERATION_PLANNER_BATCH_SIZE:25}
+      job-deadline: ${INTERPRETATION_GENERATION_JOB_DEADLINE:5m}
+    generation-worker:
+      enabled: ${INTERPRETATION_GENERATION_WORKER_ENABLED:false}
+      worker-delay: ${INTERPRETATION_GENERATION_WORKER_DELAY:5s}
+      lease-duration: ${INTERPRETATION_GENERATION_LEASE_DURATION:4m}
+      heartbeat-interval: ${INTERPRETATION_GENERATION_HEARTBEAT_INTERVAL:15s}
+      recovery-delay: ${INTERPRETATION_GENERATION_RECOVERY_DELAY:30s}
+      provider-call-timeout: ${INTERPRETATION_GENERATION_PROVIDER_CALL_TIMEOUT:180s}
+      max-request-bytes: ${INTERPRETATION_GENERATION_MAX_REQUEST_BYTES:524288}
+      max-estimated-cost-rub: ${INTERPRETATION_GENERATION_MAX_ESTIMATED_COST_RUB:50.00}
+  llm:
+    prompt-version: ${LLM_PROMPT_VERSION:weekly-interpretation-v4}
+    content-schema-version: ${LLM_CONTENT_SCHEMA_VERSION:2}
+    temperature: ${LLM_TEMPERATURE:0.2}
+    max-output-tokens: ${LLM_MAX_OUTPUT_TOKENS:8000}
+    max-provider-calls: ${LLM_MAX_PROVIDER_CALLS:2}
+    yandex:
+      folder-id: ${YANDEX_AI_FOLDER_ID:}
+      api-key: ${YANDEX_AI_API_KEY:}
+      model-uri: ${YANDEX_AI_MODEL_URI:}
+      connect-timeout: ${YANDEX_AI_CONNECT_TIMEOUT:5s}
+      read-timeout: ${YANDEX_AI_READ_TIMEOUT:180s}
+    yandex-policy:
+      context-window-tokens: ${YANDEX_AI_CONTEXT_WINDOW_TOKENS:32768}
+      max-response-bytes: ${YANDEX_AI_MAX_RESPONSE_BYTES:1048576}
+      input-rub-per-thousand-tokens: ${YANDEX_AI_INPUT_RUB_PER_THOUSAND_TOKENS:0.8}
+      cached-input-rub-per-thousand-tokens: ${YANDEX_AI_CACHED_INPUT_RUB_PER_THOUSAND_TOKENS:0.8}
+      output-rub-per-thousand-tokens: ${YANDEX_AI_OUTPUT_RUB_PER_THOUSAND_TOKENS:0.8}
+  notification:
+    telegram:
+      enabled: ${TELEGRAM_NOTIFICATIONS_ENABLED:false}
+      fanout-enabled: ${TELEGRAM_FANOUT_ENABLED:false}
+      bot-code: ${TELEGRAM_BOT_CODE:store-analytics-primary}
+      fanout-delay: ${TELEGRAM_FANOUT_DELAY:5s}
+      max-attempts: ${TELEGRAM_DELIVERY_MAX_ATTEMPTS:5}
+      render-version: ${TELEGRAM_WEEKLY_RENDER_VERSION:weekly-telegram-v1}
+      linking-enabled: ${TELEGRAM_LINKING_ENABLED:false}
+      webhook-enabled: ${TELEGRAM_WEBHOOK_ENABLED:false}
+      bot-username: ${TELEGRAM_BOT_USERNAME:}
+      link-token-ttl: ${TELEGRAM_LINK_TOKEN_TTL:10m}
+      pending-confirmation-ttl: ${TELEGRAM_PENDING_CONFIRMATION_TTL:10m}
+      link-issue-min-interval: ${TELEGRAM_LINK_ISSUE_MIN_INTERVAL:30s}
+      link-max-per-hour: ${TELEGRAM_LINK_MAX_PER_HOUR:5}
+      webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
+      webhook-previous-secret: ${TELEGRAM_WEBHOOK_PREVIOUS_SECRET:}
+      webhook-max-body-bytes: ${TELEGRAM_WEBHOOK_MAX_BODY_BYTES:65536}
+      delivery-enabled: ${TELEGRAM_DELIVERY_ENABLED:false}
+      bot-token: ${TELEGRAM_BOT_TOKEN:}
+      api-base-url: ${TELEGRAM_API_BASE_URL:https://api.telegram.org}
+      connect-timeout: ${TELEGRAM_CONNECT_TIMEOUT:5s}
+      read-timeout: ${TELEGRAM_READ_TIMEOUT:15s}
+      delivery-delay: ${TELEGRAM_DELIVERY_DELAY:5s}
+      delivery-lease-duration: ${TELEGRAM_DELIVERY_LEASE_DURATION:1m}
+      delivery-retry-initial-delay: ${TELEGRAM_DELIVERY_RETRY_INITIAL_DELAY:15s}
+      delivery-retry-max-delay: ${TELEGRAM_DELIVERY_RETRY_MAX_DELAY:5m}
+      max-response-bytes: ${TELEGRAM_MAX_RESPONSE_BYTES:65536}
+    daily-pulse:
+      enabled: ${DAILY_STORE_PULSE_ENABLED:false}
+      planner-delay: ${DAILY_STORE_PULSE_PLANNER_DELAY:5m}
+      send-after: ${DAILY_STORE_PULSE_SEND_AFTER:08:05}
+      expires-at: ${DAILY_STORE_PULSE_EXPIRES_AT:14:00}
+      policy-version: ${DAILY_STORE_PULSE_POLICY_VERSION:daily-store-pulse-v1}
+      render-version: ${DAILY_STORE_PULSE_RENDER_VERSION:daily-store-pulse-v2}
   migration:
     lock-timeout: ${MIGRATION_LOCK_TIMEOUT:5s}
     statement-timeout: ${MIGRATION_STATEMENT_TIMEOUT:10m}

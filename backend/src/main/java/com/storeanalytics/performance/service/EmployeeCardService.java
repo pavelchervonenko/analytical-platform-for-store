@@ -4,10 +4,7 @@ import static com.storeanalytics.common.validation.ModelValidation.requireNonNul
 
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.performance.exception.EmployeeAssignmentNotFoundException;
-import com.storeanalytics.salary.exception.PayrollMonthNotCalculatedException;
 import com.storeanalytics.salary.service.PayrollManagementService;
-import com.storeanalytics.salary.service.PayrollRunDetailView;
-import com.storeanalytics.salary.service.PayrollStatementView;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -111,17 +108,14 @@ public class EmployeeCardService {
                 || !period.end().equals(month.atEndOfMonth())) {
             return null;
         }
-        try {
-            PayrollRunDetailView payroll = payrollService.latest(storeId, month);
-            PayrollStatementView statement = payroll.statements().stream()
-                    .filter(value -> value.employeeId().equals(employeeId))
-                    .findFirst()
-                    .orElse(null);
-            return statement == null
-                    ? null : new EmployeePayrollContextView(payroll.run(), statement);
-        } catch (PayrollMonthNotCalculatedException exception) {
-            return null;
-        }
+        return payrollService.findLatest(storeId, month)
+                .flatMap(payroll -> payroll.statements().stream()
+                        .filter(value -> value.employeeId().equals(employeeId))
+                        .findFirst()
+                        .map(statement -> new EmployeePayrollContextView(
+                                payroll.run(), statement
+                        )))
+                .orElse(null);
     }
 
     private EmployeeRatingDynamics dynamics(

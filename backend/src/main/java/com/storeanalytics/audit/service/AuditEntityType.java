@@ -19,7 +19,11 @@ public final class AuditEntityType {
     public static final String REPORT_SNAPSHOT = "REPORT_SNAPSHOT";
     public static final String REPORT_BACKFILL = "REPORT_BACKFILL";
     public static final String DATA_RETENTION_RUN = "DATA_RETENTION_RUN";
+    public static final String TELEGRAM_LINK_TOKEN = "TELEGRAM_LINK_TOKEN";
+    public static final String TELEGRAM_SUBSCRIPTION = "TELEGRAM_SUBSCRIPTION";
 
+    public static final String NOTIFICATION_DELIVERY = "NOTIFICATION_DELIVERY";
+    public static final String LLM_ANALYSIS_JOB = "LLM_ANALYSIS_JOB";
     private AuditEntityType() {
     }
 }

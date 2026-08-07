@@ -12,6 +12,25 @@ public interface ProductCategoryAssignmentRepository
         extends JpaRepository<ProductCategoryAssignment, UUID> {
 
     @Query("""
+            SELECT count(assignment)
+            FROM ProductCategoryAssignment assignment
+            WHERE assignment.product.connection.id = :connectionId
+            """)
+    long countByConnectionId(@Param("connectionId") UUID connectionId);
+
+    @Query("""
+            SELECT count(assignment)
+            FROM ProductCategoryAssignment assignment
+            WHERE assignment.product.connection.id = :connectionId
+              AND assignment.validFrom <= :occurredAt
+              AND (assignment.validTo IS NULL OR assignment.validTo > :occurredAt)
+            """)
+    long countEffectiveByConnectionId(
+            @Param("connectionId") UUID connectionId,
+            @Param("occurredAt") Instant occurredAt
+    );
+
+    @Query("""
             SELECT assignment
             FROM ProductCategoryAssignment assignment
             WHERE assignment.product.id = :productId

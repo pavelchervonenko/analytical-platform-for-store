@@ -41,11 +41,21 @@ class AuditRetentionPolicyTest {
                 AuditAction.USER_STORE_ACCESS_CHANGED,
                 AuditAction.USER_PASSWORD_RESET,
                 AuditAction.BOOTSTRAP_ADMIN_CREATED,
-                AuditAction.BREAK_GLASS_LOGIN_SUCCEEDED
+                AuditAction.BREAK_GLASS_LOGIN_SUCCEEDED,
+                AuditAction.TELEGRAM_LINK_ISSUED,
+                AuditAction.TELEGRAM_LINK_PENDING,
+                AuditAction.TELEGRAM_LINK_CONFIRMED,
+                AuditAction.TELEGRAM_LINK_REVOKED,
+                AuditAction.TELEGRAM_DELIVERY_SETTINGS_CHANGED,
+                AuditAction.TELEGRAM_BOT_BLOCKED,
+                AuditAction.TELEGRAM_BOT_UNBLOCKED,
+                AuditAction.TELEGRAM_DELIVERY_RESEND_REQUESTED
         );
         Set<AuditAction> operational = EnumSet.of(
                 AuditAction.MANUAL_SYNC_STARTED,
                 AuditAction.SCHEDULED_SYNC_STARTED,
+                AuditAction.LLM_REGENERATION_REQUESTED,
+                AuditAction.LLM_JOB_CANCELLATION_REQUESTED,
                 AuditAction.SYNC_JOB_CANCELLATION_REQUESTED,
                 AuditAction.TECHNICAL_DATA_RETENTION_COMPLETED
         );

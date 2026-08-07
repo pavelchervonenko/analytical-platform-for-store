@@ -43,8 +43,9 @@ class AnnualReportAggregationServiceTest {
         assertThat(result.totals().grossProfit()).isEqualByComparingTo("140.00");
         assertThat(result.totals().marginPercent()).isEqualByComparingTo("14.00");
         assertThat(result.attachRates()).singleElement().satisfies(rate -> {
-            assertThat(rate.numeratorQuantity()).isEqualByComparingTo("10.00");
-            assertThat(rate.denominatorQuantity()).isEqualByComparingTo("100.00");
+            assertThat(rate.formulaVersion()).isEqualTo("attach-rate-v2");
+            assertThat(rate.numeratorReceiptCount()).isEqualByComparingTo("10.00");
+            assertThat(rate.denominatorReceiptCount()).isEqualByComparingTo("100.00");
             assertThat(rate.ratePerHundred()).isEqualByComparingTo("10.00");
         });
     }
@@ -74,7 +75,7 @@ class AnnualReportAggregationServiceTest {
                 storeId,
                 from,
                 through,
-                "attach-rate-v1",
+                "attach-rate-v2",
                 null,
                 List.of(new AttachRateEntry(
                         "ACCESSORIES_PER_PHONE",

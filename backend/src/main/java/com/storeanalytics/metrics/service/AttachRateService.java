@@ -16,9 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AttachRateService {
 
-    static final String FORMULA_VERSION = "attach-rate-v1";
-    private static final int QUANTITY_SCALE = 3;
-    private static final int PERCENT_SCALE = 1;
+    static final String FORMULA_VERSION = "attach-rate-v2";
+    private static final int RECEIPT_COUNT_SCALE = 0;
+    private static final int PERCENT_SCALE = 0;
 
     private final StoreRepository storeRepository;
     private final AttachRateRepository attachRateRepository;
@@ -61,8 +61,8 @@ public class AttachRateService {
     }
 
     private AttachRateEntry toEntry(AttachRateAggregate aggregate) {
-        BigDecimal numerator = quantity(aggregate.numeratorQuantity());
-        BigDecimal denominator = quantity(aggregate.denominatorQuantity());
+        BigDecimal numerator = receiptCount(aggregate.numeratorReceiptCount());
+        BigDecimal denominator = receiptCount(aggregate.denominatorReceiptCount());
         BigDecimal rate = denominator.signum() <= 0
                 ? null
                 : numerator.multiply(BigDecimal.valueOf(100))
@@ -85,7 +85,7 @@ public class AttachRateService {
         );
     }
 
-    private BigDecimal quantity(BigDecimal value) {
-        return value.setScale(QUANTITY_SCALE, RoundingMode.UNNECESSARY);
+    private BigDecimal receiptCount(BigDecimal value) {
+        return value.setScale(RECEIPT_COUNT_SCALE, RoundingMode.UNNECESSARY);
     }
 }

@@ -8,7 +8,12 @@ import com.storeanalytics.common.config.SyncProperties;
 import com.storeanalytics.sync.exception.SyncJobNotFoundException;
 import com.storeanalytics.sync.model.SyncJob;
 import com.storeanalytics.sync.model.SyncJobStatus;
+import com.storeanalytics.sync.model.SyncRun;
+import com.storeanalytics.sync.model.SyncRunError;
+import com.storeanalytics.sync.model.SyncStatus;
 import com.storeanalytics.sync.repository.SyncJobRepository;
+import com.storeanalytics.sync.repository.SyncRunErrorRepository;
+import com.storeanalytics.sync.repository.SyncRunRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -33,17 +38,23 @@ public class SyncJobCoordinator {
     private final SyncProperties properties;
     private final Clock clock;
     private final AuditLogService auditLogService;
+    private final SyncRunRepository syncRunRepository;
+    private final SyncRunErrorRepository syncRunErrorRepository;
 
     public SyncJobCoordinator(
             SyncJobRepository jobRepository,
             SyncProperties properties,
             Clock clock,
-            AuditLogService auditLogService
+            AuditLogService auditLogService,
+            SyncRunRepository syncRunRepository,
+            SyncRunErrorRepository syncRunErrorRepository
     ) {
         this.jobRepository = jobRepository;
         this.properties = properties;
         this.clock = clock;
         this.auditLogService = auditLogService;
+        this.syncRunRepository = syncRunRepository;
+        this.syncRunErrorRepository = syncRunErrorRepository;
     }
 
     @Transactional
@@ -136,10 +147,29 @@ public class SyncJobCoordinator {
                 PageRequest.of(0, 1)
         );
         if (!expired.isEmpty()) {
-            expired.getFirst().recoverExpiredLease(
+            SyncJob job = expired.getFirst();
+            closeInterruptedRuns(job.getId(), now);
+            job.recoverExpiredLease(
                     now.plus(properties.retryInitialDelay()),
                     now
             );
+        }
+    }
+
+    private void closeInterruptedRuns(UUID jobId, Instant now) {
+        List<SyncRun> interruptedRuns = syncRunRepository
+                .findAllByJobIdAndStatusForUpdate(jobId, SyncStatus.RUNNING);
+        for (SyncRun run : interruptedRuns) {
+            run.fail(
+                    run.getRecordsFetched(),
+                    SyncJob.EXPIRED_LEASE_ERROR_SUMMARY,
+                    now
+            );
+            syncRunErrorRepository.save(SyncRunError.workerLeaseExpired(
+                    run,
+                    SyncJob.EXPIRED_LEASE_ERROR_SUMMARY,
+                    now
+            ));
         }
     }
 

@@ -57,9 +57,11 @@ class AnnualReportAggregationService {
             MonthlyReportPayload month
     ) {
         for (AttachRateEntry rate : month.attachRates().rates()) {
+            String formulaVersion = month.attachRates().formulaVersion();
+            String aggregateKey = formulaVersion + ":" + rate.metricCode();
             target.computeIfAbsent(
-                    rate.metricCode(),
-                    ignored -> new AttachAccumulator(rate.metricCode())
+                    aggregateKey,
+                    ignored -> new AttachAccumulator(formulaVersion, rate.metricCode())
             ).add(rate);
         }
     }
@@ -185,21 +187,24 @@ class AnnualReportAggregationService {
 
     private static final class AttachAccumulator {
 
+        private final String formulaVersion;
         private final String code;
         private BigDecimal numerator = BigDecimal.ZERO;
         private BigDecimal denominator = BigDecimal.ZERO;
 
-        AttachAccumulator(String code) {
+        AttachAccumulator(String formulaVersion, String code) {
+            this.formulaVersion = formulaVersion;
             this.code = code;
         }
 
         void add(AttachRateEntry rate) {
-            numerator = sum(numerator, rate.numeratorQuantity());
-            denominator = sum(denominator, rate.denominatorQuantity());
+            numerator = sum(numerator, rate.numeratorReceiptCount());
+            denominator = sum(denominator, rate.denominatorReceiptCount());
         }
 
         AnnualAttachRateTotals view() {
             return new AnnualAttachRateTotals(
+                    formulaVersion,
                     code,
                     numerator,
                     denominator,

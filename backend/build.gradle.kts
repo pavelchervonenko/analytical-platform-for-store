@@ -1,3 +1,5 @@
+import org.gradle.language.jvm.tasks.ProcessResources
+
 plugins {
     id("java")
     id("checkstyle")
@@ -37,6 +39,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3")
+    implementation("com.networknt:json-schema-validator:3.0.2")
 
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     runtimeOnly("org.postgresql:postgresql")
@@ -48,6 +51,15 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.named<ProcessResources>("processResources") {
+    from(rootProject.layout.projectDirectory.dir("docs/schemas")) {
+        into("contracts/llm")
+    }
+    from(rootProject.layout.projectDirectory.dir("docs/prompts")) {
+        into("prompts/llm")
+    }
 }
 
 springBoot {

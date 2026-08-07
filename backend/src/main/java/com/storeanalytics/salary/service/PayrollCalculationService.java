@@ -1,7 +1,6 @@
 package com.storeanalytics.salary.service;
 
 import static com.storeanalytics.common.validation.ModelValidation.requireNonNull;
-import static com.storeanalytics.common.validation.ModelValidation.requireText;
 
 import com.storeanalytics.audit.service.AuditAction;
 import com.storeanalytics.audit.service.AuditEntityType;
@@ -9,6 +8,7 @@ import com.storeanalytics.audit.service.AuditLogService;
 import com.storeanalytics.audit.service.AuditTarget;
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.auth.repository.AppUserRepository;
+import com.storeanalytics.common.exception.InvalidRequestException;
 import com.storeanalytics.employee.model.Employee;
 import com.storeanalytics.salary.model.PayrollAdjustment;
 import com.storeanalytics.salary.model.PayrollAdjustmentType;
@@ -104,7 +104,7 @@ public class PayrollCalculationService {
                     prepared,
                     latest.getRevision() + 1,
                     latest,
-                    requireText(revisionReason, "revisionReason"),
+                    requireRevisionReason(revisionReason),
                     actor
             ));
             eventType = PayrollEventType.REVISION_CREATED;
@@ -177,6 +177,14 @@ public class PayrollCalculationService {
         result.put("missingCostItemCount", run.getMissingCostItemCount());
         result.put("daysWithoutShift", run.getDaysWithoutShift());
         return result;
+    }
+
+    private String requireRevisionReason(String value) {
+        if (value == null || value.isBlank()) {
+            throw new InvalidRequestException(
+                    "revisionReason is required for a new payroll revision");
+        }
+        return value;
     }
 
     private PreparedCalculation prepare(PayrollCalculationSourceData sourceData) {

@@ -2,11 +2,14 @@ package com.storeanalytics.sync.web;
 
 import com.storeanalytics.auth.security.AppUserPrincipal;
 import com.storeanalytics.sync.service.SyncJobCoordinator;
+import com.storeanalytics.sync.service.SyncClassificationReadinessView;
 import com.storeanalytics.sync.service.SyncJobService;
 import com.storeanalytics.sync.service.SyncJobView;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,6 +52,15 @@ public class SyncJobController {
     @GetMapping
     List<SyncJobView> list(@RequestParam(defaultValue = "20") int limit) {
         return jobService.list(limit);
+    }
+
+    @GetMapping("/backfill-readiness")
+    SyncClassificationReadinessView backfillReadiness(
+            @RequestParam
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate periodStart
+    ) {
+        return jobService.classificationReadiness(periodStart);
     }
 
     @GetMapping("/{jobId}")

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.auth.repository.AppUserRepository;
+import com.storeanalytics.common.exception.InvalidRequestException;
 import com.storeanalytics.employee.model.Employee;
 import com.storeanalytics.performance.model.EmployeeWorkShift;
 import com.storeanalytics.performance.model.StorePerformancePlan;
@@ -284,6 +285,95 @@ class PayrollCalculationServiceTest {
         assertThatThrownBy(() -> run.approve(actor, Instant.parse("2026-08-01T10:00:00Z")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("incomplete");
+    }
+
+    @Test
+    void advancesGenerationWhenAnUnchangedDraftIsRecalculated() {
+        UUID storeId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        Store store = store(storeId);
+        AppUser actor = mock(AppUser.class);
+        PayrollCalculationSourceData sourceData = new PayrollCalculationSourceData(
+                store,
+                plan(store, "1000.00"),
+                scheme(),
+                List.of(),
+                List.of()
+        );
+        when(source.load(storeId, MONTH)).thenReturn(sourceData);
+        when(userRepository.findById(actorId)).thenReturn(Optional.of(actor));
+        when(runRepository.findFirstByStoreIdAndPeriodMonthOrderByRevisionDesc(
+                storeId, MONTH.atDay(1)
+        )).thenReturn(Optional.empty());
+        when(runRepository.saveAndFlush(any(PayrollRun.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(snapshotStore.activeAdjustments(any(PayrollRun.class))).thenReturn(List.of());
+
+        PayrollRun first = service.calculate(storeId, MONTH, null, actorId);
+
+        assertThat(first.getCalculationGeneration()).isEqualTo(1);
+        when(runRepository.findFirstByStoreIdAndPeriodMonthOrderByRevisionDesc(
+                storeId, MONTH.atDay(1)
+        )).thenReturn(Optional.of(first));
+
+        PayrollRun recalculated = service.calculate(storeId, MONTH, null, actorId);
+
+        assertThat(recalculated).isSameAs(first);
+        assertThat(recalculated.getCalculationGeneration()).isEqualTo(2);
+        verify(snapshotStore, times(2)).replaceCalculatedSnapshot(
+                any(PayrollRun.class), any(), any(), any()
+        );
+    }
+
+    @Test
+    void rejectsMissingReasonForNewRevisionAsTypedInvalidRequest() {
+        UUID storeId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        Store store = store(storeId);
+        AppUser actor = mock(AppUser.class);
+        PayrollScheme scheme = scheme();
+        StorePerformancePlan plan = plan(store, "1000.00");
+        PayrollCalculationSourceData sourceData = new PayrollCalculationSourceData(
+                store,
+                plan,
+                scheme,
+                List.of(),
+                List.of()
+        );
+        PayrollRun latest = new PayrollRun(new PayrollRunDefinition(
+                store,
+                MONTH.atDay(1),
+                1,
+                null,
+                null,
+                scheme,
+                new PayrollPlanResult(
+                        new BigDecimal("1000.00"),
+                        BigDecimal.ZERO.setScale(2),
+                        false,
+                        new BigDecimal("3.90"),
+                        BigDecimal.ZERO.setScale(2),
+                        null,
+                        false,
+                        new BigDecimal("3.00"),
+                        BigDecimal.ZERO.setScale(2),
+                        null,
+                        false
+                ),
+                new PayrollRunQuality(true, 0, 0, 0),
+                fingerprint(),
+                actor
+        ));
+        latest.approve(actor, Instant.parse("2026-08-01T08:00:00Z"));
+        latest.markPaid(actor, Instant.parse("2026-08-01T09:00:00Z"));
+        when(source.load(storeId, MONTH)).thenReturn(sourceData);
+        when(userRepository.findById(actorId)).thenReturn(Optional.of(actor));
+        when(runRepository.findFirstByStoreIdAndPeriodMonthOrderByRevisionDesc(
+                storeId, MONTH.atDay(1)
+        )).thenReturn(Optional.of(latest));
+
+        assertThatThrownBy(() -> service.calculate(storeId, MONTH, null, actorId))
+                .isInstanceOf(InvalidRequestException.class);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

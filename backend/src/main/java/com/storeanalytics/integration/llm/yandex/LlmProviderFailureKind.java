@@ -1,0 +1,15 @@
+package com.storeanalytics.integration.llm.yandex;
+
+public enum LlmProviderFailureKind {
+    AUTHENTICATION,
+    INVALID_REQUEST,
+    RATE_LIMITED,
+    TRANSIENT_PROVIDER,
+    DEADLINE_EXCEEDED,
+    RESPONSE_TOO_LARGE,
+    MALFORMED_RESPONSE,
+    TRUNCATED_RESPONSE,
+    MODERATION_OR_REFUSAL,
+    PROVIDER_INCOMPATIBLE,
+    TRANSPORT
+}

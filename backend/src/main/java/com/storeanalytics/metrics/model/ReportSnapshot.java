@@ -74,9 +74,7 @@ public class ReportSnapshot extends AbstractCreatedEntity {
     @Column(name = "payload_hash", length = 64, updatable = false)
     private String payloadHash;
 
-
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(nullable = false, columnDefinition = "jsonb")
+    @Column(nullable = false, columnDefinition = "text")
     private String payload;
 
     @Column(name = "generated_at", nullable = false)

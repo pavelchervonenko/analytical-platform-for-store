@@ -92,6 +92,9 @@ public class PayrollRun extends AbstractMutableEntity {
     @Column(name = "days_without_shift", nullable = false)
     private int daysWithoutShift;
 
+    @Column(name = "calculation_generation", nullable = false)
+    private long calculationGeneration;
+
     @Column(name = "source_fingerprint_version")
     private Integer sourceFingerprintVersion;
 
@@ -141,6 +144,7 @@ public class PayrollRun extends AbstractMutableEntity {
         scheme = validated.scheme();
         createdBy = validated.createdBy();
         status = PayrollRunStatus.CALCULATED;
+        calculationGeneration = 1;
         applyCalculation(validated);
     }
 
@@ -151,6 +155,7 @@ public class PayrollRun extends AbstractMutableEntity {
         require(validated.store().getId().equals(store.getId()), "store cannot change");
         require(validated.periodMonth().equals(periodMonth), "period month cannot change");
         scheme = validated.scheme();
+        calculationGeneration = Math.addExact(calculationGeneration, 1);
         applyCalculation(validated);
     }
 
@@ -254,6 +259,10 @@ public class PayrollRun extends AbstractMutableEntity {
 
     public int getDaysWithoutShift() {
         return daysWithoutShift;
+    }
+
+    public long getCalculationGeneration() {
+        return calculationGeneration;
     }
 
     public PayrollSourceFingerprint getSourceFingerprint() {

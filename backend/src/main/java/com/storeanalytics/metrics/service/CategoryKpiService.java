@@ -6,8 +6,6 @@ import com.storeanalytics.metrics.exception.StoreNotFoundException;
 import com.storeanalytics.metrics.repository.CategoryKpiAggregate;
 import com.storeanalytics.metrics.repository.CategoryKpiRepository;
 import com.storeanalytics.store.repository.StoreRepository;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
@@ -18,9 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class CategoryKpiService {
 
     static final String FORMULA_VERSION = "category-kpi-v1";
-    private static final int MONEY_SCALE = 2;
-    private static final int QUANTITY_SCALE = 3;
-    private static final int PERCENT_SCALE = 2;
 
     private final StoreRepository storeRepository;
     private final CategoryKpiRepository categoryKpiRepository;
@@ -106,56 +101,6 @@ public class CategoryKpiService {
     }
 
     private CategoryKpiMetrics metrics(List<CategoryKpiAggregate> aggregates) {
-        BigDecimal netRevenue = aggregates.stream()
-                .map(CategoryKpiAggregate::netRevenue)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal netQuantity = aggregates.stream()
-                .map(CategoryKpiAggregate::netQuantity)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal costAmountValue = aggregates.stream()
-                .map(CategoryKpiAggregate::costAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        long includedItemCount = aggregates.stream()
-                .mapToLong(CategoryKpiAggregate::includedItemCount)
-                .sum();
-        long missingCostItemCount = aggregates.stream()
-                .mapToLong(CategoryKpiAggregate::missingCostItemCount)
-                .sum();
-        long unexpectedZeroCostItemCount = aggregates.stream()
-                .mapToLong(CategoryKpiAggregate::unexpectedZeroCostItemCount)
-                .sum();
-        boolean completeCostData = missingCostItemCount == 0;
-
-        BigDecimal scaledRevenue = money(netRevenue);
-        BigDecimal scaledQuantity = quantity(netQuantity);
-        BigDecimal costAmount = completeCostData ? money(costAmountValue) : null;
-        BigDecimal grossProfit = completeCostData
-                ? money(scaledRevenue.subtract(costAmount))
-                : null;
-        BigDecimal marginPercent = grossProfit == null || scaledRevenue.signum() == 0
-                ? null
-                : grossProfit.multiply(BigDecimal.valueOf(100))
-                        .divide(scaledRevenue, PERCENT_SCALE, RoundingMode.HALF_UP);
-        return new CategoryKpiMetrics(
-                scaledRevenue,
-                scaledQuantity,
-                costAmount,
-                grossProfit,
-                marginPercent,
-                new CategoryKpiDataQuality(
-                        completeCostData,
-                        includedItemCount,
-                        missingCostItemCount,
-                        unexpectedZeroCostItemCount
-                )
-        );
-    }
-
-    private BigDecimal money(BigDecimal value) {
-        return value.setScale(MONEY_SCALE, RoundingMode.UNNECESSARY);
-    }
-
-    private BigDecimal quantity(BigDecimal value) {
-        return value.setScale(QUANTITY_SCALE, RoundingMode.UNNECESSARY);
+        return CategoryKpiMetricsCalculator.calculate(aggregates);
     }
 }

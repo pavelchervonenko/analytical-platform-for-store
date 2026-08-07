@@ -42,6 +42,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.YearMonth;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -127,13 +128,18 @@ public class PayrollManagementService {
 
     @Transactional(readOnly = true)
     public PayrollRunDetailView latest(UUID storeId, YearMonth month) {
-        PayrollRun run = runRepository
+        return findLatest(storeId, month)
+                .orElseThrow(() -> new PayrollMonthNotCalculatedException(storeId, month));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<PayrollRunDetailView> findLatest(UUID storeId, YearMonth month) {
+        return runRepository
                 .findFirstByStoreIdAndPeriodMonthOrderByRevisionDesc(
                         requireNonNull(storeId, "storeId"),
                         requireNonNull(month, "month").atDay(1)
                 )
-                .orElseThrow(() -> new PayrollMonthNotCalculatedException(storeId, month));
-        return detail(run);
+                .map(this::detail);
     }
 
     @Transactional(readOnly = true)
@@ -446,6 +452,10 @@ public class PayrollManagementService {
     private PayrollRun requireEditableRun(UUID storeId, UUID runId, long version) {
         PayrollRun run = requireLatestRun(requireRun(storeId, runId));
         requireVersion(run.getVersion(), version, "payroll run");
+        if (run.getStatus() != PayrollRunStatus.CALCULATED) {
+            throw new PayrollStateConflictException(
+                    "only a calculated payroll run can be edited");
+        }
         return run;
     }
 

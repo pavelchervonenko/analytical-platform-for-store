@@ -35,18 +35,18 @@ class AttachRateServiceTest {
     }
 
     @Test
-    void calculatesRatePerHundredAndPreservesValuesAboveOneHundred() {
+    void calculatesWholePercentageFromReceiptCounts() {
         UUID storeId = UUID.randomUUID();
         when(storeRepository.existsById(storeId)).thenReturn(true);
         when(attachRateRepository.aggregate(storeId, PERIOD_START, PERIOD_END))
                 .thenReturn(List.of(
-                        aggregate("2.000", "3.000", 1, 2, 3),
+                        aggregate("2", "3", 1, 2, 3),
                         new AttachRateAggregate(
                                 "CASE_SAMSUNG",
                                 "CASE_SAMSUNG",
                                 AttachDenominatorCode.SAMSUNG,
-                                new BigDecimal("3.000"),
-                                new BigDecimal("2.000"),
+                                new BigDecimal("1"),
+                                new BigDecimal("2"),
                                 1,
                                 2,
                                 3
@@ -55,10 +55,10 @@ class AttachRateServiceTest {
 
         AttachRateResult result = service.calculate(storeId, period());
 
-        assertThat(result.formulaVersion()).isEqualTo("attach-rate-v1");
+        assertThat(result.formulaVersion()).isEqualTo("attach-rate-v2");
         assertThat(result.rates()).hasSize(2);
-        assertThat(result.rates().get(0).ratePerHundred()).isEqualByComparingTo("66.7");
-        assertThat(result.rates().get(1).ratePerHundred()).isEqualByComparingTo("150.0");
+        assertThat(result.rates().get(0).ratePerHundred()).isEqualByComparingTo("67");
+        assertThat(result.rates().get(1).ratePerHundred()).isEqualByComparingTo("50");
         assertThat(result.dataQuality())
                 .isEqualTo(new AttachRateDataQuality(1, 2, 3));
     }
@@ -69,8 +69,8 @@ class AttachRateServiceTest {
         when(storeRepository.existsById(storeId)).thenReturn(true);
         when(attachRateRepository.aggregate(storeId, PERIOD_START, PERIOD_END))
                 .thenReturn(List.of(
-                        aggregate("0.000", "0.000", 0, 0, 0),
-                        aggregate("1.000", "-1.000", 0, 0, 0)
+                        aggregate("0", "0", 0, 0, 0),
+                        aggregate("1", "-1", 0, 0, 0)
                 ));
 
         AttachRateResult result = service.calculate(storeId, period());

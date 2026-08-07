@@ -7,8 +7,8 @@ public record AttachRateAggregate(
         String metricCode,
         String numeratorCategoryCode,
         AttachDenominatorCode denominatorCode,
-        BigDecimal numeratorQuantity,
-        BigDecimal denominatorQuantity,
+        BigDecimal numeratorReceiptCount,
+        BigDecimal denominatorReceiptCount,
         long unmatchedNumeratorItemCount,
         long ambiguousWarrantyItemCount,
         long unknownDeviceConditionItemCount

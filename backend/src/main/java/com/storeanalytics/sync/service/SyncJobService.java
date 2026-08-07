@@ -11,6 +11,7 @@ import com.storeanalytics.common.config.SyncProperties;
 import com.storeanalytics.integration.connection.model.IntegrationConnection;
 import com.storeanalytics.integration.connection.repository.IntegrationConnectionRepository;
 import com.storeanalytics.sync.exception.ActiveSyncJobException;
+import com.storeanalytics.sync.exception.SyncClassificationRequiredException;
 import com.storeanalytics.sync.exception.SyncJobNotFoundException;
 import com.storeanalytics.sync.model.SourceSystem;
 import com.storeanalytics.sync.model.SyncJob;
@@ -26,6 +27,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -34,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SyncJobService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(SyncJobService.class);
     private static final String LIVESKLAD_CONNECTION_KEY = "livesklad-default";
     private static final Set<SyncJobStatus> ACTIVE_STATUSES = Set.of(
             SyncJobStatus.PENDING,
@@ -43,6 +47,7 @@ public class SyncJobService {
 
     private final SyncJobRepository jobRepository;
     private final IntegrationConnectionRepository connectionRepository;
+    private final SyncClassificationReadinessService classificationReadinessService;
     private final AppUserRepository userRepository;
     private final SyncProperties properties;
     private final Clock clock;
@@ -51,6 +56,7 @@ public class SyncJobService {
     public SyncJobService(
             SyncJobRepository jobRepository,
             IntegrationConnectionRepository connectionRepository,
+            SyncClassificationReadinessService classificationReadinessService,
             AppUserRepository userRepository,
             SyncProperties properties,
             Clock clock,
@@ -58,6 +64,7 @@ public class SyncJobService {
     ) {
         this.jobRepository = jobRepository;
         this.connectionRepository = connectionRepository;
+        this.classificationReadinessService = classificationReadinessService;
         this.userRepository = userRepository;
         this.properties = properties;
         this.clock = clock;
@@ -75,10 +82,14 @@ public class SyncJobService {
         Instant end = periodEndInclusive.plusDays(1)
                 .atStartOfDay(properties.reportingZone())
                 .toInstant();
+        IntegrationConnection connection = activeConnection();
+        if (!classificationReadiness(connection, start).ready()) {
+            throw new SyncClassificationRequiredException(periodStart);
+        }
         AppUser requestedBy = userRepository.findById(requestedById)
                 .orElseThrow(() -> new IllegalStateException("Requesting user no longer exists"));
         SyncJobView created = create(
-                activeConnection(), requestedBy, SyncJobType.BACKFILL, start, end
+                connection, requestedBy, SyncJobType.BACKFILL, start, end
         );
         auditLogService.record(
                 requestedById,
@@ -100,6 +111,15 @@ public class SyncJobService {
                 .atStartOfDay(properties.reportingZone())
                 .toInstant();
         IntegrationConnection connection = activeConnection();
+        if (!classificationReadiness(connection, start).ready()) {
+            LOGGER.warn(
+                    "Skipped scheduled synchronization because no approved product "
+                            + "classification is effective at {} for connection {}",
+                    start,
+                    connection.getConnectionKey()
+            );
+            return Optional.empty();
+        }
         if (jobRepository.existsByConnectionIdAndJobTypeAndPeriodStartAndPeriodEnd(
                 connection.getId(),
                 SyncJobType.INCREMENTAL,
@@ -142,6 +162,26 @@ public class SyncJobService {
                 .stream()
                 .map(SyncJobView::from)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public SyncClassificationReadinessView classificationReadiness(
+            LocalDate periodStart
+    ) {
+        if (periodStart == null) {
+            throw new InvalidRequestException("periodStart is required");
+        }
+        Instant start = periodStart.atStartOfDay(
+                properties.reportingZone()
+        ).toInstant();
+        return classificationReadiness(activeConnection(), start);
+    }
+
+    private SyncClassificationReadinessView classificationReadiness(
+            IntegrationConnection connection,
+            Instant periodStart
+    ) {
+        return classificationReadinessService.inspect(connection, periodStart);
     }
 
     private Map<String, Object> jobSummary(SyncJobView job) {

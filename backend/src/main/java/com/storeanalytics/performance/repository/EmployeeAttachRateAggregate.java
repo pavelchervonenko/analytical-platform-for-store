@@ -9,7 +9,7 @@ public record EmployeeAttachRateAggregate(
         String metricCode,
         String numeratorCategoryCode,
         AttachDenominatorCode denominatorCode,
-        BigDecimal numeratorQuantity,
-        BigDecimal denominatorQuantity
+        BigDecimal numeratorReceiptCount,
+        BigDecimal denominatorReceiptCount
 ) {
 }

@@ -71,7 +71,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    @Order(2)
+    @Order(3)
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             SecurityChainComponents components,
@@ -109,7 +109,10 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/integration-connections/*/product-category-imports"
                         ).access(adminAccess)
-                        .requestMatchers("/api/stores/**", "/api/data-quality/**", "/api/system/status")
+                        .requestMatchers(
+                                "/api/stores/**", "/api/data-quality/**",
+                                "/api/system/status", "/api/notifications/**"
+                        )
                         .access(components.passwordChanged())
                         .anyRequest().denyAll()
                 )
@@ -178,10 +181,10 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(validateOrigins(properties.corsAllowedOrigins()));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of(
-                "Content-Type", "X-XSRF-TOKEN", "X-Correlation-ID"
+                "Content-Type", "X-XSRF-TOKEN", "X-Correlation-ID", "If-Match"
         ));
         configuration.setExposedHeaders(List.of(
-                "X-XSRF-TOKEN", "X-Correlation-ID"
+                "X-XSRF-TOKEN", "X-Correlation-ID", "ETag"
         ));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(Duration.ofHours(1));

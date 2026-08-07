@@ -94,6 +94,18 @@ public class SyncRunError {
                 "RETURN_SYNC_FAILED", summary, retryable
         ), now);
     }
+
+    public static SyncRunError workerLeaseExpired(
+            SyncRun syncRun,
+            String summary,
+            Instant now
+    ) {
+        return failure(syncRun, new SyncErrorDetails(
+                "SYNC_JOB_RECOVERY", null, null,
+                "SYNC_WORKER_LEASE_EXPIRED", summary, true
+        ), now);
+    }
+
     public static SyncRunError failure(
             SyncRun syncRun,
             SyncErrorDetails details,

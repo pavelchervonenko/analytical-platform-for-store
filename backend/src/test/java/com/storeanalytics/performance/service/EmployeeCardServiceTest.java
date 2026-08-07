@@ -9,7 +9,9 @@ import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.salary.service.PayrollManagementService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,10 +57,33 @@ class EmployeeCardServiceTest {
         verifyNoInteractions(payrollService);
     }
 
+    @Test
+    void returnsCardWithoutPayrollWhenFullMonthHasNotBeenCalculated() {
+        UUID storeId = UUID.randomUUID();
+        UUID employeeId = UUID.randomUUID();
+        StoreKpiPeriod currentPeriod = new StoreKpiPeriod(
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)
+        );
+        StoreKpiPeriod previousPeriod = new StoreKpiPeriod(
+                LocalDate.of(2026, 5, 31), LocalDate.of(2026, 6, 30)
+        );
+        EmployeeRatingEntry current = entry(employeeId, 1, "110.00", "1200.00");
+        when(ratingService.get(storeId, currentPeriod))
+                .thenReturn(result(storeId, currentPeriod, current));
+        when(ratingService.get(storeId, previousPeriod))
+                .thenReturn(result(storeId, previousPeriod));
+        when(payrollService.findLatest(storeId, YearMonth.of(2026, 7)))
+                .thenReturn(Optional.empty());
+
+        EmployeeCardView card = service.card(storeId, employeeId, currentPeriod);
+
+        assertThat(card.payroll()).isNull();
+    }
+
     private EmployeeRatingResult result(
             UUID storeId,
             StoreKpiPeriod period,
-            EmployeeRatingEntry entry
+            EmployeeRatingEntry... entries
     ) {
         return new EmployeeRatingResult(
                 storeId,
@@ -66,7 +91,7 @@ class EmployeeCardServiceTest {
                 period.end(),
                 mock(RatingFormulaView.class),
                 mock(RatingPlanContext.class),
-                List.of(entry), EmployeeRatingHistoryView.live()
+                List.of(entries), EmployeeRatingHistoryView.live()
         );
     }
 

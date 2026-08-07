@@ -184,7 +184,7 @@ class StoreSyncIntegrationTest {
                 Integer.class
         );
 
-        assertThat(tableCount).isEqualTo(43);
+        assertThat(tableCount).isEqualTo(57);
         assertThat(entityManagerFactory.getMetamodel().getEntities()).hasSize(39);
         assertThat(applicationContext.getBeanNamesForType(JpaRepository.class)).hasSize(39);
         assertThat(jdbcTemplate.queryForObject(
@@ -199,7 +199,7 @@ class StoreSyncIntegrationTest {
                   AND NOT tgisinternal
                 """,
                 Integer.class
-        )).isEqualTo(23);
+        )).isEqualTo(28);
     }
 
     @Test
@@ -215,7 +215,21 @@ class StoreSyncIntegrationTest {
                       'auth_login_throttles',
                       'audit_retention_holds',
                       'store_product_inventory_daily',
-                      'store_product_inventory_monthly'
+                      'store_product_inventory_monthly',
+                      'analytics_snapshots',
+                      'analytics_snapshot_employees',
+                      'analytics_snapshot_jobs',
+                      'llm_analysis_jobs',
+                      'llm_analysis_attempts',
+                      'llm_interpretations',
+                      'telegram_subscriptions',
+                      'telegram_link_tokens',
+                      'notification_preferences',
+                      'telegram_update_receipts',
+                      'notification_events',
+                      'notification_deliveries',
+                      'notification_delivery_attempts',
+                      'notification_event_fanout_receipts'
                   )
                 ORDER BY table_name, ordinal_position
                 """,

@@ -86,6 +86,10 @@ public enum BusinessErrorCode {
             "ACTIVE_SYNC_JOB_EXISTS", BusinessErrorType.CONFLICT,
             "An active synchronization job already exists"
     ),
+    SYNC_CLASSIFICATION_REQUIRED(
+            "SYNC_CLASSIFICATION_REQUIRED", BusinessErrorType.CONFLICT,
+            "Import the approved product classification before synchronization"
+    ),
     ACTIVE_REPORT_BACKFILL_JOB_EXISTS(
             "ACTIVE_REPORT_BACKFILL_JOB_EXISTS", BusinessErrorType.CONFLICT,
             "An active report backfill job already exists"
@@ -113,6 +117,34 @@ public enum BusinessErrorCode {
     REPORT_NOT_FOUND(
             "REPORT_NOT_FOUND", BusinessErrorType.NOT_FOUND,
             "Report was not found"
+    ),
+    WEEKLY_INTERPRETATION_NOT_FOUND(
+            "WEEKLY_INTERPRETATION_NOT_FOUND", BusinessErrorType.NOT_FOUND,
+            "Weekly interpretation was not found"
+    ),
+    LLM_JOB_NOT_FOUND(
+            "LLM_JOB_NOT_FOUND", BusinessErrorType.NOT_FOUND,
+            "LLM analysis job was not found"
+    ),
+    LLM_OPERATIONS_CONFLICT(
+            "LLM_OPERATIONS_CONFLICT", BusinessErrorType.CONFLICT,
+            "LLM operation conflicts with the current state"
+    ),
+    TELEGRAM_LINK_STATE_CONFLICT(
+            "TELEGRAM_LINK_STATE_CONFLICT", BusinessErrorType.CONFLICT,
+            "Telegram channel state does not allow this operation"
+    ),
+    TELEGRAM_LINK_THROTTLED(
+            "TELEGRAM_LINK_THROTTLED", BusinessErrorType.RATE_LIMITED,
+            "Too many Telegram link requests; try again later"
+    ),
+    TELEGRAM_DELIVERY_NOT_FOUND(
+            "TELEGRAM_DELIVERY_NOT_FOUND", BusinessErrorType.NOT_FOUND,
+            "Telegram delivery was not found"
+    ),
+    TELEGRAM_DELIVERY_RESEND_CONFLICT(
+            "TELEGRAM_DELIVERY_RESEND_CONFLICT", BusinessErrorType.CONFLICT,
+            "Telegram delivery cannot be resent in its current state"
     ),
     EMPLOYEE_SYNC_FAILED(
             "EMPLOYEE_SYNC_FAILED", BusinessErrorType.UPSTREAM_FAILURE,

@@ -11,9 +11,12 @@ import com.storeanalytics.integration.connection.repository.IntegrationConnectio
 import com.storeanalytics.sync.model.SyncRun;
 import com.storeanalytics.sync.model.SyncTriggerType;
 import com.storeanalytics.sync.repository.SyncRunRepository;
+import com.storeanalytics.sync.model.SyncJob;
 import com.storeanalytics.sync.exception.ActiveSyncJobException;
+import com.storeanalytics.sync.exception.SyncClassificationRequiredException;
 import com.storeanalytics.sync.model.SyncJobPhase;
 import com.storeanalytics.sync.model.SyncJobStatus;
+import com.storeanalytics.sync.model.SyncStatus;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -78,6 +81,8 @@ class SyncJobIntegrationTest {
         jdbcTemplate.update("DELETE FROM sync_run_errors");
         jdbcTemplate.update("DELETE FROM sync_runs");
         jdbcTemplate.update("DELETE FROM sync_jobs");
+        jdbcTemplate.update("DELETE FROM product_category_assignments");
+        jdbcTemplate.update("DELETE FROM products");
         jdbcTemplate.update("DELETE FROM user_store_access");
         jdbcTemplate.update("DELETE FROM app_users");
         admin = userRepository.saveAndFlush(new AppUser(
@@ -86,6 +91,74 @@ class SyncJobIntegrationTest {
                 "Sync Admin",
                 UserRole.ADMIN
         ));
+        IntegrationConnection connection = connectionRepository
+                .findByConnectionKeyAndActiveTrue("livesklad-default")
+                .orElseThrow();
+        UUID productId = UUID.randomUUID();
+        jdbcTemplate.update(
+                """
+                INSERT INTO products (
+                    id, connection_id, source_system, external_id, code, name,
+                    source_kind, is_active, metadata
+                ) VALUES (?, ?, 'LIVESKLAD', 'approved-product', 'approved-product',
+                          'Approved product', 'UNKNOWN', true, '{}'::jsonb)
+                """,
+                productId,
+                connection.getId()
+        );
+        jdbcTemplate.update(
+                """
+                INSERT INTO product_category_assignments (
+                    product_id, analytics_category_id, condition_type,
+                    assignment_source, rule_version, valid_from, assigned_by,
+                    change_reason
+                )
+                SELECT ?, category.id, 'NOT_APPLICABLE', 'INITIAL_IMPORT',
+                       'test-approved-v1', '2025-12-31 22:00:00+00', ?,
+                       'Test approved classification'
+                FROM analytics_categories category
+                WHERE category.code = 'CHARGER_CABLE'
+                """,
+                productId,
+                admin.getId()
+        );
+    }
+
+    @Test
+    void rejectsBackfillUntilApprovedClassificationIsEffective() {
+        jdbcTemplate.update("DELETE FROM product_category_assignments");
+
+        SyncClassificationReadinessView readiness =
+                jobService.classificationReadiness(LocalDate.of(2026, 1, 1));
+
+        assertThat(readiness.ready()).isFalse();
+        assertThat(readiness.effectiveAssignmentCount()).isZero();
+        assertThat(readiness.totalAssignmentCount()).isZero();
+        assertThat(readiness.productCount()).isOne();
+        assertThatThrownBy(() -> jobService.createBackfill(
+                LocalDate.of(2026, 1, 1),
+                LocalDate.of(2026, 1, 1),
+                admin.getId()
+        )).isInstanceOf(SyncClassificationRequiredException.class);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM sync_jobs",
+                Integer.class
+        )).isZero();
+    }
+
+    @Test
+    void reportsClassificationReadinessForBackfillStart() {
+        SyncClassificationReadinessView readiness =
+                jobService.classificationReadiness(LocalDate.of(2026, 1, 1));
+
+        assertThat(readiness.ready()).isTrue();
+        assertThat(readiness.connectionKey()).isEqualTo("livesklad-default");
+        assertThat(readiness.periodStart())
+                .isEqualTo(Instant.parse("2025-12-31T22:00:00Z"));
+        assertThat(readiness.effectiveAssignmentCount()).isOne();
+        assertThat(readiness.totalAssignmentCount()).isOne();
+        assertThat(readiness.productCount()).isOne();
+        assertThat(readiness.unmappedSalesItemCount()).isZero();
     }
 
     @Test
@@ -241,6 +314,18 @@ class SyncJobIntegrationTest {
     void recoversExpiredLeaseAndAllowsAnotherWorkerToResume() {
         SyncJobView created = createOneDayJob();
         coordinator.claimNext(WORKER).orElseThrow();
+        IntegrationConnection connection = connectionRepository
+                .findById(created.connectionId())
+                .orElseThrow();
+        SyncRun interruptedRun = syncRunRepository.saveAndFlush(
+                SyncRun.startStoreSync(
+                        connection,
+                        SyncTriggerType.INITIAL,
+                        created.id(),
+                        admin,
+                        Instant.parse("2026-01-01T00:00:00Z")
+                )
+        );
         jdbcTemplate.update(
                 "UPDATE sync_jobs SET lease_until = now() - interval '1 second' WHERE id = ?",
                 created.id()
@@ -252,8 +337,32 @@ class SyncJobIntegrationTest {
         assertThat(recovered.status()).isEqualTo(SyncJobStatus.WAITING_RETRY);
         assertThat(recovered.attemptCount()).isEqualTo(1);
         assertThat(recovered.errorSummary()).isEqualTo(
-                "Synchronization worker lease expired"
+                SyncJob.EXPIRED_LEASE_ERROR_SUMMARY
         );
+        SyncRun recoveredRun = syncRunRepository.findById(interruptedRun.getId())
+                .orElseThrow();
+        assertThat(recoveredRun.getStatus()).isEqualTo(SyncStatus.FAILED);
+        assertThat(recoveredRun.getRecordsFetched()).isZero();
+        assertThat(recoveredRun.getRecordsFailed()).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT count(*)
+                FROM sync_run_errors
+                WHERE sync_run_id = ?
+                  AND stage = 'SYNC_JOB_RECOVERY'
+                  AND error_code = 'SYNC_WORKER_LEASE_EXPIRED'
+                  AND error_message = ?
+                  AND is_retryable
+                """,
+                Integer.class,
+                interruptedRun.getId(),
+                SyncJob.EXPIRED_LEASE_ERROR_SUMMARY
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT finished_at IS NOT NULL FROM sync_runs WHERE id = ?",
+                Boolean.class,
+                interruptedRun.getId()
+        )).isTrue();
 
         jdbcTemplate.update(
                 "UPDATE sync_jobs SET next_attempt_at = now() - interval '1 second' WHERE id = ?",

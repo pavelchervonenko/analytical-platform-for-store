@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ProductRepository extends JpaRepository<Product, UUID> {
 
+    long countByConnectionId(UUID connectionId);
+
     Optional<Product> findByConnectionIdAndExternalId(UUID connectionId, String externalId);
 
     List<Product> findAllByConnectionIdAndCode(UUID connectionId, String code);

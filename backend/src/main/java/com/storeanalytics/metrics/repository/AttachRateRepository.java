@@ -14,24 +14,17 @@ public class AttachRateRepository {
     private static final String ATTACH_RATE_QUERY = """
             WITH period_documents AS (
                 SELECT
-                    document.id AS document_id,
-                    document.document_kind,
-                    CASE document.document_kind
-                        WHEN 'SALE' THEN document.id
-                        ELSE document.original_document_id
-                    END AS context_document_id
+                    document.id AS document_id
                 FROM sales_documents document
                 WHERE document.store_id = :storeId
                   AND document.business_date BETWEEN :periodStart AND :periodEnd
+                  AND document.document_kind = 'SALE'
                   AND NOT document.is_deleted
             ),
             period_items AS (
                 SELECT
                     period_document.document_id,
-                    period_document.context_document_id,
-                    CASE period_document.document_kind WHEN 'SALE' THEN 1 ELSE -1 END AS sign,
                     item.analytics_category_id,
-                    item.quantity,
                     item.condition_type_snapshot,
                     category.code AS category_code,
                     category.device_family,
@@ -44,14 +37,9 @@ public class AttachRateRepository {
                 WHERE NOT item.is_deleted
                   AND category.code <> 'EXCLUDE'
             ),
-            context_documents AS (
-                SELECT DISTINCT context_document_id
-                FROM period_documents
-                WHERE context_document_id IS NOT NULL
-            ),
             context_device_summary AS (
                 SELECT
-                    requested.context_document_id,
+                    item.document_id AS context_document_id,
                     BOOL_OR(
                         category.counts_as_phone
                         AND category.device_family = 'IPHONE'
@@ -77,17 +65,9 @@ public class AttachRateRepository {
                         category.counts_as_device
                         AND item.condition_type_snapshot = 'USED'
                     ) AS has_used_device
-                FROM context_documents requested
-                JOIN sales_documents context_document
-                  ON context_document.id = requested.context_document_id
-                 AND context_document.store_id = :storeId
-                 AND NOT context_document.is_deleted
-                JOIN sales_document_items item
-                  ON item.sales_document_id = context_document.id
-                 AND NOT item.is_deleted
+                FROM period_items item
                 JOIN analytics_categories category ON category.id = item.analytics_category_id
-                WHERE category.code <> 'EXCLUDE'
-                GROUP BY requested.context_document_id
+                GROUP BY item.document_id
             ),
             original_rate_categories AS (
                 SELECT
@@ -132,8 +112,6 @@ public class AttachRateRepository {
                     definition.numerator_category_code,
                     definition.denominator_code,
                     item.document_id,
-                    item.sign,
-                    item.quantity,
                     CASE
                         WHEN definition.match_device_condition
                              AND definition.denominator_code = 'NEW_DEVICE'
@@ -162,26 +140,23 @@ public class AttachRateRepository {
                 LEFT JOIN period_items item
                   ON item.analytics_category_id = definition.numerator_category_id
                 LEFT JOIN context_device_summary context
-                  ON context.context_document_id = item.context_document_id
+                  ON context.context_document_id = item.document_id
             ),
             numerator_totals AS (
                 SELECT
                     metric_code,
                     numerator_category_code,
                     denominator_code,
-                    COALESCE(
-                        SUM(sign * quantity) FILTER (
-                            WHERE document_id IS NOT NULL AND attached
-                        ),
-                        0
-                    ) AS numerator_quantity
+                    COUNT(DISTINCT document_id) FILTER (
+                        WHERE document_id IS NOT NULL AND attached
+                    ) AS numerator_receipt_count
                 FROM numerator_candidates
                 GROUP BY metric_code, numerator_category_code, denominator_code
             ),
             denominator_totals AS (
                 SELECT
                     definition.metric_code,
-                    COALESCE(SUM(item.sign * item.quantity), 0) AS denominator_quantity
+                    COUNT(DISTINCT item.document_id) AS denominator_receipt_count
                 FROM rate_definitions definition
                 LEFT JOIN period_items item ON CASE definition.denominator_code
                     WHEN 'IPHONE' THEN item.counts_as_phone
@@ -225,7 +200,7 @@ public class AttachRateRepository {
                 JOIN original_rate_categories original
                   ON original.numerator_category_id = item.analytics_category_id
                 LEFT JOIN context_device_summary context
-                  ON context.context_document_id = item.context_document_id
+                  ON context.context_document_id = item.document_id
             ),
             quality AS (
                 SELECT
@@ -251,8 +226,8 @@ public class AttachRateRepository {
                 numerator.metric_code,
                 numerator.numerator_category_code,
                 numerator.denominator_code,
-                numerator.numerator_quantity,
-                denominator.denominator_quantity,
+                numerator.numerator_receipt_count,
+                denominator.denominator_receipt_count,
                 quality.unmatched_numerator_item_count,
                 quality.ambiguous_warranty_item_count,
                 quality.unknown_device_condition_item_count
@@ -285,8 +260,8 @@ public class AttachRateRepository {
                         resultSet.getString("metric_code"),
                         resultSet.getString("numerator_category_code"),
                         AttachDenominatorCode.valueOf(resultSet.getString("denominator_code")),
-                        resultSet.getBigDecimal("numerator_quantity"),
-                        resultSet.getBigDecimal("denominator_quantity"),
+                        resultSet.getBigDecimal("numerator_receipt_count"),
+                        resultSet.getBigDecimal("denominator_receipt_count"),
                         resultSet.getLong("unmatched_numerator_item_count"),
                         resultSet.getLong("ambiguous_warranty_item_count"),
                         resultSet.getLong("unknown_device_condition_item_count")

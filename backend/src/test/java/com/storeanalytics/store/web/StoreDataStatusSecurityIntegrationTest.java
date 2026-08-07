@@ -167,6 +167,18 @@ class StoreDataStatusSecurityIntegrationTest {
         mockMvc.perform(get("/api/stores/{storeId}/data-status", deniedStore.getId())
                         .session(managerSession))
                 .andExpect(status().isForbidden());
+        mockMvc.perform(get(
+                        "/api/stores/{storeId}/interpretations/weekly/latest",
+                        assignedStore.getId()
+                ).session(managerSession))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code")
+                        .value("WEEKLY_INTERPRETATION_NOT_FOUND"));
+        mockMvc.perform(get(
+                        "/api/stores/{storeId}/interpretations/weekly/latest",
+                        deniedStore.getId()
+                ).session(managerSession))
+                .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/stores/{storeId}/data-quality", assignedStore.getId())
                         .session(managerSession))
                 .andExpect(status().isOk())
@@ -240,7 +252,31 @@ class StoreDataStatusSecurityIntegrationTest {
                 .andExpect(jsonPath("$.info.version").value(ApiContractVersion.CURRENT))
                 .andExpect(jsonPath("$.paths['/api/data-quality/summary']").exists())
                 .andExpect(jsonPath(
+                        "$.paths['/api/sync/jobs/backfill-readiness']"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.components.schemas.SyncClassificationReadinessView"
+                ).exists())
+                .andExpect(jsonPath(
                         "$.paths['/api/stores/{storeId}/data-quality']"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.paths['/api/stores/{storeId}/interpretations/weekly']"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.paths['/api/stores/{storeId}/interpretations/weekly/latest']"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.paths['/api/stores/{storeId}/interpretations/weekly/"
+                                + "{interpretationId}']"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.components.schemas.WeeklyInterpretationSummaryView.properties"
+                                + ".contentHash"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.components.schemas.WeeklyInterpretationDetailView.properties"
+                                + ".employees"
                 ).exists())
                 .andExpect(jsonPath(
                         "$.paths['/api/stores/{storeId}/period-quality/{month}']"

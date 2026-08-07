@@ -22,6 +22,9 @@ import java.time.Instant;
 @Table(name = "sync_jobs")
 public class SyncJob extends AbstractMutableEntity {
 
+    public static final String EXPIRED_LEASE_ERROR_SUMMARY =
+            "Synchronization worker lease expired";
+
     private static final Duration MINIMUM_WINDOW = Duration.ofMinutes(15);
     private static final int MAXIMUM_ERROR_SUMMARY_LENGTH = 300;
 
@@ -216,7 +219,7 @@ public class SyncJob extends AbstractMutableEntity {
         String owner = leaseOwner;
         retryOrFail(
                 owner,
-                "Synchronization worker lease expired",
+                EXPIRED_LEASE_ERROR_SUMMARY,
                 true,
                 nextAttempt,
                 now

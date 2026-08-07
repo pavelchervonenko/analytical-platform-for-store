@@ -4,6 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.storeanalytics.common.config.ApplicationRole;
 import com.storeanalytics.common.config.ConditionalOnApplicationRole;
+import com.storeanalytics.interpretation.config.WeeklySnapshotPlanningSchedulingConfiguration;
+import com.storeanalytics.interpretation.config.WeeklySnapshotSchedulingConfiguration;
+import com.storeanalytics.interpretation.snapshot.WeeklySnapshotJobWorker;
+import com.storeanalytics.interpretation.snapshot.WeeklySnapshotPlanner;
+import com.storeanalytics.notification.config.NotificationFanoutSchedulingConfiguration;
+import com.storeanalytics.notification.fanout.NotificationEventFanoutWorker;
 import com.storeanalytics.sync.config.SyncWorkerSchedulingConfiguration;
 import com.storeanalytics.report.config.ReportBackfillSchedulingConfiguration;
 import com.storeanalytics.report.service.ReportBackfillJobWorker;
@@ -116,6 +122,57 @@ class BackgroundSchedulingArchitectureTest {
         assertThat(scheduled).isNotNull();
         assertThat(scheduled.scheduler()).isEqualTo(
                 ReportBackfillSchedulingConfiguration.REPORT_BACKFILL_SCHEDULER
+        );
+    }
+
+    @Test
+    void weeklySnapshotWorkerSeparatesExecutionAndHeartbeatSchedulers()
+            throws NoSuchMethodException {
+        Scheduled execution = AnnotatedElementUtils.findMergedAnnotation(
+                WeeklySnapshotJobWorker.class.getDeclaredMethod("processNext"),
+                Scheduled.class
+        );
+        Scheduled heartbeat = AnnotatedElementUtils.findMergedAnnotation(
+                WeeklySnapshotJobWorker.class.getDeclaredMethod("heartbeat"),
+                Scheduled.class
+        );
+
+        assertThat(execution).isNotNull();
+        assertThat(execution.scheduler()).isEqualTo(
+                WeeklySnapshotSchedulingConfiguration.SNAPSHOT_WORKER_SCHEDULER
+        );
+        assertThat(heartbeat).isNotNull();
+        assertThat(heartbeat.scheduler()).isEqualTo(
+                WeeklySnapshotSchedulingConfiguration.SNAPSHOT_HEARTBEAT_SCHEDULER
+        );
+    }
+
+    @Test
+    void notificationFanoutUsesDedicatedScheduler() throws NoSuchMethodException {
+        Scheduled scheduled = AnnotatedElementUtils.findMergedAnnotation(
+                NotificationEventFanoutWorker.class.getDeclaredMethod("processNext"),
+                Scheduled.class
+        );
+
+        assertThat(scheduled).isNotNull();
+        assertThat(scheduled.scheduler()).isEqualTo(
+                NotificationFanoutSchedulingConfiguration
+                        .NOTIFICATION_FANOUT_SCHEDULER
+        );
+    }
+
+    @Test
+    void weeklySnapshotPlannerUsesDedicatedControlScheduler()
+            throws NoSuchMethodException {
+        Scheduled scheduled = AnnotatedElementUtils.findMergedAnnotation(
+                WeeklySnapshotPlanner.class.getDeclaredMethod("reconcile"),
+                Scheduled.class
+        );
+
+        assertThat(scheduled).isNotNull();
+        assertThat(scheduled.scheduler()).isEqualTo(
+                WeeklySnapshotPlanningSchedulingConfiguration
+                        .SNAPSHOT_PLANNING_SCHEDULER
         );
     }
 }

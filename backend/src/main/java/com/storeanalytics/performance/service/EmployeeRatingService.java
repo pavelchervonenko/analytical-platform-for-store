@@ -31,7 +31,8 @@ public class EmployeeRatingService {
     private static final int MONEY_SCALE = 2;
     private static final int HOURS_SCALE = 2;
     private static final int PERCENT_SCALE = 2;
-    private static final int RATE_SCALE = 1;
+    private static final int RATE_SCALE = 0;
+    private static final int RECEIPT_COUNT_SCALE = 0;
     private static final int SCORE_SCALE = 2;
 
     private final StoreRepository storeRepository;
@@ -214,14 +215,14 @@ public class EmployeeRatingService {
     ) {
         return employeeRates.stream().map(employee -> {
             AttachRateAggregate store = storeRates.get(employee.metricCode());
-            BigDecimal numerator = quantity(employee.numeratorQuantity());
-            BigDecimal denominator = quantity(employee.denominatorQuantity());
+            BigDecimal numerator = receiptCount(employee.numeratorReceiptCount());
+            BigDecimal denominator = receiptCount(employee.denominatorReceiptCount());
             BigDecimal rate = rate(numerator, denominator);
             BigDecimal storeRate = store == null
                     ? null
                     : rate(
-                            quantity(store.numeratorQuantity()),
-                            quantity(store.denominatorQuantity())
+                            receiptCount(store.numeratorReceiptCount()),
+                            receiptCount(store.denominatorReceiptCount())
                     );
             boolean included = denominator.compareTo(scheme.getMinimumAttachDenominator()) >= 0
                     && storeRate != null
@@ -443,8 +444,8 @@ public class EmployeeRatingService {
         return value.setScale(MONEY_SCALE, RoundingMode.UNNECESSARY);
     }
 
-    private BigDecimal quantity(BigDecimal value) {
-        return value.setScale(3, RoundingMode.UNNECESSARY);
+    private BigDecimal receiptCount(BigDecimal value) {
+        return value.setScale(RECEIPT_COUNT_SCALE, RoundingMode.UNNECESSARY);
     }
 
     private BigDecimal hours(BigDecimal value) {

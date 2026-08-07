@@ -48,9 +48,19 @@ public class AuditRetentionPolicy {
                     USER_STORE_ACCESS_CHANGED,
                     USER_PASSWORD_RESET,
                     BOOTSTRAP_ADMIN_CREATED,
-                    BREAK_GLASS_LOGIN_SUCCEEDED -> AuditRetentionClass.SECURITY;
+                    BREAK_GLASS_LOGIN_SUCCEEDED,
+                    TELEGRAM_LINK_ISSUED,
+                    TELEGRAM_LINK_PENDING,
+                    TELEGRAM_LINK_CONFIRMED,
+                    TELEGRAM_LINK_REVOKED,
+                    TELEGRAM_DELIVERY_SETTINGS_CHANGED,
+                    TELEGRAM_BOT_BLOCKED,
+                    TELEGRAM_BOT_UNBLOCKED,
+                    TELEGRAM_DELIVERY_RESEND_REQUESTED -> AuditRetentionClass.SECURITY;
             case MANUAL_SYNC_STARTED,
                     SCHEDULED_SYNC_STARTED,
+                    LLM_REGENERATION_REQUESTED,
+                    LLM_JOB_CANCELLATION_REQUESTED,
                     SYNC_JOB_CANCELLATION_REQUESTED,
                     TECHNICAL_DATA_RETENTION_COMPLETED -> AuditRetentionClass.OPERATIONAL;
             case EMPLOYEE_RATING_PARTICIPATION_CHANGED,
