@@ -1,0 +1,85 @@
+{
+  "contractVersion": 1,
+  "snapshot": {
+    "snapshotRef": "00000000-0000-4000-8000-000000000001",
+    "revision": 1,
+    "factsHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "storeRef": "S01",
+    "timezone": "Europe/Kaliningrad",
+    "period": {
+      "start": "2026-07-20",
+      "end": "2026-07-26"
+    },
+    "comparisonPeriod": {
+      "start": "2026-07-13",
+      "end": "2026-07-19"
+    },
+    "qualityStatus": "READY",
+    "versions": {
+      "factsSchemaVersion": 1,
+      "metricContractVersion": "store-kpi-v1",
+      "calculationVersion": "analytics-v1",
+      "qualityPolicyVersion": "weekly-sufficiency-v1"
+    }
+  },
+  "manifest": {
+    "employeeRefs": ["E01"],
+    "evidence": [
+      {
+        "evidenceRef": "STORE.NET_REVENUE.CURRENT",
+        "scope": "STORE",
+        "employeeRef": null,
+        "available": true
+      },
+      {
+        "evidenceRef": "EMP:E01.WORKLOAD.STATUS",
+        "scope": "EMPLOYEE",
+        "employeeRef": "E01",
+        "available": true
+      }
+    ],
+    "candidateRefs": [],
+    "categoryCodes": [],
+    "competencyCodes": [],
+    "limitations": []
+  },
+  "facts": {
+    "store": [
+      {
+        "evidenceRef": "STORE.NET_REVENUE.CURRENT",
+        "metricCode": "NET_REVENUE",
+        "categoryCode": null,
+        "unit": "MONEY",
+        "value": 100000,
+        "comparison": {
+          "previousValue": 90000,
+          "absoluteDelta": 10000,
+          "relativeDeltaPercent": 11.1111
+        },
+        "sufficiency": "SUFFICIENT",
+        "materiality": "PRIMARY"
+      }
+    ],
+    "team": [],
+    "employees": [
+      {
+        "employeeRef": "E01",
+        "analysisStatus": "SUFFICIENT",
+        "availableSections": ["RESULT"],
+        "facts": [
+          {
+            "evidenceRef": "EMP:E01.WORKLOAD.STATUS",
+            "metricCode": "WORKLOAD_STATUS",
+            "categoryCode": null,
+            "unit": "STATUS",
+            "value": "SUFFICIENT",
+            "comparison": null,
+            "sufficiency": "SUFFICIENT",
+            "materiality": "CONTEXT"
+          }
+        ]
+      }
+    ],
+    "candidateSignals": []
+  }
+}

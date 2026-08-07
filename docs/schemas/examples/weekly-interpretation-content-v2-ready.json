@@ -1,0 +1,118 @@
+{
+  "employees": [
+    {
+      "employeeRef": "E01",
+      "analysisStatus": "SUFFICIENT"
+    }
+  ],
+  "summaryBlocks": [
+    {
+      "scope": "STORE",
+      "employeeRef": null,
+      "section": "HEADLINE",
+      "categoryCode": null,
+      "text": "Магазин улучшил общий результат, однако структура продаж требует внимания.",
+      "evidenceRefs": [
+        "STORE.NET_REVENUE.DELTA",
+        "STORE.MARGIN_PERCENT.DELTA"
+      ]
+    },
+    {
+      "scope": "TEAM",
+      "employeeRef": null,
+      "section": "TEAM_OVERVIEW",
+      "categoryCode": null,
+      "text": "В команде есть подтверждённая практика для обмена опытом.",
+      "evidenceRefs": [
+        "TEAM.COMPETENCY:SERVICE_SALES.LEADERS"
+      ]
+    },
+    {
+      "scope": "EMPLOYEE",
+      "employeeRef": "E01",
+      "section": "HEADLINE",
+      "categoryCode": null,
+      "text": "Сотрудник сохраняет заметную роль в результате команды.",
+      "evidenceRefs": [
+        "EMP:E01.WORKLOAD.STATUS"
+      ]
+    },
+    {
+      "scope": "EMPLOYEE",
+      "employeeRef": "E01",
+      "section": "WORKLOAD",
+      "categoryCode": null,
+      "text": "Рабочая нагрузка достаточна для анализа доступных направлений.",
+      "evidenceRefs": [
+        "EMP:E01.WORKLOAD.SUFFICIENCY"
+      ]
+    },
+    {
+      "scope": "EMPLOYEE",
+      "employeeRef": "E01",
+      "section": "CATEGORY_PERFORMANCE",
+      "categoryCode": "SERVICE",
+      "text": "Сервисное направление является подтверждённой сильной стороной сотрудника.",
+      "evidenceRefs": [
+        "EMP:E01.GROUP:SERVICE.REVENUE_SHARE_PERCENT.CURRENT"
+      ]
+    }
+  ],
+  "insights": [
+    {
+      "scope": "STORE",
+      "employeeRef": null,
+      "categoryCode": null,
+      "kind": "SYNTHESIS",
+      "theme": "SALES_QUALITY",
+      "candidateRef": null,
+      "title": "Структура результата",
+      "summary": "Изменение структуры продаж сдерживает улучшение качественных показателей.",
+      "evidenceRefs": [
+        "STORE.MARGIN_PERCENT.DELTA",
+        "STORE.GROUP:SERVICE.REVENUE_SHARE_PERCENT.DELTA"
+      ]
+    },
+    {
+      "scope": "EMPLOYEE",
+      "employeeRef": "E01",
+      "categoryCode": "SERVICE",
+      "kind": "OBSERVATION",
+      "theme": "CATEGORY_MIX",
+      "candidateRef": null,
+      "title": "Сильное направление",
+      "summary": "Сотрудник показывает подтверждённый результат в сервисном направлении.",
+      "evidenceRefs": [
+        "EMP:E01.GROUP:SERVICE.REVENUE_SHARE_PERCENT.CURRENT"
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "type": "PEER_LEARNING",
+      "title": "Распространить сильную практику",
+      "summary": "Организовать обмен рабочими приёмами по сервисному направлению.",
+      "evidenceRefs": [
+        "TEAM.COMPETENCY:SERVICE_SALES.LEADERS"
+      ],
+      "targetScope": "TEAM",
+      "targetEmployeeRefs": [],
+      "horizon": "CURRENT_WEEK"
+    }
+  ],
+  "teamRelationships": [
+    {
+      "type": "COMPETENCY_LEADER",
+      "competencyCode": "SERVICE_SALES",
+      "sourceEmployeeRefs": [
+        "E01"
+      ],
+      "targetEmployeeRefs": [],
+      "summary": "Сотрудник является подтверждённым ориентиром в сервисном направлении.",
+      "evidenceRefs": [
+        "EMP:E01.GROUP:SERVICE.REVENUE_SHARE_PERCENT.CURRENT"
+      ]
+    }
+  ],
+  "dataLimitations": []
+}

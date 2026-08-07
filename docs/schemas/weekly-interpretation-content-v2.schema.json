@@ -1,0 +1,364 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://store-analytics.local/schemas/weekly-interpretation-content-v2.schema.json",
+  "title": "WeeklyInterpretationContent v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "employees",
+    "summaryBlocks",
+    "insights",
+    "actions",
+    "teamRelationships",
+    "dataLimitations"
+  ],
+  "properties": {
+    "employees": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/employee"},
+      "minItems": 1,
+      "maxItems": 100,
+      "uniqueItems": true
+    },
+    "summaryBlocks": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/summaryBlock"},
+      "minItems": 2,
+      "maxItems": 64
+    },
+    "insights": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/insight"},
+      "maxItems": 48
+    },
+    "actions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/action"},
+      "maxItems": 24
+    },
+    "teamRelationships": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/teamRelationship"},
+      "maxItems": 24
+    },
+    "dataLimitations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/dataLimitation"},
+      "maxItems": 100
+    }
+  },
+  "$defs": {
+    "employeeRef": {
+      "type": "string",
+      "pattern": "^E[0-9]{2,4}$",
+      "maxLength": 5
+    },
+    "evidenceRef": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[A-Z][A-Z0-9:._-]+$"
+    },
+    "nullableEmployeeRef": {
+      "anyOf": [
+        {"$ref": "#/$defs/employeeRef"},
+        {"type": "null"}
+      ]
+    },
+    "nullableCategoryCode": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100,
+          "pattern": "^[A-Z][A-Z0-9_]+$"
+        },
+        {"type": "null"}
+      ]
+    },
+    "nullableCandidateRef": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160,
+          "pattern": "^[A-Z][A-Z0-9:._-]+$"
+        },
+        {"type": "null"}
+      ]
+    },
+    "nullableCompetencyCode": {
+      "anyOf": [
+        {
+          "enum": [
+            "COMMERCIAL_CONTRIBUTION",
+            "TIME_EFFICIENCY",
+            "ACCESSORY_SALES",
+            "SERVICE_SALES",
+            "ADDITIONAL_SALES",
+            "ATTACH_RATE"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^CATEGORY:[A-Z][A-Z0-9_]+$",
+          "maxLength": 110
+        },
+        {"type": "null"}
+      ]
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/evidenceRef"},
+      "minItems": 1,
+      "maxItems": 8,
+      "uniqueItems": true
+    },
+    "employeeRefs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/employeeRef"},
+      "maxItems": 10,
+      "uniqueItems": true
+    },
+    "employee": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["employeeRef", "analysisStatus"],
+      "properties": {
+        "employeeRef": {"$ref": "#/$defs/employeeRef"},
+        "analysisStatus": {
+          "enum": ["SUFFICIENT", "LIMITED", "INSUFFICIENT"]
+        }
+      }
+    },
+    "summaryBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "employeeRef",
+        "section",
+        "categoryCode",
+        "text",
+        "evidenceRefs"
+      ],
+      "properties": {
+        "scope": {"enum": ["STORE", "TEAM", "EMPLOYEE"]},
+        "employeeRef": {"$ref": "#/$defs/nullableEmployeeRef"},
+        "section": {
+          "enum": [
+            "HEADLINE",
+            "WORKLOAD",
+            "RESULT",
+            "DYNAMICS",
+            "CATEGORY_PERFORMANCE",
+            "ADDITIONAL_SALES",
+            "PLAN_OUTLOOK",
+            "TEAM_OVERVIEW"
+          ]
+        },
+        "categoryCode": {"$ref": "#/$defs/nullableCategoryCode"},
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "evidenceRefs": {"$ref": "#/$defs/evidenceRefs"}
+      }
+    },
+    "insight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "employeeRef",
+        "categoryCode",
+        "kind",
+        "theme",
+        "candidateRef",
+        "title",
+        "summary",
+        "evidenceRefs"
+      ],
+      "properties": {
+        "scope": {"enum": ["STORE", "TEAM", "EMPLOYEE"]},
+        "employeeRef": {"$ref": "#/$defs/nullableEmployeeRef"},
+        "categoryCode": {"$ref": "#/$defs/nullableCategoryCode"},
+        "kind": {
+          "enum": [
+            "OBSERVATION",
+            "SYNTHESIS",
+            "HYPOTHESIS",
+            "RISK",
+            "OPPORTUNITY"
+          ]
+        },
+        "theme": {
+          "enum": [
+            "FINANCIAL_RESULT",
+            "REVENUE_DYNAMICS",
+            "PROFITABILITY",
+            "PLAN",
+            "CATEGORY_MIX",
+            "ADDITIONAL_SALES",
+            "ATTACH_RATE",
+            "RETURNS",
+            "TIME_EFFICIENCY",
+            "TEAM_PERFORMANCE",
+            "EMPLOYEE_PERFORMANCE",
+            "SALES_QUALITY",
+            "DATA_QUALITY",
+            "OTHER"
+          ]
+        },
+        "candidateRef": {"$ref": "#/$defs/nullableCandidateRef"},
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "evidenceRefs": {"$ref": "#/$defs/evidenceRefs"}
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "title",
+        "summary",
+        "evidenceRefs",
+        "targetScope",
+        "targetEmployeeRefs",
+        "horizon"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "COACHING",
+            "PEER_LEARNING",
+            "PROCESS_REVIEW",
+            "CATEGORY_FOCUS",
+            "MONITORING",
+            "INVESTIGATION"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "evidenceRefs": {"$ref": "#/$defs/evidenceRefs"},
+        "targetScope": {"enum": ["STORE", "TEAM", "EMPLOYEE"]},
+        "targetEmployeeRefs": {"$ref": "#/$defs/employeeRefs"},
+        "horizon": {
+          "enum": [
+            "CURRENT_WEEK",
+            "NEXT_WEEK",
+            "MONTH_END",
+            "MONITORING_PERIOD"
+          ]
+        }
+      }
+    },
+    "teamRelationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "competencyCode",
+        "sourceEmployeeRefs",
+        "targetEmployeeRefs",
+        "summary",
+        "evidenceRefs"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "COMPETENCY_LEADER",
+            "MOST_IMPROVED",
+            "LEARNING_OPPORTUNITY"
+          ]
+        },
+        "competencyCode": {"$ref": "#/$defs/nullableCompetencyCode"},
+        "sourceEmployeeRefs": {"$ref": "#/$defs/employeeRefs"},
+        "targetEmployeeRefs": {"$ref": "#/$defs/employeeRefs"},
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "evidenceRefs": {"$ref": "#/$defs/evidenceRefs"}
+      }
+    },
+    "dataLimitation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "scope",
+        "employeeRef",
+        "categoryCode",
+        "impact",
+        "affectedSections",
+        "summary",
+        "evidenceRefs"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 100,
+          "pattern": "^[A-Z][A-Z0-9_]+$"
+        },
+        "scope": {
+          "enum": ["STORE", "TEAM", "EMPLOYEE", "CATEGORY", "METRIC"]
+        },
+        "employeeRef": {"$ref": "#/$defs/nullableEmployeeRef"},
+        "categoryCode": {"$ref": "#/$defs/nullableCategoryCode"},
+        "impact": {"enum": ["REDUCED_CONFIDENCE", "UNAVAILABLE"]},
+        "affectedSections": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "RESULT",
+              "DYNAMICS",
+              "PLAN",
+              "PROFITABILITY",
+              "CATEGORY_PERFORMANCE",
+              "ADDITIONAL_SALES",
+              "TIME_EFFICIENCY",
+              "RATING",
+              "TEAM_COMPARISON",
+              "RECOMMENDATIONS"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 10,
+          "uniqueItems": true
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/evidenceRef"},
+          "maxItems": 8,
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

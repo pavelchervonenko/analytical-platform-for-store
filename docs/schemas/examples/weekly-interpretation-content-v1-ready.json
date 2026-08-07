@@ -1,0 +1,361 @@
+{
+  "store": {
+    "headline": {
+      "text": "Магазин улучшил оборот, но качество структуры результата требует внимания.",
+      "evidenceRefs": [
+        "STORE.NET_REVENUE.DELTA",
+        "STORE.MARGIN_PERCENT.DELTA"
+      ]
+    },
+    "resultSummary": {
+      "text": "Финансовый результат улучшился относительно предыдущей недели.",
+      "evidenceRefs": [
+        "STORE.NET_REVENUE.CURRENT",
+        "STORE.GROSS_PROFIT.CURRENT",
+        "STORE.MARGIN_PERCENT.CURRENT"
+      ]
+    },
+    "dynamicsSummary": {
+      "text": "Рост распределён между несколькими направлениями, при этом часть показателей ослабла.",
+      "evidenceRefs": [
+        "STORE.NET_REVENUE.DELTA",
+        "STORE.GROUP:SERVICE.REVENUE_SHARE_PERCENT.DELTA"
+      ]
+    },
+    "categoryPerformance": {
+      "summary": {
+        "text": "Основное изменение результата связано со структурой категорий.",
+        "evidenceRefs": [
+          "STORE.GROUP:PHONES.NET_REVENUE.DELTA",
+          "STORE.GROUP:SERVICE.NET_REVENUE.DELTA"
+        ]
+      },
+      "growthDrivers": [
+        {
+          "kind": "OBSERVATION",
+          "theme": "CATEGORY_MIX",
+          "candidateRef": null,
+          "title": "Драйвер роста",
+          "summary": "Ключевая категория обеспечила основную часть роста.",
+          "evidenceRefs": [
+            "STORE.GROUP:PHONES.NET_REVENUE.DELTA"
+          ]
+        }
+      ],
+      "declineDrivers": [],
+      "mixInsights": [
+        {
+          "kind": "SYNTHESIS",
+          "theme": "SALES_QUALITY",
+          "candidateRef": null,
+          "title": "Изменение структуры",
+          "summary": "Рост оборота не сопровождался сопоставимым усилением сервисного направления.",
+          "evidenceRefs": [
+            "STORE.NET_REVENUE.DELTA",
+            "STORE.GROUP:SERVICE.REVENUE_SHARE_PERCENT.DELTA"
+          ]
+        }
+      ]
+    },
+    "additionalSalesPerformance": {
+      "summary": {
+        "text": "Дополнительные продажи сохраняют заметный вклад в результат магазина.",
+        "evidenceRefs": [
+          "STORE.GROUP:ADDITIONAL_REVENUE.NET_REVENUE.CURRENT",
+          "STORE.GROUP:ADDITIONAL_REVENUE.REVENUE_SHARE_PERCENT.CURRENT"
+        ]
+      },
+      "revenueInsights": [],
+      "attachRateInsights": [],
+      "opportunities": []
+    },
+    "planOutlook": {
+      "text": "Текущий темп сохраняет достижимость месячного ориентира, но требует контроля.",
+      "evidenceRefs": [
+        "STORE.PLAN:REVENUE.PROJECTED_AMOUNT",
+        "STORE.PLAN:REVENUE.REQUIRED_PER_REMAINING_DAY"
+      ]
+    },
+    "strength": {
+      "kind": "SYNTHESIS",
+      "theme": "REVENUE_DYNAMICS",
+      "candidateRef": null,
+      "title": "Рост результата",
+      "summary": "Магазин улучшил общий финансовый результат относительно предыдущей недели.",
+      "evidenceRefs": [
+        "STORE.NET_REVENUE.DELTA",
+        "STORE.GROSS_PROFIT.DELTA"
+      ]
+    },
+    "attentionArea": {
+      "kind": "SYNTHESIS",
+      "theme": "SALES_QUALITY",
+      "candidateRef": null,
+      "title": "Структура результата",
+      "summary": "Изменение структуры продаж сдерживает улучшение качественных показателей.",
+      "evidenceRefs": [
+        "STORE.MARGIN_PERCENT.DELTA",
+        "STORE.GROUP:SERVICE.REVENUE_SHARE_PERCENT.DELTA"
+      ]
+    },
+    "primaryRisk": {
+      "kind": "RISK",
+      "theme": "PLAN",
+      "candidateRef": null,
+      "title": "Риск замедления темпа",
+      "summary": "При ослаблении текущей динамики достижимость месячного ориентира может ухудшиться.",
+      "evidenceRefs": [
+        "STORE.PLAN:REVENUE.PROJECTED_AMOUNT",
+        "STORE.NET_REVENUE.TREND"
+      ]
+    },
+    "recommendedActions": [
+      {
+        "type": "CATEGORY_FOCUS",
+        "title": "Сфокусироваться на структуре продаж",
+        "summary": "Обсудить с командой практики, которые поддерживают сервисное направление.",
+        "evidenceRefs": [
+          "STORE.GROUP:SERVICE.REVENUE_SHARE_PERCENT.DELTA",
+          "TEAM.COMPETENCY:SERVICE_SALES.LEADERS"
+        ],
+        "targetScope": "TEAM",
+        "targetEmployeeRefs": [],
+        "horizon": "CURRENT_WEEK"
+      }
+    ]
+  },
+  "teamInsights": {
+    "summary": {
+      "text": "Команда показывает неоднородный результат по вкладу, эффективности и дополнительным продажам.",
+      "evidenceRefs": [
+        "TEAM.RATING.DISTRIBUTION",
+        "TEAM.ADDITIONAL_SALES.DISTRIBUTION"
+      ]
+    },
+    "highlights": [
+      {
+        "kind": "SYNTHESIS",
+        "theme": "TEAM_PERFORMANCE",
+        "candidateRef": null,
+        "title": "Сильная компетенция команды",
+        "summary": "В команде есть подтверждённая практика, которую можно распространить между сотрудниками.",
+        "evidenceRefs": [
+          "TEAM.COMPETENCY:SERVICE_SALES.LEADERS",
+          "TEAM.GROUP:SERVICE.DISTRIBUTION"
+        ]
+      },
+      {
+        "kind": "OPPORTUNITY",
+        "theme": "ADDITIONAL_SALES",
+        "candidateRef": null,
+        "title": "Возможность обмена опытом",
+        "summary": "Разница результатов сотрудников создаёт возможность для целевого обмена практикой.",
+        "evidenceRefs": [
+          "TEAM.ATTACH_RATE.DISTRIBUTION",
+          "TEAM.COMPETENCY:ATTACH_RATE.LEADERS"
+        ]
+      }
+    ],
+    "competencyLeaders": [
+      {
+        "competencyCode": "SERVICE_SALES",
+        "employeeRefs": [
+          "E01"
+        ],
+        "summary": "Сотрудник является подтверждённым ориентиром в сервисном направлении.",
+        "evidenceRefs": [
+          "EMP:E01.GROUP:SERVICE.REVENUE_SHARE_PERCENT.CURRENT",
+          "TEAM.GROUP:SERVICE.REVENUE_SHARE_PERCENT.MEDIAN"
+        ]
+      }
+    ],
+    "mostImproved": [
+      {
+        "employeeRef": "E02",
+        "kind": "OBSERVATION",
+        "summary": "Сотрудник показывает наиболее заметную подтверждённую положительную динамику.",
+        "evidenceRefs": [
+          "EMP:E02.RATING.CURRENT",
+          "EMP:E02.RATING.PREVIOUS"
+        ]
+      }
+    ],
+    "learningOpportunities": [
+      {
+        "competencyCode": "SERVICE_SALES",
+        "mentorEmployeeRefs": [
+          "E01"
+        ],
+        "targetEmployeeRefs": [
+          "E02"
+        ],
+        "summary": "Практику лидера сервисного направления можно использовать для обмена опытом.",
+        "evidenceRefs": [
+          "EMP:E01.GROUP:SERVICE.REVENUE_SHARE_PERCENT.CURRENT",
+          "EMP:E02.GROUP:SERVICE.REVENUE_SHARE_PERCENT.CURRENT"
+        ]
+      }
+    ]
+  },
+  "employees": [
+    {
+      "employeeRef": "E01",
+      "analysisStatus": "SUFFICIENT",
+      "headline": {
+        "text": "Сотрудник сохраняет заметную роль в результате команды.",
+        "evidenceRefs": [
+          "EMP:E01.WORKLOAD.STATUS"
+        ]
+      },
+      "workloadContext": {
+        "text": "Рабочая нагрузка достаточна для сопоставления основных направлений.",
+        "evidenceRefs": [
+          "EMP:E01.WORKLOAD.SUFFICIENCY"
+        ]
+      },
+      "performanceSummary": {
+        "text": "Вклад и эффективность сотрудника подтверждаются доступной выборкой.",
+        "evidenceRefs": [
+          "EMP:E01.NET_REVENUE.CURRENT",
+          "EMP:E01.REVENUE_PER_HOUR.CURRENT"
+        ]
+      },
+      "dynamicsSummary": {
+        "text": "Относительно предыдущей недели сотрудник улучшил часть нормализованных показателей.",
+        "evidenceRefs": [
+          "EMP:E01.RATING.CURRENT",
+          "EMP:E01.RATING.PREVIOUS"
+        ]
+      },
+      "categoryPerformance": {
+        "summary": {
+          "text": "Категорийный профиль показывает устойчивую сильную сторону.",
+          "evidenceRefs": [
+            "EMP:E01.GROUP:SERVICE.REVENUE_SHARE_PERCENT.CURRENT"
+          ]
+        },
+        "strengths": [
+          {
+            "kind": "OBSERVATION",
+            "theme": "CATEGORY_MIX",
+            "candidateRef": null,
+            "title": "Сильная категория",
+            "summary": "Сотрудник показывает подтверждённый результат в значимой категории.",
+            "evidenceRefs": [
+              "EMP:E01.GROUP:SERVICE.REVENUE_SHARE_PERCENT.CURRENT",
+              "STORE.GROUP:SERVICE.REVENUE_SHARE_PERCENT.CURRENT"
+            ]
+          }
+        ],
+        "attentionAreas": [],
+        "dynamics": []
+      },
+      "additionalSalesPerformance": {
+        "summary": {
+          "text": "Дополнительные продажи поддерживают общий результат сотрудника.",
+          "evidenceRefs": [
+            "EMP:E01.GROUP:ADDITIONAL_REVENUE.REVENUE_SHARE_PERCENT.CURRENT"
+          ]
+        },
+        "revenueInsights": [],
+        "attachRateInsights": [],
+        "opportunities": []
+      },
+      "strength": {
+        "kind": "SYNTHESIS",
+        "theme": "EMPLOYEE_PERFORMANCE",
+        "candidateRef": null,
+        "title": "Подтверждённая сильная сторона",
+        "summary": "Сотрудник сочетает коммерческий вклад с устойчивой эффективностью.",
+        "evidenceRefs": [
+          "EMP:E01.NET_REVENUE.CURRENT",
+          "EMP:E01.REVENUE_PER_HOUR.CURRENT"
+        ]
+      },
+      "attentionArea": null,
+      "primaryRisk": null,
+      "recommendedActions": [],
+      "dataLimitations": []
+    },
+    {
+      "employeeRef": "E02",
+      "analysisStatus": "SUFFICIENT",
+      "headline": {
+        "text": "Сотрудник сохраняет заметную роль в результате команды.",
+        "evidenceRefs": [
+          "EMP:E02.WORKLOAD.STATUS"
+        ]
+      },
+      "workloadContext": {
+        "text": "Рабочая нагрузка достаточна для сопоставления основных направлений.",
+        "evidenceRefs": [
+          "EMP:E02.WORKLOAD.SUFFICIENCY"
+        ]
+      },
+      "performanceSummary": {
+        "text": "Вклад и эффективность сотрудника подтверждаются доступной выборкой.",
+        "evidenceRefs": [
+          "EMP:E02.NET_REVENUE.CURRENT",
+          "EMP:E02.REVENUE_PER_HOUR.CURRENT"
+        ]
+      },
+      "dynamicsSummary": {
+        "text": "Относительно предыдущей недели сотрудник улучшил часть нормализованных показателей.",
+        "evidenceRefs": [
+          "EMP:E02.RATING.CURRENT",
+          "EMP:E02.RATING.PREVIOUS"
+        ]
+      },
+      "categoryPerformance": {
+        "summary": {
+          "text": "Категорийный профиль показывает устойчивую сильную сторону.",
+          "evidenceRefs": [
+            "EMP:E02.GROUP:SERVICE.REVENUE_SHARE_PERCENT.CURRENT"
+          ]
+        },
+        "strengths": [
+          {
+            "kind": "OBSERVATION",
+            "theme": "CATEGORY_MIX",
+            "candidateRef": null,
+            "title": "Сильная категория",
+            "summary": "Сотрудник показывает подтверждённый результат в значимой категории.",
+            "evidenceRefs": [
+              "EMP:E02.GROUP:SERVICE.REVENUE_SHARE_PERCENT.CURRENT",
+              "STORE.GROUP:SERVICE.REVENUE_SHARE_PERCENT.CURRENT"
+            ]
+          }
+        ],
+        "attentionAreas": [],
+        "dynamics": []
+      },
+      "additionalSalesPerformance": {
+        "summary": {
+          "text": "Дополнительные продажи поддерживают общий результат сотрудника.",
+          "evidenceRefs": [
+            "EMP:E02.GROUP:ADDITIONAL_REVENUE.REVENUE_SHARE_PERCENT.CURRENT"
+          ]
+        },
+        "revenueInsights": [],
+        "attachRateInsights": [],
+        "opportunities": []
+      },
+      "strength": {
+        "kind": "SYNTHESIS",
+        "theme": "EMPLOYEE_PERFORMANCE",
+        "candidateRef": null,
+        "title": "Подтверждённая сильная сторона",
+        "summary": "Сотрудник сочетает коммерческий вклад с устойчивой эффективностью.",
+        "evidenceRefs": [
+          "EMP:E02.NET_REVENUE.CURRENT",
+          "EMP:E02.REVENUE_PER_HOUR.CURRENT"
+        ]
+      },
+      "attentionArea": null,
+      "primaryRisk": null,
+      "recommendedActions": [],
+      "dataLimitations": []
+    }
+  ],
+  "dataLimitations": []
+}

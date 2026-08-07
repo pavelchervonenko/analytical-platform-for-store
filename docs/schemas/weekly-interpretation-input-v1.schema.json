@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://store-analytics.local/schemas/weekly-interpretation-input-v1.schema.json",
+  "title": "WeeklyInterpretationInput v1",
+  "description": "Provider-neutral, pseudonymized input projection built from one immutable weekly analytics snapshot.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "snapshot", "manifest", "facts"],
+  "properties": {
+    "contractVersion": {"const": 1},
+    "snapshot": {"$ref": "#/$defs/snapshot"},
+    "manifest": {"$ref": "#/$defs/manifest"},
+    "facts": {"$ref": "#/$defs/facts"}
+  },
+  "$defs": {
+    "employeeRef": {
+      "type": "string",
+      "pattern": "^E[0-9]{2,4}$"
+    },
+    "evidenceRef": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[A-Z][A-Z0-9:._-]+$"
+    },
+    "code": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 120,
+      "pattern": "^[A-Z][A-Z0-9:._-]+$"
+    },
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": {"type": "string", "format": "date"},
+        "end": {"type": "string", "format": "date"}
+      }
+    },
+    "versions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "factsSchemaVersion",
+        "metricContractVersion",
+        "calculationVersion",
+        "qualityPolicyVersion"
+      ],
+      "properties": {
+        "factsSchemaVersion": {"type": "integer", "minimum": 1},
+        "metricContractVersion": {"type": "string", "minLength": 1, "maxLength": 80},
+        "calculationVersion": {"type": "string", "minLength": 1, "maxLength": 80},
+        "qualityPolicyVersion": {"type": "string", "minLength": 1, "maxLength": 80}
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshotRef",
+        "revision",
+        "factsHash",
+        "storeRef",
+        "timezone",
+        "period",
+        "comparisonPeriod",
+        "qualityStatus",
+        "versions"
+      ],
+      "properties": {
+        "snapshotRef": {"type": "string", "format": "uuid"},
+        "revision": {"type": "integer", "minimum": 1},
+        "factsHash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "storeRef": {"type": "string", "pattern": "^S[0-9]{2,4}$"},
+        "timezone": {"type": "string", "minLength": 1, "maxLength": 80},
+        "period": {"$ref": "#/$defs/period"},
+        "comparisonPeriod": {"$ref": "#/$defs/period"},
+        "qualityStatus": {"enum": ["READY", "PARTIAL"]},
+        "versions": {"$ref": "#/$defs/versions"}
+      }
+    },
+    "evidenceIndexEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidenceRef", "scope", "employeeRef", "available"],
+      "properties": {
+        "evidenceRef": {"$ref": "#/$defs/evidenceRef"},
+        "scope": {"enum": ["STORE", "TEAM", "EMPLOYEE", "CATEGORY", "METRIC"]},
+        "employeeRef": {
+          "anyOf": [{"$ref": "#/$defs/employeeRef"}, {"type": "null"}]
+        },
+        "available": {"type": "boolean"}
+      }
+    },
+    "limitation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "scope",
+        "employeeRef",
+        "categoryCode",
+        "impact",
+        "affectedSections",
+        "evidenceRefs"
+      ],
+      "properties": {
+        "code": {"$ref": "#/$defs/code"},
+        "scope": {"enum": ["STORE", "TEAM", "EMPLOYEE", "CATEGORY", "METRIC"]},
+        "employeeRef": {
+          "anyOf": [{"$ref": "#/$defs/employeeRef"}, {"type": "null"}]
+        },
+        "categoryCode": {
+          "anyOf": [{"$ref": "#/$defs/code"}, {"type": "null"}]
+        },
+        "impact": {"enum": ["REDUCED_CONFIDENCE", "UNAVAILABLE"]},
+        "affectedSections": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/code"},
+          "minItems": 1,
+          "maxItems": 10,
+          "uniqueItems": true
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/evidenceRef"},
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true
+        }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "employeeRefs",
+        "evidence",
+        "candidateRefs",
+        "categoryCodes",
+        "competencyCodes",
+        "limitations"
+      ],
+      "properties": {
+        "employeeRefs": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/employeeRef"},
+          "maxItems": 10,
+          "uniqueItems": true
+        },
+        "evidence": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/evidenceIndexEntry"},
+          "minItems": 0,
+          "maxItems": 2000
+        },
+        "candidateRefs": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/code"},
+          "maxItems": 100,
+          "uniqueItems": true
+        },
+        "categoryCodes": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/code"},
+          "maxItems": 100,
+          "uniqueItems": true
+        },
+        "competencyCodes": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/code"},
+          "maxItems": 100,
+          "uniqueItems": true
+        },
+        "limitations": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/limitation"},
+          "maxItems": 20
+        }
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["previousValue", "absoluteDelta", "relativeDeltaPercent"],
+      "properties": {
+        "previousValue": {"type": ["number", "null"]},
+        "absoluteDelta": {"type": ["number", "null"]},
+        "relativeDeltaPercent": {"type": ["number", "null"]}
+      }
+    },
+    "fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidenceRef",
+        "metricCode",
+        "categoryCode",
+        "unit",
+        "value",
+        "comparison",
+        "sufficiency",
+        "materiality"
+      ],
+      "properties": {
+        "evidenceRef": {"$ref": "#/$defs/evidenceRef"},
+        "metricCode": {"$ref": "#/$defs/code"},
+        "categoryCode": {
+          "anyOf": [{"$ref": "#/$defs/code"}, {"type": "null"}]
+        },
+        "unit": {
+          "enum": [
+            "MONEY",
+            "COUNT",
+            "PERCENT",
+            "RATE_PER_HUNDRED",
+            "HOURS",
+            "SCORE",
+            "RANK",
+            "STATUS"
+          ]
+        },
+        "value": {
+          "anyOf": [
+            {"type": "number"},
+            {"type": "string", "minLength": 1, "maxLength": 120},
+            {"type": "null"}
+          ]
+        },
+        "comparison": {
+          "anyOf": [{"$ref": "#/$defs/comparison"}, {"type": "null"}]
+        },
+        "sufficiency": {"enum": ["SUFFICIENT", "LIMITED", "INSUFFICIENT"]},
+        "materiality": {"enum": ["PRIMARY", "SECONDARY", "CONTEXT"]}
+      }
+    },
+    "candidateSignal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidateRef", "kind", "theme", "employeeRef", "evidenceRefs"],
+      "properties": {
+        "candidateRef": {"$ref": "#/$defs/code"},
+        "kind": {"enum": ["OBSERVATION", "RISK", "OPPORTUNITY"]},
+        "theme": {"$ref": "#/$defs/code"},
+        "employeeRef": {
+          "anyOf": [{"$ref": "#/$defs/employeeRef"}, {"type": "null"}]
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/evidenceRef"},
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true
+        }
+      }
+    },
+    "employeeFacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["employeeRef", "analysisStatus", "availableSections", "facts"],
+      "properties": {
+        "employeeRef": {"$ref": "#/$defs/employeeRef"},
+        "analysisStatus": {"enum": ["SUFFICIENT", "LIMITED", "INSUFFICIENT"]},
+        "availableSections": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/code"},
+          "maxItems": 20,
+          "uniqueItems": true
+        },
+        "facts": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/fact"},
+          "maxItems": 150
+        }
+      }
+    },
+    "facts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["store", "team", "employees", "candidateSignals"],
+      "properties": {
+        "store": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/fact"},
+          "maxItems": 200
+        },
+        "team": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/fact"},
+          "maxItems": 150
+        },
+        "employees": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/employeeFacts"},
+          "maxItems": 10
+        },
+        "candidateSignals": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/candidateSignal"},
+          "maxItems": 100
+        }
+      }
+    }
+  }
+}
