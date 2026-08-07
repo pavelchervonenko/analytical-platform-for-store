@@ -1,0 +1,36 @@
+.llm-ops-layout { display: grid; gap: 14px; }
+.llm-ops-summary > .panel__heading > svg { width: 24px; color: var(--success); }
+.llm-ops-summary.is-warning > .panel__heading > svg { color: var(--warning); }
+.llm-ops-summary.is-critical > .panel__heading > svg { color: var(--danger); }
+.llm-ops-summary h2 { margin-top: 4px; font-size: 21px; }
+.llm-ops-disabled { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; padding: 10px 12px; border-radius: 11px; color: var(--warning); background: var(--warning-soft); font-size: 11px; }
+.llm-ops-disabled svg { width: 17px; flex: 0 0 17px; }
+.llm-ops-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
+.llm-ops-metrics article { display: grid; gap: 5px; min-width: 0; padding: 12px; border-radius: 13px; background: var(--surface-muted); }
+.llm-ops-metrics svg { width: 17px; color: var(--text-faint); }
+.llm-ops-metrics strong { overflow-wrap: anywhere; font-size: 21px; }
+.llm-ops-metrics span { color: var(--text-muted); font-size: 10px; line-height: 1.35; }
+.llm-ops-facts { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px; color: var(--text-muted); font-size: 11px; }
+.llm-job-list { display: grid; }
+.llm-job-list > article { display: grid; grid-template-columns: minmax(180px,.9fr) minmax(240px,1.2fr) 180px; align-items: center; gap: 13px; padding: 13px 0; border-top: 1px solid var(--border); }
+.llm-job-list article > div { min-width: 0; display: grid; gap: 4px; }
+.llm-job-list strong { overflow-wrap: anywhere; font-size: 12px; }
+.llm-job-list small, .llm-job-list time { color: var(--text-faint); font-size: 10px; line-height: 1.4; }
+.llm-job-status { width: max-content; max-width: 100%; padding: 3px 7px; border-radius: 999px; color: var(--warning); background: var(--warning-soft); font-size: 9px; font-weight: 800; text-transform: uppercase; }
+.llm-job-status.is-failed, .llm-job-status.is-validation_failed { color: var(--danger); background: var(--danger-soft); }
+.llm-job-status.is-success { color: var(--success); background: var(--success-soft); }
+.llm-job-actions { align-items: start; }
+.llm-job-actions time { display: flex; align-items: center; gap: 4px; }
+.llm-job-actions time svg, .llm-job-actions button svg { width: 13px; }
+.llm-job-actions button { display: flex; align-items: center; gap: 5px; width: max-content; max-width: 100%; padding: 5px 8px; border: 1px solid var(--warning); border-radius: 8px; color: var(--warning); background: transparent; font-size: 10px; font-weight: 750; }
+.llm-action-modal { width: min(100%,580px); }
+.llm-action-warning { align-items: flex-start; }
+
+@media (max-width: 1100px) {
+  .llm-ops-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .llm-job-list > article { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 620px) {
+  .llm-ops-metrics { grid-template-columns: 1fr 1fr; }
+  .llm-job-list > article { grid-template-columns: 1fr; }
+}

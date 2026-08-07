@@ -26,7 +26,7 @@ const statusLabel: Record<ReportBackfillJob["status"], string> = {
 
 function errorMessage(error: unknown): string {
   if (!isApiClientError(error)) return "Не удалось создать задачу восстановления отчетов.";
-  return error.correlationId ? `${error.message} Код обращения: ${error.correlationId}` : error.message;
+  return error.message;
 }
 
 function ReportOperationsContent({ storeId, storeName, currentYear }: { storeId: string; storeName: string; currentYear: number }) {
@@ -64,16 +64,16 @@ function ReportOperationsContent({ storeId, storeName, currentYear }: { storeId:
   return <div className="admin-report-layout">
     <section className="panel admin-report-action">
       <span className="context-icon"><FileArchive /></span>
-      <p className="eyebrow">Служебная операция</p>
+
       <h2>Восстановить архив</h2>
-      <p>Backend сохранит задачу в PostgreSQL и обработает каждый месяц отдельным атомарным шагом. Закрытие вкладки или перезапуск приложения не прервут восстановление.</p>
+      <p>Система восстановит отчеты за выбранный год. Процесс продолжится, даже если закрыть эту страницу.</p>
       <form onSubmit={submit}>
         <label className="field"><span>Календарный год</span><input type="number" min="2000" max="2100" step="1" value={year} disabled={mutation.isPending} onChange={(event) => { setYear(Number(event.target.value)); mutation.reset(); }} /></label>
         <small className={valid ? "" : "field-error"}>Допустимый диапазон: 2000–2100.</small>
         {mutation.isError && <p className="form-error" role="alert">{errorMessage(mutation.error)}</p>}
-        <button className="button button--primary" type="submit" disabled={!valid || mutation.isPending}><Play size={16} />{mutation.isPending ? "Создаем задачу…" : "Запустить backfill"}</button>
+        <button className="button button--primary" type="submit" disabled={!valid || mutation.isPending}><Play size={16} />{mutation.isPending ? "Создаем задачу…" : "Запустить восстановление"}</button>
       </form>
-      <div className="admin-safety-note"><TriangleAlert /><p><strong>Одна активная задача на магазин.</strong><span>Повтор после сетевой ошибки использует тот же idempotency key и не создает дубликат.</span></p></div>
+      <div className="admin-safety-note"><TriangleAlert /><p><strong>Одна активная задача на магазин.</strong><span>Повторный запуск не создаст дубликаты отчетов.</span></p></div>
     </section>
 
     <section className="panel admin-report-result" aria-live="polite">
@@ -86,13 +86,13 @@ function ReportOperationsContent({ storeId, storeName, currentYear }: { storeId:
           <div><dt>Уже существовало</dt><dd>{selectedJob.monthlyExistingCount}</dd></div>
         </dl>
         {selectedJob.errorSummary && <p className="form-error" role="alert">{selectedJob.errorSummary}</p>}
-        {!terminal.has(selectedJob.status) && <button className="admin-job-cancel" type="button" disabled={cancelMutation.isPending} onClick={() => { if (window.confirm("Отменить восстановление отчетов? Текущий атомарный шаг может завершиться перед остановкой.")) cancelMutation.mutate(selectedJob.id); }}><Ban /><span>Отменить</span></button>}
+        {!terminal.has(selectedJob.status) && <button className="admin-job-cancel" type="button" disabled={cancelMutation.isPending} onClick={() => { if (window.confirm("Отменить восстановление отчетов? Обработка текущего месяца может завершиться перед остановкой.")) cancelMutation.mutate(selectedJob.id); }}><Ban /><span>Отменить</span></button>}
         {selectedJob.status === "WAITING_RETRY" && <p><RotateCcw /> Задача продолжит работу после задержки.</p>}
         {selectedJob.status === "SUCCESS" && <Link className="button button--ghost" to={{ pathname: "/reports", search: `?store=${encodeURIComponent(storeId)}` }}>Открыть архив</Link>}
       </> : <div className="admin-report-rules">
-        <p><strong>Месячный снимок</strong><span>Только для последней выплаченной payroll-ревизии.</span></p>
+        <p><strong>Месячный снимок</strong><span>Создается по последней выплаченной версии зарплаты.</span></p>
         <p><strong>Годовой снимок</strong><span>Только для закрытого года с полным набором месяцев.</span></p>
-        <p><strong>Восстановление</strong><span>Lease, retry и cursor сохраняются между перезапусками.</span></p>
+        <p><strong>Восстановление</strong><span>Прогресс сохраняется, и восстановление можно продолжить позже.</span></p>
       </div>}
     </section>
   </div>;

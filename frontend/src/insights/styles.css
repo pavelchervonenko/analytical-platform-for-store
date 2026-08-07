@@ -1,7 +1,7 @@
 .insights-preview-heading { align-items: center; }
 .insights-preview-badge { min-height: 40px; display: inline-flex; align-items: center; gap: 7px; padding: 0 13px; border: 1px solid #d9d4b9; border-radius: 13px; color: #75601e; background: #faf4d7; font-size: 12px; font-weight: 800; white-space: nowrap; }
 .insights-preview-badge svg { width: 15px; }
-.insights-preview-hero { min-height: 270px; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(260px, .6fr); align-items: center; gap: 40px; color: #fff; border-color: transparent; background: linear-gradient(145deg, #315f50, #203c33); }
+.insights-preview-hero { min-height: 270px; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(260px, .6fr); align-items: center; gap: 40px; color: #fff; border-color: transparent; background: #272729; }
 .insights-preview-hero .context-icon { width: 44px; height: 44px; display: grid; place-items: center; margin-bottom: 20px; border-radius: 14px; background: rgba(255,255,255,.12); }
 .insights-preview-hero .eyebrow { color: rgba(255,255,255,.62); }
 .insights-preview-hero h2 { max-width: 700px; margin: 0; font-size: clamp(27px, 3vw, 42px); line-height: 1.08; letter-spacing: -.045em; }
@@ -37,3 +37,11 @@
 .insights-notification-preview { grid-template-columns: 52px minmax(0, 1fr); }
 .insights-preview-grid article { min-height: 150px; }
 .insights-preview-grid article > svg { margin-bottom: 20px; }
+
+.insights-page-intro { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 14px; color: var(--primary); background: var(--primary-soft); }
+.insights-page-intro svg { flex: 0 0 auto; margin-top: 2px; }
+.insights-page-intro p { max-width: 900px; margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.55; }
+
+@media (max-width: 640px) {
+  .insights-page-intro { padding: 13px 14px; }
+}

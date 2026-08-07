@@ -18,6 +18,13 @@ function changeTone(value: number | null): string {
   return value > 0 ? "positive" : "negative";
 }
 
+function payrollStatusLabel(status: string): string {
+  if (status === "CALCULATED") return "Черновик";
+  if (status === "APPROVED") return "Утвержден";
+  if (status === "PAID") return "Выплачен";
+  return "Статус неизвестен";
+}
+
 function CardSkeleton() {
   return <div className="employee-card-skeleton" aria-busy="true" aria-label="Загрузка карточки сотрудника"><span className="skeleton skeleton--banner" /><div className="employee-card-stat-grid">{Array.from({ length: 4 }, (_, index) => <span className="skeleton employee-summary-skeleton" key={index} />)}</div><div className="employee-card-layout"><span className="skeleton skeleton--panel" /><span className="skeleton skeleton--panel" /></div></div>;
 }
@@ -43,14 +50,14 @@ export function EmployeeCardPage() {
     { label: "Коммерческий вклад", description: "Выручка относительно средней выручки участников", score: employee.scores.contributionScore, points: employee.scores.contributionWeightedPoints, weight: card.formula.contributionWeight },
     { label: "Эффективность времени", description: "Выручка за фактически отработанный час", score: employee.scores.efficiencyScore, points: employee.scores.efficiencyWeightedPoints, weight: card.formula.efficiencyWeight },
     { label: "Структура продаж", description: "Выполнение долей аксессуаров и услуг", score: employee.scores.structureScore, points: employee.scores.structureWeightedPoints, weight: card.formula.structureWeight },
-    { label: "Интенсивность допродаж", description: "Attach-rate относительно базы магазина", score: employee.scores.attachScore, points: employee.scores.attachWeightedPoints, weight: card.formula.attachWeight }
+    { label: "Интенсивность допродаж", description: "Частота допродаж относительно базы магазина", score: employee.scores.attachScore, points: employee.scores.attachWeightedPoints, weight: card.formula.attachWeight }
   ];
 
   return (
     <div className="employee-card-page">
       <Link className="back-link" to={{ pathname: "/employees", search: location.search }}><ArrowLeft size={16} />К списку сотрудников</Link>
       <header className="employee-card-header">
-        <div className="employee-card-header__identity"><span>{employee.displayName.slice(0, 1).toUpperCase()}</span><div><p className="eyebrow">{selectedStore.name}</p><h1>{employee.displayName}</h1><div className="employee-card-statuses"><span className={`status status--${employee.employeeActive && employee.assignmentActive ? "success" : "warning"}`}>{employee.employeeActive && employee.assignmentActive ? "Активен" : "Неактивен"}</span><span className={`status status--${employee.participatesInRanking ? "success" : "warning"}`}>{employee.participatesInRanking ? "Участвует в рейтинге" : "Вне рейтинга"}</span></div></div></div>
+        <div className="employee-card-header__identity"><span>{employee.displayName.slice(0, 1).toUpperCase()}</span><div><h1>{employee.displayName}</h1><div className="employee-card-statuses"><span className={`status status--${employee.employeeActive && employee.assignmentActive ? "success" : "warning"}`}>{employee.employeeActive && employee.assignmentActive ? "Активен" : "Неактивен"}</span><span className={`status status--${employee.participatesInRanking ? "success" : "warning"}`}>{employee.participatesInRanking ? "Участвует в рейтинге" : "Вне рейтинга"}</span></div></div></div>
         <div className="employee-card-header__period"><small>Текущий период</small><strong>{formatDate(card.periodStart)} — {formatDate(card.periodEnd)}</strong><span>Сравнение: {formatDate(card.previousPeriodStart)} — {formatDate(card.previousPeriodEnd)}</span></div>
       </header>
 
@@ -58,17 +65,17 @@ export function EmployeeCardPage() {
         <article className="employee-card-stat employee-card-stat--rank"><span><Trophy /></span><div><small>Место</small><strong>{employee.rank ?? "—"}</strong><p>{employeeRatingReason(employee, card.formula.minimumCoveragePercent)}</p></div><i className={`change-chip change-chip--${changeTone(card.dynamics.rankImprovement)}`}>{card.dynamics.rankImprovement == null ? "нет сравнения" : card.dynamics.rankImprovement === 0 ? "без изменений" : `${card.dynamics.rankImprovement > 0 ? "↑" : "↓"} ${Math.abs(card.dynamics.rankImprovement)}`}</i></article>
         <article className="employee-card-stat"><span><BarChart3 /></span><div><small>Общий балл</small><strong>{formatNumber(employee.scores.overallScore)}</strong><p>Покрытие {formatPercent(employee.scores.coveragePercent)}</p></div><i className={`change-chip change-chip--${changeTone(card.dynamics.overallScoreChange)}`}>{signedNumber(card.dynamics.overallScoreChange, " п.")}</i></article>
         <article className="employee-card-stat"><span><CircleDollarSign /></span><div><small>Чистая выручка</small><strong>{formatMoney(employee.netRevenue)}</strong><p>{formatPercent(employee.storeRevenueSharePercent)} магазина</p></div><i className={`change-chip change-chip--${changeTone(card.dynamics.revenueChange)}`}>{card.dynamics.revenueChange == null ? "—" : `${card.dynamics.revenueChange > 0 ? "+" : ""}${formatCompactMoney(card.dynamics.revenueChange)}`}</i></article>
-        <article className="employee-card-stat"><span><Clock3 /></span><div><small>Эффективность</small><strong>{formatMoney(employee.revenuePerHour)}</strong><p>за час · {employee.shiftCount} смен</p></div><i className={`change-chip change-chip--${changeTone(card.dynamics.revenuePerHourChange)}`}>{card.dynamics.revenuePerHourChange == null ? "—" : `${card.dynamics.revenuePerHourChange > 0 ? "+" : ""}${formatCompactMoney(card.dynamics.revenuePerHourChange)}`}</i></article>
+        <article className="employee-card-stat"><span><Clock3 /></span><div><small>Эффективность</small><strong>{formatMoney(employee.revenuePerHour)}</strong><p>за час, {employee.shiftCount} смен</p></div><i className={`change-chip change-chip--${changeTone(card.dynamics.revenuePerHourChange)}`}>{card.dynamics.revenuePerHourChange == null ? "—" : `${card.dynamics.revenuePerHourChange > 0 ? "+" : ""}${formatCompactMoney(card.dynamics.revenuePerHourChange)}`}</i></article>
       </section>
 
       <div className="employee-card-layout">
         <div className="employee-card-main">
           <section className="panel score-breakdown-panel">
-            <div className="panel__heading"><div><p className="eyebrow">Профиль</p><h2>Четыре направления рейтинга</h2></div><span>Базовый уровень — 100 · максимум {formatNumber(card.formula.scoreCap)}</span></div>
+            <div className="panel__heading"><h2>Результат по направлениям</h2></div>
             <div className="score-breakdown-list">{scoreRows.map((row) => (
               <article key={row.label}>
                 <div><strong>{row.label}</strong><small>{row.description}</small></div>
-                <div className="score-breakdown-meter"><progress value={Math.max(0, row.score ?? 0)} max={card.formula.scoreCap} aria-label={`${row.label}: ${formatNumber(row.score)}`} /><span><strong>{formatNumber(row.score)}</strong><small>{formatNumber(row.points)} п. · вес {formatPercent(row.weight)}</small></span></div>
+                <div className="score-breakdown-meter"><progress value={Math.max(0, row.score ?? 0)} max={card.formula.scoreCap} aria-label={`${row.label}: ${formatNumber(row.score)}`} /><span><strong>{formatNumber(row.score)}</strong><small>{formatNumber(row.points)} п., вес {formatPercent(row.weight)}</small></span></div>
               </article>
             ))}</div>
           </section>
@@ -86,27 +93,27 @@ export function EmployeeCardPage() {
           </section>
 
           <section className="panel employee-attach-panel">
-            <div className="panel__heading"><div><p className="eyebrow">Допродажи</p><h2>Attach-rate сотрудника</h2></div><span>Сравнение с фактической базой магазина</span></div>
-            {employee.attachRates.length === 0 ? <div className="panel-empty"><Link2 size={24} /><strong>Нет доступных attach-rate</strong><p>Для выбранного периода не сформированы релевантные базы устройств.</p></div> : <div className="employee-attach-list">{employee.attachRates.map((rate) => {
+            <div className="panel__heading"><div><p className="eyebrow">Допродажи</p><h2>Показатели допродаж сотрудника</h2></div><span>Сравнение с фактической базой магазина</span></div>
+            {employee.attachRates.length === 0 ? <div className="panel-empty"><Link2 size={24} /><strong>Нет данных о допродажах</strong><p>Для выбранного периода не сформированы релевантные базы устройств.</p></div> : <div className="employee-attach-list">{employee.attachRates.map((rate) => {
               const dynamics = card.dynamics.attachRateChanges.find((item) => item.metricCode === rate.metricCode);
-              return <article key={rate.metricCode}><div><strong>{attachRateLabels[rate.metricCode] ?? rate.metricCode}</strong><small>{formatNumber(rate.numeratorQuantity)} из {formatNumber(rate.denominatorQuantity)} релевантных единиц</small></div><div><span><small>Сотрудник</small><strong>{formatPercent(rate.ratePercent)}</strong></span><span><small>Магазин</small><strong>{formatPercent(rate.storeRatePercent)}</strong></span><span><small>Динамика</small><strong className={`text-${changeTone(dynamics?.change ?? null)}`}>{signedNumber(dynamics?.change ?? null, " п.п.")}</strong></span></div><i className={`status status--${rate.includedInScore ? "success" : "warning"}`}>{rate.includedInScore ? `В балле · ${formatNumber(rate.score)}` : "Не входит в балл"}</i></article>;
+              return <article key={rate.metricCode}><div><strong>{attachRateLabels[rate.metricCode] ?? "Другой показатель"}</strong><small>{formatNumber(rate.numeratorReceiptCount)} из {formatNumber(rate.denominatorReceiptCount)} релевантных чеков</small></div><div><span><small>Сотрудник</small><strong>{formatPercent(rate.ratePercent)}</strong></span><span><small>Магазин</small><strong>{formatPercent(rate.storeRatePercent)}</strong></span><span><small>Динамика</small><strong className={`text-${changeTone(dynamics?.change ?? null)}`}>{signedNumber(dynamics?.change ?? null, " п.п.")}</strong></span></div><i className={`status status--${rate.includedInScore ? "success" : "warning"}`}>{rate.includedInScore ? `В балле, ${formatNumber(rate.score)}` : "Не входит в балл"}</i></article>;
             })}</div>}
           </section>
         </div>
 
         <aside className="employee-card-aside">
           <section className="panel employee-context-panel"><span className="context-icon"><Target /></span><p className="eyebrow">План магазина</p><h2>{card.plan.complete ? formatPercent(card.plan.revenueAchievementPercent) : "Неполный план"}</h2><p>{formatMoney(card.plan.actualStoreRevenue)} из {formatMoney(card.plan.proratedRevenueTarget)}</p><dl><div><dt>Аксессуары</dt><dd>{formatPercent(card.plan.accessoryShareTarget)}</dd></div><div><dt>Услуги</dt><dd>{formatPercent(card.plan.serviceShareTarget)}</dd></div><div><dt>Доп. выручка</dt><dd>{formatPercent(card.plan.additionalShareTarget)}</dd></div></dl><small><Info size={13} />План общий для магазина, персональных планов нет.</small></section>
-          <section className="panel employee-context-panel"><span className="context-icon"><CalendarDays /></span><p className="eyebrow">Рабочее время</p><h2>{formatNumber(employee.workedHours)} ч</h2><p>{employee.shiftCount} смен · {formatMoney(employee.revenuePerShift)} за смену</p><dl><div><dt>Прошлый период</dt><dd>{formatNumber(previous?.workedHours)} ч</dd></div><div><dt>Выручка / час</dt><dd>{formatMoney(employee.revenuePerHour)}</dd></div></dl></section>
+          <section className="panel employee-context-panel"><span className="context-icon"><CalendarDays /></span><p className="eyebrow">Рабочее время</p><h2>{formatNumber(employee.workedHours)} ч</h2><p>{employee.shiftCount} смен, {formatMoney(employee.revenuePerShift)} за смену</p><dl><div><dt>Прошлый период</dt><dd>{formatNumber(previous?.workedHours)} ч</dd></div><div><dt>Выручка / час</dt><dd>{formatMoney(employee.revenuePerHour)}</dd></div></dl></section>
           <section className="panel employee-context-panel employee-payroll-card">
             <span className="context-icon"><WalletCards /></span><p className="eyebrow">Зарплата</p>
             {card.payroll ? <>
               <h2>{formatMoney(card.payroll.statement.payableAmount)}</h2>
-              <p>К выплате · ревизия {card.payroll.run.revision}</p>
+              <p>К выплате, версия {card.payroll.run.revision}</p>
               <dl>
                 <div><dt>Начислено</dt><dd>{formatMoney(card.payroll.statement.earnedAmount)}</dd></div>
                 <div><dt>Аванс</dt><dd>{formatMoney(card.payroll.statement.advanceAmount)}</dd></div>
                 <div><dt>Удержания</dt><dd>{formatMoney(card.payroll.statement.penaltyAmount + card.payroll.statement.inventoryAmount + card.payroll.statement.taxAmount)}</dd></div>
-                <div><dt>Статус</dt><dd>{card.payroll.run.status}</dd></div>
+                <div><dt>Статус</dt><dd>{payrollStatusLabel(card.payroll.run.status)}</dd></div>
               </dl>
               {card.payroll.run.freshness.requiresRecalculation && <p className="employee-payroll-warning">Расчет устарел и требует пересчета.</p>}
               <Link className="context-link" to={{ pathname: "/payroll", search: location.search }}>Открыть ведомость</Link>

@@ -77,6 +77,63 @@ export const activeSessionListSchema = z.object({
 
 export type ActiveSession = z.infer<typeof activeSessionSchema>;
 
+const telegramUrlSchema = z.string().url().refine((value) => {
+  const url = new URL(value);
+  return url.protocol === "https:" && url.hostname === "t.me";
+}, "Only an official HTTPS Telegram link is allowed");
+
+export const telegramChannelStateSchema = forwardCompatibleEnum([
+  "NOT_LINKED",
+  "LINK_ISSUED",
+  "PENDING_CONFIRMATION",
+  "ACTIVE",
+  "BOT_BLOCKED"
+]);
+
+export const telegramChannelActionSchema = forwardCompatibleEnum([
+  "LINK",
+  "CONFIRM",
+  "REVOKE",
+  "UPDATE_SETTINGS",
+  "OPEN_BOT"
+]);
+
+export const telegramDeliverySettingsSchema = z.object({
+  timezone: z.string().min(1).max(100),
+  quietHoursEnabled: z.boolean(),
+  quietHoursStart: z.string().regex(/^\d{2}:\d{2}:\d{2}$/u),
+  quietHoursEnd: z.string().regex(/^\d{2}:\d{2}:\d{2}$/u)
+});
+
+export const telegramChannelSchema = z.object({
+  state: telegramChannelStateSchema,
+  subscriptionId: z.string().uuid().nullable(),
+  version: z.number().int().nonnegative().nullable(),
+  linkExpiresAt: z.string().datetime({ offset: true }).nullable(),
+  pendingSince: z.string().datetime({ offset: true }).nullable(),
+  confirmedAt: z.string().datetime({ offset: true }).nullable(),
+  blockedAt: z.string().datetime({ offset: true }).nullable(),
+  destination: z.string().min(1).max(100).nullable(),
+  deliverySettings: telegramDeliverySettingsSchema.nullish(),
+  allowedActions: z.array(telegramChannelActionSchema).max(8),
+  publicBotUrl: telegramUrlSchema.nullable()
+});
+
+export const telegramLinkCreatedSchema = z.object({
+  deepLink: telegramUrlSchema,
+  expiresAt: z.string().datetime({ offset: true })
+});
+
+export type TelegramChannelState = z.infer<typeof telegramChannelStateSchema>;
+export type TelegramChannelAction = z.infer<typeof telegramChannelActionSchema>;
+export type TelegramChannel = z.infer<typeof telegramChannelSchema>;
+export type TelegramLinkCreated = z.infer<typeof telegramLinkCreatedSchema>;
+export type TelegramDeliverySettingsInput = z.infer<typeof telegramDeliverySettingsSchema>;
+export interface TelegramChannelResource {
+  value: TelegramChannel;
+  etag: string | null;
+}
+
 export const storeSummarySchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -224,8 +281,10 @@ const attachRateEntrySchema = z.object({
   metricCode: z.string(),
   numeratorCategoryCode: z.string(),
   denominatorCode: z.string(),
-  numeratorQuantity: z.number(),
-  denominatorQuantity: z.number(),
+  numeratorReceiptCount: z.number().int().nonnegative(),
+  denominatorReceiptCount: z.number().int().nonnegative(),
+  numeratorQuantity: z.number().optional(),
+  denominatorQuantity: z.number().optional(),
   ratePerHundred: z.number().nullable()
 });
 
@@ -386,8 +445,10 @@ const employeeAttachRatingEntrySchema = z.object({
   metricCode: z.string(),
   numeratorCategoryCode: z.string(),
   denominatorCode: z.string(),
-  numeratorQuantity: z.number(),
-  denominatorQuantity: z.number(),
+  numeratorReceiptCount: z.number().int().nonnegative(),
+  denominatorReceiptCount: z.number().int().nonnegative(),
+  numeratorQuantity: z.number().optional(),
+  denominatorQuantity: z.number().optional(),
   ratePercent: z.number().nullable(),
   storeRatePercent: z.number().nullable(),
   includedInScore: z.boolean(),
@@ -867,9 +928,12 @@ const annualCategoryTotalsSchema = z.object({
 });
 
 const annualAttachRateTotalsSchema = z.object({
+  formulaVersion: z.string(),
   metricCode: z.string(),
-  numeratorQuantity: z.number(),
-  denominatorQuantity: z.number(),
+  numeratorReceiptCount: z.number().int().nonnegative(),
+  denominatorReceiptCount: z.number().int().nonnegative(),
+  numeratorQuantity: z.number().optional(),
+  denominatorQuantity: z.number().optional(),
   ratePerHundred: z.number().nullable()
 });
 

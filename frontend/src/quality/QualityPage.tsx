@@ -2,16 +2,19 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, Clock3, DatabaseZap, RefreshCw, ShieldAlert, TriangleAlert } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import { useAuth } from "../auth/AuthProvider";
-import { formatDate } from "../shared/date";
+import { formatDate, formatMonth } from "../shared/date";
 import { formatNumber } from "../shared/format";
 import { QueryError } from "../shared/QueryState";
 import { useWorkspace } from "../stores/WorkspaceProvider";
 import { describeQualityAction } from "./actions";
 import { getQualityOverview, getStorePeriodQuality, getStoreQuality, qualityKeys, type QualityAction } from "./api";
-
-const statusLabels = { OK: "Готово", WARNING: "Нужно внимание", ERROR: "Есть блокеры", UNKNOWN: "Неизвестно" } as const;
-const areaLabels = { SOURCE_DATA: "Исходные данные", STORE_PLAN: "План магазина", EMPLOYEE_RATING: "Рейтинг сотрудников", PAYROLL: "Расчет зарплаты", UNKNOWN: "Неизвестное направление" } as const;
-const severityLabels = { ERROR: "Ошибка", WARNING: "Предупреждение", INFO: "Информация", UNKNOWN: "Неизвестно" } as const;
+import {
+  qualityAreaLabel,
+  qualityIssueMessage,
+  qualitySeverityLabel,
+  qualitySourceLabel,
+  qualityStatusLabel
+} from "./presentation";
 
 function actionSearch(currentSearch: string, route: string, view?: string): string {
   const params = new URLSearchParams(currentSearch);
@@ -58,35 +61,35 @@ export function QualityPage() {
   return (
     <div className="quality-page">
       <header className="page-heading quality-heading">
-        <div><p className="eyebrow">Контроль пригодности данных</p><h1>Центр качества данных</h1><p>Единая точка проверки источников, плана, рейтинга и зарплаты перед управленческими решениями.</p></div>
+        <div><h1>Качество данных</h1><p>Здесь видно, что нужно исправить перед расчетом зарплаты и рейтинга.</p></div>
         <button className="button button--secondary" type="button" onClick={refresh} disabled={overviewQuery.isFetching || storeQuery.isFetching || periodQuery.isFetching}><RefreshCw size={16} className={storeQuery.isFetching ? "is-spinning" : ""} />Обновить</button>
       </header>
 
       <section className={`quality-verdict quality-verdict--${period.status.toLowerCase()}`}>
         <span>{period.readyForDecisions ? <CheckCircle2 /> : <ShieldAlert />}</span>
-        <div><p className="eyebrow">{selectedStore.name} · {month}</p><h2>{period.readyForDecisions ? "Данные готовы для решений" : "Перед решением устраните замечания"}</h2><p>{period.issues.length === 0 ? "Контроль не обнаружил проблем за выбранный месяц." : `Открыто ${period.issues.length} замечаний; критичные действия показаны первыми.`}</p></div>
+        <div><p className="eyebrow">{formatMonth(month)}</p><h2>{period.readyForDecisions ? "Данные готовы для работы" : "Сначала исправьте замечания"}</h2><p>{period.issues.length === 0 ? "Проблем за выбранный месяц нет." : `Найдено замечаний: ${period.issues.length}. Важные показаны первыми.`}</p></div>
         <dl><div><dt>Данные по</dt><dd>{formatDate(period.sourceData.dataThroughDate)}</dd></div><div><dt>Проверено</dt><dd>{new Date(period.checkedAt).toLocaleString("ru-RU")}</dd></div></dl>
       </section>
 
       <section className="quality-area-grid" aria-label="Готовность по направлениям">
-        {period.areas.map((area) => <article className={`quality-area quality-area--${area.status.toLowerCase()}`} key={area.code}><div><span>{area.ready ? <CheckCircle2 /> : area.status === "ERROR" ? <AlertCircle /> : <TriangleAlert />}</span><i className={`status status--${area.status === "OK" ? "success" : "warning"}`}>{statusLabels[area.status]}</i></div><h2>{areaLabels[area.code]}</h2><p>{area.issueCount === 0 ? "Замечаний нет" : `${area.issueCount} замечаний · ${area.errorCount} критичных`}</p></article>)}
+        {period.areas.map((area) => <article className={`quality-area quality-area--${area.status.toLowerCase()}`} key={area.code}><div><span>{area.ready ? <CheckCircle2 /> : area.status === "ERROR" ? <AlertCircle /> : <TriangleAlert />}</span><i className={`status status--${area.status === "OK" ? "success" : "warning"}`}>{qualityStatusLabel(area.status)}</i></div><h2>{qualityAreaLabel(area.code)}</h2><p>{area.issueCount === 0 ? "Замечаний нет" : `Замечаний: ${area.issueCount}, важных: ${area.errorCount}`}</p></article>)}
       </section>
 
       <div className="quality-layout">
         <section className="panel quality-issues" id="quality-issues">
           <div className="panel__heading"><div><p className="eyebrow">Выбранный месяц</p><h2>Что требует действия</h2></div><span>{period.issues.length}</span></div>
-          {period.issues.length === 0 ? <div className="panel-empty"><CheckCircle2 size={28} /><strong>Месяц готов</strong><p>Все проверки источников и расчетов пройдены.</p></div> : <div className="quality-issue-list">{period.issues.map((issue) => <article key={issue.key}><span className={`quality-severity quality-severity--${issue.severity.toLowerCase()}`}>{severityLabels[issue.severity]}</span><div><strong>{issue.message}</strong><small>{areaLabels[issue.area as keyof typeof areaLabels] ?? issue.area} · {issue.code}{issue.affectedCount != null ? ` · затронуто ${formatNumber(issue.affectedCount)}` : ""}</small></div><ActionControl action={issue.recommendedAction} refresh={refresh} /></article>)}</div>}
+          {period.issues.length === 0 ? <div className="panel-empty"><CheckCircle2 size={28} /><strong>Месяц готов</strong><p>Все проверки пройдены.</p></div> : <div className="quality-issue-list">{period.issues.map((issue) => <article key={issue.key}><span className={`quality-severity quality-severity--${issue.severity.toLowerCase()}`}>{qualitySeverityLabel(issue.severity)}</span><div><strong>{qualityIssueMessage(issue.code)}</strong><small>{qualityAreaLabel(issue.area)}{issue.affectedCount != null ? `, затронуто: ${formatNumber(issue.affectedCount)}` : ""}</small></div><ActionControl action={issue.recommendedAction} refresh={refresh} /></article>)}</div>}
         </section>
 
         <aside className="quality-aside">
-          <section className="panel quality-source-card"><div className="panel__heading"><div><p className="eyebrow">Источник</p><h2>Свежесть магазина</h2></div><DatabaseZap /></div><strong className={`quality-source-status quality-source-status--${store.summary.status.toLowerCase()}`}>{statusLabels[store.summary.status]}</strong><dl><div><dt>Покрытие продаж</dt><dd>{formatDate(store.dataStatus.salesDataThroughDate)}</dd></div><div><dt>Покрытие возвратов</dt><dd>{formatDate(store.dataStatus.returnsDataThroughDate)}</dd></div><div><dt>Отставание</dt><dd>{store.summary.lagDays == null ? "—" : `${store.summary.lagDays} дн.`}</dd></div></dl>{store.dataStatus.synchronization.active && <p className="quality-syncing"><Clock3 size={15} />Синхронизация выполняется; статус обновляется автоматически.</p>}</section>
-          <section className="panel quality-portfolio"><div className="panel__heading"><div><p className="eyebrow">Все доступные магазины</p><h2>Общий контур</h2></div><span>{overview.storeCount}</span></div><div className="quality-portfolio__stats"><span><strong>{overview.okStoreCount}</strong><small>готово</small></span><span><strong>{overview.warningStoreCount}</strong><small>внимание</small></span><span><strong>{overview.errorStoreCount}</strong><small>блокеры</small></span></div><p>{overview.openIssueCount} открытых замечаний во всех доступных магазинах.</p></section>
+          <section className="panel quality-source-card"><div className="panel__heading"><h2>Актуальность данных</h2><DatabaseZap /></div><strong className={`quality-source-status quality-source-status--${store.summary.status.toLowerCase()}`}>{qualityStatusLabel(store.summary.status)}</strong><dl><div><dt>Продажи загружены по</dt><dd>{formatDate(store.dataStatus.salesDataThroughDate)}</dd></div><div><dt>Возвраты загружены по</dt><dd>{formatDate(store.dataStatus.returnsDataThroughDate)}</dd></div><div><dt>Отставание</dt><dd>{store.summary.lagDays == null ? "—" : `${store.summary.lagDays} дн.`}</dd></div></dl>{store.dataStatus.synchronization.active && <p className="quality-syncing"><Clock3 size={15} />Данные обновляются автоматически.</p>}</section>
+          <section className="panel quality-portfolio"><div className="panel__heading"><h2>Все магазины</h2><span>{overview.storeCount}</span></div><div className="quality-portfolio__stats"><span><strong>{overview.okStoreCount}</strong><small>готовы</small></span><span><strong>{overview.warningStoreCount}</strong><small>есть замечания</small></span><span><strong>{overview.errorStoreCount}</strong><small>есть проблемы</small></span></div><p>Всего открытых замечаний: {overview.openIssueCount}.</p></section>
         </aside>
       </div>
 
       <section className="panel quality-store-issues">
-        <div className="panel__heading"><div><p className="eyebrow">Независимо от месяца</p><h2>Проблемы источника и документов</h2></div><span>{store.issues.length}</span></div>
-        {store.issues.length === 0 ? <div className="panel-empty"><CheckCircle2 size={24} /><strong>Открытых проблем нет</strong></div> : <div className="quality-issue-list">{store.issues.map((issue) => <article key={issue.key}><span className={`quality-severity quality-severity--${issue.severity.toLowerCase()}`}>{severityLabels[issue.severity]}</span><div><strong>{issue.message}</strong><small>{issue.source} · {issue.code} · {issue.detectedAt ? new Date(issue.detectedAt).toLocaleString("ru-RU") : "время не определено"}</small></div><ActionControl action={issue.recommendedAction} refresh={refresh} /></article>)}</div>}
+        <div className="panel__heading"><h2>Проблемы в исходных данных</h2><span>{store.issues.length}</span></div>
+        {store.issues.length === 0 ? <div className="panel-empty"><CheckCircle2 size={24} /><strong>Открытых проблем нет</strong></div> : <div className="quality-issue-list">{store.issues.map((issue) => <article key={issue.key}><span className={`quality-severity quality-severity--${issue.severity.toLowerCase()}`}>{qualitySeverityLabel(issue.severity)}</span><div><strong>{qualityIssueMessage(issue.code)}</strong><small>{qualitySourceLabel(issue.source)}, {issue.detectedAt ? new Date(issue.detectedAt).toLocaleString("ru-RU") : "время не определено"}</small></div><ActionControl action={issue.recommendedAction} refresh={refresh} /></article>)}</div>}
       </section>
     </div>
   );

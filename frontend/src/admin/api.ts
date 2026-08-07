@@ -27,6 +27,15 @@ const productCategoryImportResultSchema = z.object({
   assignmentsCreated: z.number().int().nonnegative(),
   assignmentsUnchanged: z.number().int().nonnegative()
 });
+const syncClassificationReadinessSchema = z.object({
+  connectionKey: z.string(),
+  periodStart: z.string(),
+  ready: z.boolean(),
+  effectiveAssignmentCount: z.number().int().nonnegative(),
+  totalAssignmentCount: z.number().int().nonnegative(),
+  productCount: z.number().int().nonnegative(),
+  unmappedSalesItemCount: z.number().int().nonnegative()
+});
 
 export interface ProductCategoryImportItem {
   externalProductId: string;
@@ -44,6 +53,37 @@ const ratingSchemeSchema = z.object({
 const payrollSchemeSchema = z.object({
   id: z.string().uuid(), code: z.string(), effectiveFrom: z.string(), achievedPercentage: z.number(), missedPercentage: z.number(),
   achievedTier1Rate: z.number(), missedTier1Rate: z.number(), achievedTier2Rate: z.number(), missedTier2Rate: z.number(), advanceAmount: z.number()
+});
+
+const telegramDeliverySummarySchema = z.object({
+  attentionLevel: forwardCompatibleEnum(["NORMAL", "WARNING", "CRITICAL"]),
+  readyPending: z.number().int().nonnegative(), readyRetries: z.number().int().nonnegative(),
+  running: z.number().int().nonnegative(), overdueRunning: z.number().int().nonnegative(),
+  permanentFailed: z.number().int().nonnegative(), unknownOutcome: z.number().int().nonnegative(),
+  activeSubscriptions: z.number().int().nonnegative(), blockedSubscriptions: z.number().int().nonnegative(),
+  oldestReadyAt: z.string().nullable()
+});
+const telegramDeliveryIncidentSchema = z.object({
+  deliveryId: z.string().uuid(),
+  deliveryKind: forwardCompatibleEnum(["NOTIFICATION", "LINK_CONFIRMATION"]),
+  eventType: z.string().nullable(), storeName: z.string().nullable(), recipientName: z.string(),
+  status: forwardCompatibleEnum(["PENDING", "RUNNING", "WAITING_RETRY", "SENT", "PERMANENT_FAILED", "UNKNOWN_OUTCOME", "EXPIRED", "CANCELLED"]),
+  attemptCount: z.number().int().nonnegative(), maxAttempts: z.number().int().positive(),
+  nextAttemptAt: z.string(), leaseUntil: z.string().nullable(), expiresAt: z.string(),
+  errorCode: z.string().nullable(), errorSummary: z.string().nullable(),
+  createdAt: z.string(), updatedAt: z.string()
+});
+const telegramDeliveryOperationsSchema = z.object({
+  generatedAt: z.string(),
+  summary: telegramDeliverySummarySchema,
+  incidents: z.array(telegramDeliveryIncidentSchema)
+});
+const manualTelegramResendSchema = z.object({
+  deliveryId: z.string().uuid(),
+  sourceDeliveryId: z.string().uuid(),
+  status: z.literal("PENDING"),
+  scheduledAt: z.string(),
+  expiresAt: z.string()
 });
 
 const categoryValues = ["TECH_TIER_1", "TECH_TIER_2", "ACCESSORY", "SERVICE", "PLAYSTATION_SUBSCRIPTION", "PAID_REPAIR", "EXCLUDE"] as const;
@@ -65,10 +105,13 @@ const reportBackfillJobSchema = z.object({
 export type AdminUser = z.infer<typeof adminUserSchema>;
 export type SyncJob = z.infer<typeof syncJobSchema>;
 export type ProductCategoryImportResult = z.infer<typeof productCategoryImportResultSchema>;
+export type SyncClassificationReadiness = z.infer<typeof syncClassificationReadinessSchema>;
 export type RatingScheme = z.infer<typeof ratingSchemeSchema>;
 export type PayrollScheme = z.infer<typeof payrollSchemeSchema>;
 export type PayrollCategory = typeof categoryValues[number];
 export type ReportBackfillJob = z.infer<typeof reportBackfillJobSchema>;
+export type TelegramDeliveryOperations = z.infer<typeof telegramDeliveryOperationsSchema>;
+export type ManualTelegramResend = z.infer<typeof manualTelegramResendSchema>;
 
 export interface CreateAdminUserInput { email: string; temporaryPassword: string; displayName: string; role: "ADMIN" | "MANAGER"; storeIds: string[]; }
 export interface UpdateAdminUserInput { displayName: string; role: "ADMIN" | "MANAGER"; active: boolean; }
@@ -76,9 +119,10 @@ export interface RatingSchemeInput { code: string; effectiveFrom: string; contri
 export interface PayrollSchemeInput { code: string; effectiveFrom: string; achievedPercentage: number; missedPercentage: number; achievedTier1Rate: number; missedTier1Rate: number; achievedTier2Rate: number; missedTier2Rate: number; advanceAmount: number; }
 
 export const adminKeys = {
-  users: ["admin", "users"] as const, syncJobs: ["admin", "sync-jobs"] as const,
+  users: ["admin", "users"] as const, syncJobs: ["admin", "sync-jobs"] as const, syncReadiness: ["admin", "sync-readiness"] as const,
   ratingSchemes: ["admin", "rating-schemes"] as const, payrollSchemes: ["admin", "payroll-schemes"] as const,
   reportBackfillJobs: ["admin", "report-backfill-jobs"] as const,
+  telegramDeliveries: ["admin", "telegram-deliveries"] as const,
 };
 
 export const getAdminUsers = (page = 0, size = 20): Promise<PageResponse<AdminUser>> => apiClient.request(
@@ -91,6 +135,10 @@ export const replaceUserStoreAccess = (id: string, storeIds: string[]): Promise<
 export const resetAdminUserPassword = (id: string, temporaryPassword: string): Promise<AdminUser> => apiClient.request(`/api/admin/users/${encodeURIComponent(id)}/reset-password`, { method: "POST", body: { temporaryPassword }, schema: adminUserSchema });
 
 export const getSyncJobs = (): Promise<SyncJob[]> => apiClient.request("/api/sync/jobs?limit=50", { schema: z.array(syncJobSchema) });
+export const getSyncClassificationReadiness = (periodStart: string): Promise<SyncClassificationReadiness> => apiClient.request(
+  `/api/sync/jobs/backfill-readiness?${new URLSearchParams({ periodStart }).toString()}`,
+  { schema: syncClassificationReadinessSchema }
+);
 export const getSyncJob = (id: string): Promise<SyncJob> => apiClient.request(`/api/sync/jobs/${encodeURIComponent(id)}`, { schema: syncJobSchema });
 export const createBackfill = (periodStart: string, periodEndInclusive: string): Promise<SyncJob> => apiClient.request("/api/sync/jobs/backfill", { method: "POST", body: { periodStart, periodEndInclusive }, schema: syncJobSchema });
 export const cancelSyncJob = (id: string): Promise<SyncJob> => apiClient.request(`/api/sync/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST", schema: syncJobSchema });
@@ -114,6 +162,19 @@ export const backfillReports = (storeId: string, year: number): Promise<ReportBa
 );
 export const cancelReportBackfill = (id: string): Promise<ReportBackfillJob> => apiClient.request(
   `/api/admin/reports/backfill/${encodeURIComponent(id)}/cancel`, { method: "POST", schema: reportBackfillJobSchema }
+);
+export const getTelegramDeliveryOperations = (): Promise<TelegramDeliveryOperations> => apiClient.request(
+  "/api/admin/notifications/telegram/deliveries?incidentLimit=50", { schema: telegramDeliveryOperationsSchema }
+);
+export const resendTelegramDelivery = (
+  deliveryId: string,
+  reason: string
+): Promise<ManualTelegramResend> => apiClient.request(
+  `/api/admin/notifications/telegram/deliveries/${encodeURIComponent(deliveryId)}/resend`,
+  {
+    method: "POST", body: { reason, acknowledgeDuplicateRisk: true },
+    idempotencyScope: `telegram-delivery:resend:${deliveryId}`, schema: manualTelegramResendSchema
+  }
 );
 
 export const getRatingSchemes = (page = 0, size = 20): Promise<PageResponse<RatingScheme>> => apiClient.request(

@@ -75,7 +75,7 @@ describe("ApiClient", () => {
 
     await expect(client.request("/api/example")).rejects.toMatchObject({
       status: 502,
-      message: "Сервис временно недоступен. Попробуйте позже."
+      message: "Внешний сервис временно недоступен. Попробуйте позже."
     });
   });
 
@@ -128,7 +128,25 @@ describe("ApiClient", () => {
     await expect(client.request("/api/example")).rejects.toMatchObject({
       status: 500,
       code: "INTERNAL_ERROR",
+      message: "Произошла внутренняя ошибка. Повторите действие позже.",
       correlationId: "request-42"
+    });
+  });
+
+  it("does not expose English backend messages to users", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      timestamp: "2026-08-04T00:00:00Z",
+      status: 409,
+      code: "ACTIVE_SYNC_JOB_EXISTS",
+      message: "An active synchronization job already exists",
+      path: "/api/sync/jobs",
+      correlationId: "request-43"
+    }, { status: 409 })));
+    const client = new ApiClient();
+
+    await expect(client.request("/api/sync/jobs")).rejects.toMatchObject({
+      code: "ACTIVE_SYNC_JOB_EXISTS",
+      message: "Для этого подключения уже выполняется синхронизация."
     });
   });
 });

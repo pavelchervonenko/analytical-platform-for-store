@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, ArrowRight, CheckCircle2, CircleDollarSign, Package, ReceiptText, RefreshCw, ShieldCheck, Smartphone, Target, TrendingUp, TriangleAlert } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, Package, RefreshCw, ShieldCheck, Smartphone, Target, TrendingUp, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import {
   getAttachRates,
@@ -12,6 +12,8 @@ import {
   queryKeys
 } from "../api/queries";
 import type { PlanDirection } from "../api/contracts";
+import { WeeklyInsightPanel } from "../insights/WeeklyInsightPanel";
+import { qualityIssueMessage, qualityStatusLabel } from "../quality/presentation";
 import { formatDate, formatMonth } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
 import { Delta, PanelSkeleton, QueryError } from "../shared/QueryState";
@@ -55,7 +57,7 @@ const attachLabels: Record<string, string> = {
   FILM_PHONE: "Защитные пленки",
   GLASS_CAMERA_IPHONE: "Стекла и защита камеры iPhone",
   GLASS_CAMERA_SAMSUNG: "Стекла Samsung",
-  PREMIUM_PROTECTION: "Премиум и протекция",
+  PREMIUM_PROTECTION: "Протекция",
   SETUP_SERVICE: "Настройки и услуги",
   WARRANTY_GENERIC_NEW: "Гарантии — новые устройства",
   WARRANTY_GENERIC_USED: "Гарантии — устройства Б/У"
@@ -67,43 +69,29 @@ function toneForStatus(status: string): string {
   return "warning";
 }
 
-function MetricCard({
-  label,
-  value,
-  icon,
-  children,
-  featured = false
-}: {
-  label: string;
-  value: string;
-  icon: ReactNode;
-  children?: ReactNode;
-  featured?: boolean;
-}) {
+function SummaryMetric({ label, value, note, children }: { label: string; value: string; note?: string; children?: ReactNode }) {
   return (
-    <article className={`metric-card ${featured ? "metric-card--featured" : ""}`}>
-      <div className="metric-card__heading"><span>{label}</span><i>{icon}</i></div>
-      <strong className="metric-card__value">{value}</strong>
+    <article className="overview-summary__metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {note && <small>{note}</small>}
       {children}
     </article>
   );
 }
 
-function PlanCard({ direction }: { direction: PlanDirection | null }) {
-  if (!direction) {
-    return (
-      <MetricCard label="Выполнение плана" value="План не задан" icon={<Target size={18} />}>
-        <p className="metric-card__hint">Заполните месячный план, чтобы видеть темп.</p>
-      </MetricCard>
-    );
-  }
+function PlanSummary({ direction }: { direction: PlanDirection | null }) {
+  if (!direction) return <SummaryMetric label="План" value="Не задан" note="Нужна цель на месяц" />;
+
   const completion = direction.criterionCompletionPercent;
   return (
-    <MetricCard label="Выполнение плана" value={formatPercent(completion)} icon={<Target size={18} />}>
-      <progress className="progress" value={Math.max(0, completion ?? 0)} max={100} aria-label="Выполнение плана по выручке" />
-      <div className="metric-card__meta"><span>{formatCompactMoney(direction.actualAmount)} из {formatCompactMoney(direction.targetAmount)}</span><span className={`status status--${toneForStatus(direction.status)}`}>{directionStatusLabels[direction.status] ?? direction.status}</span></div>
-      <div className="metric-card__foot"><span>Осталось</span><strong>{formatMoney(direction.remainingAmount)}</strong></div>
-    </MetricCard>
+    <SummaryMetric
+      label="План"
+      value={formatPercent(completion)}
+      note={`${formatCompactMoney(direction.actualAmount)} из ${formatCompactMoney(direction.targetAmount)}`}
+    >
+      <span className={`status status--${toneForStatus(direction.status)}`}>{directionStatusLabels[direction.status] ?? "Неизвестный статус"}</span>
+    </SummaryMetric>
   );
 }
 
@@ -111,7 +99,7 @@ function OverviewSkeleton() {
   return (
     <div className="overview-skeleton" aria-label="Загружаем показатели" aria-busy="true">
       <span className="skeleton skeleton--banner" />
-      <div className="metric-grid">{Array.from({ length: 5 }, (_, index) => <span className="skeleton skeleton--metric" key={index} />)}</div>
+      <span className="skeleton skeleton--summary" />
       <div className="overview-grid"><span className="skeleton skeleton--panel" /><span className="skeleton skeleton--panel" /></div>
     </div>
   );
@@ -155,57 +143,55 @@ export function OverviewPage() {
   return (
     <div className="overview-page">
       <header className="page-heading">
-        <div><p className="eyebrow">{selectedStore.name}</p><h1>Обзор магазина</h1><p>Ключевые результаты и качество данных за {formatMonth(month)}.</p></div>
-        <div className="page-heading__period"><small>Срез показателей</small><strong>по {formatDate(asOfDate)}</strong></div>
+        <div><h1>Обзор</h1><p>{formatMonth(month)}, {formatDate(periodStart)} — {formatDate(periodEnd)}</p></div>
+        <div className="page-heading__period"><small>Данные по</small><strong>{formatDate(asOfDate)}</strong></div>
       </header>
 
       {status && (
-        <section className={`freshness-banner freshness-banner--${freshnessTone}`} aria-live="polite">
+        <section className={`freshness-banner freshness-banner--${freshnessTone} ${status.status === "CURRENT" ? "freshness-banner--quiet" : ""}`} aria-live="polite">
           <span className="freshness-banner__icon">{freshnessTone === "success" ? <ShieldCheck /> : <TriangleAlert />}</span>
           <div>
-            <strong>{freshnessLabels[status.status] ?? "Статус данных неизвестен"}</strong>
-            <p>{status.dataThroughDate ? `Продажи и возвраты подтверждены по ${formatDate(status.dataThroughDate)}.` : "Полная дата покрытия пока неизвестна."}{status.lagDays ? ` Отставание: ${status.lagDays} дн.` : ""}</p>
+            <strong>{freshnessLabels[status.status] ?? "Статус неизвестен"}</strong>
+            <p>{status.dataThroughDate ? `По ${formatDate(status.dataThroughDate)}` : "Дата покрытия неизвестна"}{status.lagDays ? `, отставание ${status.lagDays} дн.` : ""}</p>
           </div>
-          {status.openQualityIssueCount > 0 && <span className="freshness-banner__issues"><AlertCircle size={16} />{status.openQualityIssueCount} проблем</span>}
-          {status.synchronization.active && <span className="freshness-banner__sync"><RefreshCw size={15} />Обновляется автоматически</span>}
+          {status.openQualityIssueCount > 0 && <span className="freshness-banner__issues"><AlertCircle size={16} />{status.openQualityIssueCount}</span>}
+          {status.synchronization.active && <span className="freshness-banner__sync"><RefreshCw size={15} />Обновление</span>}
         </section>
       )}
 
       {quality && !quality.readyForDecisions && (
         <section className="decision-banner" aria-label="Готовность данных для решений">
           <TriangleAlert size={20} />
-          <div><strong>Перед управленческим решением проверьте данные</strong><p>{quality.issues.filter((issue) => issue.severity === "ERROR").length} блокирующих причин за выбранный месяц.</p></div>
-          <a href="#quality-details">Показать причины <ArrowRight size={15} /></a>
+          <div><strong>Данные требуют проверки</strong><p>{quality.issues.filter((issue) => issue.severity === "ERROR").length} важных замечаний</p></div>
+          <a href="#quality-details">Открыть <ArrowRight size={15} /></a>
         </section>
       )}
 
-      <section className="metric-grid" aria-label="Ключевые показатели">
-        <MetricCard label="Чистая выручка" value={formatMoney(kpi?.netRevenue)} icon={<CircleDollarSign size={19} />} featured>
-          <div className="metric-card__meta"><span>Продано: {formatNumber(kpi?.netQuantity)} ед.</span><span>{kpi?.formulaVersion}</span></div>
-          <div className="metric-card__foot"><span>Себестоимость</span><strong>{formatMoney(kpi?.costAmount)}</strong></div>
-        </MetricCard>
+      <WeeklyInsightPanel storeId={storeId} />
 
-        <PlanCard direction={revenueDirection} />
-
-        <MetricCard label="Маржа" value={formatPercent(kpi?.marginPercent)} icon={<TrendingUp size={19} />}>
-          <div className="metric-card__meta">{kpi?.dataQuality.completeCostData ? <span className="quality-ok"><CheckCircle2 size={14} />Себестоимость полная</span> : <span className="quality-warning"><AlertCircle size={14} />Неполные данные</span>}</div>
-          <div className="metric-card__foot"><span>Валовая прибыль</span><strong>{formatMoney(kpi?.grossProfit)}</strong></div>
-        </MetricCard>
-
-        <MetricCard label="Средний чек" value={formatMoney(averages?.averageReceipt.current.value)} icon={<ReceiptText size={19} />}>
-          <div className="metric-card__meta"><Delta value={averages?.averageReceipt.changePercent} /><span>к прошлому периоду</span></div>
-          <div className="metric-card__foot"><span>Чеков</span><strong>{formatNumber(averages?.averageReceipt.current.denominator)}</strong></div>
-        </MetricCard>
-
-        <MetricCard label="Дополнительная выручка" value={formatMoney(additionalGroup?.metrics.netRevenue)} icon={<TrendingUp size={19} />}>
-          <div className="metric-card__meta"><Delta value={averages?.additionalRevenuePerPhone.changePercent} /><span>на телефон</span></div>
-          <div className="metric-card__foot"><span>На один телефон</span><strong>{formatMoney(averages?.additionalRevenuePerPhone.current.value)}</strong></div>
-        </MetricCard>
+      <section className="overview-summary" aria-label="Главные показатели">
+        <article className="overview-summary__primary">
+          <span>Чистая выручка</span>
+          <strong>{formatMoney(kpi?.netRevenue)}</strong>
+          <div><span>{formatNumber(kpi?.netQuantity)} ед.</span><span>Себестоимость {formatMoney(kpi?.costAmount)}</span></div>
+        </article>
+        <div className="overview-summary__metrics">
+          <PlanSummary direction={revenueDirection} />
+          <SummaryMetric label="Валовая прибыль" value={formatMoney(kpi?.grossProfit)} note={`Маржа ${formatPercent(kpi?.marginPercent)}`}>
+            {!kpi?.dataQuality.completeCostData && <span className="quality-warning"><AlertCircle size={14} />Данные неполные</span>}
+          </SummaryMetric>
+          <SummaryMetric label="Средний чек" value={formatMoney(averages?.averageReceipt.current.value)} note={`${formatNumber(averages?.averageReceipt.current.denominator)} чеков`}>
+            <Delta value={averages?.averageReceipt.changePercent} />
+          </SummaryMetric>
+          <SummaryMetric label="Допродажи" value={formatMoney(additionalGroup?.metrics.netRevenue)} note={`${formatMoney(averages?.additionalRevenuePerPhone.current.value)} на телефон`}>
+            <Delta value={averages?.additionalRevenuePerPhone.changePercent} />
+          </SummaryMetric>
+        </div>
       </section>
 
       <div className="overview-grid">
         <section className="panel groups-panel">
-          <div className="panel__heading"><div><p className="eyebrow">Структура продаж</p><h2>Бизнес-группы</h2></div></div>
+          <div className="panel__heading"><h2>Структура продаж</h2></div>
           <div className="group-list">
             {categories?.groups.map((group) => {
               const info = groupLabels[group.groupCode] ?? { label: group.groupName, icon: <Package size={18} /> };
@@ -221,17 +207,17 @@ export function OverviewPage() {
         </section>
 
         <section className="panel plan-panel">
-          <div className="panel__heading"><div><p className="eyebrow">Темп месяца</p><h2>Направления плана</h2></div>{plan && <span>{plan.achievedDirectionCount} из {plan.directions.length} выполнено</span>}</div>
+          <div className="panel__heading"><h2>План месяца</h2>{plan && <span>{plan.achievedDirectionCount} из {plan.directions.length}</span>}</div>
           {!plan ? (
-            <div className="panel-empty"><Target size={24} /><strong>План на месяц не задан</strong><p>Добавьте общую цель магазина и три целевые доли.</p></div>
+            <div className="panel-empty"><Target size={24} /><strong>План не задан</strong><p>Задайте цели на месяц.</p></div>
           ) : (
             <div className="direction-list">
               {plan.directions.map((direction) => {
                 const completion = direction.criterionCompletionPercent;
                 return (
                   <article key={direction.code} className="direction-row">
-                    <div className="direction-row__top"><strong>{directionLabels[direction.code] ?? direction.code}</strong><span className={`status status--${toneForStatus(direction.status)}`}>{directionStatusLabels[direction.status] ?? direction.status}</span></div>
-                    <progress className="progress" value={Math.max(0, completion ?? 0)} max={100} aria-label={`Выполнение направления ${directionLabels[direction.code] ?? direction.code}`} />
+                    <div className="direction-row__top"><strong>{directionLabels[direction.code] ?? "Другое направление"}</strong><span className={`status status--${toneForStatus(direction.status)}`}>{directionStatusLabels[direction.status] ?? "Неизвестный статус"}</span></div>
+                    <progress className="progress" value={Math.max(0, completion ?? 0)} max={100} aria-label={`Выполнение направления ${directionLabels[direction.code] ?? "Другое направление"}`} />
                     <div className="direction-row__meta"><span>{formatPercent(completion)} критерия</span><span>прогноз {formatCompactMoney(direction.projectedAmount)}</span></div>
                   </article>
                 );
@@ -241,60 +227,64 @@ export function OverviewPage() {
         </section>
       </div>
 
-      <section className="panel categories-panel">
-        <div className="panel__heading"><div><p className="eyebrow">Детализация</p><h2>Категории продаж</h2></div><span>{categories?.categories.length ?? 0} категорий</span></div>
-        <div className="table-scroll">
-          <table>
-            <thead><tr><th>Категория</th><th>Выручка</th><th>Количество</th><th>Валовая прибыль</th><th>Маржа</th><th>Качество</th></tr></thead>
-            <tbody>
-              {categories?.categories.map((category) => (
-                <tr key={category.categoryCode} className={!category.categoryActive ? "row-muted" : ""}>
-                  <td><strong>{category.categoryName}</strong><small>{category.categoryCode}</small></td>
-                  <td>{formatMoney(category.metrics.netRevenue)}</td>
-                  <td>{formatNumber(category.metrics.netQuantity)}</td>
-                  <td>{formatMoney(category.metrics.grossProfit)}</td>
-                  <td>{formatPercent(category.metrics.marginPercent)}</td>
-                  <td>{category.metrics.dataQuality.completeCostData ? <span className="quality-ok"><CheckCircle2 size={14} />Полные</span> : <span className="quality-warning"><AlertCircle size={14} />Проверьте</span>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <section className="overview-details" aria-label="Подробные показатели">
+        <details className="disclosure-panel">
+          <summary><span>Категории продаж</span><small>{categories?.categories.length ?? 0}</small></summary>
+          <div className="disclosure-panel__content table-scroll">
+            <table>
+              <thead><tr><th>Категория</th><th>Выручка</th><th>Количество</th><th>Валовая прибыль</th><th>Маржа</th><th>Качество</th></tr></thead>
+              <tbody>
+                {categories?.categories.map((category) => (
+                  <tr key={category.categoryCode} className={!category.categoryActive ? "row-muted" : ""}>
+                    <td><strong>{category.categoryName}</strong></td>
+                    <td>{formatMoney(category.metrics.netRevenue)}</td>
+                    <td>{formatNumber(category.metrics.netQuantity)}</td>
+                    <td>{formatMoney(category.metrics.grossProfit)}</td>
+                    <td>{formatPercent(category.metrics.marginPercent)}</td>
+                    <td>{category.metrics.dataQuality.completeCostData ? <span className="quality-ok"><CheckCircle2 size={14} />Полные</span> : <span className="quality-warning"><AlertCircle size={14} />Проверьте</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+
+        <details className="disclosure-panel">
+          <summary><span>Показатели допродаж</span><small>{attachQuery.data?.rates.length ?? 0}</small></summary>
+          <div className="disclosure-panel__content">
+            {attachQuery.isPending && <PanelSkeleton rows={5} />}
+            {attachQuery.isError && <QueryError error={attachQuery.error} onRetry={() => void attachQuery.refetch()} compact />}
+            {attachQuery.data && (
+              <div className="attach-list">
+                {attachQuery.data.rates.map((rate) => (
+                  <article key={rate.metricCode}>
+                    <div><strong>{attachLabels[rate.metricCode] ?? "Другой показатель"}</strong><small>{formatNumber(rate.numeratorReceiptCount)} из {formatNumber(rate.denominatorReceiptCount)} чеков</small></div>
+                    <span>{formatPercent(rate.ratePerHundred)}</span>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        </details>
+
+        <details id="quality-details" className="disclosure-panel" open={Boolean(quality?.issues.length)}>
+          <summary><span>Качество данных</span>{quality && <small className={`status status--${toneForStatus(quality.status)}`}>{qualityStatusLabel(quality.status)}</small>}</summary>
+          <div className="disclosure-panel__content">
+            {quality?.issues.length === 0 ? (
+              <div className="disclosure-empty"><ShieldCheck size={20} /><span>Критичных замечаний нет</span></div>
+            ) : (
+              <div className="quality-list">
+                {quality?.issues.slice(0, 5).map((issue) => (
+                  <article key={issue.key}>
+                    <span className={`quality-list__icon quality-list__icon--${toneForStatus(issue.severity)}`}>{issue.severity === "ERROR" ? <AlertCircle size={17} /> : <TriangleAlert size={17} />}</span>
+                    <div><strong>{qualityIssueMessage(issue.code)}</strong>{issue.affectedCount != null && <small>Затронуто: {issue.affectedCount}</small>}</div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        </details>
       </section>
-
-      <div className="overview-grid overview-grid--lower">
-        <section className="panel attach-panel">
-          <div className="panel__heading"><div><p className="eyebrow">Допродажи</p><h2>Attach-rate на 100 устройств</h2></div><span>Значение может быть выше 100%</span></div>
-          {attachQuery.isPending && <PanelSkeleton rows={5} />}
-          {attachQuery.isError && <QueryError error={attachQuery.error} onRetry={() => void attachQuery.refetch()} compact />}
-          {attachQuery.data && (
-            <div className="attach-list">
-              {attachQuery.data.rates.map((rate) => (
-                <article key={rate.metricCode}>
-                  <div><strong>{attachLabels[rate.metricCode] ?? rate.metricCode}</strong><small>{formatNumber(rate.numeratorQuantity)} из {formatNumber(rate.denominatorQuantity)} ед.</small></div>
-                  <span>{formatPercent(rate.ratePerHundred)}</span>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section id="quality-details" className="panel quality-panel">
-          <div className="panel__heading"><div><p className="eyebrow">Надежность</p><h2>Качество периода</h2></div>{quality && <span className={`status status--${toneForStatus(quality.status)}`}>{quality.status}</span>}</div>
-          {quality?.issues.length === 0 ? (
-            <div className="panel-empty panel-empty--success"><ShieldCheck size={26} /><strong>Критичных замечаний нет</strong><p>Данные выбранного месяца готовы для управленческих решений.</p></div>
-          ) : (
-            <div className="quality-list">
-              {quality?.issues.slice(0, 8).map((issue) => (
-                <article key={issue.key}>
-                  <span className={`quality-list__icon quality-list__icon--${toneForStatus(issue.severity)}`}>{issue.severity === "ERROR" ? <AlertCircle size={17} /> : <TriangleAlert size={17} />}</span>
-                  <div><strong>{issue.message}</strong><small>{issue.area} · {issue.code}{issue.affectedCount != null ? ` · ${issue.affectedCount}` : ""}</small></div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
     </div>
   );
 }

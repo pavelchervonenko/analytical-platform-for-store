@@ -3,7 +3,8 @@
 
 .profile-grid { display: grid; grid-template-columns: minmax(260px, .38fr) minmax(0, 1fr); align-items: start; gap: 14px; }
 .profile-card { position: sticky; top: calc(var(--topbar-height) + 18px); }
-.profile-card__avatar { width: 68px; height: 68px; display: grid; place-items: center; margin-bottom: 24px; border-radius: 22px; color: #fff; background: linear-gradient(145deg, #376f5d, #285746); font-size: 25px; font-weight: 800; box-shadow: var(--shadow-sm); }
+.profile-sections { min-width: 0; display: grid; gap: 14px; }
+.profile-card__avatar { width: 68px; height: 68px; display: grid; place-items: center; margin-bottom: 24px; border-radius: 50%; color: #fff; background: #272729; font-size: 25px; font-weight: 600; box-shadow: none; }
 .profile-card h2 { margin: 0; font-size: 25px; letter-spacing: -.04em; }
 .profile-card > p:not(.eyebrow) { overflow-wrap: anywhere; margin: 7px 0 0; color: var(--text-muted); font-size: 14px; }
 .profile-card dl { display: grid; gap: 0; margin: 24px 0; }
@@ -14,6 +15,46 @@
 .profile-security-note { display: flex; align-items: flex-start; gap: 10px; padding: 13px; border-radius: 14px; color: var(--success); background: var(--success-soft); }
 .profile-security-note svg { width: 18px; }
 .profile-security-note span { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+
+.telegram-panel { overflow: hidden; }
+.telegram-panel__heading { margin-bottom: 18px; }
+.telegram-state { padding: 6px 9px; border-radius: 999px; color: var(--text-muted); background: var(--surface-muted); font-size: 11px; font-weight: 750; }
+.telegram-state--active { color: var(--success); background: var(--success-soft); }
+.telegram-state--bot_blocked { color: var(--danger); background: var(--danger-soft); }
+.telegram-state--pending_confirmation, .telegram-state--link_issued { color: var(--warning); background: var(--warning-soft); }
+.telegram-loading { min-height: 148px; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--text-muted); font-size: 13px; }
+.telegram-state-view { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: start; gap: 14px; padding: 16px; border: 1px solid var(--border); border-radius: 17px; background: var(--surface-muted); }
+.telegram-state-view--attention { border-color: #ead9ae; background: var(--warning-soft); }
+.telegram-state-view--success { border-color: #c9ddd1; background: var(--success-soft); }
+.telegram-state-view--danger { border-color: #ecd0cc; background: var(--danger-soft); }
+.telegram-state-view__icon { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; color: var(--primary); background: var(--surface); }
+.telegram-state-view__icon svg { width: 21px; }
+.telegram-state-view h3 { margin: 1px 0 6px; font-size: 16px; }
+.telegram-state-view p { max-width: 700px; margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.55; }
+.telegram-state-view small { display: block; margin-top: 8px; color: var(--text-faint); font-size: 11px; }
+.telegram-state-view > .button, .telegram-actions { align-self: center; }
+.telegram-state-view .button svg { width: 16px; }
+.telegram-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.telegram-facts { display: flex; flex-wrap: wrap; gap: 7px; margin: 13px 0 0; }
+.telegram-facts div { display: grid; gap: 2px; min-width: 120px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--surface) 82%, transparent); }
+.telegram-facts dt, .telegram-facts dd { margin: 0; }
+.telegram-facts dt { color: var(--text-faint); font-size: 10px; }
+.telegram-facts dd { font-size: 12px; font-weight: 750; }
+.telegram-settings-form { grid-column: 2 / -1; display: grid; grid-template-columns: minmax(190px, 1.5fr) minmax(110px, .75fr) minmax(110px, .75fr); align-items: end; gap: 12px; margin-top: 3px; padding: 15px; border: 1px solid color-mix(in srgb, var(--success) 24%, var(--border)); border-radius: 14px; background: var(--surface); }
+.telegram-settings-form__heading { grid-column: 1 / -1; display: grid; gap: 3px; }
+.telegram-settings-form__heading strong { font-size: 13px; }
+.telegram-settings-form__heading span { color: var(--text-faint); font-size: 11px; }
+.telegram-settings-form .field { display: grid; gap: 6px; }
+.telegram-settings-form .field > span { color: var(--text-muted); font-size: 11px; font-weight: 700; }
+.telegram-settings-form__timezone { grid-column: 1 / -1; }
+.telegram-settings-toggle { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; }
+.telegram-settings-toggle > span { display: grid; gap: 2px; }
+.telegram-settings-toggle strong { font-size: 12px; }
+.telegram-settings-toggle small { color: var(--text-faint); font-size: 10px; }
+.telegram-settings-form > .form-error { grid-column: 1 / -1; margin: 0; }
+.telegram-settings-form__actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+.telegram-settings-form__actions svg { width: 15px; }
+.telegram-panel__error { margin: 12px 0 0; }
 
 .sessions-panel__intro { max-width: 760px; margin: -8px 0 20px; color: var(--text-muted); font-size: 13px; line-height: 1.55; }
 .sessions-loading { min-height: 190px; display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--text-muted); font-size: 14px; }
@@ -43,8 +84,23 @@
 }
 
 @media (max-width: 600px) {
+  .telegram-state-view { grid-template-columns: 42px minmax(0, 1fr); }
+  .telegram-state-view__icon { width: 42px; height: 42px; }
+  .telegram-state-view > .button, .telegram-actions { grid-column: 1 / -1; width: 100%; }
+  .telegram-actions { justify-content: stretch; }
+  .telegram-actions .button { flex: 1; }
+  .telegram-settings-form { grid-column: 1 / -1; grid-template-columns: 1fr 1fr; }
+  .telegram-settings-form__timezone, .telegram-settings-toggle { grid-column: 1 / -1; }
   .session-row { grid-template-columns: 42px minmax(0, 1fr); }
   .session-row > button { grid-column: 1 / -1; width: 100%; }
   .sessions-panel__footer { align-items: stretch; flex-direction: column; }
   .sessions-panel__footer > button { width: 100%; }
+}
+
+@media (max-width: 480px) {
+  .telegram-settings-form { grid-template-columns: 1fr; }
+  .telegram-settings-form__timezone, .telegram-settings-toggle { grid-column: auto; }
+  .telegram-actions { flex-direction: column; }
+  .telegram-actions .button { width: 100%; }
+  .session-row__copy > div { align-items: flex-start; flex-direction: column; }
 }

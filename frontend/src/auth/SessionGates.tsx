@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { useAuth } from "./AuthProvider";
 
@@ -50,8 +49,11 @@ export function PasswordChangeGate() {
   return <Outlet />;
 }
 
-export function AdminGate({ children }: { children: ReactNode }) {
+export function AdminGate() {
   const { user } = useAuth();
-  if (user?.role !== "ADMIN") return <Navigate to="/overview" replace />;
-  return children;
+  const location = useLocation();
+  if (user?.role !== "ADMIN") {
+    return <Navigate to={{ pathname: "/overview", search: location.search }} replace />;
+  }
+  return <Outlet />;
 }

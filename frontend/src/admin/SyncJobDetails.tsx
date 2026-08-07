@@ -8,6 +8,14 @@ function dateTime(value: string | null): string {
   return value ? new Date(value).toLocaleString("ru-RU") : "—";
 }
 
+const statusLabels: Readonly<Record<string, string>> = {
+  PENDING: "Ожидает запуска", RUNNING: "Выполняется", WAITING_RETRY: "Ожидает повтора",
+  SUCCESS: "Завершена", FAILED: "Не завершена", CANCELLED: "Отменена", UNKNOWN: "Статус уточняется"
+};
+const phaseLabels: Readonly<Record<string, string>> = {
+  STORES: "Магазины", EMPLOYEES: "Сотрудники", SALES: "Продажи", RETURNS: "Возвраты"
+};
+
 export function SyncJobDetails({ jobId }: { jobId: string }) {
   const [open, setOpen] = useState(false);
   const query = useQuery({
@@ -24,9 +32,9 @@ export function SyncJobDetails({ jobId }: { jobId: string }) {
         <header><h2 id={`sync-job-${jobId}`}>Задача синхронизации</h2><button className="icon-button" type="button" onClick={() => setOpen(false)} aria-label="Закрыть"><X /></button></header>
         <div className="sync-job-details">
           {query.isPending ? <div className="panel-loader"><span className="spinner" />Загружаем задачу…</div> : query.isError ? <QueryError error={query.error} onRetry={() => void query.refetch()} /> : <>
-            <div className="sync-job-details__summary"><span className={`sync-dot sync-dot--${query.data.status.toLowerCase()}`} /><div><strong>{query.data.status}</strong><small>{query.data.jobType} · {query.data.phase ?? "ожидание"}</small></div></div>
-            <dl><div><dt>ID задачи</dt><dd>{query.data.id}</dd></div><div><dt>Период</dt><dd>{dateTime(query.data.periodStart)} — {dateTime(query.data.periodEnd)}</dd></div><div><dt>Текущий курсор</dt><dd>{dateTime(query.data.cursorStart)} — {dateTime(query.data.currentWindowEnd)}</dd></div><div><dt>Прогресс</dt><dd>{query.data.completedSteps} шагов, {query.data.totalRetries} повторов</dd></div><div><dt>Попытка</dt><dd>{query.data.attemptCount} из {query.data.maxAttempts}</dd></div><div><dt>Запущена</dt><dd>{dateTime(query.data.startedAt)}</dd></div><div><dt>Завершена</dt><dd>{dateTime(query.data.finishedAt)}</dd></div></dl>
-            {query.data.errorSummary && <p className="form-error">{query.data.errorSummary}</p>}
+            <div className="sync-job-details__summary"><span className={`sync-dot sync-dot--${query.data.status.toLowerCase()}`} /><div><strong>{statusLabels[query.data.status] ?? "Статус уточняется"}</strong><small>{phaseLabels[query.data.phase ?? ""] ?? "Подготовка"}</small></div></div>
+            <dl><div><dt>Период</dt><dd>{dateTime(query.data.periodStart)} — {dateTime(query.data.periodEnd)}</dd></div><div><dt>Прогресс</dt><dd>Завершено шагов: {query.data.completedSteps}</dd></div><div><dt>Запущена</dt><dd>{dateTime(query.data.startedAt)}</dd></div><div><dt>Завершена</dt><dd>{dateTime(query.data.finishedAt)}</dd></div></dl>
+            {query.data.errorSummary && <p className="form-error">Не удалось завершить загрузку. Повторите попытку позже.</p>}
           </>}
         </div>
       </section>

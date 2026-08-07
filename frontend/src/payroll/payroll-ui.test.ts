@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PayrollStatement } from "../api/contracts";
-import { adjustmentTypeLabel, comparisonReasonLabel, parsePayrollAmount, summarizeStatements, validateReason } from "./payroll-ui";
+import { adjustmentTypeLabel, comparisonReasonLabel, parsePayrollAmount, payrollCategoryLabel, summarizeStatements, validateReason } from "./payroll-ui";
 
 const statement = (values: Partial<PayrollStatement>): PayrollStatement => ({
   id: "11111111-1111-4111-8111-111111111111",
@@ -36,6 +36,11 @@ describe("payroll UI helpers", () => {
     expect(validateReason("  ")).toContain("причину");
     expect(validateReason("Инвентаризация 24 июля")).toBeNull();
     expect(validateReason("x".repeat(501))).toContain("500");
+  });
+
+  it("localizes payroll category codes", () => {
+    expect(payrollCategoryLabel("TECH_TIER_1")).toBe("Техника, уровень 1");
+    expect(payrollCategoryLabel("FUTURE_CATEGORY")).toBe("Другая категория");
   });
 
   it("uses safe labels for future enum variants", () => {

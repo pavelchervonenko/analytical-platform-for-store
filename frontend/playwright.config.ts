@@ -9,7 +9,11 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  // Credentialed checks mutate the server-side session registry. Keep them
+  // sequential so parallel viewport projects do not race on the same account.
+  workers: process.env.E2E_ADMIN_EMAIL || process.env.E2E_MANAGER_EMAIL
+    ? 1
+    : process.env.CI ? 2 : undefined,
   reporter: process.env.CI
     ? [["line"], ["html", { outputFolder: "playwright-report", open: "never" }]]
     : [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
@@ -31,6 +35,7 @@ export default defineConfig({
   },
   projects: [
     { name: "desktop-chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 1000 } } },
+    { name: "tablet-chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 768, height: 1024 }, hasTouch: true } },
     { name: "mobile-chromium", use: { ...devices["Pixel 7"] } }
   ]
 });

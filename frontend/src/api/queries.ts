@@ -27,6 +27,8 @@ import {
   storeKpiSchema,
   storeListSchema,
   systemStatusSchema,
+  telegramChannelSchema,
+  telegramLinkCreatedSchema,
   type AttachRate,
   type ActiveSession,
   type AverageKpi,
@@ -56,16 +58,22 @@ import {
   type StoreDataStatus,
   type StoreKpi,
   type StoreSummary,
-  type SystemStatus
+  type SystemStatus,
+  type TelegramDeliverySettingsInput,
+  type TelegramChannelResource,
+  type TelegramLinkCreated
 } from "./contracts";
-import { apiClient, isApiClientError, type EtaggedResource } from "./client";
+import { weeklyInsightSchema, type WeeklyInsight } from "./weeklyInsightContract";
+import { ApiClientError, apiClient, isApiClientError, type EtaggedResource } from "./client";
 
 export const queryKeys = {
   session: ["session"] as const,
   activeSessions: ["session", "active"] as const,
+  telegramChannel: ["notifications", "channels", "telegram"] as const,
   stores: ["stores"] as const,
   systemStatus: ["system", "status"] as const,
   storeStatus: (storeId: string) => ["stores", storeId, "data-status"] as const,
+  weeklyInsight: (storeId: string) => ["stores", storeId, "insights", "weekly", "current"] as const,
   storeKpi: (storeId: string, start: string, end: string) => ["stores", storeId, "kpi", start, end] as const,
   categories: (storeId: string, start: string, end: string) => ["stores", storeId, "categories", start, end] as const,
   averages: (storeId: string, start: string, end: string) => ["stores", storeId, "averages", start, end] as const,
@@ -83,7 +91,11 @@ export const queryKeys = {
   payrollReadiness: (storeId: string, month: string) => ["stores", storeId, "payroll", month, "readiness"] as const,
   payrollPreview: (storeId: string, month: string) => ["stores", storeId, "payroll", month, "preview"] as const,
   payrollLatest: (storeId: string, month: string) => ["stores", storeId, "payroll", month, "latest"] as const,
-  payrollRuns: (storeId: string, month?: string, page?: number) => ["stores", storeId, "payroll", "runs", month, page] as const,
+  payrollRuns: (storeId: string, month?: string, page?: number) => [
+    "stores", storeId, "payroll", "runs",
+    ...(month === undefined ? [] : [month]),
+    ...(page === undefined ? [] : [page])
+  ] as const,
   payrollRun: (storeId: string, runId: string) => ["stores", storeId, "payroll", "run", runId] as const,
   payrollComparison: (storeId: string, previousId: string, currentId: string) => ["stores", storeId, "payroll", "compare", previousId, currentId] as const,
   reportArchive: (storeId: string) => ["stores", storeId, "reports"] as const,
@@ -124,6 +136,82 @@ export function revokeOtherSessions(): Promise<void> {
   return apiClient.request("/api/auth/sessions/others", { method: "DELETE" });
 }
 
+const telegramChannelPath = "/api/notifications/channels/telegram";
+
+function validateTelegramChannelResource(
+  resource: TelegramChannelResource
+): TelegramChannelResource {
+  if (resource.value.subscriptionId && !resource.etag) {
+    throw new ApiClientError("Сервер не вернул версию подключения Telegram.", {
+      status: 200,
+      code: "ETAG_MISSING"
+    });
+  }
+  return resource;
+}
+
+export async function getTelegramChannel(): Promise<TelegramChannelResource> {
+  const resource = await apiClient.requestWithOptionalEtag(telegramChannelPath, {
+    schema: telegramChannelSchema
+  });
+  return validateTelegramChannelResource(resource);
+}
+
+export function createTelegramLink(): Promise<TelegramLinkCreated> {
+  return apiClient.request(`${telegramChannelPath}/link`, {
+    method: "POST",
+    schema: telegramLinkCreatedSchema
+  });
+}
+
+export async function confirmTelegramChannel(
+  etag: string
+): Promise<TelegramChannelResource> {
+  const resource = await apiClient.requestWithOptionalEtag(
+    `${telegramChannelPath}/confirm`,
+    {
+      method: "POST",
+      headers: { "If-Match": etag },
+      schema: telegramChannelSchema
+    }
+  );
+  return validateTelegramChannelResource(resource);
+}
+
+export async function revokeTelegramChannel(
+  etag: string
+): Promise<TelegramChannelResource> {
+  const resource = await apiClient.requestWithOptionalEtag(
+    `${telegramChannelPath}/revoke`,
+    {
+      method: "POST",
+      headers: { "If-Match": etag },
+      schema: telegramChannelSchema
+    }
+  );
+  return validateTelegramChannelResource(resource);
+}
+
+export interface UpdateTelegramDeliverySettingsCommand {
+  input: TelegramDeliverySettingsInput;
+  etag: string;
+}
+
+export async function updateTelegramDeliverySettings(
+  command: UpdateTelegramDeliverySettingsCommand
+): Promise<TelegramChannelResource> {
+  const resource = await apiClient.requestWithOptionalEtag(
+    `${telegramChannelPath}/settings`,
+    {
+      method: "PUT",
+      headers: { "If-Match": command.etag },
+      body: command.input,
+      schema: telegramChannelSchema
+    }
+  );
+  return validateTelegramChannelResource(resource);
+}
+
 export function getStores(): Promise<StoreSummary[]> {
   return apiClient.request("/api/stores", { schema: storeListSchema });
 }
@@ -134,6 +222,12 @@ export function getSystemStatus(): Promise<SystemStatus> {
 
 export function getStoreStatus(storeId: string): Promise<StoreDataStatus> {
   return apiClient.request(`${storePath(storeId)}/data-status`, { schema: storeDataStatusSchema });
+}
+
+export function getWeeklyInsight(storeId: string): Promise<WeeklyInsight> {
+  return apiClient.request(`${storePath(storeId)}/insights/weekly/current`, {
+    schema: weeklyInsightSchema
+  });
 }
 
 export function getStoreKpi(storeId: string, start: string, end: string): Promise<StoreKpi> {

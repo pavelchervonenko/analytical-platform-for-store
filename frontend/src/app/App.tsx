@@ -16,8 +16,6 @@ const AdminPage = lazy(async () => { const module = await import("../admin/Admin
 
 const ProfilePage = lazy(async () => { const module = await import("../auth/ProfilePage"); return { default: module.ProfilePage }; });
 const InsightsPreviewPage = lazy(async () => { const module = await import("../insights/InsightsPreviewPage"); return { default: module.InsightsPreviewPage }; });
-const insightsPreviewEnabled = import.meta.env.DEV
-  || import.meta.env.VITE_ENABLE_INSIGHTS_PREVIEW === "true";
 
 function PageLoader() { return <div className="page-loader" aria-live="polite"><span className="spinner" /><span>Загружаем раздел…</span></div>; }
 
@@ -35,8 +33,10 @@ export function App() {
       <Route path="/quality" element={<QualityPage />} />
       <Route path="/reports" element={<ReportsPage />} />
       <Route path="/profile" element={<ProfilePage />} />
-      <Route path="/insights" element={insightsPreviewEnabled ? <InsightsPreviewPage /> : <Navigate to="/overview" replace />} />
-      <Route path="/admin" element={<AdminGate><AdminPage /></AdminGate>} />
+      <Route path="/insights" element={<InsightsPreviewPage />} />
+      <Route element={<AdminGate />}>
+        <Route path="/admin" element={<AdminPage />} />
+      </Route>
     </Route></Route>
     <Route path="*" element={<Navigate to="/overview" replace />} />
   </Routes></Suspense>;

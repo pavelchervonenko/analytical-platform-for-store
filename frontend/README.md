@@ -26,12 +26,18 @@ visual reference and is not imported by this application.
   guarded manual synchronization, report archive recovery, immutable scheme versions,
   effective-dated payroll classification and the bootstrap category import. Backend authorization
   remains authoritative for every request.
+- `/insights` is a feature-gated weekly AI interpretation preview; `/profile` owns active sessions and
+  the user-facing Telegram connection lifecycle. ADMIN LLM/Telegram operations remain available only
+  behind backend feature flags and operational permissions.
+- The UI follows the Apple-inspired hierarchy while retaining translucent liquid-glass navigation.
+  Responsive behavior is regression-tested at desktop `1440x1000`, tablet `768x1024` with touch and
+  Pixel 7 mobile sizes.
 - Query keys contain every store, period, month or resource identifier that affects server state.
   Mutations invalidate dependent authoritative queries instead of recalculating business data in
   the browser.
 
-- Safe API errors retain the backend correlation ID for support diagnostics; raw proxy and server
-  details are never rendered.
+- Safe API errors keep diagnostics inside the transport layer; correlation IDs, raw proxy details and
+  server internals are not rendered to store managers.
 
 ## Development
 
@@ -62,11 +68,23 @@ npm run e2e:install
 E2E_ADMIN_EMAIL=... E2E_ADMIN_PASSWORD=... npm run e2e
 ```
 
-Add `E2E_MANAGER_EMAIL` and `E2E_MANAGER_PASSWORD` to verify the negative role boundary. Secrets
-must come from the shell or the CI secret store; they are never kept in repository files. Without
-credentials, Playwright still verifies the anonymous route guard. Set `E2E_BASE_URL` to test an
-already deployed same-origin environment; otherwise Playwright starts the local production preview
-on `127.0.0.1:4174`, which proxies `/api` to `DEV_API_TARGET`.
+Add `E2E_MANAGER_EMAIL` and `E2E_MANAGER_PASSWORD` to verify the permanent MANAGER role
+boundary. Secrets must come from the shell or the CI secret store; they are never kept in repository
+files. Without credentials, Playwright still verifies the anonymous route guard. Credentialed runs
+use one worker so desktop/tablet/mobile projects do not race on the same server-side session.
+
+Set `E2E_BASE_URL` to test an already deployed same-origin environment; otherwise Playwright starts
+the local production preview on `127.0.0.1:4174`, which proxies `/api` to `DEV_API_TARGET`.
+
+The deeper MANAGER lifecycle creates and later disables a test account. Run it only against a local
+or staging database prepared for mutations:
+
+```bash
+E2E_MUTATING=true E2E_ADMIN_EMAIL=... E2E_ADMIN_PASSWORD=... npx playwright test e2e/live-acceptance.spec.ts --project=desktop-chromium --grep 'MANAGER'
+```
+
+Exact scope, latest results, intentional skips and known risks are recorded in
+`docs/FRONTEND_ACCEPTANCE.md`.
 
 Failure artifacts contain screenshots and traces but no video. Treat them as access-controlled CI
 artifacts because rendered business data can be sensitive.

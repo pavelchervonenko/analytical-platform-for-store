@@ -1,7 +1,7 @@
 .plan-schedule-heading { margin-bottom: 16px; }
 .plan-schedule-tabs { width: max-content; display: flex; gap: 5px; margin-bottom: 18px; padding: 5px; border: 1px solid var(--border); border-radius: 17px; background: rgba(255,254,250,.75); box-shadow: var(--shadow-sm); }
-.plan-schedule-tabs button { min-width: 190px; min-height: 48px; display: grid; grid-template-columns: 24px 1fr; grid-template-rows: auto auto; align-items: center; column-gap: 8px; padding: 7px 13px; border: 0; border-radius: 12px; color: var(--text-muted); background: transparent; text-align: left; }
-.plan-schedule-tabs button > svg { grid-row: 1 / 3; width: 19px; }
+.plan-schedule-tabs button { min-width: 190px; min-height: 48px; display: grid; grid-template-columns: 24px 1fr; grid-template-rows: auto; align-items: center; column-gap: 8px; padding: 7px 13px; border: 0; border-radius: 12px; color: var(--text-muted); background: transparent; text-align: left; }
+.plan-schedule-tabs button > svg { grid-row: auto; width: 19px; }
 .plan-schedule-tabs button { font-size: 13px; font-weight: 800; }
 .plan-schedule-tabs button span { color: var(--text-faint); font-size: 10px; font-weight: 600; }
 .plan-schedule-tabs button.active { color: #fff; background: var(--primary); }
@@ -34,8 +34,8 @@
 .plan-direction-card > p { margin: 7px 0 0; color: var(--text-muted); font-size: 11px; }
 .plan-direction-card > progress { width: 100%; height: 7px; margin: 15px 0 13px; overflow: hidden; border: 0; border-radius: 999px; appearance: none; }
 .plan-direction-card > progress::-webkit-progress-bar { background: #e7ebe7; }
-.plan-direction-card > progress::-webkit-progress-value { border-radius: 999px; background: linear-gradient(90deg, #285b49, #7da08c); }
-.plan-direction-card > progress::-moz-progress-bar { border-radius: 999px; background: linear-gradient(90deg, #285b49, #7da08c); }
+.plan-direction-card > progress::-webkit-progress-value { border-radius: 999px; background: var(--primary); }
+.plan-direction-card > progress::-moz-progress-bar { border-radius: 999px; background: var(--primary); }
 .plan-direction-card dl { display: grid; gap: 6px; margin: auto 0 0; }
 .plan-direction-card dl div { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 6px; border-top: 1px solid var(--border); }
 .plan-direction-card dt, .plan-direction-card dd { margin: 0; font-size: 10px; }
@@ -90,9 +90,10 @@
 .schedule-calendar-skeleton { height: 650px; }
 
 .shift-editor-overlay { position: fixed; z-index: 150; inset: 0; display: flex; justify-content: flex-end; background: rgba(13,20,16,.52); backdrop-filter: blur(3px); }
-.shift-editor { width: min(100%, 620px); height: 100%; display: flex; flex-direction: column; padding: 24px; background: var(--surface); box-shadow: -20px 0 60px rgba(15,22,18,.18); }
+.shift-editor { width: min(100%, 620px); height: 100dvh; display: flex; flex-direction: column; padding: 24px; background: var(--surface); box-shadow: -20px 0 60px rgba(15,22,18,.18); }
 .shift-editor > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border); }
-.shift-editor > header h2 { margin: 0; font-size: 25px; letter-spacing: -.035em; text-transform: capitalize; }
+.shift-editor > header > div { min-width: 0; }
+.shift-editor > header h2 { margin: 0; overflow-wrap: anywhere; font-size: 25px; letter-spacing: -.035em; text-transform: capitalize; }
 .shift-editor > header p:last-child { margin: 7px 0 0; color: var(--text-muted); font-size: 11px; }
 .shift-editor__summary { display: flex; gap: 8px; padding: 12px 0; }
 .shift-editor__summary span { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 10px; color: var(--text-muted); background: var(--surface-muted); font-size: 11px; font-weight: 700; }
@@ -141,7 +142,7 @@
   .schedule-day { min-height: 78px; padding: 6px; border-radius: 10px; }
   .schedule-day > span i, .schedule-day__avatars { display: none; }
   .schedule-day > small { overflow: hidden; font-size: 9px; white-space: nowrap; text-overflow: ellipsis; }
-  .shift-editor { padding: 18px; }
+  .shift-editor { padding: 18px 18px max(18px, env(safe-area-inset-bottom)); }
 }
 
 @media (max-width: 520px) {

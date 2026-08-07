@@ -1,22 +1,27 @@
-import { BellRing, BrainCircuit, ChartNoAxesCombined, Sparkles, UsersRound } from "lucide-react";
+import { BrainCircuit, Sparkles } from "lucide-react";
+import { useWorkspace } from "../stores/WorkspaceProvider";
+import { WeeklyInsightPanel } from "./WeeklyInsightPanel";
 import "./styles.css";
 
-const areas = [
-  { icon: ChartNoAxesCombined, title: "Магазин" },
-  { icon: UsersRound, title: "Команда" },
-  { icon: BrainCircuit, title: "Сотрудники" }
-];
-
 export function InsightsPreviewPage() {
-  return <div className="insights-preview-page">
-    <header className="page-heading insights-preview-heading"><div><h1>AI-разбор</h1></div></header>
+  const { selectedStore } = useWorkspace();
+  return (
+    <div className="insights-preview-page">
+      <header className="page-heading insights-preview-heading">
+        <div>
+          <p className="eyebrow"><BrainCircuit size={16} /> {selectedStore.name}</p>
+          <h1>ИИ-разбор</h1>
+          <p>Интерпретация результатов магазина и сотрудников за последнюю завершённую неделю.</p>
+        </div>
+      </header>
 
-    <section className="panel insights-preview-hero">
-      <div><span className="context-icon"><Sparkles /></span><h2>Главное за неделю</h2></div>
-    </section>
+      <section className="insights-page-intro" aria-label="Назначение ИИ-разбора">
+        <Sparkles size={18} />
+        <p>Выводы сформированы по рассчитанным backend-метрикам. Рекомендации помогают выбрать
+          направление проверки, а окончательное решение остаётся за руководителем.</p>
+      </section>
 
-    <div className="insights-preview-grid">{areas.map(({ icon: Icon, title }) => <article className="panel" key={title}><Icon /><h2>{title}</h2></article>)}</div>
-
-    <section className="panel insights-notification-preview"><span><BellRing /></span><h2>Уведомления</h2></section>
-  </div>;
+      <WeeklyInsightPanel storeId={selectedStore.id} />
+    </div>
+  );
 }

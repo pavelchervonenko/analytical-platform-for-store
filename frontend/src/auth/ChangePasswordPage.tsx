@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from "react";
-import { CheckCircle2 } from "lucide-react";
 import { isApiClientError } from "../api/client";
 import { useAuth } from "./AuthProvider";
 
@@ -39,15 +38,11 @@ export function ChangePasswordPage() {
             <p className="muted">После смены пароля текущая сессия завершится. Затем войдите снова.</p>
           </div>
 
-          <ul className="password-rules" aria-label="Требования к паролю">
-            <li><CheckCircle2 size={16} />От 12 до 128 символов</li>
-            <li><CheckCircle2 size={16} />Не используйте распространенный пароль</li>
-          </ul>
 
           {error && <div className="form-alert" role="alert">{error}</div>}
 
           <label className="field"><span>Временный пароль</span><input type="password" autoComplete="current-password" maxLength={128} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required /></label>
-          <label className="field"><span>Новый пароль</span><input type="password" autoComplete="new-password" minLength={12} maxLength={128} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required /></label>
+          <label className="field"><span>Новый пароль</span><input type="password" autoComplete="new-password" minLength={12} maxLength={128} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required /><small>от 12 символов</small></label>
           <label className="field"><span>Повторите новый пароль</span><input type="password" autoComplete="new-password" minLength={12} maxLength={128} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required /></label>
 
           <button className="button button--primary button--wide" type="submit" disabled={submitting}>{submitting ? "Сохраняем…" : "Сменить пароль"}</button>

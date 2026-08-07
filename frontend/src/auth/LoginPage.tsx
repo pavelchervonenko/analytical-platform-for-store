@@ -52,7 +52,7 @@ export function LoginPage() {
         <div className="auth-intro__copy">
           <h1>Store Analytics</h1>
         </div>
-        <div className="auth-intro__security"><LockKeyhole size={18} /><span>Защищенная серверная сессия</span></div>
+        <div className="auth-intro__security"><LockKeyhole size={18} /><span>Безопасный вход</span></div>
       </section>
 
       <section className="auth-panel">
@@ -67,7 +67,7 @@ export function LoginPage() {
           {error && <div className="form-alert" role="alert">{error}</div>}
 
           <label className="field">
-            <span>Email</span>
+            <span>Электронная почта</span>
             <input
               type="email"
               name="email"
@@ -81,10 +81,11 @@ export function LoginPage() {
             />
           </label>
 
-          <label className="field">
-            <span>Пароль</span>
+          <div className="field">
+            <label htmlFor="login-password">Пароль</label>
             <span className="password-field">
               <input
+                id="login-password"
                 type={showPassword ? "text" : "password"}
                 name="password"
                 autoComplete="current-password"
@@ -97,7 +98,7 @@ export function LoginPage() {
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </span>
-          </label>
+          </div>
 
           <button className="button button--primary button--wide" type="submit" disabled={submitting || retryAfter !== null}>
             {submitting ? "Входим…" : retryAfter !== null ? `Повторите через ${retryAfter} сек.` : "Войти"}

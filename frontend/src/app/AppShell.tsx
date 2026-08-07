@@ -1,24 +1,36 @@
-import { useQuery } from "@tanstack/react-query";
 import { BarChart3, CalendarRange, ChevronDown, CircleDollarSign, DatabaseZap, FileArchive, LogOut, Menu, Settings, Sparkles, Users, X } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
-import { getSystemStatus, queryKeys } from "../api/queries";
 import { InitialStoreSetup } from "../admin/InitialStoreSetup";
 import { useAuth } from "../auth/AuthProvider";
 import { PeriodSelector } from "../stores/PeriodSelector";
 import { WorkspaceProvider, useWorkspace } from "../stores/WorkspaceProvider";
 
-const navigation = [
-  { to: "/overview", label: "Обзор", icon: BarChart3 },
-  { to: "/employees", label: "Сотрудники", icon: Users },
-  { to: "/plan", label: "План и смены", icon: CalendarRange },
-  { to: "/payroll", label: "Зарплата и аудит", icon: CircleDollarSign },
-  { to: "/reports", label: "Отчеты", icon: FileArchive },
-  { to: "/quality", label: "Качество данных", icon: DatabaseZap }
-];
-
-const insightsPreviewEnabled = import.meta.env.DEV
-  || import.meta.env.VITE_ENABLE_INSIGHTS_PREVIEW === "true";
+const navigationGroups = [
+  {
+    label: "Аналитика",
+    items: [
+      { to: "/overview", label: "Обзор", icon: BarChart3, visibility: "all" },
+      { to: "/insights", label: "ИИ-разбор", icon: Sparkles, visibility: "all" },
+      { to: "/employees", label: "Сотрудники", icon: Users, visibility: "all" }
+    ]
+  },
+  {
+    label: "Управление",
+    items: [
+      { to: "/plan", label: "План и смены", icon: CalendarRange, visibility: "all" },
+      { to: "/payroll", label: "Зарплата", icon: CircleDollarSign, visibility: "all" },
+      { to: "/reports", label: "Отчеты", icon: FileArchive, visibility: "all" }
+    ]
+  },
+  {
+    label: "Система",
+    items: [
+      { to: "/quality", label: "Качество данных", icon: DatabaseZap, visibility: "all" },
+      { to: "/admin", label: "Настройки", icon: Settings, visibility: "admin" }
+    ]
+  }
+] as const;
 
 function roleLabel(role: "ADMIN" | "MANAGER" | "UNKNOWN" | undefined): string {
   if (role === "ADMIN") return "Администратор";
@@ -32,13 +44,6 @@ function ShellContent() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const analyticsPeriodEnabled = location.pathname === "/overview" || location.pathname.startsWith("/employees");
-  const systemStatus = useQuery({
-    queryKey: queryKeys.systemStatus,
-    queryFn: getSystemStatus,
-    staleTime: 5 * 60_000,
-    retry: 1
-  });
-
   return (
     <div className="app-layout">
       <a className="skip-link" href="#main-content">К основному содержимому</a>
@@ -46,14 +51,24 @@ function ShellContent() {
         <div className="sidebar__brand"><span className="brand-mark">S</span><span><strong>Store</strong><small>Analytics</small></span></div>
         <button className="sidebar__close" type="button" onClick={() => setMobileMenuOpen(false)} aria-label="Закрыть меню"><X /></button>
         <nav>
-          <span className="nav-caption">Рабочее пространство</span>
-          {navigation.map(({ to, label, icon: Icon }) => <NavLink key={to} to={{ pathname: to, search: location.search }} onClick={() => setMobileMenuOpen(false)}><Icon size={19} /><span>{label}</span></NavLink>)}
-          {insightsPreviewEnabled && <NavLink to={{ pathname: "/insights", search: location.search }} onClick={() => setMobileMenuOpen(false)}><Sparkles size={19} /><span>AI-разбор <small className="nav-preview-label">концепт</small></span></NavLink>}
-          {user?.role === "ADMIN" && <NavLink to={{ pathname: "/admin", search: location.search }} onClick={() => setMobileMenuOpen(false)}><Settings size={19} /><span>Администрирование</span></NavLink>}
+          {navigationGroups.map((group) => {
+            const items = group.items.filter((item) =>
+              item.visibility !== "admin" || user?.role === "ADMIN");
+            if (items.length === 0) return null;
+            return (
+              <div className="nav-group" key={group.label}>
+                <span className="nav-caption">{group.label}</span>
+                {items.map(({ to, label, icon: Icon }) => (
+                  <NavLink key={to} to={{ pathname: to, search: location.search }} onClick={() => setMobileMenuOpen(false)}>
+                    <Icon size={19} /><span>{label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            );
+          })}
         </nav>
         <div className="sidebar__footer">
-          {systemStatus.data && <div className="sidebar-build" title={`Web ${__FRONTEND_BUILD_VERSION__} · API contract ${systemStatus.data.apiContractVersion} · Серверное время: ${new Date(systemStatus.data.time).toLocaleString("ru-RU")}`}><span>API · c{systemStatus.data.apiContractVersion}</span><strong>v{systemStatus.data.version}</strong></div>}
-          <NavLink className="sidebar-user" to="/profile"><span>{user?.displayName.slice(0, 1).toUpperCase()}</span><div><strong>{user?.displayName}</strong><small>{roleLabel(user?.role)} · профиль</small></div></NavLink>
+          <NavLink className="sidebar-user" to="/profile"><span>{user?.displayName.slice(0, 1).toUpperCase()}</span><div><strong>{user?.displayName}</strong><small>{roleLabel(user?.role)}</small></div></NavLink>
           <button type="button" onClick={() => void logout()}><LogOut size={18} /><span>Выйти</span></button>
         </div>
       </aside>
@@ -63,7 +78,7 @@ function ShellContent() {
           <button className="icon-button topbar__menu" type="button" onClick={() => setMobileMenuOpen(true)} aria-label="Открыть меню"><Menu /></button>
           <label className="store-selector">
             <span className="store-selector__avatar">{workspace.selectedStore.name.slice(0, 1).toUpperCase()}</span>
-            <span className="store-selector__copy"><small>Магазин</small><strong>{workspace.selectedStore.name}</strong></span>
+            <span className="store-selector__copy"><strong>{workspace.selectedStore.name}</strong></span>
             <select value={workspace.selectedStore.id} onChange={(event) => workspace.selectStore(event.target.value)} aria-label="Выбрать магазин">{workspace.stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}</select>
             <ChevronDown size={16} aria-hidden="true" />
           </label>

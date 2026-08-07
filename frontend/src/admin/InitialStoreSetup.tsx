@@ -19,6 +19,15 @@ const phaseLabel: Record<string, string> = {
   SALES: "продажи",
   RETURNS: "возвраты"
 };
+const statusLabel: Record<SyncJob["status"], string> = {
+  PENDING: "ожидает запуска",
+  RUNNING: "выполняется",
+  WAITING_RETRY: "ожидает повтора",
+  SUCCESS: "завершена",
+  FAILED: "не завершена",
+  CANCELLED: "отменена",
+  UNKNOWN: "уточняется"
+};
 
 export function InitialStoreSetup() {
   const queryClient = useQueryClient();
@@ -63,7 +72,7 @@ export function InitialStoreSetup() {
     : jobsQuery.isError
       ? "Не удалось получить состояние задач синхронизации."
       : trackedJob?.status === "FAILED"
-        ? trackedJob.errorSummary ?? "Задача синхронизации завершилась с ошибкой."
+        ? "Не удалось завершить загрузку данных. Повторите попытку или откройте настройки."
         : null;
   const busy = mutation.isPending || Boolean(activeJob);
 
@@ -73,16 +82,12 @@ export function InitialStoreSetup() {
         <span className="context-icon" aria-hidden="true"><Warehouse /></span>
         <p className="eyebrow">Первичная настройка</p>
         <h1>Подключите первый магазин</h1>
-        <p>
-          Запустите единую фоновую синхронизацию. Backend последовательно обновит
-          магазины, сотрудников, продажи и возвраты и продолжит работу независимо
-          от открытой вкладки.
-        </p>
+        <p>Загрузите данные магазина, чтобы начать работу. Загрузка продолжится, даже если закрыть эту страницу.</p>
 
         {error && <p className="form-error" role="alert">{error}</p>}
         {trackedJob && (
           <p className="workspace-bootstrap__result" role="status">
-            Статус: {trackedJob.status.toLowerCase()} · этап:{" "}
+            {statusLabel[trackedJob.status]}, сейчас загружаются:{" "}
             {phaseLabel[trackedJob.phase ?? ""] ?? "ожидание"}
           </p>
         )}
@@ -104,8 +109,7 @@ export function InitialStoreSetup() {
         <div className="workspace-bootstrap__note">
           <ShieldCheck aria-hidden="true" />
           <span>
-            Запускается durable job за последние 7 дней; полный исторический
-            период можно загрузить позже в разделе администрирования.
+            Сначала загрузим данные за последние 7 дней. Более ранние периоды можно добавить позже в настройках.
           </span>
         </div>
       </section>

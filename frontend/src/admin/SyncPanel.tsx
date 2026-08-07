@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, Clock3, DatabaseZap, Play, RefreshCw, RotateCcw, TriangleAlert } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Link } from "react-router";
 import { isApiClientError } from "../api/client";
 import { inclusiveDayCount, monthRange } from "../shared/date";
 import { QueryError } from "../shared/QueryState";
 import { useWorkspace } from "../stores/WorkspaceProvider";
-import { adminKeys, cancelSyncJob, createBackfill, getSyncJobs, type SyncJob } from "./api";
+import { adminKeys, cancelSyncJob, createBackfill, getSyncClassificationReadiness, getSyncJobs, type SyncJob } from "./api";
 import { SyncJobDetails } from "./SyncJobDetails";
 
 const terminal = new Set<SyncJob["status"]>(["SUCCESS", "FAILED", "CANCELLED", "UNKNOWN"]);
@@ -47,6 +48,20 @@ export function SyncPanel() {
     refetchInterval: (query) =>
       query.state.data?.some((job) => !terminal.has(job.status)) ? 5_000 : false
   });
+  const readinessQuery = useQuery({
+    queryKey: [...adminKeys.syncReadiness, start],
+    queryFn: () => getSyncClassificationReadiness(start)
+  });
+  const observedActiveJobs = useRef(new Set<string>());
+  useEffect(() => {
+    for (const job of jobsQuery.data ?? []) {
+      if (!terminal.has(job.status)) {
+        observedActiveJobs.current.add(job.id);
+      } else if (job.status === "SUCCESS" && observedActiveJobs.current.delete(job.id)) {
+        void queryClient.invalidateQueries({ queryKey: ["stores"] });
+      }
+    }
+  }, [jobsQuery.data, queryClient]);
   const backgroundJobActive =
     jobsQuery.data?.some((job) => !terminal.has(job.status)) ?? false;
   const createMutation = useMutation({
@@ -72,22 +87,33 @@ export function SyncPanel() {
   const valid = days > 0 && days <= 730 && end <= today;
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (valid && !backgroundJobActive) createMutation.mutate();
+    if (valid && readinessQuery.data?.ready && !backgroundJobActive) createMutation.mutate();
   };
 
-  if (jobsQuery.isPending) {
-    return <div className="panel-loader"><span className="spinner" />Загружаем задачи…</div>;
+  if (jobsQuery.isPending || readinessQuery.isPending) {
+    return <div className="panel-loader"><span className="spinner" />Проверяем готовность синхронизации…</div>;
   }
-  if (jobsQuery.isError) {
-    return <QueryError error={jobsQuery.error} onRetry={() => void jobsQuery.refetch()} />;
+  if (jobsQuery.isError || readinessQuery.isError) {
+    const failedQuery = jobsQuery.isError ? jobsQuery : readinessQuery;
+    return <QueryError error={failedQuery.error} onRetry={() => void failedQuery.refetch()} />;
   }
+  const readiness = readinessQuery.data;
 
   return <div className="admin-sync-layout">
     <section className="panel admin-sync-card">
       <span className="context-icon"><DatabaseZap /></span>
       <p className="eyebrow">Единая синхронизация</p>
       <h2>Синхронизировать данные</h2>
-      <p>Backend последовательно обновит справочники, продажи и возвраты за выбранный период.</p>
+      <p>Система обновит магазины, сотрудников, продажи и возвраты за выбранный период.</p>
+      {!readiness.ready && <div className="admin-safety-note admin-safety-note--blocking">
+        <TriangleAlert />
+        <p><strong>Сначала импортируйте классификацию товаров.</strong><span>Для {start} нет ни одного действующего утвержденного назначения. Без него продажи попадут в «Неразмеченные».</span></p>
+        <Link className="button button--secondary" to="/admin?adminView=category-import">Импортировать</Link>
+      </div>}
+      {readiness.ready && readiness.unmappedSalesItemCount > 0 && <div className="admin-safety-note">
+        <TriangleAlert />
+        <p><strong>Есть ранее загруженные неразмеченные позиции: {readiness.unmappedSalesItemCount}.</strong><span>После импорта запустите повторную синхронизацию исходного периода, чтобы обновить их снимки классификации.</span></p>
+      </div>}
       <ol className="sync-pipeline" aria-label="Этапы синхронизации">
         {syncPhases.map(([, label], index) =>
           <li key={label}><span>{index + 1}</span>{label}</li>
@@ -112,7 +138,7 @@ export function SyncPanel() {
         </small>
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="button button--primary" type="submit"
-          disabled={!valid || backgroundJobActive || createMutation.isPending}>
+          disabled={!valid || !readiness.ready || backgroundJobActive || createMutation.isPending}>
           <Play size={16} />
           {createMutation.isPending ? "Создаем задачу…" :
             backgroundJobActive ? "Задача уже выполняется" : "Синхронизировать"}
@@ -121,15 +147,15 @@ export function SyncPanel() {
       <div className="admin-safety-note">
         <TriangleAlert />
         <p>
-          <strong>Одна активная задача на подключение.</strong>
-          <span>Backend сам управляет окнами, повторами, восстановлением и бюджетом запросов LiveSklad.</span>
+          <strong>Одновременно выполняется одна загрузка.</strong>
+          <span>Загрузка продолжится в фоне. Если возникнет временная ошибка, система повторит попытку.</span>
         </p>
       </div>
     </section>
 
     <section className="panel admin-jobs">
       <div className="panel__heading">
-        <div><p className="eyebrow">Фоновая обработка</p><h2>Задачи синхронизации</h2></div>
+        <div><p className="eyebrow">История обновлений</p><h2>Выполненные и текущие загрузки</h2></div>
         <button className="icon-button" type="button"
           onClick={() => void jobsQuery.refetch()} aria-label="Обновить">
           <RefreshCw className={jobsQuery.isFetching ? "is-spinning" : ""} />
@@ -153,7 +179,7 @@ export function SyncPanel() {
                     {new Date(job.periodStart).toLocaleDateString("ru-RU")} —{" "}
                     {new Date(job.periodEnd).toLocaleDateString("ru-RU")}
                   </strong>
-                  <small>Шагов: {job.completedSteps} · повторов: {job.totalRetries}</small>
+                  <small>Шагов: {job.completedSteps}, повторов: {job.totalRetries}</small>
                 </div>
                 <div>
                   <strong>

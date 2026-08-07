@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, Check, Filter, History, LockKeyhole, Search, Trophy, UserCheck, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, Filter, History, LockKeyhole, Search, Trophy, UserCheck, Users } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import { isApiClientError } from "../api/client";
@@ -39,7 +39,7 @@ function SummaryCard({ icon, label, value, note, featured = false }: { icon: Rea
 }
 
 function EmployeesSkeleton() {
-  return <div className="employees-skeleton" aria-busy="true" aria-label="Загрузка сотрудников"><span className="skeleton skeleton--banner" /><div className="employee-summary-grid">{Array.from({ length: 4 }, (_, index) => <span className="skeleton employee-summary-skeleton" key={index} />)}</div><span className="skeleton employee-table-skeleton" /></div>;
+  return <div className="employees-skeleton" aria-busy="true" aria-label="Загрузка сотрудников"><span className="skeleton skeleton--banner" /><div className="employee-summary-grid">{Array.from({ length: 3 }, (_, index) => <span className="skeleton employee-summary-skeleton" key={index} />)}</div><span className="skeleton employee-table-skeleton" /></div>;
 }
 
 export function EmployeesPage() {
@@ -144,14 +144,14 @@ export function EmployeesPage() {
   return (
     <div className="employees-page">
       <header className="page-heading employees-heading">
-        <div><p className="eyebrow">{selectedStore.name}</p><h1>Сотрудники и рейтинг</h1></div>
+        <h1>Сотрудники и рейтинг</h1>
         <div className="employees-heading__actions">
           <span className={`rating-history-badge rating-history-badge--${isFinalized ? "finalized" : isLive ? "live" : "unknown"}`}>{isFinalized ? <LockKeyhole size={15} /> : isLive ? <History size={15} /> : <AlertTriangle size={15} />}{isFinalized ? "Зафиксирован" : isLive ? "Живой расчет" : "Статус неизвестен"}</span>
           {canFinalize && <button className="button button--primary" type="button" onClick={() => setFinalizeDialogOpen(true)}><LockKeyhole size={17} />Зафиксировать период</button>}
         </div>
       </header>
 
-      {isFinalized && <section className="rating-snapshot-banner"><LockKeyhole size={18} /><div><strong>Исторический снимок защищен от изменений</strong><p>Зафиксировал {rating.history.finalizedByName ?? "пользователь"}{rating.history.finalizedAt ? ` · ${new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short", timeZone: selectedStore.timezone }).format(new Date(rating.history.finalizedAt))}` : ""}. Новые продажи, смены и настройки его не изменят.</p></div></section>}
+      {isFinalized && <section className="rating-snapshot-banner"><LockKeyhole size={18} /><div><strong>Результат периода сохранен</strong><p>Зафиксировал {rating.history.finalizedByName ?? "пользователь"}{rating.history.finalizedAt ? `, ${new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short", timeZone: selectedStore.timezone }).format(new Date(rating.history.finalizedAt))}` : ""}. Новые продажи, смены и настройки не изменят этот результат.</p></div></section>}
 
       {(settingMutation.isError || finalizeMutation.isError) && (
         <div className="form-alert" role="alert">{isApiClientError(settingMutation.error ?? finalizeMutation.error) ? (settingMutation.error ?? finalizeMutation.error as Error).message : "Не удалось сохранить изменение. Обновите данные и повторите действие."}</div>
@@ -162,7 +162,6 @@ export function EmployeesPage() {
         <SummaryCard icon={<Users size={21} />} label="Сотрудники" value={String(allEntries.length)} note={`${participants} включены в рейтинг`} featured />
         <SummaryCard icon={<Trophy size={21} />} label="Получили место" value={String(ranked)} note={needAttention ? `${needAttention} требуют внимания` : "У всех достаточно данных"} />
         <SummaryCard icon={<UserCheck size={21} />} label="Покрытие плана" value={formatPercent(rating.plan.coveragePercent)} note={rating.plan.complete ? `Выполнение выручки: ${formatPercent(rating.plan.revenueAchievementPercent)}` : "План задан не на весь период"} />
-        <SummaryCard icon={<Check size={21} />} label="Формула" value={rating.formula.version.replace(/^employee-rating-/u, "")} note={`${rating.formula.version} · место от ${formatPercent(rating.formula.minimumCoveragePercent)} покрытия`} />
       </section>
 
       <section className="employees-panel panel">
@@ -185,7 +184,7 @@ export function EmployeesPage() {
                     <td><div className="employee-score-cell"><strong>{formatNumber(current.scores.overallScore)}</strong><small>покрытие {formatPercent(current.scores.coveragePercent)}</small></div></td>
                     <td><ScoreProfile employee={current} /></td>
                     <td><div className="employee-money-cell"><strong>{formatMoney(current.netRevenue)}</strong><small>{formatPercent(current.storeRevenueSharePercent)} выручки магазина</small></div></td>
-                    <td><div className="employee-time-cell"><strong>{current.shiftCount} смен · {formatNumber(current.workedHours)} ч</strong><small>{formatCompactMoney(current.revenuePerHour)} / час</small></div></td>
+                    <td><div className="employee-time-cell"><strong>{current.shiftCount} смен, {formatNumber(current.workedHours)} ч</strong><small>{formatCompactMoney(current.revenuePerHour)} / час</small></div></td>
                     <td><ParticipationButton employee={current} /></td>
                     <td><Link className="employee-open" to={{ pathname: `/employees/${current.employeeId}`, search: location.search }} aria-label={`Открыть карточку: ${current.displayName}`}><ArrowRight size={17} /></Link></td>
                   </tr>
@@ -196,7 +195,7 @@ export function EmployeesPage() {
             <div className="employee-mobile-list">{entries.map(({ current, dynamics }) => (
               <article className="employee-mobile-card" key={current.employeeId}>
                 <div className="employee-mobile-card__head"><div className="employee-person"><span>{current.displayName.slice(0, 1).toUpperCase()}</span><div><Link to={{ pathname: `/employees/${current.employeeId}`, search: location.search }}>{current.displayName}</Link><small>{employeeRatingReason(current, rating.formula.minimumCoveragePercent)}</small></div></div><div className="employee-rank-cell"><strong>{current.rank ?? "—"}</strong>{rankDynamics(dynamics.rankImprovement)}</div></div>
-                <div className="employee-mobile-card__metrics"><span><small>Общий балл</small><strong>{formatNumber(current.scores.overallScore)}</strong></span><span><small>Выручка</small><strong>{formatCompactMoney(current.netRevenue)}</strong></span><span><small>Смены</small><strong>{current.shiftCount} · {formatNumber(current.workedHours)} ч</strong></span></div>
+                <div className="employee-mobile-card__metrics"><span><small>Общий балл</small><strong>{formatNumber(current.scores.overallScore)}</strong></span><span><small>Выручка</small><strong>{formatCompactMoney(current.netRevenue)}</strong></span><span><small>Смены</small><strong>{current.shiftCount}, {formatNumber(current.workedHours)} ч</strong></span></div>
                 <ScoreProfile employee={current} />
                 <div className="employee-mobile-card__actions"><ParticipationButton employee={current} /><Link to={{ pathname: `/employees/${current.employeeId}`, search: location.search }}>Подробнее <ArrowRight size={15} /></Link></div>
               </article>
@@ -205,7 +204,7 @@ export function EmployeesPage() {
         )}
       </section>
 
-      {finalizeDialogOpen && <div className="confirm-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !finalizeMutation.isPending) setFinalizeDialogOpen(false); }}><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="finalize-title"><span className="confirm-dialog__icon"><LockKeyhole /></span><h2 id="finalize-title">Зафиксировать рейтинг?</h2><p>Результат за {formatDate(periodStart)} — {formatDate(periodEnd)} станет неизменяемым историческим снимком. Отменить это действие через API нельзя.</p><div><button className="button button--ghost" type="button" autoFocus disabled={finalizeMutation.isPending} onClick={() => setFinalizeDialogOpen(false)}>Отмена</button><button className="button button--primary" type="button" disabled={finalizeMutation.isPending} onClick={() => finalizeMutation.mutate()}>{finalizeMutation.isPending ? "Фиксируем…" : "Да, зафиксировать"}</button></div></section></div>}
+      {finalizeDialogOpen && <div className="confirm-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !finalizeMutation.isPending) setFinalizeDialogOpen(false); }}><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="finalize-title"><span className="confirm-dialog__icon"><LockKeyhole /></span><h2 id="finalize-title">Зафиксировать рейтинг?</h2><p>Результат за {formatDate(periodStart)} — {formatDate(periodEnd)} станет неизменяемым историческим снимком. Отменить это действие после подтверждения нельзя.</p><div><button className="button button--ghost" type="button" autoFocus disabled={finalizeMutation.isPending} onClick={() => setFinalizeDialogOpen(false)}>Отмена</button><button className="button button--primary" type="button" disabled={finalizeMutation.isPending} onClick={() => finalizeMutation.mutate()}>{finalizeMutation.isPending ? "Фиксируем…" : "Да, зафиксировать"}</button></div></section></div>}
     </div>
   );
 }

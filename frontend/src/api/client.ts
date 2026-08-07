@@ -5,6 +5,7 @@ import {
   type ApiErrorPayload,
   type CsrfConfiguration
 } from "./contracts";
+import { apiErrorMessage } from "./errorMessages";
 
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -12,6 +13,11 @@ const DEFAULT_TIMEOUT_MS = 20_000;
 export interface EtaggedResource<T> {
   value: T;
   etag: string;
+}
+
+export interface OptionalEtaggedResource<T> {
+  value: T;
+  etag: string | null;
 }
 
 export class ApiClientError extends Error {
@@ -106,17 +112,6 @@ function parseRetryAfter(value: string | null): number | undefined {
   if (!value) return undefined;
   const seconds = Number(value);
   return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
-}
-
-function fallbackMessage(status: number): string {
-  if (status === 401) return "Сессия завершена. Войдите снова.";
-  if (status === 403) return "Недостаточно прав для этого действия.";
-  if (status === 404) return "Запрошенные данные не найдены.";
-  if (status === 409 || status === 412) return "Данные уже изменились. Обновите страницу и повторите действие.";
-  if (status === 428) return "Сначала загрузите актуальную версию данных.";
-  if (status === 429) return "Слишком много запросов. Попробуйте позже.";
-  if (status >= 500) return "Сервис временно недоступен. Попробуйте позже.";
-  return "Не удалось выполнить запрос.";
 }
 
 async function readApiError(response: Response): Promise<ApiErrorPayload | null> {
@@ -263,7 +258,7 @@ export class ApiClient {
       if (response.status === 401 && notifyOnUnauthorized) {
         this.unauthorizedHandler?.();
       }
-      throw new ApiClientError(payload?.message || fallbackMessage(response.status), {
+      throw new ApiClientError(apiErrorMessage(payload?.code, response.status), {
         status: response.status,
         code: payload?.code || `HTTP_${response.status}`,
         path: payload?.path,
@@ -315,6 +310,20 @@ export class ApiClient {
     path: string,
     options: ApiRequestOptions<T> = {}
   ): Promise<EtaggedResource<T>> {
+    const resource = await this.requestWithOptionalEtag(path, options);
+    if (!resource.etag) {
+      throw new ApiClientError("Сервер не вернул обязательную версию ресурса.", {
+        status: 200,
+        code: "ETAG_MISSING"
+      });
+    }
+    return { value: resource.value, etag: resource.etag };
+  }
+
+  async requestWithOptionalEtag<T>(
+    path: string,
+    options: ApiRequestOptions<T> = {}
+  ): Promise<OptionalEtaggedResource<T>> {
     let etag: string | null = null;
     const value = await this.request(path, {
       ...options,
@@ -324,10 +333,13 @@ export class ApiClient {
       }
     });
     const observedEtag = etag as string | null;
-    if (!observedEtag || observedEtag.startsWith("W/") || (!observedEtag.startsWith('"') && observedEtag !== "*")) {
-      throw new ApiClientError("Сервер не вернул обязательную версию ресурса.", {
+    if (observedEtag && (
+      observedEtag.startsWith("W/")
+      || (!observedEtag.startsWith('"') && observedEtag !== "*")
+    )) {
+      throw new ApiClientError("Сервер вернул некорректную версию ресурса.", {
         status: 200,
-        code: "ETAG_MISSING"
+        code: "ETAG_INVALID"
       });
     }
     return { value, etag: observedEtag };

@@ -25,10 +25,20 @@ export function parsePayrollAmount(value: string): number | null {
 
 export function validateReason(value: string): string | null {
   const reason = value.trim();
-  if (!reason) return "Укажите причину — она сохранится в аудите.";
+  if (!reason) return "Укажите причину — она сохранится в истории.";
   if (reason.length > 500) return "Причина не должна превышать 500 символов.";
   return null;
 }
+
+const payrollCategoryLabels: Readonly<Record<string, string>> = {
+  TECH_TIER_1: "Техника, уровень 1",
+  TECH_TIER_2: "Техника, уровень 2",
+  ACCESSORY: "Аксессуар",
+  SERVICE: "Услуга",
+  PLAYSTATION_SUBSCRIPTION: "Подписка PlayStation",
+  PAID_REPAIR: "Платный ремонт",
+  EXCLUDE: "Не участвует в расчете зарплаты"
+};
 
 const adjustmentLabels: Record<string, string> = {
   PENALTY: "Штраф",
@@ -42,13 +52,13 @@ const staleReasonLabels: Record<string, string> = {
   STORE_PLAN_CHANGED: "Изменился план магазина",
   PRODUCT_CLASSIFICATION_CHANGED: "Изменилась классификация товаров",
   PAYROLL_SCHEME_CHANGED: "Изменилась версия формулы",
-  SOURCE_FINGERPRINT_MISSING: "У ревизии нет контрольного отпечатка источников"
+  SOURCE_FINGERPRINT_MISSING: "Не удалось проверить актуальность исходных данных"
 };
 
 const eventLabels: Record<string, string> = {
   CALCULATED: "Расчет создан",
   RECALCULATED: "Черновик пересчитан",
-  REVISION_CREATED: "Создана новая ревизия",
+  REVISION_CREATED: "Создана новая версия",
   ADJUSTMENT_ADDED: "Добавлено удержание",
   ADJUSTMENT_VOIDED: "Удержание отменено",
   APPROVED: "Расчет утвержден",
@@ -64,6 +74,10 @@ const comparisonReasonLabels: Record<string, string> = {
   PLAN_STATUS_OR_FORMULA_CHANGED: "Изменился статус плана или формула",
   FUND_CHANGED: "Изменился дневной фонд"
 };
+
+export function payrollCategoryLabel(value: string): string {
+  return payrollCategoryLabels[value] ?? "Другая категория";
+}
 
 export function adjustmentTypeLabel(value: string): string {
   return adjustmentLabels[value] ?? "Другое удержание";

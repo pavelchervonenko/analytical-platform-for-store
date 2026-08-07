@@ -12,7 +12,7 @@ export const attachRateLabels: Record<string, string> = {
   FILM_PHONE: "Защитные пленки",
   GLASS_CAMERA_IPHONE: "Стекла и защита камеры iPhone",
   GLASS_CAMERA_SAMSUNG: "Стекла Samsung",
-  PREMIUM_PROTECTION: "Премиум и протекция",
+  PREMIUM_PROTECTION: "Протекция",
   SETUP_SERVICE: "Настройки и услуги",
   WARRANTY_GENERIC_NEW: "Гарантии — новые устройства",
   WARRANTY_GENERIC_USED: "Гарантии — устройства Б/У"

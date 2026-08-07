@@ -1,4 +1,4 @@
-.admin-view-tabs { grid-template-columns: repeat(6,minmax(0,1fr)); }
+.admin-view-tabs { grid-template-columns: repeat(4,minmax(0,1fr)); }
 .admin-job-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .admin-job-detail-button, .admin-job-cancel { display: flex; align-items: center; gap: 5px; border: 0; background: transparent; font-size: 11px; font-weight: 750; }
 .admin-job-detail-button { color: var(--primary); }
@@ -13,6 +13,10 @@
 .sync-job-details dl > div { display: grid; grid-template-columns: 150px minmax(0,1fr); gap: 14px; padding: 11px 0; border-top: 1px solid var(--border); }
 .sync-job-details dt { color: var(--text-muted); font-size: 11px; }
 .sync-job-details dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-size: 12px; font-weight: 700; }
+.admin-safety-note--blocking { align-items: center; }
+.admin-safety-note--blocking p { flex: 1; }
+.admin-safety-note--blocking .button { flex: 0 0 auto; }
+
 .category-import-layout { display: grid; grid-template-columns: minmax(0,1fr) 290px; gap: 14px; }
 .category-import-main > .panel__heading > svg { color: var(--primary); }
 .category-import-lead, .category-import-aside > p:not(.eyebrow) { color: var(--text-muted); font-size: 12px; line-height: 1.55; }
@@ -27,6 +31,46 @@
 .category-import-count { color: var(--text-faint); font-size: 11px; }
 .category-import-aside h2 { margin: 5px 0 12px; font-size: 20px; }
 
+.telegram-ops-layout { display: grid; gap: 14px; }
+.telegram-ops-summary > .panel__heading > svg { width: 24px; color: var(--success); }
+.telegram-ops-summary.is-warning > .panel__heading > svg { color: var(--warning); }
+.telegram-ops-summary.is-critical > .panel__heading > svg { color: var(--danger); }
+.telegram-ops-summary h2 { margin-top: 4px; font-size: 21px; }
+.telegram-ops-metrics { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 8px; }
+.telegram-ops-metrics article { display: grid; gap: 5px; min-width: 0; padding: 12px; border-radius: 13px; background: var(--surface-muted); }
+.telegram-ops-metrics svg { width: 17px; color: var(--text-faint); }
+.telegram-ops-metrics strong { font-size: 21px; }
+.telegram-ops-metrics span { color: var(--text-muted); font-size: 10px; line-height: 1.35; }
+.telegram-ops-facts { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px; color: var(--text-muted); font-size: 11px; }
+.telegram-ops-boundary { margin: 13px 0 0; padding: 10px 12px; border-radius: 11px; color: var(--warning); background: var(--warning-soft); font-size: 11px; line-height: 1.45; }
+.telegram-incident-list { display: grid; }
+.telegram-incident-list > article { display: grid; grid-template-columns: minmax(170px,.8fr) minmax(170px,.8fr) minmax(220px,1.3fr) 145px; align-items: center; gap: 13px; padding: 13px 0; border-top: 1px solid var(--border); }
+.telegram-incident-list article > div { min-width: 0; display: grid; gap: 4px; }
+.telegram-incident-list strong { overflow-wrap: anywhere; font-size: 12px; }
+.telegram-incident-list small, .telegram-incident-list time { color: var(--text-faint); font-size: 10px; line-height: 1.4; }
+.telegram-incident-status { width: max-content; max-width: 100%; padding: 3px 7px; border-radius: 999px; color: var(--warning); background: var(--warning-soft); font-size: 9px; font-weight: 800; text-transform: uppercase; }
+.telegram-incident-status.is-unknown_outcome, .telegram-incident-status.is-running { color: var(--danger); background: var(--danger-soft); }
+.telegram-incident-actions { align-items: start; }
+.telegram-incident-actions button { width: max-content; max-width: 100%; padding: 5px 8px; border: 1px solid var(--warning); border-radius: 8px; color: var(--warning); background: transparent; font-size: 10px; font-weight: 750; }
+.telegram-resend-modal { width: min(100%,580px); }
+.telegram-resend-warning { align-items: flex-start; }
+.telegram-resend-facts { display: grid; gap: 0; margin: 0; border: 1px solid var(--border); border-radius: 12px; }
+.telegram-resend-facts div { display: grid; grid-template-columns: 120px minmax(0,1fr); gap: 10px; padding: 9px 11px; border-top: 1px solid var(--border); }
+.telegram-resend-facts div:first-child { border-top: 0; }
+.telegram-resend-facts dt { color: var(--text-muted); font-size: 11px; }
+.telegram-resend-facts dd { margin: 0; overflow-wrap: anywhere; font-size: 11px; font-weight: 700; }
+.telegram-resend-consent { display: flex; align-items: flex-start; gap: 9px; color: var(--text-muted); font-size: 11px; line-height: 1.45; }
+.telegram-resend-consent input { margin-top: 2px; accent-color: var(--primary); }
+
+@media (max-width: 1100px) {
+  .telegram-ops-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .telegram-incident-list > article { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 620px) {
+  .telegram-ops-metrics { grid-template-columns: 1fr 1fr; }
+  .telegram-incident-list > article { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 1100px) { .admin-view-tabs { grid-template-columns: repeat(2,1fr); } .category-import-layout { grid-template-columns: 1fr; } }
 @media (max-width: 720px) { .admin-job-actions { justify-content: flex-start; } .category-import-form .admin-form-grid { grid-template-columns: 1fr; } }
-@media (max-width: 480px) { .sync-job-details dl > div { grid-template-columns: 1fr; gap: 5px; } }
+@media (max-width: 480px) { .sync-job-details dl > div, .telegram-resend-facts div { grid-template-columns: 1fr; gap: 5px; } .admin-safety-note--blocking { align-items: stretch; flex-direction: column; } .admin-safety-note--blocking .button { width: 100%; } }

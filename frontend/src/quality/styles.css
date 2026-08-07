@@ -52,4 +52,11 @@ button.quality-action { cursor: pointer; }
 .employee-payroll-warning { padding: 8px 10px; border-radius: 9px; color: var(--warning) !important; background: var(--warning-soft); }
 
 @media (max-width: 1100px) { .quality-area-grid { grid-template-columns: 1fr 1fr; } .quality-layout { grid-template-columns: 1fr; } .quality-aside { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 720px) { .quality-heading { align-items: stretch; } .quality-heading .button { width: 100%; } .quality-verdict { grid-template-columns: auto 1fr; } .quality-verdict dl { grid-column: 1 / -1; } .quality-area-grid, .quality-aside { grid-template-columns: 1fr; } .quality-issue-list article { grid-template-columns: 1fr; } .quality-action { justify-self: start; } }
+@media (max-width: 820px) { .quality-heading { align-items: stretch; } .quality-heading .button { width: 100%; } .quality-verdict { grid-template-columns: auto 1fr; } .quality-verdict dl { grid-column: 1 / -1; } .quality-area-grid, .quality-aside { grid-template-columns: 1fr; } .quality-issue-list article { grid-template-columns: 1fr; } .quality-action { justify-self: start; } }
+
+@media (max-width: 480px) {
+  .quality-verdict { grid-template-columns: 1fr; padding: 16px; }
+  .quality-verdict dl { grid-column: auto; flex-direction: column; gap: 10px; }
+  .quality-portfolio__stats { grid-template-columns: 1fr; }
+  .quality-action { width: 100%; min-height: 44px; }
+}

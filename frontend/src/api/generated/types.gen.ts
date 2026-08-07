@@ -67,6 +67,34 @@ export type EmployeeRatingSettingView = {
     updatedAt?: string;
 };
 
+export type TelegramDeliverySettingsRequest = {
+    timezone: string;
+    quietHoursEnabled: boolean;
+    quietHoursStart: string;
+    quietHoursEnd: string;
+};
+
+export type TelegramChannelView = {
+    state: 'NOT_LINKED' | 'LINK_ISSUED' | 'PENDING_CONFIRMATION' | 'ACTIVE' | 'BOT_BLOCKED';
+    subscriptionId: string | null;
+    version: number | null;
+    linkExpiresAt: string | null;
+    pendingSince: string | null;
+    confirmedAt: string | null;
+    blockedAt: string | null;
+    destination: string | null;
+    deliverySettings?: TelegramDeliverySettingsView;
+    allowedActions: Array<'LINK' | 'CONFIRM' | 'REVOKE' | 'UPDATE_SETTINGS' | 'OPEN_BOT'>;
+    publicBotUrl: string | null;
+};
+
+export type TelegramDeliverySettingsView = {
+    timezone: string;
+    quietHoursEnabled: boolean;
+    quietHoursStart: string;
+    quietHoursEnd: string;
+};
+
 export type UpdateUserRequest = {
     displayName: string;
     role: 'ADMIN' | 'MANAGER';
@@ -288,12 +316,14 @@ export type EmployeeAttachRatingEntry = {
     metricCode?: string;
     numeratorCategoryCode?: string;
     denominatorCode?: 'IPHONE' | 'SAMSUNG' | 'PHONE' | 'PODS_WATCH' | 'IPAD_MAC' | 'NEW_DEVICE' | 'USED_DEVICE' | 'MATCH_DEVICE_CONDITION';
-    numeratorQuantity?: number;
-    denominatorQuantity?: number;
+    numeratorReceiptCount?: number;
+    denominatorReceiptCount?: number;
     ratePercent?: number;
     storeRatePercent?: number;
     includedInScore?: boolean;
     score?: number;
+    denominatorQuantity?: number;
+    numeratorQuantity?: number;
 };
 
 export type EmployeeRatingEntry = {
@@ -374,6 +404,11 @@ export type RatingScoreBreakdown = {
     attachWeightedPoints?: number;
     coveragePercent?: number;
     overallScore?: number;
+};
+
+export type TelegramLinkCreatedView = {
+    deepLink: string;
+    expiresAt: string;
 };
 
 export type ProductCategoryImportItemRequest = {
@@ -528,11 +563,48 @@ export type PayrollBulkCategoryRequest = {
     assignments: Array<PayrollBulkCategoryItemRequest>;
 };
 
+export type ManualTelegramResendRequest = {
+    reason: string;
+    acknowledgeDuplicateRisk: boolean;
+};
+
+export type ManualTelegramResendView = {
+    deliveryId?: string;
+    sourceDeliveryId?: string;
+    status?: string;
+    scheduledAt?: string;
+    expiresAt?: string;
+};
+
+export type ManualLlmActionRequest = {
+    reason: string;
+};
+
+export type ManualLlmJobView = {
+    jobId?: string;
+    snapshotId?: string;
+    generationRevision?: number;
+    status?: string;
+    phase?: string;
+    cancelRequested?: boolean;
+    updatedAt?: string;
+};
+
 export type SystemStatusView = {
     application?: string;
     version?: string;
     apiContractVersion?: string;
     time?: string;
+};
+
+export type SyncClassificationReadinessView = {
+    connectionKey?: string;
+    periodStart?: string;
+    ready?: boolean;
+    effectiveAssignmentCount?: number;
+    totalAssignmentCount?: number;
+    productCount?: number;
+    unmappedSalesItemCount?: number;
 };
 
 export type StoreSummaryView = {
@@ -581,10 +653,13 @@ export type ReportSummaryView = {
 };
 
 export type AnnualAttachRateTotals = {
+    formulaVersion?: string;
     metricCode?: string;
-    numeratorQuantity?: number;
-    denominatorQuantity?: number;
+    numeratorReceiptCount?: number;
+    denominatorReceiptCount?: number;
     ratePerHundred?: number;
+    denominatorQuantity?: number;
+    numeratorQuantity?: number;
 };
 
 export type AnnualCategoryTotals = {
@@ -645,9 +720,11 @@ export type AttachRateEntry = {
     metricCode?: string;
     numeratorCategoryCode?: string;
     denominatorCode?: 'IPHONE' | 'SAMSUNG' | 'PHONE' | 'PODS_WATCH' | 'IPAD_MAC' | 'NEW_DEVICE' | 'USED_DEVICE' | 'MATCH_DEVICE_CONDITION';
-    numeratorQuantity?: number;
-    denominatorQuantity?: number;
+    numeratorReceiptCount?: number;
+    denominatorReceiptCount?: number;
     ratePerHundred?: number;
+    denominatorQuantity?: number;
+    numeratorQuantity?: number;
 };
 
 export type AttachRateResult = {
@@ -1129,6 +1206,58 @@ export type EmployeeKpiResult = {
     employees?: Array<EmployeeKpiEntry>;
 };
 
+export type EmployeeCategoryKpiEmployee = {
+    employeeId?: string;
+    displayName?: string;
+    employeeActive?: boolean;
+    assignedToStore?: boolean;
+    assignmentActive?: boolean;
+    participatesInRanking?: boolean;
+    rankingEligible?: boolean;
+    unassigned?: boolean;
+    netRevenue?: number;
+    dataQuality?: EmployeeKpiDataQuality;
+    groups?: Array<EmployeeCategoryKpiGroup>;
+    categories?: Array<EmployeeCategoryKpiEntry>;
+};
+
+export type EmployeeCategoryKpiEntry = {
+    categoryCode?: string;
+    categoryName?: string;
+    categoryKind?: 'DEVICE' | 'ACCESSORY' | 'SERVICE' | 'WARRANTY' | 'PROTECTION' | 'OTHER' | 'EXCLUDED';
+    deviceFamily?: 'IPHONE' | 'SAMSUNG' | 'PODS_WATCH' | 'IPAD_MAC' | 'OTHER' | 'NONE';
+    categoryActive?: boolean;
+    countsAsPhone?: boolean;
+    countsAsDevice?: boolean;
+    countsAsAdditionalRevenue?: boolean;
+    metrics?: EmployeeCategoryKpiMetrics;
+};
+
+export type EmployeeCategoryKpiGroup = {
+    groupCode?: string;
+    groupName?: string;
+    metrics?: EmployeeCategoryKpiMetrics;
+};
+
+export type EmployeeCategoryKpiMetrics = {
+    netRevenue?: number;
+    netQuantity?: number;
+    costAmount?: number;
+    grossProfit?: number;
+    marginPercent?: number;
+    revenueSharePercent?: number;
+    dataQuality?: CategoryKpiDataQuality;
+};
+
+export type EmployeeCategoryKpiResult = {
+    storeId?: string;
+    periodStart?: string;
+    periodEnd?: string;
+    formulaVersion?: string;
+    categoryFormulaVersion?: string;
+    employees?: Array<EmployeeCategoryKpiEmployee>;
+};
+
 export type AverageKpiResult = {
     storeId?: string;
     periodStart?: string;
@@ -1152,6 +1281,121 @@ export type CategoryAverageEntry = {
     categoryName?: string;
     categoryActive?: boolean;
     averageUnitPrice?: AverageMetricComparison;
+};
+
+export type PageResponseWeeklyInterpretationSummaryView = {
+    items?: Array<WeeklyInterpretationSummaryView>;
+    page?: number;
+    size?: number;
+    totalElements?: number;
+    totalPages?: number;
+    hasNext?: boolean;
+    hasPrevious?: boolean;
+};
+
+export type WeeklyInterpretationSummaryView = {
+    id?: string;
+    storeId?: string;
+    snapshotId?: string;
+    periodStart?: string;
+    periodEnd?: string;
+    timezone?: string;
+    snapshotRevision?: number;
+    interpretationRevision?: number;
+    currentRevision?: boolean;
+    supersedesInterpretationId?: string;
+    publicationReason?: 'INITIAL' | 'SNAPSHOT_REVISION' | 'MANUAL_REGENERATION' | 'MODEL_CHANGE';
+    contentHash?: string;
+    contentSchemaVersion?: number;
+    qualityStatus?: 'READY' | 'PARTIAL' | 'BLOCKED';
+    employeeCount?: number;
+    validatedAt?: string;
+    publishedAt?: string;
+};
+
+export type JsonNode = {
+    string?: boolean;
+    array?: boolean;
+    empty?: boolean;
+    null?: boolean;
+    float?: boolean;
+    container?: boolean;
+    number?: boolean;
+    missingNode?: boolean;
+    floatingPointNumber?: boolean;
+    valueNode?: boolean;
+    nodeType?: 'ARRAY' | 'BINARY' | 'BOOLEAN' | 'MISSING' | 'NULL' | 'NUMBER' | 'OBJECT' | 'POJO' | 'STRING';
+    object?: boolean;
+    pojo?: boolean;
+    integralNumber?: boolean;
+    short?: boolean;
+    int?: boolean;
+    long?: boolean;
+    double?: boolean;
+    bigDecimal?: boolean;
+    bigInteger?: boolean;
+    /**
+     * @deprecated
+     */
+    textual?: boolean;
+    boolean?: boolean;
+    binary?: boolean;
+    embeddedValue?: boolean;
+};
+
+export type WeeklyInterpretationDetailView = {
+    interpretation?: WeeklyInterpretationSummaryView;
+    content?: JsonNode;
+    employees?: Array<WeeklyInterpretationEmployeeView>;
+};
+
+export type WeeklyInterpretationEmployeeView = {
+    employeeRef?: string;
+    employeeId?: string;
+    displayName?: string;
+};
+
+export type WeeklyInsightContentView = {
+    store?: JsonNode;
+    teamInsights?: JsonNode;
+    employees?: Array<WeeklyInsightEmployeeView>;
+    dataLimitations?: JsonNode;
+};
+
+export type WeeklyInsightEmployeeView = {
+    employeeId?: string;
+    displayName?: string;
+    analysisStatus?: string;
+    insight?: JsonNode;
+};
+
+export type WeeklyInsightFallbackView = {
+    title?: string;
+    summary?: string;
+    qualityStatus?: 'READY' | 'PARTIAL' | 'BLOCKED';
+    dataLimitationCodes?: Array<string>;
+};
+
+export type WeeklyInsightPeriodView = {
+    periodStart?: string;
+    periodEnd?: string;
+    timezone?: string;
+};
+
+export type WeeklyInsightResponse = {
+    period?: WeeklyInsightPeriodView;
+    state?: 'READY' | 'PREPARING' | 'DELAYED' | 'UNAVAILABLE';
+    reasonCode?: 'READY' | 'WAITING_FOR_DATA' | 'ANALYSIS_IN_PROGRESS' | 'SOURCE_DELAYED' | 'ANALYSIS_DELAYED' | 'DATA_QUALITY_BLOCKED' | 'ANALYSIS_TEMPORARILY_UNAVAILABLE' | 'PERIOD_NOT_AVAILABLE';
+    message?: string;
+    statusUpdatedAt?: string;
+    nextRefreshAt?: string;
+    interpretationId?: string;
+    revision?: number;
+    publishedAt?: string;
+    sourceDataUpdatedAt?: string;
+    revisionState?: 'CURRENT' | 'UPDATING' | 'UPDATE_DELAYED';
+    content?: WeeklyInsightContentView;
+    fallback?: WeeklyInsightFallbackView;
 };
 
 export type EmployeeAttachRateChange = {
@@ -1326,6 +1570,100 @@ export type PageResponsePayrollSchemeView = {
     hasPrevious?: boolean;
 };
 
+export type TelegramDeliveryIncidentView = {
+    deliveryId?: string;
+    deliveryKind?: string;
+    eventType?: string;
+    storeName?: string;
+    recipientName?: string;
+    status?: string;
+    attemptCount?: number;
+    maxAttempts?: number;
+    expiresAt?: string;
+    nextAttemptAt?: string;
+    leaseUntil?: string;
+    errorCode?: string;
+    errorSummary?: string;
+    createdAt?: string;
+    updatedAt?: string;
+};
+
+export type TelegramDeliveryOperationsView = {
+    generatedAt?: string;
+    summary?: TelegramDeliveryQueueSummary;
+    incidents?: Array<TelegramDeliveryIncidentView>;
+};
+
+export type TelegramDeliveryQueueSummary = {
+    attentionLevel?: 'NORMAL' | 'WARNING' | 'CRITICAL';
+    readyPending?: number;
+    readyRetries?: number;
+    running?: number;
+    overdueRunning?: number;
+    permanentFailed?: number;
+    unknownOutcome?: number;
+    activeSubscriptions?: number;
+    blockedSubscriptions?: number;
+    oldestReadyAt?: string;
+};
+
+export type LlmJobIncidentView = {
+    jobId?: string;
+    snapshotId?: string;
+    storeId?: string;
+    storeName?: string;
+    periodStart?: string;
+    periodEnd?: string;
+    snapshotRevision?: number;
+    generationRevision?: number;
+    triggerType?: string;
+    status?: string;
+    phase?: string;
+    attemptCount?: number;
+    transportRetryCount?: number;
+    validationRetryCount?: number;
+    nextAttemptAt?: string;
+    deadlineAt?: string;
+    cancelRequested?: boolean;
+    terminalReasonCode?: string;
+    errorSummary?: string;
+    lastAttemptStatus?: string;
+    lastHttpStatus?: number;
+    updatedAt?: string;
+};
+
+export type LlmOperationsConfigurationView = {
+    snapshotsEnabled?: boolean;
+    generationEnabled?: boolean;
+    publicationEnabled?: boolean;
+    providerConfigured?: boolean;
+    model?: string;
+};
+
+export type LlmOperationsSummaryView = {
+    attentionLevel?: string;
+    pending?: number;
+    waitingRetry?: number;
+    running?: number;
+    overdueRunning?: number;
+    failed?: number;
+    validationFailed?: number;
+    succeededLast30Days?: number;
+    providerCallsLast30Days?: number;
+    inputTokensLast30Days?: number;
+    outputTokensLast30Days?: number;
+    knownCostLast30Days?: number;
+    costCurrency?: string;
+    oldestReadyAt?: string;
+};
+
+export type LlmOperationsView = {
+    generatedAt?: string;
+    configuration?: LlmOperationsConfigurationView;
+    summary?: LlmOperationsSummaryView;
+    incidents?: Array<LlmJobIncidentView>;
+};
+
 export type GetDayData = {
     body?: never;
     path: {
@@ -1436,6 +1774,28 @@ export type UpdateResponses = {
 };
 
 export type UpdateResponse = UpdateResponses[keyof UpdateResponses];
+
+export type UpdateSettingsData = {
+    body: TelegramDeliverySettingsRequest;
+    headers: {
+        /**
+         * Strong ETag returned for the active subscription
+         */
+        'If-Match': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/notifications/channels/telegram/settings';
+};
+
+export type UpdateSettingsResponses = {
+    /**
+     * OK
+     */
+    200: TelegramChannelView;
+};
+
+export type UpdateSettingsResponse = UpdateSettingsResponses[keyof UpdateSettingsResponses];
 
 export type Update1Data = {
     body: UpdateUserRequest;
@@ -1638,6 +1998,66 @@ export type FinalizeRatingResponses = {
 };
 
 export type FinalizeRatingResponse = FinalizeRatingResponses[keyof FinalizeRatingResponses];
+
+export type RevokeData = {
+    body?: never;
+    headers: {
+        /**
+         * Strong ETag returned for the current subscription
+         */
+        'If-Match': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/notifications/channels/telegram/revoke';
+};
+
+export type RevokeResponses = {
+    /**
+     * OK
+     */
+    200: TelegramChannelView;
+};
+
+export type RevokeResponse = RevokeResponses[keyof RevokeResponses];
+
+export type CreateLinkData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/notifications/channels/telegram/link';
+};
+
+export type CreateLinkResponses = {
+    /**
+     * Created
+     */
+    201: TelegramLinkCreatedView;
+};
+
+export type CreateLinkResponse = CreateLinkResponses[keyof CreateLinkResponses];
+
+export type ConfirmData = {
+    body?: never;
+    headers: {
+        /**
+         * Strong ETag returned for the pending subscription
+         */
+        'If-Match': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/notifications/channels/telegram/confirm';
+};
+
+export type ConfirmResponses = {
+    /**
+     * OK
+     */
+    200: TelegramChannelView;
+};
+
+export type ConfirmResponse = ConfirmResponses[keyof ConfirmResponses];
 
 export type ImportAssignmentsData = {
     body: ProductCategoryImportRequest;
@@ -1922,6 +2342,69 @@ export type AssignResponses = {
 
 export type AssignResponse = AssignResponses[keyof AssignResponses];
 
+export type ResendData = {
+    body: ManualTelegramResendRequest;
+    headers: {
+        'Idempotency-Key': string;
+    };
+    path: {
+        deliveryId: string;
+    };
+    query?: never;
+    url: '/api/admin/notifications/telegram/deliveries/{deliveryId}/resend';
+};
+
+export type ResendResponses = {
+    /**
+     * Accepted
+     */
+    202: ManualTelegramResendView;
+};
+
+export type ResendResponse = ResendResponses[keyof ResendResponses];
+
+export type RegenerateData = {
+    body: ManualLlmActionRequest;
+    headers: {
+        'Idempotency-Key': string;
+    };
+    path: {
+        snapshotId: string;
+    };
+    query?: never;
+    url: '/api/admin/llm/snapshots/{snapshotId}/regenerate';
+};
+
+export type RegenerateResponses = {
+    /**
+     * Accepted
+     */
+    202: ManualLlmJobView;
+};
+
+export type RegenerateResponse = RegenerateResponses[keyof RegenerateResponses];
+
+export type Cancel1Data = {
+    body: ManualLlmActionRequest;
+    headers: {
+        'Idempotency-Key': string;
+    };
+    path: {
+        jobId: string;
+    };
+    query?: never;
+    url: '/api/admin/llm/jobs/{jobId}/cancel';
+};
+
+export type Cancel1Responses = {
+    /**
+     * Accepted
+     */
+    202: ManualLlmJobView;
+};
+
+export type Cancel1Response = Cancel1Responses[keyof Cancel1Responses];
+
 export type StatusData = {
     body?: never;
     path?: never;
@@ -1973,6 +2456,24 @@ export type Get1Responses = {
 };
 
 export type Get1Response = Get1Responses[keyof Get1Responses];
+
+export type BackfillReadinessData = {
+    body?: never;
+    path?: never;
+    query: {
+        periodStart: string;
+    };
+    url: '/api/sync/jobs/backfill-readiness';
+};
+
+export type BackfillReadinessResponses = {
+    /**
+     * OK
+     */
+    200: SyncClassificationReadinessView;
+};
+
+export type BackfillReadinessResponse = BackfillReadinessResponses[keyof BackfillReadinessResponses];
 
 export type FindAccessibleData = {
     body?: never;
@@ -2273,6 +2774,27 @@ export type GetEmployeeKpiResponses = {
 
 export type GetEmployeeKpiResponse = GetEmployeeKpiResponses[keyof GetEmployeeKpiResponses];
 
+export type GetEmployeeCategoryKpiData = {
+    body?: never;
+    path: {
+        storeId: string;
+    };
+    query: {
+        periodStart: string;
+        periodEnd: string;
+    };
+    url: '/api/stores/{storeId}/kpi/employees/categories';
+};
+
+export type GetEmployeeCategoryKpiResponses = {
+    /**
+     * OK
+     */
+    200: EmployeeCategoryKpiResult;
+};
+
+export type GetEmployeeCategoryKpiResponse = GetEmployeeCategoryKpiResponses[keyof GetEmployeeCategoryKpiResponses];
+
 export type GetCategoryKpiData = {
     body?: never;
     path: {
@@ -2336,6 +2858,84 @@ export type GetAttachRatesResponses = {
 
 export type GetAttachRatesResponse = GetAttachRatesResponses[keyof GetAttachRatesResponses];
 
+export type List3Data = {
+    body?: never;
+    path: {
+        storeId: string;
+    };
+    query?: {
+        periodStartFrom?: string;
+        periodEndTo?: string;
+        page?: number;
+        size?: number;
+    };
+    url: '/api/stores/{storeId}/interpretations/weekly';
+};
+
+export type List3Responses = {
+    /**
+     * OK
+     */
+    200: PageResponseWeeklyInterpretationSummaryView;
+};
+
+export type List3Response = List3Responses[keyof List3Responses];
+
+export type Get6Data = {
+    body?: never;
+    path: {
+        storeId: string;
+        interpretationId: string;
+    };
+    query?: never;
+    url: '/api/stores/{storeId}/interpretations/weekly/{interpretationId}';
+};
+
+export type Get6Responses = {
+    /**
+     * OK
+     */
+    200: WeeklyInterpretationDetailView;
+};
+
+export type Get6Response = Get6Responses[keyof Get6Responses];
+
+export type Latest1Data = {
+    body?: never;
+    path: {
+        storeId: string;
+    };
+    query?: never;
+    url: '/api/stores/{storeId}/interpretations/weekly/latest';
+};
+
+export type Latest1Responses = {
+    /**
+     * OK
+     */
+    200: WeeklyInterpretationDetailView;
+};
+
+export type Latest1Response = Latest1Responses[keyof Latest1Responses];
+
+export type CurrentData = {
+    body?: never;
+    path: {
+        storeId: string;
+    };
+    query?: never;
+    url: '/api/stores/{storeId}/insights/weekly/current';
+};
+
+export type CurrentResponses = {
+    /**
+     * OK
+     */
+    200: WeeklyInsightResponse;
+};
+
+export type CurrentResponse = CurrentResponses[keyof CurrentResponses];
+
 export type DirectoryData = {
     body?: never;
     path: {
@@ -2379,7 +2979,7 @@ export type CardResponses = {
 
 export type CardResponse = CardResponses[keyof CardResponses];
 
-export type Get6Data = {
+export type Get7Data = {
     body?: never;
     path: {
         storeId: string;
@@ -2391,14 +2991,14 @@ export type Get6Data = {
     url: '/api/stores/{storeId}/employee-ratings';
 };
 
-export type Get6Responses = {
+export type Get7Responses = {
     /**
      * OK
      */
     200: EmployeeRatingResult;
 };
 
-export type Get6Response = Get6Responses[keyof Get6Responses];
+export type Get7Response = Get7Responses[keyof Get7Responses];
 
 export type FindAll2Data = {
     body?: never;
@@ -2418,7 +3018,7 @@ export type FindAll2Responses = {
 
 export type FindAll2Response = FindAll2Responses[keyof FindAll2Responses];
 
-export type Get7Data = {
+export type Get8Data = {
     body?: never;
     path: {
         storeId: string;
@@ -2427,16 +3027,16 @@ export type Get7Data = {
     url: '/api/stores/{storeId}/data-status';
 };
 
-export type Get7Responses = {
+export type Get8Responses = {
     /**
      * OK
      */
     200: StoreDataStatusView;
 };
 
-export type Get7Response = Get7Responses[keyof Get7Responses];
+export type Get8Response = Get8Responses[keyof Get8Responses];
 
-export type Get8Data = {
+export type Get9Data = {
     body?: never;
     path: {
         storeId: string;
@@ -2445,14 +3045,30 @@ export type Get8Data = {
     url: '/api/stores/{storeId}/data-quality';
 };
 
-export type Get8Responses = {
+export type Get9Responses = {
     /**
      * OK
      */
     200: StoreDataQualityView;
 };
 
-export type Get8Response = Get8Responses[keyof Get8Responses];
+export type Get9Response = Get9Responses[keyof Get9Responses];
+
+export type Get10Data = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/notifications/channels/telegram';
+};
+
+export type Get10Responses = {
+    /**
+     * OK
+     */
+    200: TelegramChannelView;
+};
+
+export type Get10Response = Get10Responses[keyof Get10Responses];
 
 export type OverviewData = {
     body?: never;
@@ -2537,6 +3153,42 @@ export type GetBackfillResponses = {
 };
 
 export type GetBackfillResponse = GetBackfillResponses[keyof GetBackfillResponses];
+
+export type Get11Data = {
+    body?: never;
+    path?: never;
+    query?: {
+        incidentLimit?: number;
+    };
+    url: '/api/admin/notifications/telegram/deliveries';
+};
+
+export type Get11Responses = {
+    /**
+     * OK
+     */
+    200: TelegramDeliveryOperationsView;
+};
+
+export type Get11Response = Get11Responses[keyof Get11Responses];
+
+export type Get12Data = {
+    body?: never;
+    path?: never;
+    query?: {
+        incidentLimit?: number;
+    };
+    url: '/api/admin/llm/operations';
+};
+
+export type Get12Responses = {
+    /**
+     * OK
+     */
+    200: LlmOperationsView;
+};
+
+export type Get12Response = Get12Responses[keyof Get12Responses];
 
 export type RevokeSessionData = {
     body?: never;

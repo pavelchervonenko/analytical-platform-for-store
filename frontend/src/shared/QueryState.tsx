@@ -3,11 +3,10 @@ import { isApiClientError } from "../api/client";
 
 export function QueryError({ error, onRetry, compact = false }: { error: unknown; onRetry: () => void; compact?: boolean }) {
   const message = isApiClientError(error) ? error.message : "Не удалось загрузить данные.";
-  const correlationId = isApiClientError(error) ? error.correlationId : undefined;
   return (
     <div className={`query-error ${compact ? "query-error--compact" : ""}`} role="alert">
       <AlertTriangle size={20} />
-      <div><strong>Данные временно недоступны</strong><p>{message}</p>{correlationId && <small>Код обращения: {correlationId}</small>}</div>
+      <div><strong>Данные временно недоступны</strong><p>{message}</p></div>
       <button type="button" onClick={onRetry}><RefreshCw size={16} />Повторить</button>
     </div>
   );
