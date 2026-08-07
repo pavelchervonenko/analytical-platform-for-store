@@ -6,7 +6,7 @@ umask 077
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-input="${1:-${PROJECT_DIR}/outputs/category-review-approved/product-category-assignments-v1.json}"
+input="${1:-${PROJECT_DIR}/outputs/category-review-approved/product-category-assignments-v2.json}"
 output="${2:-${OUTPUT_FILE:-}}"
 
 [[ -f "${input}" && -r "${input}" ]] || {

@@ -28,6 +28,7 @@ EXPECTED_WRAPPER_JAR_SHA256 = (
 VERIFICATION_NAMESPACE = "https://schema.gradle.org/dependency-verification"
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 REQUIRED_COMPONENTS = {
+    ("com.networknt", "json-schema-validator", "3.0.2"),
     ("com.puppycrawl.tools", "checkstyle", "13.3.0"),
     ("org.jacoco", "org.jacoco.agent", "0.8.14"),
     ("org.springdoc", "springdoc-openapi-starter-webmvc-ui", "3.0.3"),

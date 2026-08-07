@@ -12,7 +12,7 @@ source "${SCRIPT_DIR}/lib/shell-security.sh"
 BASE_URL="${BASE_URL:-http://localhost:8080}"
 CONNECTION_KEY="${CONNECTION_KEY:-livesklad-default}"
 APP_EMAIL="${APP_EMAIL:-}"
-PAYLOAD_FILE="${PAYLOAD_FILE:-$PROJECT_DIR/outputs/category-review-approved/product-category-assignments-v1.json}"
+PAYLOAD_FILE="${PAYLOAD_FILE:-$PROJECT_DIR/outputs/category-review-approved/product-category-assignments-v2.json}"
 
 for command_name in curl awk python3; do
     security_require_command "$command_name"

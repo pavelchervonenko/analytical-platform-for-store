@@ -55,12 +55,43 @@ done
 if grep -Eq '^RUN[[:space:]]+gradle[[:space:]]' "${dockerfile}"; then
     fail_test 'Docker build invokes an image-provided Gradle instead of the wrapper'
 fi
+production_compose="${PROJECT_ROOT}/docker-compose.prod.yml"
+env_example="${PROJECT_ROOT}/.env.example"
+for required_fragment in \
+    'target: app.llm.yandex.api-key' \
+    'target: app.notification.telegram.bot-token' \
+    'target: app.notification.telegram.webhook-secret' \
+    'target: app.security.telemetry.pseudonym-key' \
+    'LLM_PROMPT_VERSION: ${LLM_PROMPT_VERSION:-weekly-interpretation-v4}' \
+    'LLM_CONTENT_SCHEMA_VERSION: ${LLM_CONTENT_SCHEMA_VERSION:-2}' \
+    'DAILY_STORE_PULSE_RENDER_VERSION: ${DAILY_STORE_PULSE_RENDER_VERSION:-daily-store-pulse-v2}'; do
+    grep -F -- "${required_fragment}" "${production_compose}" >/dev/null \
+        || fail_test "production Compose is missing: ${required_fragment}"
+done
+
+if grep -Eq '^[[:space:]]+(TELEGRAM_BOT_TOKEN|TELEGRAM_WEBHOOK_SECRET):' \
+    "${production_compose}"; then
+    fail_test 'production Compose exposes a Telegram secret through environment'
+fi
+
+for required_file_variable in \
+    TELEGRAM_BOT_TOKEN_FILE \
+    TELEGRAM_WEBHOOK_SECRET_FILE \
+    YANDEX_AI_API_KEY_FILE \
+    SECURITY_TELEMETRY_PSEUDONYM_KEY_FILE; do
+    grep -Eq "^${required_file_variable}=$" "${env_example}" \
+        || fail_test ".env.example is missing ${required_file_variable}"
+done
+
 
 bash -n \
     "${PROJECT_ROOT}/scripts/change-own-password.sh" \
     "${PROJECT_ROOT}/scripts/import-approved-product-categories.sh" \
     "${PROJECT_ROOT}/scripts/prepare-local-demo.sh" \
     "${PROJECT_ROOT}/scripts/generate-payroll-classification-review.sh" \
+    "${PROJECT_ROOT}/scripts/run-local-llm-telegram-integration.sh" \
+    "${PROJECT_ROOT}/scripts/telegram-staging-acceptance.sh" \
+    "${PROJECT_ROOT}/scripts/yandexgpt-staging-acceptance.sh" \
     "${PROJECT_ROOT}/scripts/lib/shell-security.sh" \
     "${PROJECT_ROOT}"/scripts/livesklad-discovery/*.sh
 
@@ -87,6 +118,45 @@ cleanup() {
     rm -rf -- "${temporary_directory}"
 }
 trap cleanup EXIT
+
+telegram_script="${PROJECT_ROOT}/scripts/telegram-staging-acceptance.sh"
+telegram_token_file="${temporary_directory}/telegram-bot-token"
+telegram_curl_config="${temporary_directory}/telegram-curl.conf"
+printf '%s' '123456789:abcdefghijklmnopqrstuvwxyzABCDEFGHI' >"${telegram_token_file}"
+chmod 600 "${telegram_token_file}"
+(
+    APP_BASE_URL='https://Staging.Example.COM/'
+    TELEGRAM_API_BASE_URL='https://api.telegram.org/'
+    TELEGRAM_BOT_CODE='store-analytics-staging'
+    TELEGRAM_BOT_USERNAME='store_analytics_staging_bot'
+    TELEGRAM_BOT_TOKEN_FILE="${telegram_token_file}"
+    # shellcheck source=../telegram-staging-acceptance.sh
+    source "${telegram_script}"
+    validate_configuration
+    [[ "${APP_BASE_URL}" == 'https://staging.example.com' ]] \
+        || fail_test 'Telegram staging APP_BASE_URL was not normalized'
+    [[ "${TELEGRAM_API_BASE_URL}" == 'https://api.telegram.org' ]] \
+        || fail_test 'Telegram API base URL was not normalized'
+    token="$(read_secret 'TELEGRAM_BOT_TOKEN' "${TELEGRAM_BOT_TOKEN_FILE}")"
+    write_telegram_curl_config 'getMe' "${telegram_curl_config}" "${token}"
+    [[ "$(file_mode "${telegram_curl_config}")" == '600' ]] \
+        || fail_test 'Telegram curl config containing token is not mode 0600'
+    grep -F "/bot${token}/getMe" "${telegram_curl_config}" >/dev/null \
+        || fail_test 'Telegram curl config omitted the Bot API endpoint'
+)
+if (
+    APP_BASE_URL='http://staging.example.com'
+    TELEGRAM_API_BASE_URL='https://api.telegram.org'
+    TELEGRAM_BOT_CODE='store-analytics-staging'
+    TELEGRAM_BOT_USERNAME='store_analytics_staging_bot'
+    source "${telegram_script}"
+    validate_configuration
+) >/dev/null 2>&1; then
+    fail_test 'Telegram staging script accepted remote plaintext HTTP'
+fi
+if grep -E '(^|[[:space:]])curl.*(BOT_TOKEN|bot_token)' "${telegram_script}" >/dev/null; then
+    fail_test 'Telegram bot token is exposed directly in a curl process argument'
+fi
 
 dotenv_fixture="${temporary_directory}/dotenv-fixture"
 cat >"${dotenv_fixture}" <<'DOTENV'

@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "schema": "docs/schemas/weekly-interpretation-content-v1.schema.json",
+  "cases": [
+    {
+      "id": "canonical-ready",
+      "output": "docs/schemas/examples/weekly-interpretation-content-v1-ready.json",
+      "assertions": {
+        "forbiddenPatterns": [
+          "(?i)как языковая модель",
+          "(?i)гарантированно выполнит",
+          "(?i)уволить сотрудника"
+        ],
+        "equals": {
+          "/employees/0/analysisStatus": "SUFFICIENT"
+        }
+      }
+    },
+    {
+      "id": "canonical-insufficient-employee",
+      "output": "docs/schemas/examples/weekly-interpretation-content-v1-insufficient-employee.json",
+      "assertions": {
+        "forbiddenPatterns": [
+          "(?i)как языковая модель",
+          "(?i)гарантированно выполнит",
+          "(?i)уволить сотрудника"
+        ],
+        "equals": {
+          "/employees/1/analysisStatus": "INSUFFICIENT"
+        }
+      }
+    }
+  ]
+}

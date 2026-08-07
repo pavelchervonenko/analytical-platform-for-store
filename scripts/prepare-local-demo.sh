@@ -22,7 +22,7 @@ PERIOD_END="${PERIOD_END:-2026-07-26}"
 WAIT_TIMEOUT_SECONDS="${WAIT_TIMEOUT_SECONDS:-7200}"
 POLL_SECONDS="${POLL_SECONDS:-5}"
 EXPECTED_API_CONTRACT_VERSION="${EXPECTED_API_CONTRACT_VERSION:-9}"
-PAYLOAD_FILE="${PAYLOAD_FILE:-${PROJECT_DIR}/outputs/category-review-approved/product-category-assignments-v1.json}"
+PAYLOAD_FILE="${PAYLOAD_FILE:-${PROJECT_DIR}/outputs/category-review-approved/product-category-assignments-v2.json}"
 
 usage() {
     printf '%s\n' \
