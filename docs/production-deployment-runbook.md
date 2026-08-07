@@ -258,6 +258,20 @@ S3-инфраструктура не означает готовый backup. Е�
 подтверждённым recovery email. После активации здесь фиксируются registrar, expiration date,
 состояние auto-renewal, DNS provider и ответственные за продление.
 
+### 4.6 Pilot integrations and alert routing
+
+| Параметр | Значение |
+| --- | --- |
+| Telegram production bot | `@store_analytics_notify_bot` |
+| Runtime username | `store_analytics_notify_bot` без символа `@` |
+| Application technical alerts | Разработчик через @store_analytics_notify_bot, напрямую из Alertmanager, в обход application delivery worker |
+| Independent infrastructure fallback | Telegram-уведомления Timeweb Cloud для недоступности VPS/HTTPS/SSL |
+| Customer escalation | Billing, account access, destructive/data-loss и unrecoverable-backup incidents |
+| Yandex AI pilot budget | 500–600 RUB/month |
+
+Telegram token, webhook secret, Yandex API key и адреса доставки alerts не фиксируются в
+репозитории. Application Telegram не является единственным каналом технических alerts.
+
 ## 5. Firewall
 
 Защита реализована двумя слоями: Timeweb Cloud Firewall и UFW на VM.

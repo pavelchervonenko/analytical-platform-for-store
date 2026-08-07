@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule Store Analytics public readiness checks
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=2m
+AccuracySec=15s
+Unit=store-analytics-health.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,19 @@
+[Unit]
+Description=Store Analytics public readiness monitor
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+EnvironmentFile=/etc/store-analytics/monitor.env
+ExecStart=/opt/store-analytics/deploy/bin/monitor-health.sh
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/store-analytics
+NoNewPrivileges=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictSUIDSGID=true

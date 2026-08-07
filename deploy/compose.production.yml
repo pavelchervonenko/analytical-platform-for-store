@@ -1,0 +1,297 @@
+name: ${COMPOSE_PROJECT_NAME:-store-analytics}
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+x-hardened: &hardened
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  init: true
+  restart: unless-stopped
+  logging: *default-logging
+
+x-backend-environment: &backend-environment
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+  SPRING_CONFIG_IMPORT: configtree:/run/secrets/
+  SPRING_DATASOURCE_URL: jdbc:postgresql://${DB_CERT_HOST}:${DB_PORT:-5432}/${DB_NAME}?sslmode=verify-full&sslrootcert=/run/pki/postgresql-ca.crt
+  SPRING_FLYWAY_DEFAULT_SCHEMA: app
+  SPRING_FLYWAY_SCHEMAS: app
+  SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA: app
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+  SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+  TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-172.30.10.0/24}
+  SECURITY_TELEMETRY_PSEUDONYM_KEY_ID: ${SECURITY_TELEMETRY_PSEUDONYM_KEY_ID:-prod-v1}
+  RELEASE_ID: ${RELEASE_ID}
+  IMAGE_DIGEST: ${BACKEND_IMAGE_DIGEST}
+  LOG_STRUCTURED_FORMAT: ${LOG_STRUCTURED_FORMAT:-ecs}
+  HTTP_MAX_REQUEST_BODY_SIZE: ${HTTP_MAX_REQUEST_BODY_SIZE:-2MB}
+  INTERPRETATION_SNAPSHOT_ENABLED: ${INTERPRETATION_SNAPSHOT_ENABLED:-false}
+  INTERPRETATION_GENERATION_ENABLED: ${INTERPRETATION_GENERATION_ENABLED:-false}
+  INTERPRETATION_PUBLICATION_ENABLED: ${INTERPRETATION_PUBLICATION_ENABLED:-false}
+  TELEGRAM_NOTIFICATIONS_ENABLED: ${TELEGRAM_NOTIFICATIONS_ENABLED:-false}
+  TELEGRAM_LINKING_ENABLED: ${TELEGRAM_LINKING_ENABLED:-false}
+  TELEGRAM_BOT_CODE: ${TELEGRAM_BOT_CODE:-store-analytics-primary}
+  TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+
+services:
+  web:
+    <<: *hardened
+    image: ${WEB_IMAGE}
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - target: 80
+        published: "80"
+        protocol: tcp
+        mode: host
+      - target: 443
+        published: "443"
+        protocol: tcp
+        mode: host
+
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    networks:
+      edge: {}
+      app:
+        ipv4_address: 172.30.10.2
+    depends_on:
+      backend-api:
+        condition: service_healthy
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.50
+
+  backend-api:
+    <<: *hardened
+    image: ${BACKEND_IMAGE}
+    environment:
+      <<: *backend-environment
+      APP_RUNTIME_ROLE: API
+      SPRING_DATASOURCE_USERNAME: ${DB_RUNTIME_USER}
+      MANAGEMENT_SERVER_PORT: "9090"
+      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE_API:-10}
+      DB_POOL_MIN_IDLE: ${DB_POOL_MIN_IDLE_API:-2}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_DISPLAY_NAME: ${BOOTSTRAP_ADMIN_DISPLAY_NAME:-Administrator}
+      SYNC_WORKER_ENABLED: "false"
+      SYNC_SCHEDULE_ENABLED: "false"
+      INTERPRETATION_SNAPSHOT_WORKER_ENABLED: "false"
+      INTERPRETATION_GENERATION_WORKER_ENABLED: "false"
+      INTERPRETATION_SNAPSHOT_PLANNER_ENABLED: "false"
+      INTERPRETATION_GENERATION_PLANNER_ENABLED: "false"
+      TELEGRAM_FANOUT_ENABLED: "false"
+      TELEGRAM_DELIVERY_ENABLED: "false"
+      DAILY_STORE_PULSE_ENABLED: "false"
+      REPORT_BACKFILL_WORKER_ENABLED: "false"
+      RETENTION_SCHEDULING_ENABLED: "false"
+      TELEGRAM_WEBHOOK_ENABLED: ${TELEGRAM_WEBHOOK_ENABLED:-false}
+    secrets:
+      - source: postgres_runtime_password
+        target: spring.datasource.password
+      - source: security_telemetry_pseudonym_key
+        target: app.security.telemetry.pseudonym-key
+      - source: prometheus_scrape_token
+        target: app.observability.prometheus.token
+      - source: bootstrap_admin_password
+        target: app.security.bootstrap-admin.password
+      - source: telegram_webhook_secret
+        target: app.notification.telegram.webhook-secret
+    volumes:
+      - type: bind
+        source: ${POSTGRES_CA_FILE}
+        target: /run/pki/postgresql-ca.crt
+        read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    networks:
+      app:
+        ipv4_address: 172.30.10.3
+      data: {}
+      monitoring: {}
+    extra_hosts:
+      - "${DB_CERT_HOST}:${DB_HOST_ADDRESS}"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9090/readyz"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    stop_grace_period: 60s
+    pids_limit: 384
+    mem_limit: 2g
+    cpus: 1.50
+
+  backend-worker:
+    <<: *hardened
+    image: ${BACKEND_IMAGE}
+    environment:
+      <<: *backend-environment
+      APP_RUNTIME_ROLE: WORKER
+      SERVER_PORT: "8081"
+      MANAGEMENT_SERVER_PORT: "9091"
+      SPRING_DATASOURCE_USERNAME: ${DB_RUNTIME_USER}
+      DB_POOL_MAX_SIZE: ${DB_POOL_MAX_SIZE_WORKER:-5}
+      DB_POOL_MIN_IDLE: ${DB_POOL_MIN_IDLE_WORKER:-1}
+      LIVESKLAD_BASE_URL: ${LIVESKLAD_BASE_URL}
+      LIVESKLAD_ALLOWED_HOSTS: ${LIVESKLAD_ALLOWED_HOSTS}
+      LIVESKLAD_REQUIRE_HTTPS: "true"
+      LIVESKLAD_CONNECT_TIMEOUT: ${LIVESKLAD_CONNECT_TIMEOUT:-5s}
+      LIVESKLAD_READ_TIMEOUT: ${LIVESKLAD_READ_TIMEOUT:-30s}
+      SYNC_WORKER_ENABLED: ${SYNC_WORKER_ENABLED:-true}
+      SYNC_SCHEDULE_ENABLED: ${SYNC_SCHEDULE_ENABLED:-false}
+      SYNC_SCHEDULE_CRON: ${SYNC_SCHEDULE_CRON:-0 15 3 * * *}
+      SYNC_SCHEDULE_ZONE: ${SYNC_SCHEDULE_ZONE:-Europe/Kaliningrad}
+      SYNC_INCREMENTAL_OVERLAP_DAYS: ${SYNC_INCREMENTAL_OVERLAP_DAYS:-3}
+      SYNC_MAXIMUM_BACKFILL_DAYS: ${SYNC_MAXIMUM_BACKFILL_DAYS:-730}
+      INTERPRETATION_SNAPSHOT_ENABLED: ${INTERPRETATION_SNAPSHOT_ENABLED:-false}
+      INTERPRETATION_SNAPSHOT_WORKER_ENABLED: ${INTERPRETATION_SNAPSHOT_WORKER_ENABLED:-false}
+      INTERPRETATION_SNAPSHOT_PLANNER_ENABLED: ${INTERPRETATION_SNAPSHOT_PLANNER_ENABLED:-false}
+      INTERPRETATION_GENERATION_ENABLED: ${INTERPRETATION_GENERATION_ENABLED:-false}
+      INTERPRETATION_GENERATION_PLANNER_ENABLED: ${INTERPRETATION_GENERATION_PLANNER_ENABLED:-false}
+      INTERPRETATION_GENERATION_WORKER_ENABLED: ${INTERPRETATION_GENERATION_WORKER_ENABLED:-false}
+      INTERPRETATION_PUBLICATION_ENABLED: ${INTERPRETATION_PUBLICATION_ENABLED:-false}
+      INTERPRETATION_GENERATION_MAX_ESTIMATED_COST_RUB: ${INTERPRETATION_GENERATION_MAX_ESTIMATED_COST_RUB:-30.00}
+      LLM_PROMPT_VERSION: ${LLM_PROMPT_VERSION:-weekly-interpretation-v4}
+      LLM_CONTENT_SCHEMA_VERSION: ${LLM_CONTENT_SCHEMA_VERSION:-2}
+      LLM_MAX_OUTPUT_TOKENS: ${LLM_MAX_OUTPUT_TOKENS:-8000}
+      LLM_MAX_PROVIDER_CALLS: ${LLM_MAX_PROVIDER_CALLS:-2}
+      YANDEX_AI_FOLDER_ID: ${YANDEX_AI_FOLDER_ID:-}
+      YANDEX_AI_MODEL_URI: ${YANDEX_AI_MODEL_URI:-}
+      YANDEX_AI_CONNECT_TIMEOUT: ${YANDEX_AI_CONNECT_TIMEOUT:-5s}
+      YANDEX_AI_READ_TIMEOUT: ${YANDEX_AI_READ_TIMEOUT:-180s}
+      TELEGRAM_NOTIFICATIONS_ENABLED: ${TELEGRAM_NOTIFICATIONS_ENABLED:-false}
+      TELEGRAM_LINKING_ENABLED: ${TELEGRAM_LINKING_ENABLED:-false}
+      TELEGRAM_WEBHOOK_ENABLED: "false"
+      TELEGRAM_DELIVERY_ENABLED: ${TELEGRAM_DELIVERY_ENABLED:-false}
+      TELEGRAM_FANOUT_ENABLED: ${TELEGRAM_FANOUT_ENABLED:-false}
+      TELEGRAM_BOT_CODE: ${TELEGRAM_BOT_CODE:-store-analytics-primary}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      DAILY_STORE_PULSE_ENABLED: ${DAILY_STORE_PULSE_ENABLED:-false}
+      REPORTS_ANNUAL_SCHEDULING_ENABLED: ${REPORTS_ANNUAL_SCHEDULING_ENABLED:-true}
+      REPORT_BACKFILL_WORKER_ENABLED: ${REPORT_BACKFILL_WORKER_ENABLED:-true}
+      RETENTION_SCHEDULING_ENABLED: ${RETENTION_SCHEDULING_ENABLED:-true}
+      RETENTION_DELETION_ENABLED: ${RETENTION_DELETION_ENABLED:-false}
+      RETENTION_POLICY_APPROVAL_REFERENCE: ${RETENTION_POLICY_APPROVAL_REFERENCE:-UNAPPROVED}
+      RETENTION_BACKUP_CHECKPOINT_REFERENCE: ${RETENTION_BACKUP_CHECKPOINT_REFERENCE:-UNVERIFIED}
+      RETENTION_RESTORE_TESTED_AT: ${RETENTION_RESTORE_TESTED_AT:-1970-01-01T00:00:00Z}
+    secrets:
+      - source: postgres_runtime_password
+        target: spring.datasource.password
+      - source: security_telemetry_pseudonym_key
+        target: app.security.telemetry.pseudonym-key
+      - source: prometheus_scrape_token
+        target: app.observability.prometheus.token
+      - source: livesklad_login
+        target: app.livesklad.login
+      - source: livesklad_password
+        target: app.livesklad.password
+      - source: yandex_ai_api_key
+        target: app.llm.yandex.api-key
+      - source: telegram_bot_token
+        target: app.notification.telegram.bot-token
+    volumes:
+      - type: bind
+        source: ${POSTGRES_CA_FILE}
+        target: /run/pki/postgresql-ca.crt
+        read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    networks:
+      data: {}
+      monitoring: {}
+      egress: {}
+    extra_hosts:
+      - "${DB_CERT_HOST}:${DB_HOST_ADDRESS}"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:9091/readyz"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    stop_grace_period: 90s
+    pids_limit: 512
+    mem_limit: 3g
+    cpus: 2.00
+
+  migrate:
+    <<: *hardened
+    profiles: [tools]
+    image: ${BACKEND_IMAGE}
+    restart: "no"
+    environment:
+      <<: *backend-environment
+      APP_RUNTIME_ROLE: MIGRATION
+      SPRING_DATASOURCE_USERNAME: ${DB_MIGRATOR_USER}
+      DB_POOL_MAX_SIZE: "2"
+      DB_POOL_MIN_IDLE: "1"
+      MIGRATION_LOCK_TIMEOUT: ${MIGRATION_LOCK_TIMEOUT:-5s}
+      MIGRATION_STATEMENT_TIMEOUT: ${MIGRATION_STATEMENT_TIMEOUT:-10m}
+      MIGRATION_LOCK_RETRY_COUNT: ${MIGRATION_LOCK_RETRY_COUNT:-10}
+    secrets:
+      - source: postgres_migrator_password
+        target: spring.datasource.password
+      - source: security_telemetry_pseudonym_key
+        target: app.security.telemetry.pseudonym-key
+    volumes:
+      - type: bind
+        source: ${POSTGRES_CA_FILE}
+        target: /run/pki/postgresql-ca.crt
+        read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    networks:
+      data: {}
+    extra_hosts:
+      - "${DB_CERT_HOST}:${DB_HOST_ADDRESS}"
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1.00
+
+secrets:
+  postgres_runtime_password:
+    file: ${POSTGRES_RUNTIME_PASSWORD_FILE}
+  postgres_migrator_password:
+    file: ${POSTGRES_MIGRATOR_PASSWORD_FILE}
+  livesklad_login:
+    file: ${LIVESKLAD_LOGIN_FILE}
+  livesklad_password:
+    file: ${LIVESKLAD_PASSWORD_FILE}
+  yandex_ai_api_key:
+    file: ${YANDEX_AI_API_KEY_FILE}
+  telegram_bot_token:
+    file: ${TELEGRAM_BOT_TOKEN_FILE}
+  telegram_webhook_secret:
+    file: ${TELEGRAM_WEBHOOK_SECRET_FILE}
+  security_telemetry_pseudonym_key:
+    file: ${SECURITY_TELEMETRY_PSEUDONYM_KEY_FILE}
+  prometheus_scrape_token:
+    file: ${PROMETHEUS_SCRAPE_TOKEN_FILE}
+  bootstrap_admin_password:
+    file: ${BOOTSTRAP_ADMIN_PASSWORD_FILE}
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  edge:
+  app:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.10.0/24
+  data:
+  monitoring:
+    internal: true
+  egress:

@@ -1,0 +1,12 @@
+[Unit]
+Description=Schedule Store Analytics encrypted PostgreSQL logical backup
+
+[Timer]
+OnCalendar=*-*-* 00:45:00 Europe/Kaliningrad
+Persistent=true
+RandomizedDelaySec=10m
+AccuracySec=1m
+Unit=store-analytics-backup.service
+
+[Install]
+WantedBy=timers.target

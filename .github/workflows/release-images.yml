@@ -1,0 +1,88 @@
+name: Release production images
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-and-publish:
+    name: Verify and publish immutable images
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Verify backend and database migrations
+        run: ./gradlew :backend:check --no-daemon --console=plain
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22.22.0"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Verify frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run check
+
+      - name: Log in to GitHub Container Registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Build and publish images
+        id: images
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -Eeuo pipefail
+          owner="$(printf '%s' "${OWNER}" | tr '[:upper:]' '[:lower:]')"
+          backend="ghcr.io/${owner}/store-analytics-backend:${GITHUB_SHA}"
+          web="ghcr.io/${owner}/store-analytics-web:${GITHUB_SHA}"
+
+          docker build --pull --file backend/Dockerfile --tag "${backend}" .
+          docker build --pull --file frontend/Dockerfile --tag "${web}" .
+          docker push "${backend}"
+          docker push "${web}"
+
+          backend_digest="$(docker inspect --format='{{index .RepoDigests 0}}' "${backend}")"
+          web_digest="$(docker inspect --format='{{index .RepoDigests 0}}' "${web}")"
+          {
+            printf 'backend=%s\n' "${backend_digest}"
+            printf 'web=%s\n' "${web_digest}"
+          } >>"${GITHUB_OUTPUT}"
+
+      - name: Publish release coordinates
+        env:
+          BACKEND_IMAGE: ${{ steps.images.outputs.backend }}
+          WEB_IMAGE: ${{ steps.images.outputs.web }}
+        run: |
+          {
+            printf '## Immutable production images\n\n'
+            printf -- '- Commit: `%s`\n' "${GITHUB_SHA}"
+            printf -- '- Backend: `%s`\n' "${BACKEND_IMAGE}"
+            printf -- '- Web: `%s`\n' "${WEB_IMAGE}"
+          } >>"${GITHUB_STEP_SUMMARY}"
