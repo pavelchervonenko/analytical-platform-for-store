@@ -19,9 +19,12 @@ RUN --mount=type=cache,target=/root/.gradle ./gradlew :backend:test -x operatorS
 FROM eclipse-temurin:21-jre-alpine-3.23
 WORKDIR /app
 
-RUN addgroup -S app && adduser -S app -G app
+RUN apk add --no-cache su-exec \
+    && addgroup -S app \
+    && adduser -S app -G app
 COPY --from=build /workspace/backend/build/libs/*.jar /app/app.jar
-USER app
+COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["java", "-jar", "/app/app.jar"]

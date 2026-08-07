@@ -32,6 +32,7 @@ compose() {
 }
 
 release_id="$(sed -n 's/^RELEASE_ID=//p' "${RELEASE_ENV}")"
+skip_image_pull="$(sed -n 's/^SKIP_IMAGE_PULL=//p' "${RELEASE_ENV}")"
 [[ "${release_id}" =~ ^[A-Za-z0-9._-]{7,128}$ ]] || die 'invalid RELEASE_ID'
 
 if [[ -f "${STATE_DIR}/current.env" ]]; then
@@ -40,8 +41,12 @@ if [[ -f "${STATE_DIR}/current.env" ]]; then
 fi
 install -o root -g root -m 0600 "${RELEASE_ENV}" "${STATE_DIR}/candidate.env"
 
-printf 'Pulling immutable images for release %s\n' "${release_id}"
-compose pull backend-api backend-worker web
+if [[ "${skip_image_pull:-false}" == 'true' ]]; then
+  printf 'Using preloaded images for release %s\n' "${release_id}"
+else
+  printf 'Pulling immutable images for release %s\n' "${release_id}"
+  compose pull backend-api backend-worker web
+fi
 
 printf 'Applying database migrations\n'
 compose --profile tools run --rm migrate

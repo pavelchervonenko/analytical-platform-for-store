@@ -75,6 +75,9 @@ services:
   backend-api:
     <<: *hardened
     image: ${BACKEND_IMAGE}
+    cap_add:
+      - SETGID
+      - SETUID
     environment:
       <<: *backend-environment
       APP_RUNTIME_ROLE: API
@@ -135,6 +138,9 @@ services:
   backend-worker:
     <<: *hardened
     image: ${BACKEND_IMAGE}
+    cap_add:
+      - SETGID
+      - SETUID
     environment:
       <<: *backend-environment
       APP_RUNTIME_ROLE: WORKER
@@ -228,6 +234,9 @@ services:
     <<: *hardened
     profiles: [tools]
     image: ${BACKEND_IMAGE}
+    cap_add:
+      - SETGID
+      - SETUID
     restart: "no"
     environment:
       <<: *backend-environment
