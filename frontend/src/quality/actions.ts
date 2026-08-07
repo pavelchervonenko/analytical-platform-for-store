@@ -4,6 +4,7 @@ export interface QualityActionDescriptor {
   label: string;
   route?: string;
   view?: string;
+  hash?: string;
   refresh?: boolean;
   unavailableReason?: string;
 }
@@ -25,8 +26,17 @@ export function describeQualityAction(action: QualityAction, isAdmin: boolean): 
     case "CALCULATE_PAYROLL": return { label: "Рассчитать зарплату", route: "/payroll" };
     case "RECALCULATE_PAYROLL": return { label: "Пересчитать", route: "/payroll" };
     case "FINALIZE_RATING": return { label: "Зафиксировать рейтинг", route: "/employees" };
-    case "REVIEW_DATA_ISSUES":
-    case "REVIEW_SOURCE_DOCUMENT": return { label: "Открыть проблемы", route: "/quality", view: "issues" };
+    case "REVIEW_DATA_ISSUES": return {
+      label: "Открыть проблемы",
+      route: "/quality",
+      hash: "#quality-source-issues"
+    };
+    case "REVIEW_SOURCE_DOCUMENT": return isAdmin
+      ? { label: "Открыть синхронизацию", route: "/admin", view: "sync" }
+      : {
+          label: "Нужен администратор",
+          unavailableReason: "Исправление исходных документов и повторная синхронизация доступны администратору."
+        };
     default: return null;
   }
 }

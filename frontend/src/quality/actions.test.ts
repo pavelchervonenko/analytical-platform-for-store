@@ -18,4 +18,16 @@ describe("quality action routing", () => {
     expect(describeQualityAction("PROVIDE_COST_DATA", true)?.route).toBeUndefined();
     expect(describeQualityAction("PROVIDE_COST_DATA", true)?.unavailableReason).toEqual(expect.any(String));
   });
+
+  it("opens source issues and source synchronization instead of a no-op route", () => {
+    expect(describeQualityAction("REVIEW_DATA_ISSUES", false)).toMatchObject({
+      route: "/quality",
+      hash: "#quality-source-issues"
+    });
+    expect(describeQualityAction("REVIEW_SOURCE_DOCUMENT", true)).toMatchObject({
+      route: "/admin",
+      view: "sync"
+    });
+    expect(describeQualityAction("REVIEW_SOURCE_DOCUMENT", false)?.route).toBeUndefined();
+  });
 });
