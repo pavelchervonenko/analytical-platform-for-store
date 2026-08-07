@@ -307,7 +307,10 @@ public class SalesSyncPersistence {
             );
 
             SalesItemAmounts amounts = itemAmounts(sourceItem);
-            CostQuality costQuality = costQuality(sourceItem);
+            CostQuality costQuality = costQuality(
+                    sourceItem,
+                    classification.category()
+            );
             synchronizeIssue(
                     costQuality == CostQuality.ZERO_UNEXPECTED,
                     store,
@@ -499,14 +502,17 @@ public class SalesSyncPersistence {
         }
     }
 
-    private CostQuality costQuality(LiveSkladSalePositionPayload source) {
+    private CostQuality costQuality(
+            LiveSkladSalePositionPayload source,
+            AnalyticsCategory category
+    ) {
         if (source.costAmount() == null) {
             return CostQuality.MISSING;
         }
         if (source.costAmount().signum() != 0) {
             return CostQuality.KNOWN;
         }
-        return source.work()
+        return source.work() || category.permitsZeroCost()
                 ? CostQuality.ZERO_SERVICE
                 : CostQuality.ZERO_UNEXPECTED;
     }

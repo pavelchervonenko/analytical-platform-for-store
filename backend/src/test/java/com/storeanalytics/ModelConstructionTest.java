@@ -155,6 +155,23 @@ class ModelConstructionTest {
     }
 
     @Test
+    void zeroCostIsExpectedOnlyForNonMaterialAnalyticsCategories() {
+        assertThat(category(AnalyticsCategoryKind.SERVICE).permitsZeroCost()).isTrue();
+        assertThat(category(AnalyticsCategoryKind.WARRANTY).permitsZeroCost()).isTrue();
+        assertThat(category(AnalyticsCategoryKind.PROTECTION).permitsZeroCost()).isTrue();
+        assertThat(category(AnalyticsCategoryKind.DEVICE).permitsZeroCost()).isFalse();
+        assertThat(category(AnalyticsCategoryKind.ACCESSORY).permitsZeroCost()).isFalse();
+        assertThat(category(AnalyticsCategoryKind.OTHER).permitsZeroCost()).isFalse();
+        assertThat(category(AnalyticsCategoryKind.EXCLUDED).permitsZeroCost()).isFalse();
+    }
+
+    private AnalyticsCategory category(AnalyticsCategoryKind kind) {
+        return new AnalyticsCategory(kind.name(), kind.name(), null, new AnalyticsCategoryRules(
+                kind, DeviceFamily.NONE, false, false, false, null, false
+        ));
+    }
+
+    @Test
     void databaseInvariantsAreRejectedBeforePersistence() {
         assertThatThrownBy(() -> new AppUser(" ", "hash", "Manager", UserRole.MANAGER))
                 .isInstanceOf(IllegalArgumentException.class);

@@ -84,6 +84,12 @@ public class AnalyticsCategory extends AbstractMutableEntity {
         return code;
     }
 
+    public boolean permitsZeroCost() {
+        return categoryKind == AnalyticsCategoryKind.SERVICE
+                || categoryKind == AnalyticsCategoryKind.WARRANTY
+                || categoryKind == AnalyticsCategoryKind.PROTECTION;
+    }
+
     public PayrollCategoryCode getPayrollCategoryCode() {
         return payrollCategoryCode;
     }

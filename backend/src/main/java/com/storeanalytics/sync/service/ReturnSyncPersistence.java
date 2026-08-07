@@ -582,7 +582,10 @@ public class ReturnSyncPersistence {
             }
 
             SalesItemAmounts amounts = itemAmounts(source);
-            CostQuality costQuality = costQuality(source);
+            CostQuality costQuality = costQuality(
+                    source,
+                    classification.analyticsCategory()
+            );
             synchronizeCostIssues(
                     context,
                     store,
@@ -763,7 +766,8 @@ public class ReturnSyncPersistence {
     }
 
     private CostQuality costQuality(
-            LiveSkladReturnPositionPayload source
+            LiveSkladReturnPositionPayload source,
+            AnalyticsCategory category
     ) {
         if (source.costAmount() == null) {
             return CostQuality.MISSING;
@@ -771,7 +775,7 @@ public class ReturnSyncPersistence {
         if (source.costAmount().signum() != 0) {
             return CostQuality.KNOWN;
         }
-        return source.work()
+        return source.work() || category.permitsZeroCost()
                 ? CostQuality.ZERO_SERVICE
                 : CostQuality.ZERO_UNEXPECTED;
     }
