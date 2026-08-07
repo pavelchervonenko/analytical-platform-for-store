@@ -154,7 +154,9 @@ public class PayrollReadinessService {
                 issue.netQuantity(),
                 issue.netRevenue(),
                 suggestion,
-                suggestion == null ? null : "Suggestion based on product name; confirm manually"
+                suggestion == null
+                        ? null
+                        : "Категория предложена по названию товара. Проверьте и подтвердите выбор."
         );
     }
 

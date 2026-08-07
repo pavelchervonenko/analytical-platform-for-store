@@ -1,18 +1,21 @@
 package com.storeanalytics.salary.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.storeanalytics.performance.model.StorePerformancePlan;
 import com.storeanalytics.performance.repository.EmployeeWorkShiftRepository;
 import com.storeanalytics.performance.repository.StorePerformancePlanRepository;
+import com.storeanalytics.salary.model.PayrollCategoryCode;
 import com.storeanalytics.salary.model.PayrollScheme;
 import com.storeanalytics.salary.model.PayrollSchemeDefinition;
 import com.storeanalytics.salary.repository.PayrollReadinessRepository;
 import com.storeanalytics.salary.repository.PayrollSaleSourceFact;
 import com.storeanalytics.salary.repository.PayrollSalesRepository;
 import com.storeanalytics.salary.repository.PayrollSchemeRepository;
+import com.storeanalytics.salary.repository.PayrollUnmappedProductIssue;
 import com.storeanalytics.store.model.Store;
 import com.storeanalytics.store.repository.StoreRepository;
 import java.math.BigDecimal;
@@ -94,6 +97,77 @@ class PayrollReadinessServiceTest {
             assertThat(issue.workDate()).isEqualTo(workDate);
             assertThat(issue.fundAmount()).isEqualByComparingTo("20.00");
         });
+    }
+
+    @Test
+    void providesLocalizedPayrollCategorySuggestionsForMacBookAndIpad() {
+        UUID storeId = UUID.randomUUID();
+        LocalDate periodStart = MONTH.atDay(1);
+        LocalDate periodEnd = MONTH.atEndOfMonth();
+        String reason = "Категория предложена по названию товара. "
+                + "Проверьте и подтвердите выбор.";
+        when(storeRepository.findById(storeId))
+                .thenReturn(Optional.of(mock(Store.class)));
+        when(planRepository.findByStoreIdAndPlanMonth(storeId, periodStart))
+                .thenReturn(Optional.empty());
+        when(schemeRepository.findFirstByEffectiveFromLessThanEqualOrderByEffectiveFromDesc(
+                periodStart
+        )).thenReturn(Optional.empty());
+        when(salesRepository.sourceFacts(storeId, periodStart, periodEnd))
+                .thenReturn(List.of());
+        when(shiftRepository
+                .findAllByStoreIdAndWorkDateBetweenOrderByWorkDateAscEmployeeFullNameAsc(
+                        storeId, periodStart, periodEnd
+                )).thenReturn(List.of());
+        when(readinessRepository.unmappedProducts(storeId, periodStart, periodEnd))
+                .thenReturn(List.of(
+                        unmappedIssue("MacBook Pro 14 M5 16/512GB Space Black New"),
+                        unmappedIssue("Apple iPad Air 11 128Gb M4 Wi-Fi Starlight New"),
+                        unmappedIssue("Apple iPad 11 256GB WI-FI Silver New")
+                ));
+        when(readinessRepository.missingCosts(storeId, periodStart, periodEnd))
+                .thenReturn(List.of());
+
+        PayrollReadinessView result = service.inspect(storeId, MONTH);
+
+        assertThat(result.unmappedProducts())
+                .extracting(
+                        PayrollUnmappedProductView::productName,
+                        PayrollUnmappedProductView::suggestedCategoryCode,
+                        PayrollUnmappedProductView::suggestionReason
+                )
+                .containsExactly(
+                        tuple(
+                                "MacBook Pro 14 M5 16/512GB Space Black New",
+                                PayrollCategoryCode.TECH_TIER_1,
+                                reason
+                        ),
+                        tuple(
+                                "Apple iPad Air 11 128Gb M4 Wi-Fi Starlight New",
+                                PayrollCategoryCode.TECH_TIER_2,
+                                reason
+                        ),
+                        tuple(
+                                "Apple iPad 11 256GB WI-FI Silver New",
+                                PayrollCategoryCode.TECH_TIER_2,
+                                reason
+                        )
+                );
+    }
+
+    private PayrollUnmappedProductIssue unmappedIssue(String productName) {
+        LocalDate saleDate = MONTH.atDay(3);
+        return new PayrollUnmappedProductIssue(
+                UUID.randomUUID(),
+                productName,
+                "IPAD_MAC",
+                saleDate,
+                saleDate,
+                1,
+                0,
+                BigDecimal.ONE,
+                new BigDecimal("1000.00")
+        );
     }
 
     private PayrollSaleSourceFact fact(

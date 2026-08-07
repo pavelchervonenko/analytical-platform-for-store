@@ -98,7 +98,6 @@
 .payroll-row-button { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 9px; color: var(--primary); background: var(--primary-soft); }
 .payroll-row-button svg { width: 15px; }
 .negative-value { color: var(--danger) !important; }
-.payroll-page .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
 .payroll-daily-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .payroll-daily-summary article { min-height: 82px; display: flex; align-items: center; gap: 13px; padding: 15px; border: 1px solid var(--border); border-radius: 19px; background: var(--surface); box-shadow: var(--shadow-sm); }

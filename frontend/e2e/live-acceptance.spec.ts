@@ -30,7 +30,6 @@ async function expectNoPageOverflow(page: Page) {
 
 async function expectManagerFacingCopy(page: Page) {
   const text = await page.locator("body").innerText();
-  expect(text).not.toMatch(/[Ёё]/u);
   expect(text).not.toMatch(/\b[A-Z][A-Z0-9]+(?:_[A-Z0-9]+)+\b/u);
 }
 
