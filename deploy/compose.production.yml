@@ -76,6 +76,7 @@ services:
     <<: *hardened
     image: ${BACKEND_IMAGE}
     cap_add:
+      - CHOWN
       - SETGID
       - SETUID
     environment:
@@ -139,6 +140,7 @@ services:
     <<: *hardened
     image: ${BACKEND_IMAGE}
     cap_add:
+      - CHOWN
       - SETGID
       - SETUID
     environment:
@@ -235,6 +237,7 @@ services:
     profiles: [tools]
     image: ${BACKEND_IMAGE}
     cap_add:
+      - CHOWN
       - SETGID
       - SETUID
     restart: "no"
