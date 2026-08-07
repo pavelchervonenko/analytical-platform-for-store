@@ -249,9 +249,15 @@ export function OverviewPage() {
           </div>
         </details>
 
-        <details className="disclosure-panel">
-          <summary><span>Показатели допродаж</span><small>{attachQuery.data?.rates.length ?? 0}</small></summary>
+        <details className="disclosure-panel" open>
+          <summary><span>Attach-rate · показатели допродаж</span><small>{attachQuery.data?.rates.length ?? 0}</small></summary>
           <div className="disclosure-panel__content">
+            <div className="attach-intro">
+              <strong>Доля релевантных чеков с допродажей</strong>
+              <span>
+                Например, сколько чеков с телефоном содержали чехол, стекло, гарантию или настройку.
+              </span>
+            </div>
             {attachQuery.isPending && <PanelSkeleton rows={5} />}
             {attachQuery.isError && <QueryError error={attachQuery.error} onRetry={() => void attachQuery.refetch()} compact />}
             {attachQuery.data && (

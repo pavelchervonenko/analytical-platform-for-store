@@ -69,22 +69,37 @@ function InsightBlock({
   );
 }
 
+type InsightListItem = {
+  kind: string;
+  title: string;
+  summary: string;
+};
+
+function InsightItemList({
+  label,
+  items,
+  tone = "neutral"
+}: {
+  label: string;
+  items: InsightListItem[];
+  tone?: "neutral" | "category" | "attach" | "team";
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className={`weekly-insight-item-group weekly-insight-item-group--${tone}`}>
+      <span>{label}</span>
+      {items.map((item, index) => (
+        <div key={`${item.kind}:${item.title}:${index}`}>
+          <strong>{item.title}</strong>
+          <small>{item.summary}</small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function EmployeeInsight({ employee }: { employee: WeeklyInsightEmployee }) {
   const insight = employee.insight;
-  const categoryItems = insight.categoryPerformance
-    ? [
-        ...insight.categoryPerformance.strengths,
-        ...insight.categoryPerformance.attentionAreas,
-        ...insight.categoryPerformance.dynamics
-      ]
-    : [];
-  const additionalItems = insight.additionalSalesPerformance
-    ? [
-        ...insight.additionalSalesPerformance.revenueInsights,
-        ...insight.additionalSalesPerformance.attachRateInsights,
-        ...insight.additionalSalesPerformance.opportunities
-      ]
-    : [];
 
   return (
     <details className="weekly-employee-insight">
@@ -109,25 +124,47 @@ function EmployeeInsight({ employee }: { employee: WeeklyInsightEmployee }) {
         {(insight.categoryPerformance || insight.additionalSalesPerformance) && (
           <div className="weekly-employee-details">
             {insight.categoryPerformance && (
-              <article>
+              <article className="weekly-employee-detail weekly-employee-detail--category">
                 <strong>Категории продаж</strong>
                 {insight.categoryPerformance.summary && (
                   <p>{insight.categoryPerformance.summary.text}</p>
                 )}
-                {categoryItems.map((item) => (
-                  <small key={`${item.kind}:${item.title}`}>{item.summary}</small>
-                ))}
+                <InsightItemList
+                  label="Сильные категории"
+                  items={insight.categoryPerformance.strengths}
+                  tone="category"
+                />
+                <InsightItemList
+                  label="Зоны внимания"
+                  items={insight.categoryPerformance.attentionAreas}
+                  tone="category"
+                />
+                <InsightItemList
+                  label="Динамика"
+                  items={insight.categoryPerformance.dynamics}
+                  tone="category"
+                />
               </article>
             )}
             {insight.additionalSalesPerformance && (
-              <article>
+              <article className="weekly-employee-detail weekly-employee-detail--attach">
                 <strong>Дополнительные продажи</strong>
                 {insight.additionalSalesPerformance.summary && (
                   <p>{insight.additionalSalesPerformance.summary.text}</p>
                 )}
-                {additionalItems.map((item) => (
-                  <small key={`${item.kind}:${item.title}`}>{item.summary}</small>
-                ))}
+                <InsightItemList
+                  label="Выручка"
+                  items={insight.additionalSalesPerformance.revenueInsights}
+                />
+                <InsightItemList
+                  label="Attach-rate · доля чеков с допродажей"
+                  items={insight.additionalSalesPerformance.attachRateInsights}
+                  tone="attach"
+                />
+                <InsightItemList
+                  label="Возможности роста"
+                  items={insight.additionalSalesPerformance.opportunities}
+                />
               </article>
             )}
           </div>
@@ -203,20 +240,6 @@ function TeamExperience({
 
 function ReadyInsight({ insight }: { insight: WeeklyInsight & { content: NonNullable<WeeklyInsight["content"]> } }) {
   const store: WeeklyInsightStore = insight.content.store;
-  const categoryItems = store.categoryPerformance
-    ? [
-        ...store.categoryPerformance.growthDrivers,
-        ...store.categoryPerformance.declineDrivers,
-        ...store.categoryPerformance.mixInsights
-      ]
-    : [];
-  const additionalItems = store.additionalSalesPerformance
-    ? [
-        ...store.additionalSalesPerformance.revenueInsights,
-        ...store.additionalSalesPerformance.attachRateInsights,
-        ...store.additionalSalesPerformance.opportunities
-      ]
-    : [];
   const hasSummaries = store.resultSummary
     || store.dynamicsSummary
     || store.planOutlook;
@@ -249,57 +272,75 @@ function ReadyInsight({ insight }: { insight: WeeklyInsight & { content: NonNull
 
       <div className="weekly-insight-columns">
         {store.categoryPerformance && (
-          <article>
+          <article className="weekly-insight-column weekly-insight-column--category">
             <span className="weekly-insight-section-icon"><TrendingUp size={18} /></span>
             <h3>Категории продаж</h3>
             {store.categoryPerformance.summary && (
               <p>{store.categoryPerformance.summary.text}</p>
             )}
-            {categoryItems.map((item, index) => (
-              <small key={`category:${item.kind}:${item.title}:${index}`}>
-                {item.summary}
-              </small>
-            ))}
+            <InsightItemList
+              label="Драйверы роста"
+              items={store.categoryPerformance.growthDrivers}
+              tone="category"
+            />
+            <InsightItemList
+              label="Снижение"
+              items={store.categoryPerformance.declineDrivers}
+              tone="category"
+            />
+            <InsightItemList
+              label="Структура продаж"
+              items={store.categoryPerformance.mixInsights}
+              tone="category"
+            />
           </article>
         )}
         {store.additionalSalesPerformance && (
-          <article>
+          <article className="weekly-insight-column weekly-insight-column--attach">
             <span className="weekly-insight-section-icon"><Target size={18} /></span>
             <h3>Дополнительные продажи</h3>
             {store.additionalSalesPerformance.summary && (
               <p>{store.additionalSalesPerformance.summary.text}</p>
             )}
-            {additionalItems.map((item, index) => (
-              <small key={`additional:${item.kind}:${item.title}:${index}`}>
-                {item.summary}
-              </small>
-            ))}
+            <InsightItemList
+              label="Выручка"
+              items={store.additionalSalesPerformance.revenueInsights}
+            />
+            <InsightItemList
+              label="Attach-rate · доля чеков с допродажей"
+              items={store.additionalSalesPerformance.attachRateInsights}
+              tone="attach"
+            />
+            <InsightItemList
+              label="Возможности роста"
+              items={store.additionalSalesPerformance.opportunities}
+            />
           </article>
         )}
-        <article>
+        <article className="weekly-insight-column weekly-insight-column--team">
           <span className="weekly-insight-section-icon"><Users size={18} /></span>
           <h3>Команда</h3>
           <p>{insight.content.teamInsights.summary.text}</p>
-          {insight.content.teamInsights.highlights.map((item, index) => (
-            <small key={`team:${item.kind}:${item.title}:${index}`}>
-              {item.summary}
-            </small>
-          ))}
+          <InsightItemList
+            label="Главное по команде"
+            items={insight.content.teamInsights.highlights}
+            tone="team"
+          />
         </article>
       </div>
 
       {store.recommendedActions.length > 0 && (
         <section className="weekly-insight-focus weekly-insight-focus--list">
-          <Lightbulb size={21} />
-          <div>
+          <div className="weekly-insight-focus-heading">
+            <Lightbulb size={21} />
             <span>Действия на неделю</span>
-            <ul>{store.recommendedActions.map((action, index) => (
-              <li key={`${action.type}:${action.title}:${index}`}>
-                <strong>{action.title}</strong>
-                <p>{action.summary}</p>
-              </li>
-            ))}</ul>
           </div>
+          <ul>{store.recommendedActions.map((action, index) => (
+            <li key={`${action.type}:${action.title}:${index}`}>
+              <strong>{action.title}</strong>
+              <p>{action.summary}</p>
+            </li>
+          ))}</ul>
         </section>
       )}
 

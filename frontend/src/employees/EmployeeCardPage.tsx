@@ -93,11 +93,62 @@ export function EmployeeCardPage() {
           </section>
 
           <section className="panel employee-attach-panel">
-            <div className="panel__heading"><div><p className="eyebrow">Допродажи</p><h2>Показатели допродаж сотрудника</h2></div><span>Сравнение с фактической базой магазина</span></div>
-            {employee.attachRates.length === 0 ? <div className="panel-empty"><Link2 size={24} /><strong>Нет данных о допродажах</strong><p>Для выбранного периода не сформированы релевантные базы устройств.</p></div> : <div className="employee-attach-list">{employee.attachRates.map((rate) => {
-              const dynamics = card.dynamics.attachRateChanges.find((item) => item.metricCode === rate.metricCode);
-              return <article key={rate.metricCode}><div><strong>{attachRateLabels[rate.metricCode] ?? "Другой показатель"}</strong><small>{formatNumber(rate.numeratorReceiptCount)} из {formatNumber(rate.denominatorReceiptCount)} релевантных чеков</small></div><div><span><small>Сотрудник</small><strong>{formatPercent(rate.ratePercent)}</strong></span><span><small>Магазин</small><strong>{formatPercent(rate.storeRatePercent)}</strong></span><span><small>Динамика</small><strong className={`text-${changeTone(dynamics?.change ?? null)}`}>{signedNumber(dynamics?.change ?? null, " п.п.")}</strong></span></div><i className={`status status--${rate.includedInScore ? "success" : "warning"}`}>{rate.includedInScore ? `В балле, ${formatNumber(rate.score)}` : "Не входит в балл"}</i></article>;
-            })}</div>}
+            <div className="panel__heading">
+              <div>
+                <p className="eyebrow">Attach-rate</p>
+                <h2>Показатели допродаж сотрудника</h2>
+              </div>
+              <span>Сотрудник · магазин · изменение к прошлому периоду</span>
+            </div>
+            {employee.attachRates.length === 0 ? (
+              <div className="panel-empty">
+                <Link2 size={24} />
+                <strong>Нет данных о допродажах</strong>
+                <p>Для выбранного периода не сформированы релевантные базы устройств.</p>
+              </div>
+            ) : (
+              <div className="employee-attach-list">
+                {employee.attachRates.map((rate) => {
+                  const dynamics = card.dynamics.attachRateChanges.find(
+                    (item) => item.metricCode === rate.metricCode
+                  );
+                  return (
+                    <article key={rate.metricCode}>
+                      <div className="employee-attach-name">
+                        <strong>
+                          {attachRateLabels[rate.metricCode] ?? "Другой показатель"}
+                        </strong>
+                        <small>
+                          {formatNumber(rate.numeratorReceiptCount)} из{" "}
+                          {formatNumber(rate.denominatorReceiptCount)} релевантных чеков
+                        </small>
+                      </div>
+                      <dl className="employee-attach-metrics">
+                        <div>
+                          <dt>Сотрудник</dt>
+                          <dd>{formatPercent(rate.ratePercent)}</dd>
+                        </div>
+                        <div>
+                          <dt>Магазин</dt>
+                          <dd>{formatPercent(rate.storeRatePercent)}</dd>
+                        </div>
+                        <div>
+                          <dt>Динамика</dt>
+                          <dd className={`text-${changeTone(dynamics?.change ?? null)}`}>
+                            {signedNumber(dynamics?.change ?? null, " п.п.")}
+                          </dd>
+                        </div>
+                      </dl>
+                      <i className={`employee-attach-status status status--${rate.includedInScore ? "success" : "warning"}`}>
+                        {rate.includedInScore
+                          ? `В балле, ${formatNumber(rate.score)}`
+                          : "Не входит в балл"}
+                      </i>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </section>
         </div>
 
