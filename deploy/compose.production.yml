@@ -19,7 +19,7 @@ x-hardened: &hardened
 x-backend-environment: &backend-environment
   SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
   SPRING_CONFIG_IMPORT: configtree:/run/secrets/
-  SPRING_DATASOURCE_URL: jdbc:postgresql://${DB_CERT_HOST}:${DB_PORT:-5432}/${DB_NAME}?sslmode=verify-full&sslrootcert=/run/pki/postgresql-ca.crt
+  SPRING_DATASOURCE_URL: jdbc:postgresql://${DB_CERT_HOST}:${DB_PORT:-5432}/${DB_NAME}?sslmode=verify-full&sslrootcert=/run/pki/postgresql-ca.crt&currentSchema=app
   SPRING_FLYWAY_DEFAULT_SCHEMA: app
   SPRING_FLYWAY_SCHEMAS: app
   SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA: app
