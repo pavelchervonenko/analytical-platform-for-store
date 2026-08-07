@@ -51,6 +51,9 @@ fi
 printf 'Applying database migrations\n'
 compose --profile tools run --rm migrate
 
+printf 'Reasserting least-privilege database ACLs\n'
+"${DEPLOY_ROOT}/bin/repair-production-database-acls.sh"
+
 printf 'Starting private application services\n'
 compose up -d --remove-orphans backend-api backend-worker
 

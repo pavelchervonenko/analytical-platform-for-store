@@ -45,20 +45,13 @@ base_name="store-analytics-${timestamp}"
 dump_file="${work_dir}/${base_name}.dump"
 encrypted_file="${dump_file}.gpg"
 manifest_file="${encrypted_file}.manifest"
-pgpass_file="${work_dir}/pgpass"
 export GNUPGHOME="${work_dir}/gnupg"
 mkdir -m 0700 "${GNUPGHOME}"
 
-password="$(<"${POSTGRES_BACKUP_PASSWORD_FILE}")"
-printf '%s:%s:%s:%s:%s\n' \
-  "${DB_CERT_HOST}" "${DB_PORT}" "${DB_NAME}" "${DB_BACKUP_USER}" "${password}" \
-  >"${pgpass_file}"
-unset password
-chmod 0600 "${pgpass_file}"
 
 connection="host=${DB_CERT_HOST} hostaddr=${DB_HOST_ADDRESS} port=${DB_PORT} dbname=${DB_NAME} user=${DB_BACKUP_USER} sslmode=verify-full sslrootcert=${POSTGRES_CA_FILE} application_name=logical-backup"
 
-PGPASSFILE="${pgpass_file}" pg_dump \
+PGPASSWORD="$(<"${POSTGRES_BACKUP_PASSWORD_FILE}")" pg_dump \
   --dbname="${connection}" \
   --format=custom \
   --compress=9 \
@@ -75,7 +68,7 @@ gpg --batch --yes --quiet \
   --pinentry-mode loopback \
   --passphrase-file "${BACKUP_ENCRYPTION_PASSPHRASE_FILE}" \
   --output "${encrypted_file}" "${dump_file}"
-rm -f -- "${dump_file}" "${pgpass_file}"
+rm -f -- "${dump_file}"
 
 checksum="$(sha256sum "${encrypted_file}" | awk '{print $1}')"
 size="$(stat -c '%s' "${encrypted_file}")"

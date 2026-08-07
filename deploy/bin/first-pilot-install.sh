@@ -105,6 +105,7 @@ sed -i \
   -e 's#^RELEASE_ID=.*#RELEASE_ID=v0.1.0-pilot.2#' \
   -e "s#^BACKEND_IMAGE_DIGEST=.*#BACKEND_IMAGE_DIGEST=${backend_image_id}#" \
   -e 's#^SKIP_IMAGE_PULL=.*#SKIP_IMAGE_PULL=true#' \
+  -e 's#^SYNC_SCHEDULE_ENABLED=.*#SYNC_SCHEDULE_ENABLED=true#' \
   -e 's#^BOOTSTRAP_ADMIN_EMAIL=.*#BOOTSTRAP_ADMIN_EMAIL=pavel.chervonenko.97@gmail.com#' \
   "${release_tmp}"
 install -o root -g root -m 0600 "${release_tmp}" "${RELEASE_ENV}"
