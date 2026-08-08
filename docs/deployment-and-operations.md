@@ -63,11 +63,16 @@ target and runbook.
 - Initial LLM acceptance cost through the first production diagnostics was RUB 38.0648 for ten
   provider calls. This is one-time commissioning activity, not the expected weekly steady-state
   cost.
-- Product classification at commissioning: 101 distinct sold products have no approved analytics
-  category. This represents 3.13% of sale-item rows (4.29% of revenue) for the primary store and
-  2.26% (3.24% of revenue) for the second store over 2026-07-01 through 2026-08-07. These items must
-  be reviewed, imported as an approved mapping and then reprocessed; the application deliberately
-  does not guess categories from product names.
+- Product classification remediation completed on 2026-08-08. The 101 sold products that were
+  previously `UNMAPPED` received effective-dated assignments under rule version
+  `pilot-unmapped-review-2026-08-08-v1`, effective from 2026-01-01 in the reporting time zone.
+  Thirty-five assignments preserve the earlier customer-approved supplement exactly; the remaining
+  assignments use the same explicit device, condition, accessory and service rules. A controlled
+  commissioning transaction then re-normalized 129 already persisted sale/return rows without
+  downloading the source period again. Post-change verification for 2026-07-01 through 2026-08-08
+  found zero `UNMAPPED` rows and zero open `UNMAPPED_PRODUCT` issues in both stores. Future source
+  synchronization remains the authoritative reconciliation path; the application still does not
+  guess categories during normal synchronization.
 - Employee interpretation membership is captured immutably when a weekly snapshot is created.
   Changing `participates_in_ranking` does not mutate an existing snapshot; a newer successful
   source sync inside the revision window creates a new snapshot revision and a new LLM generation.
