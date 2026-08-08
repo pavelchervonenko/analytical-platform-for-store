@@ -216,6 +216,43 @@ class SyncJobIntegrationTest {
     }
 
     @Test
+    void retriesScheduledWindowAfterRecoverableTerminalFailure() {
+        SyncJobView first = jobService.createScheduledIncremental().orElseThrow();
+        SyncJobClaim claim = coordinator.claimNext(WORKER).orElseThrow();
+
+        coordinator.retryOrFail(
+                claim.jobId(),
+                WORKER,
+                "Synchronization phase STORES failed: LIVESKLAD_RATE_LIMIT",
+                false,
+                Duration.ZERO
+        );
+
+        assertThat(jobService.get(first.id()).status()).isEqualTo(SyncJobStatus.FAILED);
+        assertThat(jobService.createScheduledIncremental())
+                .get()
+                .extracting(SyncJobView::id)
+                .isNotEqualTo(first.id());
+    }
+
+    @Test
+    void doesNotRetryScheduledWindowAfterPermanentFailure() {
+        SyncJobView first = jobService.createScheduledIncremental().orElseThrow();
+        SyncJobClaim claim = coordinator.claimNext(WORKER).orElseThrow();
+
+        coordinator.retryOrFail(
+                claim.jobId(),
+                WORKER,
+                "Synchronization phase STORES failed: LIVESKLAD_PAYLOAD_SCHEMA",
+                false,
+                Duration.ZERO
+        );
+
+        assertThat(jobService.get(first.id()).status()).isEqualTo(SyncJobStatus.FAILED);
+        assertThat(jobService.createScheduledIncremental()).isEmpty();
+    }
+
+    @Test
     void rejectsSecondActiveJobAndReleasesConstraintAfterCancellation() {
         SyncJobView first = createOneDayJob();
 

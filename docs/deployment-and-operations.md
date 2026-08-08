@@ -546,6 +546,13 @@ Rules:
 - report generation starts only after the required synchronization succeeds;
 - the UI exposes data freshness and degraded external-source status.
 
+For the pilot deployment, the worker evaluates the same completed-day window at 03:15, 04:15 and
+05:15 in `Europe/Kaliningrad`. The repeated checks are intentional recovery points, not three data
+loads: a successful or non-recoverably failed window is not recreated, an active synchronization
+defers the check, and only a terminal recoverable source/transport/database failure may create a
+new attempt for the same window. This prevents a worker restart at one exact cron instant from
+leaving the previous business day absent until the following night.
+
 The initial schedule must be agreed with the customer as a data-freshness SLA. A nightly
 reconciliation is retained even if more frequent incremental synchronization is introduced.
 

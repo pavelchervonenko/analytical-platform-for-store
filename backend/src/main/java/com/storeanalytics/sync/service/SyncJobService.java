@@ -44,6 +44,15 @@ public class SyncJobService {
             SyncJobStatus.RUNNING,
             SyncJobStatus.WAITING_RETRY
     );
+    private static final Set<String> RECOVERABLE_SCHEDULED_FAILURES = Set.of(
+            "LIVESKLAD_RATE_LIMIT",
+            "LIVESKLAD_TRANSPORT",
+            "LIVESKLAD_HTTP_500",
+            "LIVESKLAD_HTTP_502",
+            "LIVESKLAD_HTTP_503",
+            "LIVESKLAD_HTTP_504",
+            "TRANSIENT_DATABASE"
+    );
 
     private final SyncJobRepository jobRepository;
     private final IntegrationConnectionRepository connectionRepository;
@@ -120,14 +129,30 @@ public class SyncJobService {
             );
             return Optional.empty();
         }
-        if (jobRepository.existsByConnectionIdAndJobTypeAndPeriodStartAndPeriodEnd(
-                connection.getId(),
-                SyncJobType.INCREMENTAL,
-                start,
-                end
-        ) || hasActiveJob(connection)) {
+        if (hasActiveJob(connection)) {
+            LOGGER.info(
+                    "Deferred scheduled synchronization for connection {} because another "
+                            + "synchronization job is active",
+                    connection.getConnectionKey()
+            );
             return Optional.empty();
         }
+        Optional<SyncJob> previous = jobRepository
+                .findFirstByConnectionIdAndJobTypeAndPeriodStartAndPeriodEndOrderByCreatedAtDesc(
+                        connection.getId(),
+                        SyncJobType.INCREMENTAL,
+                        start,
+                        end
+                );
+        if (previous.isPresent() && !isRecoverableScheduledFailure(previous.get())) {
+            return Optional.empty();
+        }
+        previous.ifPresent(job -> LOGGER.warn(
+                "Retrying scheduled synchronization {} for connection {} after {}",
+                job.getId(),
+                connection.getConnectionKey(),
+                job.getErrorSummary()
+        ));
         SyncJobView created = create(
                 connection,
                 null,
@@ -144,6 +169,14 @@ public class SyncJobService {
                 jobSummary(created)
         );
         return Optional.of(created);
+    }
+
+    private boolean isRecoverableScheduledFailure(SyncJob job) {
+        if (job.getStatus() != SyncJobStatus.FAILED || job.getErrorSummary() == null) {
+            return false;
+        }
+        return RECOVERABLE_SCHEDULED_FAILURES.stream()
+                .anyMatch(job.getErrorSummary()::contains);
     }
 
     @Transactional(readOnly = true)

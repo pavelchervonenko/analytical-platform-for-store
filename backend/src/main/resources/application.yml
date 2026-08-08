@@ -302,7 +302,7 @@ app:
     worker-enabled: ${SYNC_WORKER_ENABLED:true}
     worker-delay: ${SYNC_WORKER_DELAY:5s}
     schedule-enabled: ${SYNC_SCHEDULE_ENABLED:false}
-    schedule-cron: ${SYNC_SCHEDULE_CRON:0 15 3 * * *}
+    schedule-cron: ${SYNC_SCHEDULE_CRON:0 15 3-5 * * *}
     schedule-zone: ${SYNC_SCHEDULE_ZONE:Europe/Kaliningrad}
     window-size: ${SYNC_WINDOW_SIZE:1d}
     max-attempts: ${SYNC_MAX_ATTEMPTS:5}

@@ -52,7 +52,7 @@ public interface SyncJobRepository extends JpaRepository<SyncJob, UUID> {
             Collection<SyncJobStatus> statuses
     );
 
-    boolean existsByConnectionIdAndJobTypeAndPeriodStartAndPeriodEnd(
+    Optional<SyncJob> findFirstByConnectionIdAndJobTypeAndPeriodStartAndPeriodEndOrderByCreatedAtDesc(
             UUID connectionId,
             SyncJobType jobType,
             Instant periodStart,

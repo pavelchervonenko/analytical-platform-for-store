@@ -29,7 +29,7 @@ public class ScheduledSyncJobEnqueuer {
     }
 
     @Scheduled(
-            cron = "${app.sync.schedule-cron:0 15 3 * * *}",
+            cron = "${app.sync.schedule-cron:0 15 3-5 * * *}",
             zone = "${app.sync.schedule-zone:Europe/Kaliningrad}",
             scheduler = BackgroundSchedulingConfiguration.SYNC_CONTROL_SCHEDULER
     )

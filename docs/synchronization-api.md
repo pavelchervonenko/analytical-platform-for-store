@@ -81,13 +81,17 @@ deployment:
 
 ```text
 SYNC_SCHEDULE_ENABLED=false
-SYNC_SCHEDULE_CRON="0 15 3 * * *"
+SYNC_SCHEDULE_CRON="0 15 3-5 * * *"
 SYNC_SCHEDULE_ZONE=Europe/Kaliningrad
 ```
 
-When scheduling is enabled, the application creates one incremental job at 03:15 and re-reads the
-last three completed calendar days. This rolling overlap captures late corrections without
-duplicating normalized facts.
+When scheduling is enabled, the worker checks the same incremental window at 03:15, 04:15 and
+05:15. The first successful check creates the job; later checks are idempotent no-ops. If the
+worker was restarting at 03:15, another synchronization job was active, or the first job ended
+with a recoverable LiveSklad/transport/database failure, a later check recreates the same window.
+Permanent payload or configuration failures are not retried by the scheduler and require operator
+intervention. Every created job re-reads the last three completed calendar days. This rolling
+overlap captures late corrections without duplicating normalized facts.
 
 ## Source request budget
 
