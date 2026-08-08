@@ -39,8 +39,11 @@ target and runbook.
 - Public origin: `https://store-analytics.net`.
 - Application host: Ubuntu 24.04 LTS in the Timeweb Saint Petersburg region, with a public edge
   address and a private VPC interface.
-- Release: `v0.1.0-pilot.4`; separate `backend-api`, `backend-worker` and `web` containers.
-  Flyway schema version 33, HTTPS, frontend, liveness and readiness smoke checks pass.
+- Release: `v0.1.0-pilot.7-4253e1d`; backend API/worker use
+  `store-analytics-backend:v0.1.0-pilot.7` and the web edge uses
+  `store-analytics-web:v0.1.0-pilot.6`. Separate `backend-api`, `backend-worker` and `web`
+  containers are healthy. Flyway schema version 33, HTTPS, frontend, liveness and readiness smoke
+  checks pass.
 - Database: managed PostgreSQL 16 over the private network and TLS `verify-full`; runtime,
   migration and backup roles are separate and the `app` schema ACLs are reasserted by each deploy.
 - Object storage: private Timeweb S3 bucket, versioning and Governance Object Lock enabled,
@@ -60,9 +63,25 @@ target and runbook.
   eligibility changes can produce an immutable revision.
 - Telegram: bot infrastructure exists, but customer delivery remains deferred until linking and
   webhook acceptance are completed.
-- Initial LLM acceptance cost through the first production diagnostics was RUB 38.0648 for ten
-  provider calls. This is one-time commissioning activity, not the expected weekly steady-state
-  cost.
+- LLM production acceptance ended at RUB 111.3248 for twenty-two provider calls, including the
+  earlier failed-contract diagnostics and controlled acceptance regenerations. This is one-time
+  commissioning activity, not the expected weekly steady-state cost. The final accepted primary
+  store generation required one provider call and no validation retry.
+- Both pilot stores expose a `READY`, `CURRENT` weekly interpretation for 2026-07-27 through
+  2026-08-02. Store and team projections are present for both. The primary store is published from
+  snapshot revision 2; the second store has its first successful publication.
+- The response validator removes only invalid optional team relationships and unsupported optional
+  risk items, then revalidates the complete response. A missing employee `WORKLOAD` summary is
+  restored deterministically only from that employee's backend-owned `WORKLOAD_STATUS` fact and an
+  available same-employee evidence reference. Missing evidence remains fail-closed; headlines,
+  insights, actions and other substantive content are never synthesized by this fallback.
+- The weekly interpretation UI uses a smaller responsive hero, deduplicated insight/action/data
+  limitation cards, visible employee sufficiency badges and explicit explanations for unavailable
+  team or employee analysis.
+- Detailed employee interpretation remains data-gated. The primary store currently has five
+  `LIMITED` and one `INSUFFICIENT` employee; the second store has three `INSUFFICIENT` employees.
+  Managers must enter and confirm the real shifts for the affected week to improve coverage. Sales
+  are never treated as inferred shifts, and no employee facts are fabricated to unlock AI output.
 - Product classification remediation completed on 2026-08-08. The 101 sold products that were
   previously `UNMAPPED` received effective-dated assignments under rule version
   `pilot-unmapped-review-2026-08-08-v1`, effective from 2026-01-01 in the reporting time zone.
@@ -77,9 +96,9 @@ target and runbook.
   Changing `participates_in_ranking` does not mutate an existing snapshot; a newer successful
   source sync inside the revision window creates a new snapshot revision and a new LLM generation.
 
-Do not declare pilot acceptance complete until both stores expose a `READY` current weekly
-interpretation, the revised snapshots contain the intended employee membership, backup/restore
-evidence is current, and temporary deployment elevation has been removed.
+The weekly LLM release acceptance is complete. Overall pilot acceptance still requires keeping
+backup/restore evidence current and repeating the normal security, synchronization and recovery
+checks for every subsequent release.
 
 ## 1. Goals and constraints
 
