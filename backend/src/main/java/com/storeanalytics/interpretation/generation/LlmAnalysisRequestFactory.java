@@ -19,7 +19,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class LlmAnalysisRequestFactory {
 
     public static final String PROVIDER_CODE = "YANDEX";
-    public static final String PROVIDER_CONFIG_VERSION = "yandex-foundation-models-v1";
+    public static final String PROVIDER_CONFIG_VERSION = "yandex-foundation-models-v2";
     public static final String ANALYSIS_POLICY_VERSION = "weekly-analysis-v1";
     public static final String BUDGET_POLICY_VERSION = "weekly-budget-v1";
 

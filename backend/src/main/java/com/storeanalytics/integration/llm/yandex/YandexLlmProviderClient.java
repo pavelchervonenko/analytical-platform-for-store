@@ -292,7 +292,7 @@ public final class YandexLlmProviderClient implements LlmProviderClient {
                 "Versioned weekly retail analytics interpretation"
         );
         schemaDefinition.put("schema", schema);
-        schemaDefinition.put("strict", false);
+        schemaDefinition.put("strict", true);
 
         Map<String, Object> responseFormat = new LinkedHashMap<>();
         responseFormat.put("type", "json_schema");

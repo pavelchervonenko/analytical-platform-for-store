@@ -33,6 +33,15 @@ class WeeklyInterpretationV2SchemaContractTest {
         assertThat(validator.validate(resource(INSUFFICIENT_EXAMPLE))).isEmpty();
     }
 
+    @Test
+    void permitsStoreOnlyInterpretationWhenSnapshotHasNoEmployees()
+            throws IOException {
+        ObjectNode root = (ObjectNode) objectMapper.readTree(resource(READY_EXAMPLE));
+        root.putArray("employees");
+
+        assertThat(validator.validate(objectMapper.writeValueAsString(root))).isEmpty();
+    }
+
 
     @Test
     void mostImprovedRelationshipAcceptsRequiredNullCompetency() throws IOException {

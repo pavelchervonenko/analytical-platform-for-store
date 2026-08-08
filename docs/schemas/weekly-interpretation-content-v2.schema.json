@@ -16,7 +16,7 @@
     "employees": {
       "type": "array",
       "items": {"$ref": "#/$defs/employee"},
-      "minItems": 1,
+      "minItems": 0,
       "maxItems": 100,
       "uniqueItems": true
     },

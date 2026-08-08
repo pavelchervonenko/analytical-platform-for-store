@@ -104,7 +104,7 @@ class YandexLlmProviderClientTest {
         assertThat(payload.path("response_format").path("type").asText())
                 .isEqualTo("json_schema");
         assertThat(payload.path("response_format")
-                .path("json_schema").path("strict").asBoolean()).isFalse();
+                .path("json_schema").path("strict").asBoolean()).isTrue();
         assertThat(payload.path("response_format")
                 .path("json_schema").path("schema").path("type").asText())
                 .isEqualTo("object");
