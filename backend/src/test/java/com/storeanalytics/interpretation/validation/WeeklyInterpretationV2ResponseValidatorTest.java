@@ -96,7 +96,7 @@ class WeeklyInterpretationV2ResponseValidatorTest {
     }
 
     @Test
-    void rejectsMissingMandatoryEmployeeSummary() {
+    void restoresMissingWorkloadSummaryFromBackendOwnedSufficiency() throws JacksonException {
         ArrayNode summaries = (ArrayNode) validContent.path("summaryBlocks");
         for (int index = summaries.size() - 1; index >= 0; index--) {
             JsonNode summary = summaries.get(index);
@@ -105,6 +105,62 @@ class WeeklyInterpretationV2ResponseValidatorTest {
                 summaries.remove(index);
             }
         }
+
+        LlmResponseValidationResult result = validator.validate(
+                input,
+                json(validContent)
+        );
+
+        assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+        JsonNode normalized = objectMapper.readTree(result.canonicalContent());
+        JsonNode restored = null;
+        for (JsonNode summary : normalized.path("summaryBlocks")) {
+            if ("E01".equals(summary.path("employeeRef").asText())
+                    && "WORKLOAD".equals(summary.path("section").asText())) {
+                restored = summary;
+            }
+        }
+        assertThat(restored).isNotNull();
+        assertThat(restored.path("text").asText()).isEqualTo(
+                "Рабочая нагрузка достаточна для анализа доступных направлений."
+        );
+        assertThat(restored.path("evidenceRefs").get(0).asText())
+                .isEqualTo("EMP:E01.WORKLOAD.STATUS");
+    }
+
+    @Test
+    void rejectsMissingWorkloadSummaryWithoutBackendOwnedWorkloadFact() {
+        ArrayNode summaries = (ArrayNode) validContent.path("summaryBlocks");
+        for (int index = summaries.size() - 1; index >= 0; index--) {
+            JsonNode summary = summaries.get(index);
+            if ("E01".equals(summary.path("employeeRef").asText())
+                    && "WORKLOAD".equals(summary.path("section").asText())) {
+                summaries.remove(index);
+            }
+        }
+        Facts facts = input.facts();
+        List<WeeklyInterpretationInput.EmployeeFacts> employees = facts.employees()
+                .stream()
+                .map(employee -> "E01".equals(employee.employeeRef())
+                        ? new WeeklyInterpretationInput.EmployeeFacts(
+                                employee.employeeRef(),
+                                employee.analysisStatus(),
+                                employee.availableSections(),
+                                List.of()
+                        )
+                        : employee)
+                .toList();
+        input = new WeeklyInterpretationInput(
+                input.contractVersion(),
+                input.snapshot(),
+                input.manifest(),
+                new Facts(
+                        facts.store(),
+                        facts.team(),
+                        employees,
+                        facts.candidateSignals()
+                )
+        );
 
         LlmResponseValidationResult result = validator.validate(
                 input,
@@ -359,15 +415,27 @@ class WeeklyInterpretationV2ResponseValidatorTest {
                 new ArrayList<>();
         for (JsonNode employee : content.path("employees")) {
             String reference = employee.path("employeeRef").asText();
+            Sufficiency analysisStatus = Sufficiency.valueOf(
+                    employee.path("analysisStatus").asText()
+            );
             employeeRefs.add(reference);
             employeeFacts.add(new WeeklyInterpretationInput.EmployeeFacts(
                     reference,
-                    Sufficiency.valueOf(employee.path("analysisStatus").asText()),
+                    analysisStatus,
                     List.of(
                             "WORKLOAD", "RESULT", "RATING",
                             "CATEGORIES", "ATTACH"
                     ),
-                    List.of()
+                    List.of(new WeeklyInterpretationInput.Fact(
+                            "EMP:" + reference + ".WORKLOAD.STATUS",
+                            "WORKLOAD_STATUS",
+                            null,
+                            WeeklyInterpretationInput.Unit.STATUS,
+                            analysisStatus.name(),
+                            null,
+                            analysisStatus,
+                            WeeklyInterpretationInput.Materiality.CONTEXT
+                    ))
             ));
         }
         Set<String> evidenceRefs = new LinkedHashSet<>();

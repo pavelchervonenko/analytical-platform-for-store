@@ -82,6 +82,7 @@ public final class WeeklyInterpretationV2ResponseValidator
             normalizeLimitations(object, source);
             normalizeOptionalNulls(object);
             normalizeBroadActionTargets(object);
+            normalizeMissingWorkloadSummaries(object, source);
             body = objectMapper.writeValueAsString(object);
         } catch (JacksonException exception) {
             return invalidJson();
@@ -239,6 +240,68 @@ public final class WeeklyInterpretationV2ResponseValidator
                 targets.removeAll();
             }
         }
+    }
+
+    private void normalizeMissingWorkloadSummaries(
+            ObjectNode root,
+            WeeklyInterpretationInput source
+    ) {
+        if (!(root.path("summaryBlocks") instanceof ArrayNode summaries)) {
+            return;
+        }
+        Set<String> present = new HashSet<>();
+        for (JsonNode summary : summaries) {
+            if ("EMPLOYEE".equals(summary.path("scope").asText())
+                    && "WORKLOAD".equals(summary.path("section").asText())) {
+                present.add(summary.path("employeeRef").asText());
+            }
+        }
+        Map<String, EvidenceIndexEntry> evidence = new HashMap<>();
+        for (EvidenceIndexEntry entry : source.manifest().evidence()) {
+            evidence.put(entry.evidenceRef(), entry);
+        }
+        for (WeeklyInterpretationInput.EmployeeFacts employee
+                : source.facts().employees()) {
+            if (present.contains(employee.employeeRef())) {
+                continue;
+            }
+            String evidenceRef = employee.facts().stream()
+                    .filter(fact -> "WORKLOAD_STATUS".equals(fact.metricCode()))
+                    .map(WeeklyInterpretationInput.Fact::evidenceRef)
+                    .filter(reference -> {
+                        EvidenceIndexEntry entry = evidence.get(reference);
+                        return entry != null
+                                && entry.available()
+                                && entry.scope()
+                                == WeeklyInterpretationInput.Scope.EMPLOYEE
+                                && employee.employeeRef().equals(
+                                        entry.employeeRef()
+                                );
+                    })
+                    .findFirst()
+                    .orElse(null);
+            if (evidenceRef == null) {
+                continue;
+            }
+            ObjectNode summary = summaries.addObject();
+            summary.put("scope", "EMPLOYEE");
+            summary.put("employeeRef", employee.employeeRef());
+            summary.put("section", "WORKLOAD");
+            summary.putNull("categoryCode");
+            summary.put("text", workloadSummary(employee.analysisStatus()));
+            summary.putArray("evidenceRefs").add(evidenceRef);
+        }
+    }
+
+    private String workloadSummary(WeeklyInterpretationInput.Sufficiency status) {
+        return switch (status) {
+            case SUFFICIENT ->
+                    "Рабочая нагрузка достаточна для анализа доступных направлений.";
+            case LIMITED ->
+                    "Рабочая нагрузка позволяет только ограниченный разбор доступных направлений.";
+            case INSUFFICIENT ->
+                    "Наблюдений недостаточно для оценки результата сотрудника.";
+        };
     }
 
     private void normalizeLimitations(
