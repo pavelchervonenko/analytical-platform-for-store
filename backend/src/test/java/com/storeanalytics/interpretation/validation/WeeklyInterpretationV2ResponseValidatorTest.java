@@ -161,8 +161,7 @@ class WeeklyInterpretationV2ResponseValidatorTest {
                 .extracting(LlmValidationViolation::code)
                 .contains(
                         "INSUFFICIENT_SECTION_PRESENT",
-                        "INSUFFICIENT_INSIGHT_PRESENT",
-                        "INSUFFICIENT_RELATIONSHIP_PRESENT"
+                        "INSUFFICIENT_INSIGHT_PRESENT"
                 );
     }
 
@@ -262,7 +261,7 @@ class WeeklyInterpretationV2ResponseValidatorTest {
     }
 
     @Test
-    void rejectsMentorTargetOverlapAndUnconfirmedMentor() {
+    void removesRejectedOptionalTeamRelationship() throws Exception {
         ObjectNode relationship = (ObjectNode) validContent
                 .path("teamRelationships").get(0);
         relationship.put("type", "LEARNING_OPPORTUNITY");
@@ -273,14 +272,28 @@ class WeeklyInterpretationV2ResponseValidatorTest {
                 json(validContent)
         );
 
-        assertThat(result.outcome())
-                .isEqualTo(LlmValidationOutcome.SEMANTIC_INVALID);
-        assertThat(result.violations())
-                .extracting(LlmValidationViolation::code)
-                .contains(
-                        "MENTOR_TARGET_OVERLAP",
-                        "MENTOR_NOT_COMPETENCY_LEADER"
-                );
+        assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+        JsonNode canonical = objectMapper.readTree(result.canonicalContent());
+        assertThat(canonical.path("teamRelationships").isEmpty()).isTrue();
+    }
+
+    @Test
+    void removesUnsupportedOptionalRiskInsight() throws Exception {
+        ObjectNode insight = (ObjectNode) validContent.path("insights").get(0);
+        insight.put("kind", "RISK");
+        insight.put("title", "Риск снижения выручки");
+        ArrayNode evidence = (ArrayNode) insight.path("evidenceRefs");
+        evidence.removeAll();
+        evidence.add("STORE.MARGIN_PERCENT.DELTA");
+
+        LlmResponseValidationResult result = validator.validate(
+                input,
+                json(validContent)
+        );
+
+        assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+        JsonNode canonical = objectMapper.readTree(result.canonicalContent());
+        assertThat(canonical.path("insights").size()).isEqualTo(1);
     }
 
     @Test

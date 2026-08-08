@@ -107,14 +107,11 @@ public final class WeeklyInterpretationV2ResponseValidator
             );
         }
 
-        ValidationContext context = new ValidationContext(source);
-        validateEmployees(root, context);
-        validateSummaryBlocks(root.path("summaryBlocks"), context);
-        validateInsights(root.path("insights"), context);
-        validateActions(root.path("actions"), context);
-        validateTeamRelationships(root.path("teamRelationships"), context);
-        validateNarrative(root, "$", context);
-        validateRiskEvidenceDimensions(root.path("insights"), context);
+        ValidationContext context;
+        do {
+            context = validateSemantics(root, source);
+        } while (!context.violations().isEmpty()
+                && normalizeRejectedOptionalItems(root, context.violations()));
         if (!context.violations().isEmpty()) {
             return LlmResponseValidationResult.invalid(
                     LlmValidationOutcome.SEMANTIC_INVALID,
@@ -128,6 +125,80 @@ public final class WeeklyInterpretationV2ResponseValidator
         } catch (JacksonException exception) {
             return invalidJson();
         }
+    }
+
+    private ValidationContext validateSemantics(
+            JsonNode root,
+            WeeklyInterpretationInput source
+    ) {
+        ValidationContext context = new ValidationContext(source);
+        validateEmployees(root, context);
+        validateSummaryBlocks(root.path("summaryBlocks"), context);
+        validateInsights(root.path("insights"), context);
+        validateActions(root.path("actions"), context);
+        validateTeamRelationships(root.path("teamRelationships"), context);
+        validateNarrative(root, "$", context);
+        validateRiskEvidenceDimensions(root.path("insights"), context);
+        return context;
+    }
+
+    private boolean normalizeRejectedOptionalItems(
+            JsonNode root,
+            List<LlmValidationViolation> violations
+    ) {
+        TreeSet<Integer> relationshipIndexes = new TreeSet<>();
+        TreeSet<Integer> unsupportedRiskIndexes = new TreeSet<>();
+        for (LlmValidationViolation violation : violations) {
+            Integer relationshipIndex = arrayIndex(
+                    violation.path(), "$.teamRelationships["
+            );
+            if (relationshipIndex != null) {
+                relationshipIndexes.add(relationshipIndex);
+            }
+            if ("UNSUPPORTED_RISK_DIMENSION".equals(violation.code())) {
+                Integer insightIndex = arrayIndex(violation.path(), "$.insights[");
+                if (insightIndex != null) {
+                    unsupportedRiskIndexes.add(insightIndex);
+                }
+            }
+        }
+        boolean relationshipsRemoved = removeIndexes(
+                root.path("teamRelationships"), relationshipIndexes
+        );
+        boolean risksRemoved = removeIndexes(
+                root.path("insights"), unsupportedRiskIndexes
+        );
+        return relationshipsRemoved || risksRemoved;
+    }
+
+    private Integer arrayIndex(String path, String prefix) {
+        if (path == null || !path.startsWith(prefix)) {
+            return null;
+        }
+        int end = path.indexOf(']', prefix.length());
+        if (end < 0) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(path.substring(prefix.length(), end));
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private boolean removeIndexes(JsonNode value, TreeSet<Integer> indexes) {
+        if (!(value instanceof ArrayNode array)) {
+            return false;
+        }
+        boolean removed = false;
+        while (!indexes.isEmpty()) {
+            int index = indexes.pollLast();
+            if (index >= 0 && index < array.size()) {
+                array.remove(index);
+                removed = true;
+            }
+        }
+        return removed;
     }
 
     private void normalizeOptionalNulls(ObjectNode root) {

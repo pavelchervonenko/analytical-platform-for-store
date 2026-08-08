@@ -36,6 +36,16 @@ export function analysisStatusTone(status: string): InsightTone {
   return status === "SUFFICIENT" ? "positive" : status === "INSUFFICIENT" ? "warning" : "neutral";
 }
 
+export function employeeAnalysisHelp(status: string): string {
+  if (status === "INSUFFICIENT") {
+    return "Недостаточно подтверждённых смен или покрытия рейтинговых метрик за неделю. Продажи учтены в показателях магазина, но персональные выводы без этой основы были бы ненадёжными.";
+  }
+  if (status === "LIMITED") {
+    return "Разбор построен по доступным данным, но отдельные выводы имеют пониженную уверенность.";
+  }
+  return "Данных достаточно для персонального разбора.";
+}
+
 export function uniqueNarratives<T>(
   items: readonly T[],
   text: (item: T) => string

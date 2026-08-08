@@ -3,6 +3,7 @@ import {
   actionHorizonLabel,
   actionTypeLabel,
   analysisStatusLabel,
+  employeeAnalysisHelp,
   limitationSummary,
   uniqueNarratives
 } from "./presentation";
@@ -27,5 +28,12 @@ describe("weekly insight presentation", () => {
       .toBe("Части данных пока недостаточно для уверенного вывода.");
     expect(limitationSummary({ summary: "Нет смен за один день." }))
       .toBe("Нет смен за один день.");
+  });
+
+  it("explains why an insufficient employee cannot receive a detailed analysis", () => {
+    expect(employeeAnalysisHelp("INSUFFICIENT"))
+      .toContain("подтверждённых смен");
+    expect(employeeAnalysisHelp("LIMITED"))
+      .toContain("пониженную уверенность");
   });
 });

@@ -19,6 +19,15 @@ import type {
 } from "../api/weeklyInsightContract";
 import { formatDate } from "../shared/date";
 import { PanelSkeleton, QueryError } from "../shared/QueryState";
+import {
+  actionHorizonLabel,
+  actionTypeLabel,
+  analysisStatusLabel,
+  analysisStatusTone,
+  employeeAnalysisHelp,
+  limitationSummary,
+  uniqueNarratives
+} from "./presentation";
 import "./weekly-insight.css";
 
 function refetchInterval(insight: WeeklyInsight | undefined): number | false {
@@ -84,11 +93,15 @@ function InsightItemList({
   items: InsightListItem[];
   tone?: "neutral" | "category" | "attach" | "team";
 }) {
-  if (items.length === 0) return null;
+  const uniqueItems = uniqueNarratives(
+    items,
+    (item) => `${item.title}\n${item.summary}`
+  );
+  if (uniqueItems.length === 0) return null;
   return (
     <div className={`weekly-insight-item-group weekly-insight-item-group--${tone}`}>
       <span>{label}</span>
-      {items.map((item, index) => (
+      {uniqueItems.map((item, index) => (
         <div key={`${item.kind}:${item.title}:${index}`}>
           <strong>{item.title}</strong>
           <small>{item.summary}</small>
@@ -100,6 +113,12 @@ function InsightItemList({
 
 function EmployeeInsight({ employee }: { employee: WeeklyInsightEmployee }) {
   const insight = employee.insight;
+  const status = employee.analysisStatus || insight.analysisStatus;
+  const tone = analysisStatusTone(status);
+  const limitations = uniqueNarratives(
+    insight.dataLimitations.map(limitationSummary),
+    (item) => item
+  );
 
   return (
     <details className="weekly-employee-insight">
@@ -110,9 +129,21 @@ function EmployeeInsight({ employee }: { employee: WeeklyInsightEmployee }) {
         <span>
           <strong>{employee.displayName}</strong>
           <small>{insight.headline.text}</small>
+          <em className={`weekly-employee-insight__status weekly-employee-insight__status--${tone}`}>
+            {analysisStatusLabel(status)}
+          </em>
         </span>
       </summary>
       <div className="weekly-employee-insight__body">
+        {status === "INSUFFICIENT" && (
+          <div className="weekly-employee-insight__notice">
+            <TriangleAlert size={17} />
+            <div>
+              <strong>Почему подробного разбора пока нет</strong>
+              <p>{employeeAnalysisHelp(status)}</p>
+            </div>
+          </div>
+        )}
         {insight.workloadContext && <p>{insight.workloadContext.text}</p>}
         {insight.performanceSummary && <p>{insight.performanceSummary.text}</p>}
         {insight.dynamicsSummary && <p>{insight.dynamicsSummary.text}</p>}
@@ -172,19 +203,24 @@ function EmployeeInsight({ employee }: { employee: WeeklyInsightEmployee }) {
         {insight.recommendedActions.length > 0 && (
           <div className="weekly-insight-actions">
             <strong>Возможные действия</strong>
-            <ul>{insight.recommendedActions.map((action) => (
-              <li key={`${action.type}:${action.title}`}>{action.summary}</li>
+            <ul>{uniqueNarratives(
+              insight.recommendedActions,
+              (action) => `${action.title}\n${action.summary}`
+            ).map((action) => (
+              <li key={`${action.type}:${action.title}`}>
+                <span>{actionTypeLabel(action.type)} · {actionHorizonLabel(action.horizon)}</span>
+                <strong>{action.title}</strong>
+                <p>{action.summary}</p>
+              </li>
             ))}</ul>
           </div>
         )}
-        {insight.dataLimitations.length > 0 && (
+        {limitations.length > 0 && (
           <div className="weekly-employee-limitations">
             <strong>Ограничения данных</strong>
-            {insight.dataLimitations.map((limitation, index) => (
-              <p key={`${employee.employeeId}:limitation:${index}`}>
-                {"summary" in Object(limitation)
-                  ? String((limitation as { summary: unknown }).summary)
-                  : "Часть данных недоступна для уверенного вывода."}
+            {limitations.map((limitation) => (
+              <p key={`${employee.employeeId}:limitation:${limitation}`}>
+                {limitation}
               </p>
             ))}
           </div>
@@ -243,6 +279,14 @@ function ReadyInsight({ insight }: { insight: WeeklyInsight & { content: NonNull
   const hasSummaries = store.resultSummary
     || store.dynamicsSummary
     || store.planOutlook;
+  const teamHasDetails = insight.content.teamInsights.highlights.length > 0
+    || insight.content.teamInsights.competencyLeaders.length > 0
+    || insight.content.teamInsights.mostImproved.length > 0
+    || insight.content.teamInsights.learningOpportunities.length > 0;
+  const limitations = uniqueNarratives(
+    insight.content.dataLimitations,
+    (item) => item.summary
+  );
 
   return (
     <>
@@ -326,6 +370,12 @@ function ReadyInsight({ insight }: { insight: WeeklyInsight & { content: NonNull
             items={insight.content.teamInsights.highlights}
             tone="team"
           />
+          {!teamHasDetails && (
+            <div className="weekly-insight-team-note">
+              <Users size={16} />
+              <span>Сравнительные выводы появятся, когда минимум у трёх сотрудников будет достаточно подтверждённых данных.</span>
+            </div>
+          )}
         </article>
       </div>
 
@@ -335,8 +385,12 @@ function ReadyInsight({ insight }: { insight: WeeklyInsight & { content: NonNull
             <Lightbulb size={21} />
             <span>Действия на неделю</span>
           </div>
-          <ul>{store.recommendedActions.map((action, index) => (
+          <ul>{uniqueNarratives(
+            store.recommendedActions,
+            (action) => `${action.title}\n${action.summary}`
+          ).map((action, index) => (
             <li key={`${action.type}:${action.title}:${index}`}>
+              <span>{actionTypeLabel(action.type)} · {actionHorizonLabel(action.horizon)}</span>
               <strong>{action.title}</strong>
               <p>{action.summary}</p>
             </li>
@@ -358,11 +412,11 @@ function ReadyInsight({ insight }: { insight: WeeklyInsight & { content: NonNull
         </section>
       )}
 
-      {insight.content.dataLimitations.length > 0 && (
+      {limitations.length > 0 && (
         <section className="weekly-insight-limitations">
           <TriangleAlert size={18} />
-          <div><strong>Ограничения данных</strong>{insight.content.dataLimitations.map((item, index) => (
-            <p key={`${item.code}:${index}`}>{item.summary}</p>
+          <div><strong>Ограничения данных</strong>{limitations.map((item) => (
+            <p key={`${item.code}:${item.scope}:${item.employeeRef ?? "store"}`}>{item.summary}</p>
           ))}</div>
         </section>
       )}
