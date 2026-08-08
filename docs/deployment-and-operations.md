@@ -31,6 +31,51 @@ Related documents:
 - [synchronization-api.md](synchronization-api.md) — durable LiveSklad synchronization jobs;
 - [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) — current project state and delivery context.
 
+## Current pilot record (2026-08-08)
+
+This section records the deployed state. The remainder of the document remains the normative
+target and runbook.
+
+- Public origin: `https://store-analytics.net`.
+- Application host: Ubuntu 24.04 LTS in the Timeweb Saint Petersburg region, with a public edge
+  address and a private VPC interface.
+- Release: `v0.1.0-pilot.4`; separate `backend-api`, `backend-worker` and `web` containers.
+  Flyway schema version 33, HTTPS, frontend, liveness and readiness smoke checks pass.
+- Database: managed PostgreSQL 16 over the private network and TLS `verify-full`; runtime,
+  migration and backup roles are separate and the `app` schema ACLs are reasserted by each deploy.
+- Object storage: private Timeweb S3 bucket, versioning and Governance Object Lock enabled,
+  100 GB account-side safety limit, dedicated backup writer credentials. The encrypted nightly
+  logical dump is enabled and its first upload was verified; provider physical database backup is
+  enabled daily with one retained copy.
+- Host access: SSH public keys only; root login and password authentication are disabled. UFW allows
+  SSH, HTTP/HTTPS and Timeweb monitoring only. The provider Zabbix listener remains restricted to
+  provider monitoring addresses.
+- Data scope: LiveSklad backfill starts at 2026-07-01 and incremental synchronization is durable.
+  The pilot has two stores. Production identifiers and credentials are never recorded in this file.
+- Monitoring: the local public-readiness monitor passed its one-shot acceptance and its systemd
+  timer is enabled; Timeweb monitoring remains an independent external signal.
+- LLM: YandexGPT 5.1, prompt v4/content schema v2, strict structured output, bounded retries and
+  persisted cost accounting. Snapshot, generation and publication planners/workers are enabled.
+  The snapshot revision window is seven days during the pilot so late source data or late employee
+  eligibility changes can produce an immutable revision.
+- Telegram: bot infrastructure exists, but customer delivery remains deferred until linking and
+  webhook acceptance are completed.
+- Initial LLM acceptance cost through the first production diagnostics was RUB 38.0648 for ten
+  provider calls. This is one-time commissioning activity, not the expected weekly steady-state
+  cost.
+- Product classification at commissioning: 101 distinct sold products have no approved analytics
+  category. This represents 3.13% of sale-item rows (4.29% of revenue) for the primary store and
+  2.26% (3.24% of revenue) for the second store over 2026-07-01 through 2026-08-07. These items must
+  be reviewed, imported as an approved mapping and then reprocessed; the application deliberately
+  does not guess categories from product names.
+- Employee interpretation membership is captured immutably when a weekly snapshot is created.
+  Changing `participates_in_ranking` does not mutate an existing snapshot; a newer successful
+  source sync inside the revision window creates a new snapshot revision and a new LLM generation.
+
+Do not declare pilot acceptance complete until both stores expose a `READY` current weekly
+interpretation, the revised snapshots contain the intended employee membership, backup/restore
+evidence is current, and temporary deployment elevation has been removed.
+
 ## 1. Goals and constraints
 
 Expected scale for the next year:
