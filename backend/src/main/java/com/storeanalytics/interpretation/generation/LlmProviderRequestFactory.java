@@ -405,7 +405,12 @@ public class LlmProviderRequestFactory {
                 );
                 if (allowed != null) {
                     if (allowed.isEmpty()) {
-                        setNullOnly(field.getValue());
+                        if (field.getKey().endsWith("EmployeeRefs")
+                                || "employeeRefs".equals(field.getKey())) {
+                            setEmptyArray(field.getValue());
+                        } else {
+                            setNullOnly(field.getValue());
+                        }
                         continue;
                     }
                     JsonNode target = field.getKey().endsWith("EmployeeRefs")
@@ -469,6 +474,14 @@ public class LlmProviderRequestFactory {
         if (node instanceof ObjectNode schema) {
             schema.removeAll();
             schema.put("type", "null");
+        }
+    }
+
+    private void setEmptyArray(JsonNode node) {
+        if (node instanceof ObjectNode schema) {
+            schema.put("type", "array");
+            schema.put("minItems", 0);
+            schema.put("maxItems", 0);
         }
     }
 

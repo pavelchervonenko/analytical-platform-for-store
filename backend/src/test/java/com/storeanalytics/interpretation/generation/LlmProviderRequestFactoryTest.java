@@ -197,6 +197,45 @@ class LlmProviderRequestFactoryTest {
     }
 
     @Test
+    void keepsPluralEmployeeReferencesAsEmptyArraysWhenStoreHasNoEmployees()
+            throws IOException {
+        WeeklySnapshotStore snapshotStore = mock(WeeklySnapshotStore.class);
+        when(snapshotStore.findById(SNAPSHOT_ID))
+                .thenReturn(Optional.of(snapshotWithoutEmployees()));
+        LlmValidationRetryPromptFactory retryPromptFactory = mock(
+                LlmValidationRetryPromptFactory.class
+        );
+        when(retryPromptFactory.appendRetryInstruction(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        LlmProviderRequestFactory factory = new LlmProviderRequestFactory(
+                snapshotStore,
+                retryPromptFactory,
+                new LlmProviderInputCompactor()
+        );
+
+        PreparedLlmProviderRequest prepared = factory.prepare(
+                job("weekly-interpretation-v4", 2),
+                NOW,
+                Duration.ofSeconds(90)
+        );
+        JsonNode responseSchema = new ObjectMapper().readTree(
+                prepared.request().responseSchemaJson()
+        );
+
+        for (String path : List.of(
+                "/properties/actions/items/properties/targetEmployeeRefs",
+                "/properties/teamRelationships/items/properties/sourceEmployeeRefs",
+                "/properties/teamRelationships/items/properties/targetEmployeeRefs"
+        )) {
+            JsonNode references = responseSchema.at(path);
+            assertThat(references.path("type").asText()).isEqualTo("array");
+            assertThat(references.path("minItems").asInt()).isZero();
+            assertThat(references.path("maxItems").asInt()).isZero();
+        }
+    }
+
+
+    @Test
     void rejectsMixedPromptAndSchemaVersionsBeforeSnapshotRead() {
         WeeklySnapshotStore snapshotStore = mock(WeeklySnapshotStore.class);
         LlmProviderRequestFactory factory = new LlmProviderRequestFactory(
@@ -213,6 +252,64 @@ class LlmProviderRequestFactoryTest {
                 .hasMessageContaining("not a packaged pair");
     }
 
+
+    private PersistedWeeklySnapshot snapshotWithoutEmployees() throws IOException {
+        WeeklyInterpretationInput source = new ObjectMapper().readValue(
+                resource("contracts/llm/examples/weekly-interpretation-input-v1-minimal.json"),
+                WeeklyInterpretationInput.class
+        );
+        WeeklyInterpretationInput.Manifest manifest = source.manifest();
+        WeeklyInterpretationInput.Facts facts = source.facts();
+        WeeklyInterpretationInput example = new WeeklyInterpretationInput(
+                source.contractVersion(),
+                source.snapshot(),
+                new WeeklyInterpretationInput.Manifest(
+                        List.of(),
+                        manifest.evidence(),
+                        manifest.candidateRefs(),
+                        manifest.categoryCodes(),
+                        manifest.competencyCodes(),
+                        manifest.limitations()
+                ),
+                new WeeklyInterpretationInput.Facts(
+                        facts.store(), facts.team(), List.of(), facts.candidateSignals()
+                )
+        );
+        WeeklyInterpretationInput.Snapshot header = example.snapshot();
+        LocalDate start = header.period().start();
+        LocalDate end = header.period().end();
+        WeeklyAnalyticsFactsQuery query = new WeeklyAnalyticsFactsQuery(
+                UUID.randomUUID(),
+                new StoreKpiPeriod(start, end),
+                new StoreKpiPeriod(
+                        header.comparisonPeriod().start(),
+                        header.comparisonPeriod().end()
+                )
+        );
+        return new PersistedWeeklySnapshot(
+                SNAPSHOT_ID,
+                query.storeId(),
+                query,
+                header.timezone(),
+                header.revision(),
+                null,
+                "INITIAL",
+                null,
+                UUID.randomUUID(),
+                NOW.minusSeconds(60),
+                NOW.minusSeconds(60),
+                header.qualityStatus(),
+                header.versions(),
+                new WeeklySnapshotPayload(
+                        example.contractVersion(),
+                        example.manifest(),
+                        example.facts()
+                ),
+                header.factsHash(),
+                List.of(),
+                NOW.minusSeconds(60)
+        );
+    }
 
     private PersistedWeeklySnapshot snapshot() throws IOException {
         WeeklyInterpretationInput example = new ObjectMapper().readValue(
