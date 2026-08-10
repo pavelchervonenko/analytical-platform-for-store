@@ -69,14 +69,20 @@ date. The response also contains effective and total assignment counts, product 
 number of active sale items already normalized as UNMAPPED.
 
 Manual backfill returns 409 SYNC_CLASSIFICATION_REQUIRED when readiness is false. The scheduled
-incremental enqueuer skips creation and writes a warning. This is a bootstrap safety barrier, not a
-promise that every future LiveSklad product is classified: genuinely new products remain visible
-as UNMAPPED.
+incremental enqueuer skips creation and writes a warning. This is a bootstrap safety barrier. After bootstrap, classification uses two ordered layers:
+an effective customer-approved assignment by exact LiveSklad product identity first, then the
+versioned high-confidence rule set `livesklad-product-rules-v1`. A rule result is stored directly in
+the sale or return snapshot with its rule version. Ambiguous names are never forced into a fallback
+category and remain visible as `UNMAPPED` for review.
 
-If facts were synchronized before the initial import, importing assignments does not silently
-rewrite historical snapshots. Run the same durable backfill again after import; normal source
-reconciliation updates those items using the now-effective assignments. Direct SQL
-reclassification is not an approved operational path. The one-time V32 migration is a reviewed
-repair of the erroneous initial CARE mapping, not a general reclassification interface.
+If facts were synchronized before an approved rule release, ordinary assignment import still does
+not silently rewrite historical snapshots. A reviewed one-time reconciliation may update only an
+explicit allowlist of product external IDs and only when the observed active `UNMAPPED` item count
+and the complete distinct-ID set exactly match the approved dry-run. Any mismatch or unresolved
+product rolls back the transaction. The feature is disabled by default and must be disabled again
+immediately after the accepted run. This avoids a provider reload and does not change sales, return,
+quantity or monetary facts; only category/condition snapshots and their matching open data-quality
+issues change. Direct SQL reclassification remains an unapproved operational path. The one-time V32
+migration remains a reviewed repair of the erroneous initial CARE mapping, not a general interface.
 
 The endpoint is authenticated and CSRF-protected by the common Spring Security configuration.

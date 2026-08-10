@@ -293,7 +293,7 @@ public class SalesSyncPersistence {
                     unmappedCategory
             );
             synchronizeIssue(
-                    classification.assignment() == null,
+                    classification.category() == unmappedCategory,
                     store,
                     qualityIssue(
                             "PRODUCT",
@@ -434,12 +434,9 @@ public class SalesSyncPersistence {
             Instant occurredAt,
             AnalyticsCategory unmappedCategory
     ) {
-        List<ProductCategoryAssignment> assignments =
-                referenceRepositories.assignments().findEffectiveAssignments(
-                        product.getId(),
-                        occurredAt
-                );
-        if (assignments.isEmpty()) {
+        var resolved = referenceRepositories.classificationResolver()
+                .resolve(product, occurredAt);
+        if (resolved.isEmpty()) {
             return new Classification(
                     unmappedCategory,
                     null,
@@ -447,15 +444,12 @@ public class SalesSyncPersistence {
                     ProductConditionType.UNKNOWN
             );
         }
-        ProductCategoryAssignment assignment = assignments.getFirst();
-        String version = assignment.getRuleVersion() == null
-                ? "assignment:" + assignment.getId()
-                : assignment.getRuleVersion();
+        var classification = resolved.orElseThrow();
         return new Classification(
-                assignment.getAnalyticsCategory(),
-                assignment,
-                version,
-                assignment.getConditionType()
+                classification.category(),
+                classification.assignment(),
+                classification.version(),
+                classification.conditionType()
         );
     }
 

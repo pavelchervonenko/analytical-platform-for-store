@@ -10,7 +10,6 @@ import com.storeanalytics.integration.livesklad.dto.LiveSkladReturnDetailPayload
 import com.storeanalytics.integration.livesklad.dto.LiveSkladReturnPositionPayload;
 import com.storeanalytics.product.model.AnalyticsCategory;
 import com.storeanalytics.product.model.Product;
-import com.storeanalytics.product.model.ProductCategoryAssignment;
 import com.storeanalytics.product.model.ProductConditionType;
 import com.storeanalytics.product.model.ProductDetails;
 import com.storeanalytics.product.model.ProductSourceKind;
@@ -564,7 +563,7 @@ public class ReturnSyncPersistence {
             );
             if (originalItem.isEmpty()) {
                 synchronizeIssue(
-                        classification.categoryAssignment() == null,
+                        classification.analyticsCategory() == context.unmappedCategory(),
                         store,
                         qualityIssue(
                                 "PRODUCT",
@@ -673,12 +672,9 @@ public class ReturnSyncPersistence {
             Instant occurredAt,
             AnalyticsCategory unmappedCategory
     ) {
-        List<ProductCategoryAssignment> assignments =
-                referenceRepositories.assignments().findEffectiveAssignments(
-                        product.getId(),
-                        occurredAt
-                );
-        if (assignments.isEmpty()) {
+        var resolved = referenceRepositories.classificationResolver()
+                .resolve(product, occurredAt);
+        if (resolved.isEmpty()) {
             return new SalesItemClassification(
                     product.getName(),
                     null,
@@ -688,17 +684,14 @@ public class ReturnSyncPersistence {
                     ProductConditionType.UNKNOWN
             );
         }
-        ProductCategoryAssignment assignment = assignments.getFirst();
-        String version = assignment.getRuleVersion() == null
-                ? "assignment:" + assignment.getId()
-                : assignment.getRuleVersion();
+        var classification = resolved.orElseThrow();
         return new SalesItemClassification(
                 product.getName(),
                 null,
-                assignment.getAnalyticsCategory(),
-                assignment,
-                version,
-                assignment.getConditionType()
+                classification.category(),
+                classification.assignment(),
+                classification.version(),
+                classification.conditionType()
         );
     }
 

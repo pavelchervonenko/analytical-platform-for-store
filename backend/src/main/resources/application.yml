@@ -217,6 +217,11 @@ app:
     lock-timeout: ${MIGRATION_LOCK_TIMEOUT:5s}
     statement-timeout: ${MIGRATION_STATEMENT_TIMEOUT:10m}
     lock-retry-count: ${MIGRATION_LOCK_RETRY_COUNT:10}
+  product-classification:
+    reconciliation:
+      enabled: ${PRODUCT_CLASSIFICATION_RECONCILIATION_ENABLED:false}
+      external-product-ids: ${PRODUCT_CLASSIFICATION_RECONCILIATION_PRODUCT_IDS:}
+      expected-item-count: ${PRODUCT_CLASSIFICATION_RECONCILIATION_EXPECTED_ITEMS:0}
   resources:
     http:
       max-request-header-size: ${HTTP_MAX_REQUEST_HEADER_SIZE:8KB}

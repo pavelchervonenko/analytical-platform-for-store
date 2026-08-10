@@ -230,6 +230,39 @@ public class SalesDocumentItem extends AbstractMutableEntity {
         return true;
     }
 
+    public boolean reclassify(SalesItemClassification classification) {
+        requireNonNull(classification, "classification");
+        require(classification.categoryAssignment() == null
+                        || classification.categoryAssignment().matches(
+                        product,
+                        classification.analyticsCategory()
+                ),
+                "category assignment must match the item product and category");
+        boolean changed = !Objects.equals(
+                productNameSnapshot,
+                classification.productNameSnapshot()
+        ) || !Objects.equals(
+                sourceGroupNameSnapshot,
+                classification.sourceGroupNameSnapshot()
+        ) || !sameEntity(
+                analyticsCategory,
+                classification.analyticsCategory()
+        ) || !sameEntity(
+                categoryAssignment,
+                classification.categoryAssignment()
+        ) || !Objects.equals(
+                classificationVersion,
+                classification.classificationVersion()
+        ) || conditionTypeSnapshot != classification.conditionType();
+        productNameSnapshot = classification.productNameSnapshot();
+        sourceGroupNameSnapshot = classification.sourceGroupNameSnapshot();
+        analyticsCategory = classification.analyticsCategory();
+        categoryAssignment = classification.categoryAssignment();
+        classificationVersion = classification.classificationVersion();
+        conditionTypeSnapshot = classification.conditionType();
+        return changed;
+    }
+
     public SalesDocument getSalesDocument() {
         return salesDocument;
     }

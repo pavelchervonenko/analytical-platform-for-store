@@ -3,6 +3,7 @@ package com.storeanalytics.sales.repository;
 import com.storeanalytics.sales.model.SalesDocumentItem;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -20,6 +21,20 @@ public interface SalesDocumentItemRepository extends JpaRepository<SalesDocument
             """)
     long countActiveUnmappedByConnectionId(
             @Param("connectionId") UUID connectionId
+    );
+
+    @Query("""
+            SELECT item
+            FROM SalesDocumentItem item
+            JOIN FETCH item.product product
+            JOIN FETCH item.salesDocument document
+            WHERE product.externalId IN :externalProductIds
+              AND item.analyticsCategory.code = 'UNMAPPED'
+              AND item.deleted = false
+              AND document.deleted = false
+            """)
+    List<SalesDocumentItem> findAllActiveUnmappedByProductExternalIdIn(
+            @Param("externalProductIds") Set<String> externalProductIds
     );
 
     List<SalesDocumentItem> findAllBySalesDocumentId(UUID salesDocumentId);

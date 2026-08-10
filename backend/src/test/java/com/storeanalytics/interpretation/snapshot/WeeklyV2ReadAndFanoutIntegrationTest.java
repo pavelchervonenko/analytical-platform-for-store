@@ -325,11 +325,12 @@ class WeeklyV2ReadAndFanoutIntegrationTest {
                     analysis_policy_version, budget_policy_version,
                     input_hash, status, phase, attempt_count,
                     max_transport_retries, max_validation_retries,
-                    next_attempt_at, deadline_at, started_at, finished_at
+                    next_attempt_at, deadline_at, started_at, finished_at,
+                    created_at
                 ) VALUES (
                     ?, ?, 1, 'INITIAL', 'TEST', 'test-model', 'test-config',
                     2, 'weekly-interpretation-v4', 'analysis-v1', 'budget-v1',
-                    ?, 'SUCCESS', 'PUBLISH', 1, 1, 1, ?, ?, ?, ?
+                    ?, 'SUCCESS', 'PUBLISH', 1, 1, 1, ?, ?, ?, ?, ?
                 )
                 """,
                 jobId,
@@ -338,7 +339,8 @@ class WeeklyV2ReadAndFanoutIntegrationTest {
                 Timestamp.from(NOW),
                 Timestamp.from(NOW.plusSeconds(3600)),
                 Timestamp.from(NOW.minusSeconds(30)),
-                Timestamp.from(NOW)
+                Timestamp.from(NOW),
+                Timestamp.from(NOW.minusSeconds(60))
         );
         UUID attemptId = UUID.randomUUID();
         jdbcTemplate.update(
