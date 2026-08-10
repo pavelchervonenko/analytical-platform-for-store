@@ -11,6 +11,7 @@ import com.storeanalytics.integration.livesklad.exception.LiveSkladTransportExce
 import com.storeanalytics.sync.config.SyncWorkerSchedulingConfiguration;
 import com.storeanalytics.sync.exception.ReturnSyncCapacityException;
 import com.storeanalytics.sync.exception.SalesSyncCapacityException;
+import com.storeanalytics.sync.model.SyncJobPhase;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
@@ -92,6 +93,19 @@ public class SyncJobWorker {
         String errorCode = failureCode(exception);
         String summary = "Synchronization phase " + claim.phase()
                 + " failed: " + errorCode;
+        if (isRateLimitedWindowPhase(claim, exception)
+                && coordinator.shrinkWindowForRetry(
+                        claim.jobId(), workerId, summary, delay
+                )) {
+            LOGGER.info(
+                    "Reduced rate-limited synchronization window for job {} "
+                            + "in phase {}; retry delayed by {}",
+                    claim.jobId(),
+                    claim.phase(),
+                    delay
+            );
+            return;
+        }
         coordinator.retryOrFail(
                 claim.jobId(),
                 workerId,
@@ -126,6 +140,15 @@ public class SyncJobWorker {
                 status,
                 retryable
         );
+    }
+
+    private boolean isRateLimitedWindowPhase(
+            SyncJobClaim claim,
+            Throwable exception
+    ) {
+        return (claim.phase() == SyncJobPhase.SALES
+                || claim.phase() == SyncJobPhase.RETURNS)
+                && contains(exception, LiveSkladRateLimitException.class);
     }
 
     private Duration retryDelay(SyncJobClaim claim, Throwable exception) {

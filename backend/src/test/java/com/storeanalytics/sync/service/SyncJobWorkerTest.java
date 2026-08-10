@@ -89,6 +89,42 @@ class SyncJobWorkerTest {
     }
 
     @Test
+    void shrinksRateLimitedSalesWindowAndPreservesRetryAfterDelay() {
+        when(coordinator.claimNext(anyString())).thenReturn(Optional.of(claim));
+        when(executionService.execute(claim)).thenThrow(new SalesSyncException(
+                UUID.randomUUID(),
+                new LiveSkladRateLimitException(
+                        "sensitive upstream detail",
+                        Duration.ofMinutes(10)
+                )
+        ));
+        when(coordinator.shrinkWindowForRetry(
+                eq(jobId), anyString(), anyString(), any()
+        )).thenReturn(true);
+        ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Duration> delay = ArgumentCaptor.forClass(Duration.class);
+
+        worker.processNextStep();
+
+        verify(coordinator).shrinkWindowForRetry(
+                eq(jobId),
+                anyString(),
+                summary.capture(),
+                delay.capture()
+        );
+        verify(coordinator, never()).retryOrFail(
+                any(), anyString(), anyString(), anyBoolean(), any()
+        );
+        assertThat(summary.getValue())
+                .isEqualTo("Synchronization phase SALES failed: "
+                        + "LIVESKLAD_RATE_LIMIT")
+                .doesNotContain("sensitive");
+        assertThat(delay.getValue()).isBetween(
+                Duration.ofMinutes(10), Duration.ofMinutes(12)
+        );
+    }
+
+    @Test
     void honorsSourceRetryWindowWithoutExposingCauseMessage() {
         when(coordinator.claimNext(anyString())).thenReturn(Optional.of(claim));
         when(executionService.execute(claim)).thenThrow(new SalesSyncException(

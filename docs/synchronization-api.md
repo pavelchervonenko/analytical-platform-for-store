@@ -67,7 +67,7 @@ Safe defaults are defined in `application.yml`:
 ```text
 SYNC_WORKER_ENABLED=true
 SYNC_WORKER_DELAY=5s
-SYNC_WINDOW_SIZE=1d
+SYNC_WINDOW_SIZE=6h
 SYNC_MAX_ATTEMPTS=5
 SYNC_LEASE_DURATION=2h
 SYNC_RETRY_INITIAL_DELAY=1m
@@ -81,24 +81,31 @@ deployment:
 
 ```text
 SYNC_SCHEDULE_ENABLED=false
-SYNC_SCHEDULE_CRON="0 15 3-5 * * *"
+SYNC_SCHEDULE_CRON="0 15 3-8 * * *"
 SYNC_SCHEDULE_ZONE=Europe/Kaliningrad
 ```
 
-When scheduling is enabled, the worker checks the same incremental window at 03:15, 04:15 and
-05:15. The first successful check creates the job; later checks are idempotent no-ops. If the
-worker was restarting at 03:15, another synchronization job was active, or the first job ended
-with a recoverable LiveSklad/transport/database failure, a later check recreates the same window.
-Permanent payload or configuration failures are not retried by the scheduler and require operator
-intervention. Every created job re-reads the last three completed calendar days. This rolling
+When scheduling is enabled, the worker checks the same incremental window hourly from 03:15
+through 08:15. The first successful check creates the job; checks made while a job is active are
+idempotent no-ops. A later checkpoint recreates the same rolling window only after an earlier job
+has reached a terminal state. This gives a rate-limited or restarting worker additional recovery
+opportunities while keeping completed-day data available during the morning.
+
+Every created job re-reads the last three completed calendar days. The job persists progress after
+each six-hour child window, so a later provider failure does not discard earlier windows. A
+LiveSklad rate limit in a sales or returns phase halves the current child window down to the
+15-minute floor and schedules the retry no earlier than the provider `Retry-After` boundary.
+Permanent payload or configuration failures still require operator intervention. The rolling
 overlap captures late corrections without duplicating normalized facts.
 
 ## Source request budget
 
 The client observes LiveSklad `remainRequest` and `expireDate`. It preserves five requests as a
 reserve and postpones the current phase until the reported window resets. An HTTP `429` is treated
-as retryable with a conservative 15-minute delay. Tokens, credentials, full payloads, customer
-data, and upstream response bodies are never written to job errors or logs.
+as retryable. For sales and returns, the persisted child window is reduced before retry and the
+delay is the greater of local backoff and the source `Retry-After`, capped by the configured
+absolute maximum. Tokens, credentials, full payloads, customer data, and upstream response bodies
+are never written to job errors or logs.
 
 ## Initial backfill
 

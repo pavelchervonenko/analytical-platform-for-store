@@ -95,6 +95,22 @@ public class SyncJobCoordinator {
     }
 
     @Transactional
+    public boolean shrinkWindowForRetry(
+            UUID jobId,
+            String owner,
+            String summary,
+            Duration delay
+    ) {
+        Instant now = clock.instant();
+        return locked(jobId).shrinkCurrentWindowForRetry(
+                owner,
+                summary,
+                now.plus(delay),
+                now
+        );
+    }
+
+    @Transactional
     public void retryOrFail(
             UUID jobId,
             String owner,

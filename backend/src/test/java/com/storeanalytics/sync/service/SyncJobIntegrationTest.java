@@ -286,6 +286,39 @@ class SyncJobIntegrationTest {
     }
 
     @Test
+    void halvesRateLimitedWindowAndWaitsBeforeRetrying() {
+        SyncJobView created = createOneDayJob();
+        SyncJobClaim claim = coordinator.claimNext(WORKER).orElseThrow();
+        coordinator.completeStep(claim.jobId(), WORKER);
+        claim = coordinator.claimNext(WORKER).orElseThrow();
+        coordinator.completeStep(claim.jobId(), WORKER);
+        claim = coordinator.claimNext(WORKER).orElseThrow();
+        Instant transitionStartedAt = Instant.now();
+        Duration original = Duration.between(
+                claim.windowStart(),
+                claim.windowEnd()
+        );
+
+        assertThat(coordinator.shrinkWindowForRetry(
+                claim.jobId(),
+                WORKER,
+                "Synchronization phase SALES failed: LIVESKLAD_RATE_LIMIT",
+                Duration.ofMinutes(10)
+        )).isTrue();
+
+        SyncJobView resized = jobService.get(created.id());
+        assertThat(Duration.between(
+                resized.cursorStart(),
+                resized.currentWindowEnd()
+        )).isEqualTo(original.dividedBy(2));
+        assertThat(resized.status()).isEqualTo(SyncJobStatus.WAITING_RETRY);
+        assertThat(resized.attemptCount()).isZero();
+        assertThat(resized.totalRetries()).isEqualTo(1);
+        assertThat(resized.nextAttemptAt())
+                .isAfterOrEqualTo(transitionStartedAt.plusSeconds(590));
+    }
+
+    @Test
     void retriesTransientStepAndEventuallyFailsAtConfiguredLimit() {
         SyncJobView created = createOneDayJob();
 

@@ -70,7 +70,8 @@ ID, digests, backup object key и оператор; после — smoke evidenc
 1. загрузить и сверить справочники двух магазинов — «Магазин» и «Мобисфера»;
 2. выполнить управляемый backfill с 2026-07-01 по последний полностью завершённый день;
 3. сверить продажи, возвраты, деньги, сотрудников и payroll на контрольных датах;
-4. включить nightly schedule в 03:15 `Europe/Kaliningrad` с overlap 3 дня;
+4. включить nightly schedule с первым запуском в 03:15 `Europe/Kaliningrad`,
+   recovery-проверками до 08:15, overlap 3 дня и шестичасовыми дочерними окнами;
 5. включить snapshot/publication, затем Yandex generation с лимитом 30 RUB/job и максимумом
    двух provider calls;
 6. включить Telegram linking/webhook, связать каждого руководителя с собственной учётной записью;

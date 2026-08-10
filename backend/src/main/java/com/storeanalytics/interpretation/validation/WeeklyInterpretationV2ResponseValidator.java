@@ -94,6 +94,17 @@ public final class WeeklyInterpretationV2ResponseValidator
         } catch (RuntimeException exception) {
             structural = List.of(new StructuralValidationViolation("json", "$"));
         }
+        while (!structural.isEmpty()
+                && normalizeStructurallyRejectedOptionalItems(root, structural)) {
+            try {
+                body = objectMapper.writeValueAsString(root);
+                structural = schemaValidator.validate(body);
+            } catch (JacksonException exception) {
+                return invalidJson();
+            } catch (RuntimeException exception) {
+                structural = List.of(new StructuralValidationViolation("json", "$"));
+            }
+        }
         if (!structural.isEmpty()) {
             return LlmResponseValidationResult.invalid(
                     LlmValidationOutcome.STRUCTURAL_INVALID,
@@ -125,6 +136,45 @@ public final class WeeklyInterpretationV2ResponseValidator
             );
         } catch (JacksonException exception) {
             return invalidJson();
+        }
+    }
+
+    private boolean normalizeStructurallyRejectedOptionalItems(
+            JsonNode root,
+            List<StructuralValidationViolation> violations
+    ) {
+        TreeSet<Integer> relationshipIndexes = new TreeSet<>();
+        for (StructuralValidationViolation violation : violations) {
+            Integer index = jsonPointerArrayIndex(
+                    violation.path(), "/teamRelationships/"
+            );
+            if (index == null) {
+                index = arrayIndex(
+                        violation.path(), "$.teamRelationships["
+                );
+            }
+            if (index != null) {
+                relationshipIndexes.add(index);
+            }
+        }
+        return removeIndexes(
+                root.path("teamRelationships"),
+                relationshipIndexes
+        );
+    }
+
+    private Integer jsonPointerArrayIndex(String path, String prefix) {
+        if (path == null || !path.startsWith(prefix)) {
+            return null;
+        }
+        int end = path.indexOf('/', prefix.length());
+        String value = end < 0
+                ? path.substring(prefix.length())
+                : path.substring(prefix.length(), end);
+        try {
+            return Integer.valueOf(value);
+        } catch (NumberFormatException exception) {
+            return null;
         }
     }
 

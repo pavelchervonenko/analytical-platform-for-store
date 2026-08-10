@@ -190,6 +190,32 @@ public class SyncJob extends AbstractMutableEntity {
         return true;
     }
 
+    public boolean shrinkCurrentWindowForRetry(
+            String owner,
+            String summary,
+            Instant nextAttempt,
+            Instant now
+    ) {
+        requireOwnedRunningJob(owner);
+        Duration currentSize = Duration.between(cursorStart, currentWindowEnd);
+        if (currentSize.compareTo(MINIMUM_WINDOW.multipliedBy(2)) < 0) {
+            return false;
+        }
+        long halfMillis = currentSize.toMillis() / 2;
+        currentWindowEnd = cursorStart.plusMillis(halfMillis);
+        attemptCount = 0;
+        totalRetries++;
+        errorSummary = boundedSummary(summary);
+        clearLease();
+        if (cancelRequested) {
+            cancel(now);
+            return true;
+        }
+        status = SyncJobStatus.WAITING_RETRY;
+        nextAttemptAt = requireNonNull(nextAttempt, "nextAttempt");
+        return true;
+    }
+
     public void retryOrFail(
             String owner,
             String summary,

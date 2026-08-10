@@ -334,6 +334,22 @@ class WeeklyInterpretationV2ResponseValidatorTest {
     }
 
     @Test
+    void removesStructurallyInvalidOptionalTeamRelationship() throws Exception {
+        ObjectNode relationship = (ObjectNode) validContent
+                .path("teamRelationships").get(0);
+        ((ArrayNode) relationship.path("evidenceRefs")).removeAll();
+
+        LlmResponseValidationResult result = validator.validate(
+                input,
+                json(validContent)
+        );
+
+        assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+        JsonNode canonical = objectMapper.readTree(result.canonicalContent());
+        assertThat(canonical.path("teamRelationships").isEmpty()).isTrue();
+    }
+
+    @Test
     void removesUnsupportedOptionalRiskInsight() throws Exception {
         ObjectNode insight = (ObjectNode) validContent.path("insights").get(0);
         insight.put("kind", "RISK");
