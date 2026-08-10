@@ -162,3 +162,26 @@ Runtime использует шестичасовые окна. При provider 
 
 Acceptance: внешний HTTPS, `/livez` и `/readyz` отвечали HTTP 200 во время backfill; интерфейс
 оставался доступен руководителям. Повторная полная загрузка июля/августа не выполнялась.
+
+
+## 8. Production evidence: automatic product classification 2026-08-10
+
+В production выпущен backend `v0.1.0-pilot.9` из commit `732bdc0`, image ID
+`sha256:5e58a342c0d72def4af3b4f1685549c1f1986fa1fbe3be557c5189cadbf61115`.
+Web оставлен на проверенном `v0.1.0-pilot.6`. До изменения создан и проверен encrypted backup
+`postgres/daily/2026/08/10/store-analytics-20260810T125754Z.dump.gpg`.
+
+Классификация выполняется в порядке: exact customer-approved product assignment, затем
+`livesklad-product-rules-v1`, затем безопасный `UNMAPPED` для неоднозначного товара. Production
+reconciliation был ограничен утверждёнными 36 external IDs и expected count 44. Транзакция
+завершилась с `44/44`, unresolved 0 и закрыла 36 соответствующих data-quality issues. Итоговое
+распределение совпало с dry-run по всем девяти category/condition группам; глобальные active
+`UNMAPPED` и open `UNMAPPED_PRODUCT` равны нулю. Повторный provider sync не выполнялся.
+
+После acceptance one-shot properties возвращены в `false/empty/0`, worker пересоздан и повторно
+прошёл readiness. Сохранённые production flags подтверждены: nightly sync, snapshot, Yandex AI
+generation и publication включены. API, worker и web healthy; public HTTPS, liveness и readiness
+smoke прошли. Previous release pilot.8 сохранён для container rollback.
+
+Release gates: полный backend suite — 749 tests, 0 failures/errors/skips; Checkstyle — success;
+operator security — success; Gradle supply-chain — 449 components и 840 artifacts.

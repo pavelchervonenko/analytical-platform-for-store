@@ -1,6 +1,6 @@
 # Pilot rollout status
 
-Последнее обновление: 2026-08-08. Этот файл фиксирует фактическое состояние первого production
+Последнее обновление: 2026-08-10. Этот файл фиксирует фактическое состояние первого production
 rollout. Архитектурный стандарт и повторяемая процедура находятся в
 `pilot-production-deployment.md` и `production-deployment-runbook.md`.
 
@@ -11,9 +11,9 @@ rollout. Архитектурный стандарт и повторяемая �
 - managed PostgreSQL 16: private IPv4 `10.20.0.20`, база `store_analytics`, schema `app`;
 - private S3: bucket `5e8de462-4a0c-42a7-9a3b-e4d432c18eaf`, versioning и Object Lock включены,
   максимальный объём 100 GB;
-- worker release: `v0.1.0-pilot.5`, commit `c561b63`;
-- API временно оставлен на `v0.1.0-pilot.4`, web — на `v0.1.0-pilot.2`, так как исправление
-  касается только фоновой синхронизации;
+- backend API и worker: `v0.1.0-pilot.9`, commit `732bdc0`;
+- web: `v0.1.0-pilot.6`;
+- release-state: `v0.1.0-pilot.9-732bdc0`, previous release сохранён как pilot.8;
 - контейнеры `web`, `backend-api`, `backend-worker` находятся в состоянии `healthy`;
 - HTTP перенаправляется на HTTPS; сертификат Caddy и обязательные security headers проверены;
 - API и management ports на host не опубликованы.
@@ -115,3 +115,19 @@ sudo env APP_DOMAIN=store-analytics.net \
 ```bash
 sudo systemctl list-timers store-analytics-backup.timer --no-pager
 ```
+
+
+## Автоматическая классификация 2026-08-10
+
+- новые товары сначала сопоставляются с customer-approved assignment по точному LiveSklad ID;
+- при отсутствии assignment применяется versioned high-confidence rule set
+  `livesklad-product-rules-v1`; неоднозначные названия остаются `UNMAPPED`;
+- production dry-run за 8–9 августа содержал 36 distinct products и 44 active sale items;
+- fail-closed reconciliation проверил полный allowlist и точный expected count до изменения;
+- результат: inspected 44, reclassified 44, unresolved 0, resolved DQ issues 36;
+- итоговая проверка: active `UNMAPPED` items 0, open `UNMAPPED_PRODUCT` issues 0;
+- повторная синхронизация LiveSklad не выполнялась, денежные и количественные факты не менялись;
+- one-shot reconciliation после acceptance отключён, worker пересоздан с flag `false`;
+- nightly sync, snapshot, Yandex generation и publication остались включены;
+- перед rollout создан и проверен encrypted backup
+  `postgres/daily/2026/08/10/store-analytics-20260810T125754Z.dump.gpg`.
