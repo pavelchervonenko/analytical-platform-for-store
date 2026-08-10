@@ -26,7 +26,7 @@ class WeeklySnapshotQualityPolicyTest {
 
         SnapshotQualityDecision decision = policy.quality(
                 source,
-                new StoreKpiDataQuality(false, 10, 1, 1, 0, 1),
+                new StoreKpiDataQuality(false, 10, 1, 1, 0, 1, 1),
                 new AttachRateDataQuality(1, 0, 0),
                 periodEnd
         );

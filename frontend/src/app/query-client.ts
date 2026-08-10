@@ -7,7 +7,7 @@ export const queryClient = new QueryClient({
       staleTime: 60_000,
       gcTime: 10 * 60_000,
       refetchOnReconnect: true,
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true,
       retry: (failureCount, error) => {
         if (isApiClientError(error)) {
           if (error.status >= 400 && error.status < 500) return false;

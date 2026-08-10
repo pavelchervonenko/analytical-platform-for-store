@@ -1,5 +1,6 @@
 package com.storeanalytics.quality.service;
 
+import static com.storeanalytics.common.time.ReportingCutoffPolicy.clampToCompletedDay;
 import static com.storeanalytics.common.validation.ModelValidation.requireNonNull;
 
 import com.storeanalytics.common.exception.InvalidRequestException;
@@ -77,14 +78,19 @@ public class StorePeriodQualityService {
     ) {
         UUID validatedStoreId = requireNonNull(storeId, "storeId");
         YearMonth validatedMonth = requireNonNull(month, "month");
-        LocalDate asOf = requireAsOf(validatedMonth, asOfDate);
+        LocalDate requestedAsOf = requireAsOf(validatedMonth, asOfDate);
         Store store = storeRepository.findById(validatedStoreId)
                 .orElseThrow(() -> new com.storeanalytics.metrics.exception.StoreNotFoundException(
                         validatedStoreId
                 ));
+        StoreDataStatusView dataStatus = dataStatusService.get(validatedStoreId);
+        LocalDate asOf = clampToCompletedDay(
+                validatedMonth,
+                requestedAsOf,
+                dataStatus.expectedThroughDate()
+        );
         LocalDate start = validatedMonth.atDay(1);
         LocalDate end = validatedMonth.atEndOfMonth();
-        StoreDataStatusView dataStatus = dataStatusService.get(validatedStoreId);
         StoreKpiResult storeKpi = storeKpiService.calculate(
                 validatedStoreId, new StoreKpiPeriod(start, asOf)
         );
@@ -228,7 +234,7 @@ public class StorePeriodQualityService {
                     PeriodQualityAction.PROVIDE_COST_DATA
             ));
         }
-        long openIssues = storeKpi.dataQuality().storeOpenQualityIssueCount();
+        long openIssues = storeKpi.dataQuality().periodOpenConsistencyIssueCount();
         if (openIssues > 0) {
             issues.add(issue(
                     PeriodQualityAreaCode.SOURCE_DATA,

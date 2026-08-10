@@ -61,6 +61,10 @@ export function clampAsOfDate(today: string, start: string, end: string): string
   return today;
 }
 
+export function clampCompletedAsOfDate(today: string, start: string, end: string): string {
+  return clampAsOfDate(shiftDate(today, -1), start, end);
+}
+
 export function shiftMonth(month: string, offset: number): string {
   const match = ISO_MONTH.exec(month);
   if (!match) throw new Error("Invalid ISO month");

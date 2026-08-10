@@ -193,6 +193,86 @@ class PayrollSalesRepositoryIntegrationTest {
                 .isEqualTo(new BigDecimal("225.00"));
     }
 
+    @Test
+    void resolvesConfirmedDeviceDefaultsWithoutPerProductOverrides() {
+        TestGraph graph = createGraph();
+        LocalDate saleDate = LocalDate.of(2026, 7, 12);
+        UUID ipad = addProduct(
+                graph.connectionId(),
+                "salary-ipad-new",
+                "Apple iPad Air 11 128Gb M4 Wi-Fi"
+        );
+        UUID dyson = addProduct(
+                graph.connectionId(),
+                "salary-dyson-new",
+                "Dyson Airwrap Complete"
+        );
+        UUID playstation = addProduct(
+                graph.connectionId(),
+                "salary-ps5-new",
+                "Sony PlayStation 5 Slim"
+        );
+        UUID macbookCase = addProduct(
+                graph.connectionId(),
+                "salary-macbook-case",
+                "MacBook Air 13 case"
+        );
+        UUID saleId = addDocument(graph, "confirmed-devices", "SALE", saleDate, null);
+        addItem(
+                saleId, graph.macbookProductId(), "IPAD_MAC",
+                "1.000", "1000.00", "700.00"
+        );
+        addItem(
+                saleId, ipad, "IPAD_MAC",
+                "1.000", "800.00", "500.00"
+        );
+        addItem(
+                saleId, dyson, "PODS_WATCH_OTHER_DEVICE",
+                "1.000", "600.00", "400.00"
+        );
+        addItem(
+                saleId, playstation, "PODS_WATCH_OTHER_DEVICE",
+                "1.000", "700.00", "450.00"
+        );
+        addItem(
+                saleId, macbookCase, "CASE_APPLE_IPHONE",
+                "1.000", "50.00", "20.00"
+        );
+
+        assertThat(repository.sourceFacts(
+                graph.storeId(), saleDate, saleDate
+        )).hasSize(5).allSatisfy(fact ->
+                assertThat(fact.overrideAssignmentId()).isNull()
+        ).anySatisfy(fact -> {
+            assertThat(fact.productId()).isEqualTo(graph.macbookProductId());
+            assertThat(fact.effectivePayrollCategory()).isEqualTo("TECH_TIER_1");
+        }).anySatisfy(fact -> {
+            assertThat(fact.productId()).isEqualTo(ipad);
+            assertThat(fact.effectivePayrollCategory()).isEqualTo("TECH_TIER_2");
+        }).anySatisfy(fact -> {
+            assertThat(fact.productId()).isEqualTo(dyson);
+            assertThat(fact.effectivePayrollCategory()).isEqualTo("TECH_TIER_1");
+        }).anySatisfy(fact -> {
+            assertThat(fact.productId()).isEqualTo(playstation);
+            assertThat(fact.effectivePayrollCategory()).isEqualTo("TECH_TIER_1");
+        }).anySatisfy(fact -> {
+            assertThat(fact.productId()).isEqualTo(macbookCase);
+            assertThat(fact.effectivePayrollCategory()).isEqualTo("ACCESSORY");
+        });
+
+        assertThat(repository.aggregate(
+                graph.storeId(), saleDate, saleDate
+        )).singleElement().satisfies(day -> {
+            assertThat(day.tier1Quantity()).isEqualByComparingTo("3.000");
+            assertThat(day.tier2Quantity()).isEqualByComparingTo("1.000");
+            assertThat(day.accessoryTurnover()).isEqualByComparingTo("50.00");
+            assertThat(day.unmappedItemCount()).isZero();
+        });
+        assertThat(readinessRepository.unmappedProducts(
+                graph.storeId(), saleDate, saleDate
+        )).isEmpty();
+    }
+
     private TestGraph createGraph() {
         UUID connectionId = jdbcTemplate.queryForObject(
                 "SELECT id FROM integration_connections WHERE connection_key = 'livesklad-default'",
@@ -223,7 +303,6 @@ class PayrollSalesRepositoryIntegrationTest {
         UUID playstation = addProduct(connectionId, "salary-ps-sub", "PS subscription");
         UUID macbook = addProduct(connectionId, "salary-macbook", "MacBook");
         addOverride(playstation, "PLAYSTATION_SUBSCRIPTION");
-        addOverride(macbook, "TECH_TIER_1");
         return new TestGraph(
                 connectionId, storeId, syncRunId, accessory, playstation, macbook
         );

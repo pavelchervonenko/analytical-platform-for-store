@@ -65,7 +65,8 @@ class StoreKpiControllerTest {
                 .andExpect(jsonPath("$.netQuantity").value(3.000))
                 .andExpect(jsonPath("$.grossProfit").value(100.00))
                 .andExpect(jsonPath("$.marginPercent").value(33.33))
-                .andExpect(jsonPath("$.dataQuality.completeCostData").value(true));
+                .andExpect(jsonPath("$.dataQuality.completeCostData").value(true))
+                .andExpect(jsonPath("$.dataQuality.periodOpenConsistencyIssueCount").value(0));
 
         ArgumentCaptor<StoreKpiPeriod> period =
                 ArgumentCaptor.forClass(StoreKpiPeriod.class);
@@ -135,7 +136,7 @@ class StoreKpiControllerTest {
                 new BigDecimal("200.00"),
                 new BigDecimal("100.00"),
                 new BigDecimal("33.33"),
-                new StoreKpiDataQuality(true, 2, 0, 0, 0, 0)
+                new StoreKpiDataQuality(true, 2, 0, 0, 0, 0, 0)
         );
     }
 }

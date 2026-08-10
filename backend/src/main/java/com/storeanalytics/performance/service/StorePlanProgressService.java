@@ -1,5 +1,6 @@
 package com.storeanalytics.performance.service;
 
+import static com.storeanalytics.common.time.ReportingCutoffPolicy.clampToCompletedDay;
 import static com.storeanalytics.common.validation.ModelValidation.requireNonNull;
 
 import com.storeanalytics.common.exception.InvalidRequestException;
@@ -51,7 +52,6 @@ public class StorePlanProgressService {
         this.clock = clock;
     }
 
-
     @Transactional(readOnly = true)
     public java.util.Optional<StorePlanProgressView> find(
             UUID storeId,
@@ -72,7 +72,13 @@ public class StorePlanProgressService {
     ) {
         UUID validatedStoreId = requireNonNull(storeId, "storeId");
         YearMonth validatedMonth = requireNonNull(month, "month");
-        LocalDate asOf = requireAsOf(validatedMonth, asOfDate);
+        LocalDate requestedAsOf = requireAsOf(validatedMonth, asOfDate);
+        StoreDataStatusView dataStatus = dataStatusService.get(validatedStoreId);
+        LocalDate asOf = clampToCompletedDay(
+                validatedMonth,
+                requestedAsOf,
+                dataStatus.expectedThroughDate()
+        );
         LocalDate start = validatedMonth.atDay(1);
         LocalDate end = validatedMonth.atEndOfMonth();
         StoreKpiPeriod period = new StoreKpiPeriod(start, asOf);
@@ -80,7 +86,6 @@ public class StorePlanProgressService {
         StorePerformancePlanView plan = planService.get(validatedStoreId, validatedMonth);
         StoreKpiResult storeKpi = storeKpiService.calculate(validatedStoreId, period);
         CategoryKpiResult categoryKpi = categoryKpiService.calculate(validatedStoreId, period);
-        StoreDataStatusView dataStatus = dataStatusService.get(validatedStoreId);
 
         BigDecimal revenue = money(storeKpi.netRevenue());
         BigDecimal accessories = categoryAmount(
@@ -152,7 +157,7 @@ public class StorePlanProgressService {
                         && !dataStatus.dataThroughDate().isBefore(asOf),
                 storeKpi.dataQuality().unmappedItemCount() == 0,
                 storeKpi.dataQuality().unmappedItemCount(),
-                dataStatus.openQualityIssueCount()
+                storeKpi.dataQuality().periodOpenConsistencyIssueCount()
         );
         return new StorePlanProgressView(
                 validatedStoreId,

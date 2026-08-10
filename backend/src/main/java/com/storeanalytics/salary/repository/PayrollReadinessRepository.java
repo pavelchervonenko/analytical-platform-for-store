@@ -26,7 +26,11 @@ public class PayrollReadinessRepository {
                     item.net_amount,
                     item.cost_amount,
                     COALESCE(override.payroll_category_code,
-                             category.payroll_category_code) AS payroll_category_code
+                             resolve_default_payroll_category(
+                                 category.code,
+                                 product.name,
+                                 category.payroll_category_code
+                             )) AS payroll_category_code
                 FROM sales_documents document
                 JOIN sales_document_items item
                   ON item.sales_document_id = document.id

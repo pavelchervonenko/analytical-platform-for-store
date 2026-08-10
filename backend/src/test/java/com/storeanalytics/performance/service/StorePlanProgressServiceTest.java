@@ -110,6 +110,7 @@ class StorePlanProgressServiceTest {
         assertThat(result.dataQuality().completeThroughAsOf()).isTrue();
         assertThat(result.dataQuality().classificationComplete()).isFalse();
         assertThat(result.dataQuality().unmappedItemCount()).isEqualTo(2);
+        assertThat(result.dataQuality().openQualityIssueCount()).isEqualTo(3);
         assertThat(result.calculatedAt()).isEqualTo(NOW);
     }
 
@@ -141,6 +142,31 @@ class StorePlanProgressServiceTest {
         assertThat(result.focusDirections()).containsExactlyElementsOf(
                 List.of(StorePlanDirectionCode.values())
         );
+    }
+
+    @Test
+    void clampsCurrentMonthProgressToTheLastCompletedDay() {
+        UUID storeId = UUID.randomUUID();
+        YearMonth month = YearMonth.of(2026, 7);
+        LocalDate requestedAsOf = LocalDate.of(2026, 7, 21);
+        LocalDate completedThrough = LocalDate.of(2026, 7, 20);
+        StoreKpiPeriod completedPeriod = new StoreKpiPeriod(month.atDay(1), completedThrough);
+        when(planService.get(storeId, month)).thenReturn(plan(storeId));
+        when(dataStatusService.get(storeId)).thenReturn(dataStatus(
+                storeId, completedThrough, StoreDataFreshnessStatus.CURRENT, 0
+        ));
+        when(storeKpiService.calculate(storeId, completedPeriod)).thenReturn(storeKpi(
+                storeId, completedPeriod, "100.00", 0
+        ));
+        when(categoryKpiService.calculate(storeId, completedPeriod)).thenReturn(categoryKpi(
+                storeId, completedPeriod
+        ));
+
+        StorePlanProgressView result = service.calculate(storeId, month, requestedAsOf);
+
+        assertThat(result.asOfDate()).isEqualTo(completedThrough);
+        assertThat(result.elapsedDays()).isEqualTo(20);
+        assertThat(result.dataQuality().completeThroughAsOf()).isTrue();
     }
 
     @Test
@@ -194,7 +220,7 @@ class StorePlanProgressServiceTest {
                 BigDecimal.ZERO,
                 new BigDecimal(revenue),
                 null,
-                new StoreKpiDataQuality(true, 10, unmapped, 0, 0, 0)
+                new StoreKpiDataQuality(true, 10, unmapped, 0, 0, 3, 0)
         );
     }
 

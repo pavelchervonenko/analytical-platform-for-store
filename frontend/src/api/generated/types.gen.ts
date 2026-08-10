@@ -322,8 +322,8 @@ export type EmployeeAttachRatingEntry = {
     storeRatePercent?: number;
     includedInScore?: boolean;
     score?: number;
-    denominatorQuantity?: number;
     numeratorQuantity?: number;
+    denominatorQuantity?: number;
 };
 
 export type EmployeeRatingEntry = {
@@ -658,8 +658,8 @@ export type AnnualAttachRateTotals = {
     numeratorReceiptCount?: number;
     denominatorReceiptCount?: number;
     ratePerHundred?: number;
-    denominatorQuantity?: number;
     numeratorQuantity?: number;
+    denominatorQuantity?: number;
 };
 
 export type AnnualCategoryTotals = {
@@ -723,8 +723,8 @@ export type AttachRateEntry = {
     numeratorReceiptCount?: number;
     denominatorReceiptCount?: number;
     ratePerHundred?: number;
-    denominatorQuantity?: number;
     numeratorQuantity?: number;
+    denominatorQuantity?: number;
 };
 
 export type AttachRateResult = {
@@ -911,6 +911,7 @@ export type StoreKpiDataQuality = {
     unmappedItemCount?: number;
     missingCostItemCount?: number;
     unexpectedZeroCostItemCount?: number;
+    periodOpenConsistencyIssueCount?: number;
     storeOpenQualityIssueCount?: number;
 };
 
@@ -1314,20 +1315,14 @@ export type WeeklyInterpretationSummaryView = {
 };
 
 export type JsonNode = {
-    string?: boolean;
-    array?: boolean;
-    empty?: boolean;
-    null?: boolean;
-    float?: boolean;
-    container?: boolean;
-    number?: boolean;
-    missingNode?: boolean;
     floatingPointNumber?: boolean;
+    missingNode?: boolean;
+    integralNumber?: boolean;
+    string?: boolean;
     valueNode?: boolean;
     nodeType?: 'ARRAY' | 'BINARY' | 'BOOLEAN' | 'MISSING' | 'NULL' | 'NUMBER' | 'OBJECT' | 'POJO' | 'STRING';
     object?: boolean;
     pojo?: boolean;
-    integralNumber?: boolean;
     short?: boolean;
     int?: boolean;
     long?: boolean;
@@ -1340,6 +1335,12 @@ export type JsonNode = {
     textual?: boolean;
     boolean?: boolean;
     binary?: boolean;
+    number?: boolean;
+    container?: boolean;
+    array?: boolean;
+    empty?: boolean;
+    null?: boolean;
+    float?: boolean;
     embeddedValue?: boolean;
 };
 
@@ -1530,9 +1531,9 @@ export type ActiveSessionResponse = {
 };
 
 export type CsrfToken = {
-    token?: string;
-    parameterName?: string;
     headerName?: string;
+    parameterName?: string;
+    token?: string;
 };
 
 export type CsrfConfigurationResponse = {

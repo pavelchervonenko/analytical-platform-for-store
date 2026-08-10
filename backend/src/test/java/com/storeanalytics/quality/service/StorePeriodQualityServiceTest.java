@@ -68,6 +68,20 @@ class StorePeriodQualityServiceTest {
     }
 
     @Test
+    void evaluatesCurrentMonthOnlyThroughTheLastCompletedDay() {
+        Fixture fixture = fixture();
+        when(fixture.dataStatus().expectedThroughDate()).thenReturn(AS_OF);
+
+        StorePeriodQualityView result = fixture.service().inspect(
+                STORE_ID, MONTH, AS_OF.plusDays(1)
+        );
+
+        assertThat(result.asOfDate()).isEqualTo(AS_OF);
+        assertThat(result.status()).isEqualTo(DataQualityHealthStatus.OK);
+        assertThat(result.issues()).isEmpty();
+    }
+
+    @Test
     void consolidatesIncompleteSourcesRatingAndPayrollIntoStableReasons() {
         Fixture fixture = fixture();
         when(fixture.dataStatus().status()).thenReturn(StoreDataFreshnessStatus.STALE);
@@ -75,6 +89,7 @@ class StorePeriodQualityServiceTest {
         when(fixture.kpiQuality().completeCostData()).thenReturn(false);
         when(fixture.kpiQuality().unmappedItemCount()).thenReturn(2L);
         when(fixture.kpiQuality().missingCostItemCount()).thenReturn(1L);
+        when(fixture.kpiQuality().periodOpenConsistencyIssueCount()).thenReturn(3L);
         when(fixture.ratingPlan().complete()).thenReturn(false);
         when(fixture.employee().shiftCount()).thenReturn(0L);
         when(fixture.employee().workedHours()).thenReturn(BigDecimal.ZERO.setScale(2));
@@ -100,6 +115,7 @@ class StorePeriodQualityServiceTest {
                 "SOURCE_DATA_INCOMPLETE_THROUGH_AS_OF",
                 "SOURCE_PRODUCTS_UNMAPPED",
                 "SOURCE_COST_DATA_MISSING",
+                "SOURCE_OPEN_QUALITY_ISSUES",
                 "RATING_PLAN_COVERAGE_INCOMPLETE",
                 "RATING_INPUT_DATA_INCOMPLETE",
                 "RATING_NO_EMPLOYEES_WITH_SHIFTS",

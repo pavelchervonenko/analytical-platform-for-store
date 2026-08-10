@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router";
 import type { StoreSummary } from "../api/contracts";
 import { getStores, queryKeys } from "../api/queries";
 import {
-  clampAsOfDate,
+  clampCompletedAsOfDate,
   currentDateInTimeZone,
   formatDateShort,
   formatMonth,
@@ -119,7 +119,7 @@ export function WorkspaceProvider({
     periodStart,
     periodEnd,
     periodLabel: periodLabel(periodMode, periodStart, periodEnd, month),
-    asOfDate: clampAsOfDate(today, monthRange(month).start, monthRange(month).end),
+    asOfDate: clampCompletedAsOfDate(today, monthRange(month).start, monthRange(month).end),
     currentMonth,
     today,
     selectStore: (storeId) => setSearchParams((current) => updateSearchParams(current, { store: storeId })),

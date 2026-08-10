@@ -226,7 +226,7 @@ class WeeklySnapshotDraftBuilderTest {
     ) {
         BigDecimal netRevenue = new BigDecimal(revenue);
         BigDecimal netQuantity = new BigDecimal(quantity);
-        StoreKpiDataQuality quality = new StoreKpiDataQuality(true, 12, 0, 0, 0, 0);
+        StoreKpiDataQuality quality = new StoreKpiDataQuality(true, 12, 0, 0, 0, 0, 0);
         StoreKpiResult store = new StoreKpiResult(
                 STORE_ID,
                 period.start(),

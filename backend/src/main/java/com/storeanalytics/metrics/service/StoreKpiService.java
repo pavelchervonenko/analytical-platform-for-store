@@ -5,6 +5,7 @@ import static com.storeanalytics.common.validation.ModelValidation.requireNonNul
 import com.storeanalytics.metrics.exception.StoreNotFoundException;
 import com.storeanalytics.metrics.repository.StoreKpiAggregate;
 import com.storeanalytics.metrics.repository.StoreKpiRepository;
+import com.storeanalytics.quality.repository.PeriodQualityIssueRepository;
 import com.storeanalytics.store.repository.StoreRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -22,13 +23,16 @@ public class StoreKpiService {
 
     private final StoreRepository storeRepository;
     private final StoreKpiRepository storeKpiRepository;
+    private final PeriodQualityIssueRepository periodQualityIssueRepository;
 
     public StoreKpiService(
             StoreRepository storeRepository,
-            StoreKpiRepository storeKpiRepository
+            StoreKpiRepository storeKpiRepository,
+            PeriodQualityIssueRepository periodQualityIssueRepository
     ) {
         this.storeRepository = storeRepository;
         this.storeKpiRepository = storeKpiRepository;
+        this.periodQualityIssueRepository = periodQualityIssueRepository;
     }
 
     @Transactional(readOnly = true)
@@ -44,6 +48,10 @@ public class StoreKpiService {
                 validatedPeriod.start(),
                 validatedPeriod.end()
         );
+        long periodOpenConsistencyIssueCount = periodQualityIssueRepository
+                .countOpenConsistencyIssues(
+                        validatedStoreId, validatedPeriod.start(), validatedPeriod.end()
+                );
         BigDecimal netRevenue = money(aggregate.netRevenue());
         BigDecimal netQuantity = quantity(aggregate.netQuantity());
         boolean completeCostData = aggregate.missingCostItemCount() == 0;
@@ -62,6 +70,7 @@ public class StoreKpiService {
                 aggregate.unmappedItemCount(),
                 aggregate.missingCostItemCount(),
                 aggregate.unexpectedZeroCostItemCount(),
+                periodOpenConsistencyIssueCount,
                 aggregate.storeOpenQualityIssueCount()
         );
         return new StoreKpiResult(

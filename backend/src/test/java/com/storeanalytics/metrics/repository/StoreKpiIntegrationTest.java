@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.metrics.service.StoreKpiResult;
 import com.storeanalytics.metrics.service.StoreKpiService;
+import com.storeanalytics.quality.repository.PeriodQualityIssueRepository;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -36,6 +37,9 @@ class StoreKpiIntegrationTest {
     private StoreKpiService storeKpiService;
 
     @Autowired
+    private PeriodQualityIssueRepository periodQualityIssueRepository;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @DynamicPropertySource
@@ -48,6 +52,7 @@ class StoreKpiIntegrationTest {
     @BeforeEach
     void cleanDatabase() {
         jdbcTemplate.update("DELETE FROM data_quality_issues");
+        jdbcTemplate.update("DELETE FROM raw_record_versions");
         jdbcTemplate.update("DELETE FROM sales_document_items");
         jdbcTemplate.update("DELETE FROM sales_documents");
         jdbcTemplate.update("DELETE FROM products");
@@ -87,7 +92,55 @@ class StoreKpiIntegrationTest {
         assertThat(result.dataQuality().unmappedItemCount()).isOne();
         assertThat(result.dataQuality().missingCostItemCount()).isZero();
         assertThat(result.dataQuality().unexpectedZeroCostItemCount()).isOne();
+        assertThat(result.dataQuality().periodOpenConsistencyIssueCount()).isZero();
         assertThat(result.dataQuality().storeOpenQualityIssueCount()).isOne();
+    }
+
+    @Test
+    void countsOnlyOpenConsistencyIssuesFromTheRequestedPeriod() {
+        TestGraph graph = createGraph();
+        UUID julyDocumentId = addDocument(graph, document(
+                graph.storeId(), "sale-july", "SALE", PERIOD_START, "100.00", false, null
+        ));
+        addItem(graph, item(
+                julyDocumentId, "july-item", "IPHONE_NEW_ASIS", "1.000", "100.00",
+                knownCost("50.00")
+        ));
+        UUID augustDocumentId = addDocument(graph, document(
+                graph.storeId(), "sale-august", "SALE", PERIOD_END.plusDays(1),
+                "200.00", false, null
+        ));
+        addItem(graph, item(
+                augustDocumentId, "august-item", "IPHONE_NEW_ASIS", "1.000", "200.00",
+                knownCost("100.00")
+        ));
+
+        addOpenQualityIssue(
+                graph.storeId(), "SALE_DOCUMENT", scoped(graph, "sale-july"),
+                "SALE_PAYMENT_MISMATCH"
+        );
+        addOpenQualityIssue(
+                graph.storeId(), "SALE_DOCUMENT", scoped(graph, "sale-august"),
+                "SALE_PAYMENT_MISMATCH"
+        );
+        addOpenQualityIssue(
+                graph.storeId(), "SALE_ITEM", scoped(graph, "july-item"), "MISSING_COST"
+        );
+        addOpenQualityIssue(
+                graph.storeId(), "PRODUCT", scoped(graph, "kpi-product"), "UNMAPPED_PRODUCT"
+        );
+        addRawReturn(graph, "return-july-missing", Instant.parse("2026-07-15T12:00:00Z"));
+        addOpenQualityIssue(
+                graph.storeId(), "RETURN_DOCUMENT", scoped(graph, "return-july-missing"),
+                "RETURN_ORIGINAL_DOCUMENT_MISSING"
+        );
+
+        assertThat(periodQualityIssueRepository.countOpenConsistencyIssues(
+                graph.storeId(), PERIOD_START, PERIOD_END
+        )).isEqualTo(2);
+        assertThat(periodQualityIssueRepository.countOpenConsistencyIssues(
+                graph.storeId(), PERIOD_END.plusDays(1), PERIOD_END.plusMonths(1)
+        )).isOne();
     }
 
     @Test
@@ -146,6 +199,53 @@ class StoreKpiIntegrationTest {
         ));
         addItem(graph, item(otherStore, "other-store-item", "IPHONE_NEW_ASIS", "1.000", "999.00",
                 knownCost("500.00")));
+    }
+
+    private void addOpenQualityIssue(
+            UUID storeId,
+            String entityType,
+            String entityId,
+            String issueCode
+    ) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO data_quality_issues (
+                    id, store_id, entity_type, entity_id, issue_code, severity, status, message
+                ) VALUES (?, ?, ?, ?, ?, 'WARNING', 'OPEN', 'Open consistency issue')
+                """,
+                UUID.randomUUID(),
+                storeId,
+                entityType,
+                entityId,
+                issueCode
+        );
+    }
+
+    private void addRawReturn(TestGraph graph, String externalId, Instant occurredAt) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO raw_record_versions (
+                    id, connection_id, store_id, source_system, entity_type, external_id,
+                    payload, payload_hash, source_updated_at, first_seen_at, last_seen_at,
+                    first_sync_run_id, last_sync_run_id, normalization_status
+                ) VALUES (
+                    ?, ?, ?, 'LIVESKLAD', 'RETURN_DOCUMENT', ?, '{}'::jsonb, ?, ?, now(), now(),
+                    ?, ?, 'SKIPPED'
+                )
+                """,
+                UUID.randomUUID(),
+                graph.connectionId(),
+                graph.storeId(),
+                externalId,
+                "a".repeat(64),
+                Timestamp.from(occurredAt),
+                graph.syncRunId(),
+                graph.syncRunId()
+        );
+    }
+
+    private String scoped(TestGraph graph, String externalId) {
+        return graph.connectionId() + ":" + externalId;
     }
 
     private void addQualityIssues(TestGraph graph) {

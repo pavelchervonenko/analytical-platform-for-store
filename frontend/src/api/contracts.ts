@@ -182,6 +182,7 @@ const storeKpiDataQualitySchema = z.object({
   unmappedItemCount: z.number().int().nonnegative(),
   missingCostItemCount: z.number().int().nonnegative(),
   unexpectedZeroCostItemCount: z.number().int().nonnegative(),
+  periodOpenConsistencyIssueCount: z.number().int().nonnegative(),
   storeOpenQualityIssueCount: z.number().int().nonnegative()
 });
 

@@ -23,7 +23,11 @@ public class PayrollSalesRepository {
                 category.payroll_category_code AS base_payroll_category,
                 override.id AS override_assignment_id,
                 COALESCE(override.payroll_category_code,
-                         category.payroll_category_code) AS effective_payroll_category,
+                         resolve_default_payroll_category(
+                             category.code,
+                             product.name,
+                             category.payroll_category_code
+                         )) AS effective_payroll_category,
                 override.valid_from AS override_valid_from,
                 override.valid_to AS override_valid_to,
                 category.code = 'EXCLUDE' AS excluded
@@ -33,6 +37,7 @@ public class PayrollSalesRepository {
              AND NOT item.is_deleted
             LEFT JOIN sales_documents original_document
               ON original_document.id = document.original_document_id
+            JOIN products product ON product.id = item.product_id
             JOIN analytics_categories category
               ON category.id = item.analytics_category_id
             LEFT JOIN LATERAL (
@@ -71,6 +76,7 @@ public class PayrollSalesRepository {
                     END AS classification_date,
                     item.product_id,
                     item.analytics_category_id,
+                    product.name AS product_name,
                     CASE document.document_kind WHEN 'SALE' THEN 1 ELSE -1 END AS sign,
                     item.quantity,
                     item.net_amount,
@@ -81,6 +87,7 @@ public class PayrollSalesRepository {
                  AND NOT item.is_deleted
                 LEFT JOIN sales_documents original_document
                   ON original_document.id = document.original_document_id
+                JOIN products product ON product.id = item.product_id
                 WHERE document.store_id = :storeId
                   AND NOT document.is_deleted
                   AND document.business_date BETWEEN :periodStart AND :periodEnd
@@ -89,7 +96,11 @@ public class PayrollSalesRepository {
                 SELECT
                     source.*,
                     COALESCE(override.payroll_category_code,
-                             category.payroll_category_code) AS payroll_category_code
+                             resolve_default_payroll_category(
+                                 category.code,
+                                 source.product_name,
+                                 category.payroll_category_code
+                             )) AS payroll_category_code
                 FROM source_items source
                 JOIN analytics_categories category
                   ON category.id = source.analytics_category_id

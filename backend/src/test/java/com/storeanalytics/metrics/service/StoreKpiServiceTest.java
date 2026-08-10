@@ -10,6 +10,7 @@ import com.storeanalytics.common.exception.InvalidRequestException;
 import com.storeanalytics.metrics.exception.StoreNotFoundException;
 import com.storeanalytics.metrics.repository.StoreKpiAggregate;
 import com.storeanalytics.metrics.repository.StoreKpiRepository;
+import com.storeanalytics.quality.repository.PeriodQualityIssueRepository;
 import com.storeanalytics.store.repository.StoreRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -24,13 +25,16 @@ class StoreKpiServiceTest {
 
     private StoreRepository storeRepository;
     private StoreKpiRepository storeKpiRepository;
+    private PeriodQualityIssueRepository periodQualityIssueRepository;
     private StoreKpiService service;
 
     @BeforeEach
     void setUp() {
         storeRepository = mock(StoreRepository.class);
         storeKpiRepository = mock(StoreKpiRepository.class);
-        service = new StoreKpiService(storeRepository, storeKpiRepository);
+        periodQualityIssueRepository = mock(PeriodQualityIssueRepository.class);
+        service = new StoreKpiService(
+                storeRepository, storeKpiRepository, periodQualityIssueRepository);
     }
 
     @Test
@@ -42,6 +46,9 @@ class StoreKpiServiceTest {
                         "300.00", "3.000", "200.00",
                         new QualityCounts(2, 0, 0, 1, 1)
                 ));
+        when(periodQualityIssueRepository.countOpenConsistencyIssues(
+                storeId, PERIOD_START, PERIOD_END
+        )).thenReturn(4L);
 
         StoreKpiResult result = service.calculate(storeId, period());
 
@@ -53,6 +60,7 @@ class StoreKpiServiceTest {
         assertThat(result.marginPercent()).isEqualByComparingTo("33.33");
         assertThat(result.dataQuality().completeCostData()).isTrue();
         assertThat(result.dataQuality().unexpectedZeroCostItemCount()).isOne();
+        assertThat(result.dataQuality().periodOpenConsistencyIssueCount()).isEqualTo(4);
         assertThat(result.dataQuality().storeOpenQualityIssueCount()).isOne();
     }
 
@@ -102,7 +110,7 @@ class StoreKpiServiceTest {
         assertThatThrownBy(() -> service.calculate(storeId, period()))
                 .isInstanceOf(StoreNotFoundException.class)
                 .hasMessageContaining(storeId.toString());
-        verifyNoInteractions(storeKpiRepository);
+        verifyNoInteractions(storeKpiRepository, periodQualityIssueRepository);
     }
 
     @Test

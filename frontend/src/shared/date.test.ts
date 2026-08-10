@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampAsOfDate, monthRange, shiftMonth } from "./date";
+import { clampAsOfDate, clampCompletedAsOfDate, monthRange, shiftMonth } from "./date";
 
 describe("calendar date helpers", () => {
   it("keeps inclusive leap-year month boundaries", () => {
@@ -14,5 +14,15 @@ describe("calendar date helpers", () => {
   it("keeps as-of inside the requested month", () => {
     expect(clampAsOfDate("2026-07-23", "2026-07-01", "2026-07-31")).toBe("2026-07-23");
     expect(clampAsOfDate("2026-08-02", "2026-07-01", "2026-07-31")).toBe("2026-07-31");
+  });
+
+  it("uses the last completed calendar day for the current month", () => {
+    expect(clampCompletedAsOfDate("2026-08-10", "2026-08-01", "2026-08-31"))
+      .toBe("2026-08-09");
+  });
+
+  it("keeps completed historical months at month end", () => {
+    expect(clampCompletedAsOfDate("2026-08-10", "2026-07-01", "2026-07-31"))
+      .toBe("2026-07-31");
   });
 });

@@ -6,6 +6,7 @@ public record StoreKpiDataQuality(
         long unmappedItemCount,
         long missingCostItemCount,
         long unexpectedZeroCostItemCount,
+        long periodOpenConsistencyIssueCount,
         long storeOpenQualityIssueCount
 ) {
 }
