@@ -84,7 +84,7 @@ ID, digests, backup object key и оператор; после — smoke evidenc
 
 ## 4. Backup и recovery standard
 
-DBaaS physical backups остаются первым быстрым слоем восстановления. Дополнительно systemd timer
+DBaaS physical backups остаются первым быстрым слоем восстановления. Дополнительно systemd time
 создаёт ежедневный logical backup схемы `app`: `pg_dump` custom format → `pg_restore --list` →
 GPG AES-256 → SHA-256 manifest → private S3 → `head-object` size verification. Encryption
 passphrase хранится отдельно от S3 credentials и передаётся заказчику через защищённый канал.
@@ -124,3 +124,41 @@ monthly 12 месяцев. При лимите bucket 100 GB нужен alert н
 - [ ] July/August контрольные данные сверены до включения nightly schedule.
 - [ ] Telegram и Yandex AI включены поэтапно, а не одновременно с первым запуском.
 - [ ] Timeweb billing, domain expiry и Yandex budget alerts направлены минимум двум ответственным.
+
+## 7. Production evidence: восстановление nightly sync 2026-08-10
+
+Инцидент: плановые задачи 2026-08-10 не смогли завершить синхронизацию за 9 августа из-за
+`LIVESKLAD_RATE_LIMIT`. Ранее повтор выполнял то же крупное окно и терял прогресс текущего окна.
+
+В production выпущен backend `v0.1.0-pilot.8` из commit `e6a3126` с image ID
+`sha256:25125e0c32df203e7e9b9251b407aa35353a85ac810f2b825205634094bf618a`. Перед релизом
+создан и проверен encrypted logical backup:
+
+```text
+s3://5e8de462-4a0c-42a7-9a3b-e4d432c18eaf/postgres/daily/2026/08/10/
+store-analytics-20260810T092606Z.dump.gpg
+```
+
+Runtime использует шестичасовые окна. При provider rate limit worker сохраняет завершённые
+шаги, уменьшает только текущее окно вдвое и следует `Retry-After`. Recovery cron запускается
+ежечасно с 03:15 до 08:15 `Europe/Kaliningrad`; создание overlap-задач остаётся идемпотентным.
+
+Точечный backfill за 9 августа:
+
+- job `45d41d1e-f5dc-4fff-948e-a4c0ae1dcbfc`;
+- итог `SUCCESS`, 12 завершённых шагов, один контролируемый retry;
+- окно `16:00–22:00 Europe/Kaliningrad` после rate limit уменьшилось с 6 до 3 часов;
+- «МАГАЗИН»: 49 документов; «МобиСфера»: 17 документов; deleted documents: 0.
+
+Автоматический weekly pipeline за 3–9 августа после backfill:
+
+- оба snapshot jobs завершились `SUCCESS/CREATED`, snapshots имеют revision 1 и
+  `quality_status=PARTIAL` из-за реальных ограничений исходных данных;
+- обе Yandex AI jobs завершились `SUCCESS/PUBLISH` без validation retry;
+- опубликованы interpretation revision 1 для обоих магазинов;
+- структурная проверка без вывода персональных текстов: «МАГАЗИН» — 6 сотрудников и 12
+  employee summary blocks, «МобиСфера» — 3 сотрудника и 6 employee summary blocks;
+- необоснованные optional `teamRelationships` удалены валидатором без повторного provider call.
+
+Acceptance: внешний HTTPS, `/livez` и `/readyz` отвечали HTTP 200 во время backfill; интерфейс
+оставался доступен руководителям. Повторная полная загрузка июля/августа не выполнялась.
