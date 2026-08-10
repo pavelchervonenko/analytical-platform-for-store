@@ -31,7 +31,7 @@ Related documents:
 - [synchronization-api.md](synchronization-api.md) — durable LiveSklad synchronization jobs;
 - [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) — current project state and delivery context.
 
-## Current pilot record (2026-08-08)
+## Current pilot record (2026-08-10)
 
 This section records the deployed state. The remainder of the document remains the normative
 target and runbook.
@@ -39,24 +39,26 @@ target and runbook.
 - Public origin: `https://store-analytics.net`.
 - Application host: Ubuntu 24.04 LTS in the Timeweb Saint Petersburg region, with a public edge
   address and a private VPC interface.
-- Release: `v0.1.0-pilot.7-4253e1d`; backend API/worker use
-  `store-analytics-backend:v0.1.0-pilot.7` and the web edge uses
-  `store-analytics-web:v0.1.0-pilot.6`. Separate `backend-api`, `backend-worker` and `web`
-  containers are healthy. Flyway schema version 33, HTTPS, frontend, liveness and readiness smoke
+- Release: `v0.1.0-pilot.10-72a9162`; backend API/worker use
+  `store-analytics-backend:v0.1.0-pilot.10` and the web edge uses
+  `store-analytics-web:v0.1.0-pilot.10`. Separate `backend-api`, `backend-worker` and `web`
+  containers are healthy. Flyway schema version 34, HTTPS, frontend, liveness and readiness smoke
   checks pass.
 - Database: managed PostgreSQL 16 over the private network and TLS `verify-full`; runtime,
   migration and backup roles are separate and the `app` schema ACLs are reasserted by each deploy.
 - Object storage: private Timeweb S3 bucket, versioning and Governance Object Lock enabled,
   100 GB account-side safety limit, dedicated backup writer credentials. The encrypted nightly
   logical dump is enabled and its first upload was verified; provider physical database backup is
-  enabled daily with one retained copy.
+  enabled daily with one retained copy. An additional encrypted logical dump was uploaded and
+  verified immediately before the `pilot.10` migration on 2026-08-10.
 - Host access: SSH public keys only; root login and password authentication are disabled. UFW allows
   SSH, HTTP/HTTPS and Timeweb monitoring only. The provider Zabbix listener remains restricted to
   provider monitoring addresses.
 - Data scope: LiveSklad backfill starts at 2026-07-01 and incremental synchronization is durable.
   The pilot has two stores. Production identifiers and credentials are never recorded in this file.
-- Monitoring: the local public-readiness monitor passed its one-shot acceptance and its systemd
-  timer is enabled; Timeweb monitoring remains an independent external signal.
+- Monitoring: the local public-readiness monitor passed its one-shot acceptance and
+  `store-analytics-health.timer` is enabled; Timeweb monitoring remains an independent external
+  signal.
 - LLM: YandexGPT 5.1, prompt v4/content schema v2, strict structured output, bounded retries and
   persisted cost accounting. Snapshot, generation and publication planners/workers are enabled.
   The snapshot revision window is seven days during the pilot so late source data or late employee
@@ -92,6 +94,13 @@ target and runbook.
   found zero `UNMAPPED` rows and zero open `UNMAPPED_PRODUCT` issues in both stores. Future source
   synchronization remains the authoritative reconciliation path; the application still does not
   guess categories during normal synchronization.
+- Release `pilot.10` makes current-period completeness checks use the last completed reporting day,
+  separates period-scoped consistency issues from unrelated historical issues and refreshes cached
+  workspace data when a manager returns to the browser tab. Confirmed MacBook, iPad, Dyson and
+  PlayStation 5 device families now receive deterministic payroll defaults after their approved
+  analytics category has been resolved; explicit effective-dated product overrides still win and
+  accessory rows are not promoted to device payroll categories. This is calculation logic rather
+  than a source-data rewrite.
 - Employee interpretation membership is captured immutably when a weekly snapshot is created.
   Changing `participates_in_ranking` does not mutate an existing snapshot; a newer successful
   source sync inside the revision window creates a new snapshot revision and a new LLM generation.
