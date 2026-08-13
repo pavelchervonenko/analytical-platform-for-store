@@ -70,18 +70,19 @@ Operational constraints:
 
 Current deployed application release:
 
-- release ID: `v0.1.0-pilot.10-72a9162`;
-- backend image: `store-analytics-backend:v0.1.0-pilot.10`;
-- web image: `store-analytics-web:v0.1.0-pilot.10`;
-- application commit embedded in both images: `72a9162`;
+- release ID: `v0.1.0-pilot.11-4b607da`;
+- backend image: `store-analytics-backend:v0.1.0-pilot.11`;
+- web image: `store-analytics-web:v0.1.0-pilot.11`;
+- application commit embedded in both images: `4b607da`;
 - Flyway schema version: `34`;
 - liveness and readiness: `UP` after deployment;
-- previous `pilot.9` application images and release state remain available for application rollback.
+- previous `pilot.10` application images and release state remain available for application rollback.
 
-Immediately before `pilot.10`, an additional encrypted PostgreSQL logical backup was uploaded to
-S3 and verified. The release passed image checksum validation, migration, database ACL repair,
-container health checks, HTTPS smoke tests and a separate post-deploy check. No recent backend
-`ERROR`, `FATAL` or exception entry was found during acceptance.
+Immediately before `pilot.11`, an additional encrypted PostgreSQL logical backup was uploaded to
+S3 and verified. The release passed image checksum validation, Flyway validation, database ACL
+repair, container health checks, HTTPS smoke tests and a separate post-deploy check. It required no
+new migration and retained schema version 34. No recent backend `ERROR`, `FATAL` or exception entry
+was found during acceptance.
 
 Temporary full `NOPASSWD` access used for the release was removed. Do not assume passwordless sudo
 is available.
@@ -124,6 +125,13 @@ Release `pilot.10` (`72a9162`) added:
 - protection against classifying accessories as device payroll categories.
 
 Flyway V34 creates the deterministic payroll-category resolver. It does not rewrite source facts.
+
+Release `pilot.11` (`4b607da`) limits `RATING_SALES_WITHOUT_SHIFT` to employees whose
+`participates_in_ranking` flag is enabled. Excluded employees still contribute to financial facts,
+but their sales no longer produce the ranking warning. Production validation found zero such
+rating-scoped rows in the store with six ranking participants despite two rows among excluded
+employees. The store with three ranking participants still has three rating-scoped rows and
+therefore retains a legitimate warning until its real shifts are entered.
 
 ### 4.4 AI and Telegram
 
@@ -407,7 +415,7 @@ docker/local-integration/
 scripts/run-local-telegram-update-bridge.sh
 ```
 
-No Git push was performed as part of the `pilot.10` deployment. Do not assume the current branch or
+No Git push was performed as part of the `pilot.11` deployment. Do not assume the current branch or
 the two latest commits exist on a remote repository.
 
 ## 13. Verification already completed for pilot.10
@@ -429,6 +437,21 @@ the two latest commits exist on a remote repository.
 
 Do not rerun the complete test suite merely to rediscover this evidence unless code has changed or a
 new release is being prepared.
+
+### 13.1 Verification completed for pilot.11
+
+- the focused missing-shift quality regression tests passed;
+- backend Checkstyle and supply-chain verification passed;
+- the full backend run passed 673 of 674 tests; the one isolated Telegram linking timing failure
+  did not reproduce when its complete test class was rerun successfully;
+- frontend contract verification, lint, all 105 tests and the production build passed;
+- immutable backend and web images carried commit `4b607da` and passed checksum validation;
+- Flyway validated the existing 34 migrations and reported no migration necessary;
+- all three production containers became healthy and public liveness/readiness returned `UP`;
+- fresh backend API and worker logs contained no error entries;
+- production had no active synchronization job after deployment;
+- the temporary release-only passwordless sudo rule was removed and passwordless sudo was verified
+  unavailable afterward.
 
 ## 14. Acceptance criteria for the next checkpoint
 

@@ -39,9 +39,9 @@ target and runbook.
 - Public origin: `https://store-analytics.net`.
 - Application host: Ubuntu 24.04 LTS in the Timeweb Saint Petersburg region, with a public edge
   address and a private VPC interface.
-- Release: `v0.1.0-pilot.10-72a9162`; backend API/worker use
-  `store-analytics-backend:v0.1.0-pilot.10` and the web edge uses
-  `store-analytics-web:v0.1.0-pilot.10`. Separate `backend-api`, `backend-worker` and `web`
+- Release: `v0.1.0-pilot.11-4b607da`; backend API/worker use
+  `store-analytics-backend:v0.1.0-pilot.11` and the web edge uses
+  `store-analytics-web:v0.1.0-pilot.11`. Separate `backend-api`, `backend-worker` and `web`
   containers are healthy. Flyway schema version 34, HTTPS, frontend, liveness and readiness smoke
   checks pass.
 - Database: managed PostgreSQL 16 over the private network and TLS `verify-full`; runtime,
@@ -49,8 +49,9 @@ target and runbook.
 - Object storage: private Timeweb S3 bucket, versioning and Governance Object Lock enabled,
   100 GB account-side safety limit, dedicated backup writer credentials. The encrypted nightly
   logical dump is enabled and its first upload was verified; provider physical database backup is
-  enabled daily with one retained copy. An additional encrypted logical dump was uploaded and
-  verified immediately before the `pilot.10` migration on 2026-08-10.
+  enabled daily with one retained copy. Additional encrypted logical dumps were uploaded and
+  verified immediately before the `pilot.10` migration on 2026-08-10 and the application-only
+  `pilot.11` release on 2026-08-13.
 - Host access: SSH public keys only; root login and password authentication are disabled. UFW allows
   SSH, HTTP/HTTPS and Timeweb monitoring only. The provider Zabbix listener remains restricted to
   provider monitoring addresses.
@@ -101,6 +102,10 @@ target and runbook.
   analytics category has been resolved; explicit effective-dated product overrides still win and
   accessory rows are not promoted to device payroll categories. This is calculation logic rather
   than a source-data rewrite.
+- Release `pilot.11` scopes the `RATING_SALES_WITHOUT_SHIFT` quality issue to employees who
+  participate in ranking. Sales by excluded employees remain in financial reporting but no longer
+  create a false ranking-quality warning. The release has no database migration; schema version 34
+  remains current.
 - Employee interpretation membership is captured immutably when a weekly snapshot is created.
   Changing `participates_in_ranking` does not mutate an existing snapshot; a newer successful
   source sync inside the revision window creates a new snapshot revision and a new LLM generation.
