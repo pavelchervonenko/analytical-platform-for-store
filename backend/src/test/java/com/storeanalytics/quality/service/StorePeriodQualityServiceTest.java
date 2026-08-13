@@ -137,6 +137,21 @@ class StorePeriodQualityServiceTest {
         );
     }
 
+    @Test
+    void ignoresSalesWithoutShiftsForEmployeesExcludedFromRating() {
+        Fixture fixture = fixture();
+        when(fixture.employee().ratingEligible()).thenReturn(false);
+        when(fixture.employee().shiftCount()).thenReturn(0L);
+        when(fixture.employee().workedHours()).thenReturn(BigDecimal.ZERO.setScale(2));
+        when(fixture.employee().netRevenue()).thenReturn(new BigDecimal("100.00"));
+
+        StorePeriodQualityView result = fixture.service().inspect(STORE_ID, MONTH, AS_OF);
+
+        assertThat(result.issues())
+                .extracting(PeriodQualityIssueView::code)
+                .doesNotContain("RATING_SALES_WITHOUT_SHIFT");
+    }
+
     private Fixture fixture() {
         StoreRepository storeRepository = mock(StoreRepository.class);
         Store store = mock(Store.class);

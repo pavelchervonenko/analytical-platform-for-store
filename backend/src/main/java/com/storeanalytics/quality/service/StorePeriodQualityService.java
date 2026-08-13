@@ -309,7 +309,8 @@ public class StorePeriodQualityService {
         int withShifts = count(employees, entry -> entry.ratingEligible()
                 && entry.shiftCount() > 0);
         int ranked = count(employees, EmployeeRatingEntry::ranked);
-        int salesWithoutShift = count(employees, entry -> entry.netRevenue().signum() != 0
+        int salesWithoutShift = count(employees, entry -> entry.ratingEligible()
+                && entry.netRevenue().signum() != 0
                 && (entry.shiftCount() == 0 || entry.workedHours().signum() <= 0));
         BigDecimal minimumCoverage = result.formula().minimumCoveragePercent();
         int insufficientCoverage = count(employees, entry -> entry.ratingEligible()
