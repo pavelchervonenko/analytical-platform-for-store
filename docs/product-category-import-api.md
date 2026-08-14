@@ -10,8 +10,8 @@ POST /api/integration-connections/{connectionKey}/product-category-imports
 Content-Type: application/json
 ```
 
-The prepared payload is `outputs/category-review-approved/product-category-assignments-v2.json`.
-Its active rule version is `customer-approved-2026-08-07-v2`; `validFrom` is
+The prepared payload is `outputs/category-review-approved/product-category-assignments-v3.json`.
+Its active rule version is `customer-approved-2026-08-14-v3`; `validFrom` is
 `2025-12-31T22:00:00Z`, which is `2026-01-01 00:00` in the reporting time zone
 `Europe/Kaliningrad`. Import the classification before the historical sales backfill so each sale
 item captures the approved category snapshot during normalization.
@@ -72,7 +72,7 @@ Manual backfill returns 409 SYNC_CLASSIFICATION_REQUIRED when readiness is false
 incremental enqueuer skips creation and writes a warning. This is a bootstrap safety barrier. After bootstrap, classification uses two
 ordered layers:
 an effective customer-approved assignment by exact LiveSklad product identity first, then the
-versioned high-confidence rule set `livesklad-product-rules-v1`. A rule result is stored directly in
+versioned high-confidence rule set `livesklad-product-rules-v2`. A rule result is stored directly in
 the sale or return snapshot with its rule version. Ambiguous names are never forced into a fallback
 category and remain visible as `UNMAPPED` for review.
 

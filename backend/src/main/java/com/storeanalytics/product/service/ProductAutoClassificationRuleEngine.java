@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class ProductAutoClassificationRuleEngine {
 
-    public static final String RULE_VERSION = "livesklad-product-rules-v1";
+    public static final String RULE_VERSION = "livesklad-product-rules-v2";
 
     public Optional<ProductAutoClassificationDecision> classify(Product product) {
         return classify(product.getName(), product.getSourceKind());
@@ -162,18 +162,32 @@ public class ProductAutoClassificationRuleEngine {
             return notApplicable("CHARGER_CABLE", "charger-cable");
         }
 
+        if (containsAny(name, "наконечник")
+                && containsAny(name, "apple pencil", "pencil")) {
+            return notApplicable("ACCESSORY_IPAD_MAC", "ipad-mac-accessory");
+        }
+
         if (containsAny(
                 name,
-                "apple pencil",
-                "magic mouse",
-                "magic keyboard",
-                "клавиатур"
+                "док-станц",
+                "док станц",
+                "charging station",
+                "chargingstation"
         )) {
+            return notApplicable("OTHER_ACCESSORY_PRODUCT", "dock-station-accessory");
+        }
+
+        if (containsAny(name, "клавиатур")
+                && !containsAny(name, "magic keyboard")) {
             return notApplicable("ACCESSORY_IPAD_MAC", "ipad-mac-accessory");
         }
 
         if (containsAny(name, "ремешок", "браслет для", "airtag", "брелок")) {
             return notApplicable("ACCESSORY_PODS_WATCH", "pods-watch-accessory");
+        }
+
+        if (isIpadMacPeripheralDevice(name)) {
+            return Optional.empty();
         }
 
         if (containsAny(
@@ -194,6 +208,9 @@ public class ProductAutoClassificationRuleEngine {
 
     private Optional<ProductAutoClassificationDecision> classifyDevice(String name) {
         ProductConditionType condition = condition(name);
+        if (isIpadMacPeripheralDevice(name)) {
+            return decision("IPAD_MAC", condition, "ipad-mac-peripheral-device");
+        }
         if (isIphone(name)) {
             return decision(
                     condition == ProductConditionType.USED
@@ -264,6 +281,15 @@ public class ProductAutoClassificationRuleEngine {
 
     private boolean isIpadOrMac(String name) {
         return containsAny(name, "ipad", "macbook", "imac", "mac mini", "макбук");
+    }
+
+    private boolean isIpadMacPeripheralDevice(String name) {
+        return containsAny(
+                name,
+                "apple pencil",
+                "magic mouse",
+                "magic keyboard"
+        );
     }
 
     private boolean isPodsOrWatch(String name) {

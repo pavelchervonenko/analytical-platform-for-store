@@ -93,7 +93,7 @@ class ProductClassificationReconciliationServiceTest {
                 new ProductClassificationResolution(
                         category,
                         null,
-                        "livesklad-product-rules-v1:charger-cable",
+                        "livesklad-product-rules-v2:charger-cable",
                         ProductConditionType.NOT_APPLICABLE
                 )
         ));

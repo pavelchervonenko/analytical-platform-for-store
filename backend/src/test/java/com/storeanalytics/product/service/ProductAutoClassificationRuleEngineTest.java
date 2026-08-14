@@ -122,6 +122,56 @@ class ProductAutoClassificationRuleEngineTest {
                         "Чехол VLP Aster Pro Case iPhone 17 Pro Max Белый",
                         "CASE_APPLE_IPHONE",
                         ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Apple Pencil Pro NEW",
+                        "IPAD_MAC",
+                        ProductConditionType.NEW
+                ),
+                arguments(
+                        "Стилус Apple Pencil Pro NEW",
+                        "IPAD_MAC",
+                        ProductConditionType.NEW
+                ),
+                arguments(
+                        "Apple Magic Mouse USB-C Black",
+                        "IPAD_MAC",
+                        ProductConditionType.NEW
+                ),
+                arguments(
+                        "Magic Keyboard iPad Pro Black",
+                        "IPAD_MAC",
+                        ProductConditionType.NEW
+                ),
+                arguments(
+                        "Клавиатура Magic Keyboard iPad Pro Black",
+                        "IPAD_MAC",
+                        ProductConditionType.NEW
+                ),
+                arguments(
+                        "PlayStation 5 Dualsense Midnight Black",
+                        "PODS_WATCH_OTHER_DEVICE",
+                        ProductConditionType.NEW
+                ),
+                arguments(
+                        "iPhone Air Magsafe Battery Pack",
+                        "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Наконечники Elago Metal Tips для Apple Pencil 1/2/Pro/USB-C (2шт.)",
+                        "ACCESSORY_IPAD_MAC",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Наконечники для универсального стилуса",
+                        "OTHER_ACCESSORY_PRODUCT",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Док-станция PS5 DualSense ChargingStation",
+                        "OTHER_ACCESSORY_PRODUCT",
+                        ProductConditionType.NOT_APPLICABLE
                 )
         );
     }

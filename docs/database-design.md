@@ -115,6 +115,9 @@ written atomically only for successful validation; publication refuses raw or ha
 V32 applies the customer-confirmed CARE split (`ELITE`/`PRIVILEGE` warranty,
 `Check Premium`/`ULTIMATE` protection), renames the protection label and repairs affected normalized
 source facts. Finalized reports and published LLM interpretations remain immutable.
+V35 applies the customer-confirmed monetary accessory correction for the exact 14-product scope,
+repairs effective assignments and normalized item category snapshots, and preserves original
+sale/return amounts. Finalized reports remain immutable.
 
 `audit_log` is the unified command history. Flyway V10 makes actor and store references nullable
 on later hard deletion and bounds safe versioned metadata to 32 KiB. Flyway V12 assigns immutable
