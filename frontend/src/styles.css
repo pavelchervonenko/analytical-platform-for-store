@@ -697,6 +697,35 @@ body { font-size: 17px; line-height: 1.47; }
 .direction-row:first-child { border-top: 0; }
 .direction-row .progress { margin-top: 12px; }
 
+.daily-plan-panel { margin-top: 24px; overflow: hidden; }
+.daily-plan-panel .panel__heading { align-items: flex-start; padding: 22px 24px 18px; }
+.daily-plan-panel .panel__heading h2 { margin-top: 3px; }
+.daily-plan-panel .panel__heading p:last-child { max-width: 680px; margin: 6px 0 0; color: var(--text-muted); font-size: 12px; }
+.daily-plan-panel .table-scroll { border-top: 1px solid var(--border); }
+.daily-plan-table { min-width: 940px; }
+.daily-plan-table th,
+.daily-plan-table td { vertical-align: middle; }
+.daily-plan-table thead tr:first-child th { padding-bottom: 7px; text-align: center; }
+.daily-plan-table thead tr:first-child th:first-child,
+.daily-plan-table thead tr:first-child th:nth-child(2) { text-align: left; }
+.daily-plan-table thead tr:nth-child(2) th { padding-top: 0; text-align: left; }
+.daily-plan-table tbody th,
+.daily-plan-table tbody td { min-width: 128px; }
+.daily-plan-table tbody th { min-width: 112px; }
+.daily-plan-table tbody strong,
+.daily-plan-table tbody small,
+.daily-plan-table tbody i { display: block; }
+.daily-plan-table tbody strong { font-size: 13px; }
+.daily-plan-table tbody small { margin-top: 3px; color: var(--text-muted); font-size: 11px; font-weight: 500; }
+.daily-plan-table tbody i { margin-top: 4px; color: var(--text-faint); font-size: 10px; font-style: normal; }
+.daily-plan-table tbody .text-success { color: var(--success); }
+.daily-plan-table tbody .text-warning { color: var(--warning); }
+.daily-plan-table__future { background: color-mix(in srgb, var(--primary-soft) 55%, transparent); }
+.daily-plan-table__future th:first-child { box-shadow: inset 3px 0 0 var(--primary); }
+.daily-plan-table__target strong { color: var(--primary); }
+.daily-plan-table__empty { color: var(--text-faint); }
+
+
 .overview-details { display: grid; gap: 10px; margin-top: 24px; }
 .disclosure-panel { overflow: hidden; border: 1px solid rgba(0, 0, 0, .08); border-radius: 18px; background: var(--surface); }
 .disclosure-panel > summary {

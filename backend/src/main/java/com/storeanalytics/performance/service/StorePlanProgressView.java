@@ -21,6 +21,7 @@ public record StorePlanProgressView(
         boolean allDirectionsAchieved,
         List<StorePlanDirectionCode> focusDirections,
         List<StorePlanDirectionView> directions,
+        List<StorePlanDailyTargetView> dailyTargets,
         Instant calculatedAt
 ) {
 }

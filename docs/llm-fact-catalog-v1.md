@@ -172,7 +172,7 @@ Rate может превышать 100; отрицательный числит�
 
 ### 5.5 План магазина
 
-Источник: `StorePlanProgressService`, formula `store-plan-progress-v1`.
+Источник: `StorePlanProgressService`, formula `store-plan-progress-v2`.
 
 Для каждого `REVENUE/ACCESSORY/SERVICE/ADDITIONAL`:
 

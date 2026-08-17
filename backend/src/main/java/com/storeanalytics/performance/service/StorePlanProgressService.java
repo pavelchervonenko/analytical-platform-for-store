@@ -10,6 +10,8 @@ import com.storeanalytics.metrics.service.CategoryKpiService;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.metrics.service.StoreKpiResult;
 import com.storeanalytics.metrics.service.StoreKpiService;
+import com.storeanalytics.performance.repository.StorePlanDailyActual;
+import com.storeanalytics.performance.repository.StorePlanDailyActualRepository;
 import com.storeanalytics.product.model.AnalyticsCategoryKind;
 import com.storeanalytics.store.service.StoreDataStatusService;
 import com.storeanalytics.store.service.StoreDataStatusView;
@@ -18,7 +20,10 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Predicate;
 import org.springframework.stereotype.Service;
@@ -27,14 +32,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class StorePlanProgressService {
 
-    static final String FORMULA_VERSION = "store-plan-progress-v1";
+    static final String FORMULA_VERSION = "store-plan-progress-v2";
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
     private static final int MONEY_SCALE = 2;
     private static final int PERCENT_SCALE = 2;
+    private static final int CALCULATION_SCALE = 8;
 
     private final StorePerformancePlanService planService;
     private final StoreKpiService storeKpiService;
     private final CategoryKpiService categoryKpiService;
+    private final StorePlanDailyActualRepository dailyActualRepository;
     private final StoreDataStatusService dataStatusService;
     private final Clock clock;
 
@@ -42,12 +49,14 @@ public class StorePlanProgressService {
             StorePerformancePlanService planService,
             StoreKpiService storeKpiService,
             CategoryKpiService categoryKpiService,
+            StorePlanDailyActualRepository dailyActualRepository,
             StoreDataStatusService dataStatusService,
             Clock clock
     ) {
         this.planService = planService;
         this.storeKpiService = storeKpiService;
         this.categoryKpiService = categoryKpiService;
+        this.dailyActualRepository = dailyActualRepository;
         this.dataStatusService = dataStatusService;
         this.clock = clock;
     }
@@ -86,6 +95,8 @@ public class StorePlanProgressService {
         StorePerformancePlanView plan = planService.get(validatedStoreId, validatedMonth);
         StoreKpiResult storeKpi = storeKpiService.calculate(validatedStoreId, period);
         CategoryKpiResult categoryKpi = categoryKpiService.calculate(validatedStoreId, period);
+        List<StorePlanDailyActual> dailyActuals =
+                dailyActualRepository.aggregate(validatedStoreId, start, asOf);
 
         BigDecimal revenue = money(storeKpi.netRevenue());
         BigDecimal accessories = categoryAmount(
@@ -107,6 +118,15 @@ public class StorePlanProgressService {
         int elapsedDays = asOf.getDayOfMonth();
         int remainingDays = totalDays - elapsedDays;
         Timeline timeline = new Timeline(elapsedDays, remainingDays, totalDays);
+        List<StorePlanDailyTargetView> dailyTargets = dailyTargets(
+                validatedMonth,
+                asOf,
+                plan,
+                dailyActuals,
+                revenue,
+                accessories,
+                services
+        );
         List<StorePlanDirectionView> directions = List.of(
                 amountDirection(
                         StorePlanDirectionCode.REVENUE,
@@ -120,7 +140,6 @@ public class StorePlanProgressService {
                         StorePlanDirectionCode.ACCESSORY,
                         accessories,
                         revenue,
-                        plan.revenueTarget(),
                         plan.accessoryShareTarget(),
                         timeline
                 ),
@@ -128,7 +147,6 @@ public class StorePlanProgressService {
                         StorePlanDirectionCode.SERVICE,
                         services,
                         revenue,
-                        plan.revenueTarget(),
                         plan.serviceShareTarget(),
                         timeline
                 ),
@@ -136,7 +154,6 @@ public class StorePlanProgressService {
                         StorePlanDirectionCode.ADDITIONAL,
                         additional,
                         revenue,
-                        plan.revenueTarget(),
                         plan.additionalShareTarget(),
                         timeline
                 )
@@ -174,6 +191,7 @@ public class StorePlanProgressService {
                 achievedCount == directions.size(),
                 focus,
                 directions,
+                dailyTargets,
                 clock.instant()
         );
     }
@@ -195,6 +213,201 @@ public class StorePlanProgressService {
                 .map(entry -> entry.metrics().netRevenue())
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
     }
+
+    private List<StorePlanDailyTargetView> dailyTargets(
+            YearMonth month,
+            LocalDate asOf,
+            StorePerformancePlanView plan,
+            List<StorePlanDailyActual> dailyActuals,
+            BigDecimal revenue,
+            BigDecimal accessories,
+            BigDecimal services
+    ) {
+        Map<LocalDate, StorePlanDailyActual> actualsByDate = new HashMap<>();
+        dailyActuals.forEach(actual -> actualsByDate.put(actual.businessDate(), actual));
+
+        int remainingDays = month.lengthOfMonth() - asOf.getDayOfMonth();
+        BigDecimal futureRevenue = futureRevenueBasis(
+                revenue,
+                asOf.getDayOfMonth(),
+                plan.revenueTarget(),
+                month.lengthOfMonth()
+        );
+        BigDecimal projectedRevenue = money(
+                revenue.add(futureRevenue.multiply(BigDecimal.valueOf(remainingDays)))
+        );
+        BigDecimal accessoryRequired = futureRequiredAmount(
+                projectedRevenue,
+                plan.accessoryShareTarget(),
+                accessories
+        );
+        BigDecimal serviceRequired = futureRequiredAmount(
+                projectedRevenue,
+                plan.serviceShareTarget(),
+                services
+        );
+
+        List<StorePlanDailyTargetView> result = new ArrayList<>(month.lengthOfMonth());
+        BigDecimal cumulativeRevenue = BigDecimal.ZERO;
+        BigDecimal cumulativeAccessories = BigDecimal.ZERO;
+        BigDecimal cumulativeServices = BigDecimal.ZERO;
+        int futureIndex = 0;
+        for (int day = 1; day <= month.lengthOfMonth(); day++) {
+            LocalDate date = month.atDay(day);
+            if (!date.isAfter(asOf)) {
+                StorePlanDailyActual actual = actualsByDate.getOrDefault(
+                        date,
+                        emptyDailyActual(date)
+                );
+                cumulativeRevenue = cumulativeRevenue.add(actual.revenueAmount());
+                cumulativeAccessories =
+                        cumulativeAccessories.add(actual.accessoryAmount());
+                cumulativeServices = cumulativeServices.add(actual.serviceAmount());
+                result.add(new StorePlanDailyTargetView(
+                        date,
+                        true,
+                        money(actual.revenueAmount()),
+                        false,
+                        completedDailyDirection(
+                                actual.accessoryAmount(),
+                                actual.revenueAmount(),
+                                plan.accessoryShareTarget(),
+                                cumulativeAccessories,
+                                cumulativeRevenue
+                        ),
+                        completedDailyDirection(
+                                actual.serviceAmount(),
+                                actual.revenueAmount(),
+                                plan.serviceShareTarget(),
+                                cumulativeServices,
+                                cumulativeRevenue
+                        )
+                ));
+            } else {
+                futureIndex++;
+                result.add(new StorePlanDailyTargetView(
+                        date,
+                        false,
+                        futureRevenue,
+                        true,
+                        futureDailyDirection(
+                                accessoryRequired,
+                                remainingDays,
+                                futureIndex,
+                                futureRevenue
+                        ),
+                        futureDailyDirection(
+                                serviceRequired,
+                                remainingDays,
+                                futureIndex,
+                                futureRevenue
+                        )
+                ));
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private StorePlanDailyActual emptyDailyActual(LocalDate date) {
+        return new StorePlanDailyActual(
+                date,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO
+        );
+    }
+
+    private BigDecimal futureRevenueBasis(
+            BigDecimal actualRevenue,
+            int elapsedDays,
+            BigDecimal revenueTarget,
+            int totalDays
+    ) {
+        BigDecimal basis = actualRevenue.signum() > 0
+                ? actualRevenue.divide(
+                        BigDecimal.valueOf(elapsedDays),
+                        CALCULATION_SCALE,
+                        RoundingMode.HALF_UP
+                )
+                : revenueTarget.divide(
+                        BigDecimal.valueOf(totalDays),
+                        CALCULATION_SCALE,
+                        RoundingMode.HALF_UP
+                );
+        return money(basis);
+    }
+
+    private BigDecimal futureRequiredAmount(
+            BigDecimal projectedRevenue,
+            BigDecimal targetShare,
+            BigDecimal actualAmount
+    ) {
+        BigDecimal projectedTarget = projectedRevenue
+                .multiply(percentValue(targetShare))
+                .divide(ONE_HUNDRED, CALCULATION_SCALE, RoundingMode.HALF_UP);
+        return money(projectedTarget.subtract(actualAmount).max(BigDecimal.ZERO));
+    }
+
+    private StorePlanDailyDirectionView completedDailyDirection(
+            BigDecimal actualAmount,
+            BigDecimal dailyRevenue,
+            BigDecimal targetShare,
+            BigDecimal cumulativeAmount,
+            BigDecimal cumulativeRevenue
+    ) {
+        BigDecimal normalizedTargetShare = percentValue(targetShare);
+        BigDecimal targetAmount = money(
+                dailyRevenue.multiply(normalizedTargetShare)
+                        .divide(ONE_HUNDRED, CALCULATION_SCALE, RoundingMode.HALF_UP)
+        );
+        BigDecimal cumulativeTarget = cumulativeRevenue
+                .multiply(normalizedTargetShare)
+                .divide(ONE_HUNDRED, CALCULATION_SCALE, RoundingMode.HALF_UP);
+        return new StorePlanDailyDirectionView(
+                money(actualAmount),
+                dailyRevenue.signum() > 0 ? percent(actualAmount, dailyRevenue) : null,
+                targetAmount,
+                normalizedTargetShare,
+                money(cumulativeAmount.subtract(cumulativeTarget))
+        );
+    }
+
+    private StorePlanDailyDirectionView futureDailyDirection(
+            BigDecimal requiredAmount,
+            int remainingDays,
+            int futureIndex,
+            BigDecimal revenueBasis
+    ) {
+        BigDecimal targetAmount = allocatedAmount(
+                requiredAmount,
+                remainingDays,
+                futureIndex
+        );
+        return new StorePlanDailyDirectionView(
+                null,
+                null,
+                targetAmount,
+                percent(targetAmount, revenueBasis),
+                null
+        );
+    }
+
+    private BigDecimal allocatedAmount(
+            BigDecimal total,
+            int count,
+            int index
+    ) {
+        BigDecimal base = total.divide(
+                BigDecimal.valueOf(count),
+                MONEY_SCALE,
+                RoundingMode.DOWN
+        );
+        if (index < count) {
+            return money(base);
+        }
+        return money(total.subtract(base.multiply(BigDecimal.valueOf(count - 1L))));
+    }
+
 
     private StorePlanDirectionView amountDirection(
             StorePlanDirectionCode code,
@@ -226,6 +439,7 @@ public class StorePlanProgressService {
                         null,
                         null,
                         completion,
+                        percent(pace.projectedAmount(), normalizedTarget),
                         achieved,
                         status
                 )
@@ -236,13 +450,12 @@ public class StorePlanProgressService {
             StorePlanDirectionCode code,
             BigDecimal actual,
             BigDecimal revenue,
-            BigDecimal revenueTarget,
             BigDecimal shareTarget,
             Timeline timeline
     ) {
         BigDecimal normalizedShareTarget = percentValue(shareTarget);
         BigDecimal targetAmount = money(
-                revenueTarget.multiply(normalizedShareTarget).divide(ONE_HUNDRED)
+                revenue.multiply(normalizedShareTarget).divide(ONE_HUNDRED)
         );
         boolean shareAvailable = revenue.signum() > 0;
         BigDecimal actualShare = shareAvailable ? percent(actual, revenue) : null;
@@ -256,7 +469,7 @@ public class StorePlanProgressService {
                                 RoundingMode.HALF_UP
                         )
                 : null;
-        PaceAmounts pace = pace(actual, targetAmount, timeline);
+        PaceAmounts pace = sharePace(actual, targetAmount, timeline);
         StorePlanProgressStatus status = status(
                 achieved,
                 shareAvailable,
@@ -277,6 +490,7 @@ public class StorePlanProgressService {
                                 ? null : percentValue(
                                         actualShare.subtract(normalizedShareTarget)
                                 ),
+                        criterionCompletion,
                         criterionCompletion,
                         achieved,
                         status
@@ -303,7 +517,7 @@ public class StorePlanProgressService {
                 pace.expectedAmountToDate(),
                 pace.paceGapAmount(),
                 pace.projectedAmount(),
-                percent(pace.projectedAmount(), target),
+                criterion.projectedCompletion(),
                 pace.remainingAmount(),
                 pace.requiredPerRemainingDay(),
                 criterion.actualShare(),
@@ -315,19 +529,42 @@ public class StorePlanProgressService {
         );
     }
 
-    private PaceAmounts pace(
+    private PaceAmounts sharePace(
             BigDecimal actual,
-            BigDecimal target,
+            BigDecimal targetToDate,
             Timeline timeline
     ) {
-        return pace(
-                actual,
-                target,
-                timeline.elapsedDays(),
-                timeline.remainingDays(),
-                timeline.totalDays()
+        BigDecimal currentPace = money(actual.divide(
+                BigDecimal.valueOf(timeline.elapsedDays()),
+                MONEY_SCALE,
+                RoundingMode.HALF_UP
+        ));
+        BigDecimal projected = money(actual.multiply(BigDecimal.valueOf(timeline.totalDays()))
+                .divide(
+                        BigDecimal.valueOf(timeline.elapsedDays()),
+                        MONEY_SCALE,
+                        RoundingMode.HALF_UP
+                ));
+        BigDecimal remaining = money(targetToDate.subtract(actual).max(BigDecimal.ZERO));
+        BigDecimal required = remaining.signum() == 0
+                ? money(BigDecimal.ZERO)
+                : timeline.remainingDays() == 0
+                        ? null
+                        : money(remaining.divide(
+                                BigDecimal.valueOf(timeline.remainingDays()),
+                                MONEY_SCALE,
+                                RoundingMode.HALF_UP
+                        ));
+        return new PaceAmounts(
+                currentPace,
+                targetToDate,
+                money(actual.subtract(targetToDate)),
+                projected,
+                remaining,
+                required
         );
     }
+
 
     private PaceAmounts pace(
             BigDecimal actual,
@@ -408,6 +645,7 @@ public class StorePlanProgressService {
             BigDecimal targetShare,
             BigDecimal shareGap,
             BigDecimal completion,
+            BigDecimal projectedCompletion,
             boolean achieved,
             StorePlanProgressStatus status
     ) {

@@ -338,6 +338,24 @@ const planDirectionSchema = z.object({
   status: z.string()
 });
 
+const planDailyDirectionSchema = z.object({
+  actualAmount: z.number().nullable(),
+  actualSharePercent: z.number().nullable(),
+  targetAmount: z.number(),
+  targetSharePercent: z.number().nullable(),
+  cumulativeGapAmount: z.number().nullable()
+});
+
+const planDailyTargetSchema = z.object({
+  date: z.string(),
+  completed: z.boolean(),
+  revenueBasisAmount: z.number(),
+  revenueBasisProjected: z.boolean(),
+  accessory: planDailyDirectionSchema,
+  service: planDailyDirectionSchema
+});
+
+
 export const planProgressSchema = z.object({
   storeId: z.string().uuid(),
   periodStart: z.string(),
@@ -360,12 +378,14 @@ export const planProgressSchema = z.object({
   allDirectionsAchieved: z.boolean(),
   focusDirections: z.array(z.string()),
   directions: z.array(planDirectionSchema),
+  dailyTargets: z.array(planDailyTargetSchema),
   calculatedAt: z.string()
 });
 
 export type PlanProgress = z.infer<typeof planProgressSchema>;
 export type PlanDirection = z.infer<typeof planDirectionSchema>;
 export type PerformancePlan = z.infer<typeof performancePlanSchema>;
+export type PlanDailyTarget = z.infer<typeof planDailyTargetSchema>;
 
 export interface PerformancePlanInput {
   revenueTarget: number;

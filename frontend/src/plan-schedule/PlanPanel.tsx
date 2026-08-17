@@ -8,6 +8,7 @@ import { formatDate } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatPercent } from "../shared/format";
 import { QueryError } from "../shared/QueryState";
 import { useWorkspace } from "../stores/WorkspaceProvider";
+import { DailyPlanTable } from "./DailyPlanTable";
 import { validatePlanForm, type PlanFormErrors, type PlanFormValues } from "./forms";
 
 const directionLabels: Record<string, string> = {
@@ -121,6 +122,7 @@ export function PlanPanel() {
         <section className="plan-progress-heading"><div><p className="eyebrow">Выполнение на {formatDate(progress.asOfDate)}</p><h2>{progress.achievedDirectionCount} из 4 направлений выполнено</h2><p>{progress.remainingDays > 0 ? `До конца месяца ${progress.remainingDays} дн.` : "Месяц завершен."}</p></div><span className={`plan-progress-score ${progress.allDirectionsAchieved ? "plan-progress-score--success" : ""}`}><strong>{progress.achievedDirectionCount}/4</strong><small>{progress.allDirectionsAchieved ? "Все цели достигнуты" : "Требуют контроля"}</small></span></section>
         {progress.focusDirections.length > 0 && <section className="plan-focus-banner"><Target /><div><strong>Фокус руководителя</strong><p>{progress.focusDirections.map((code) => directionLabels[code] ?? "Другое направление").join(", ")}</p></div></section>}
         <section className="plan-direction-grid" aria-label="Направления плана">{progress.directions.map((direction) => <DirectionCard direction={direction} key={direction.code} />)}</section>
+        <DailyPlanTable targets={progress.dailyTargets} />
       </>}
 
       <section className="panel plan-settings-panel">

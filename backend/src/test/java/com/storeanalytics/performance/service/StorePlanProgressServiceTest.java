@@ -14,6 +14,8 @@ import com.storeanalytics.metrics.service.CategoryKpiService;
 import com.storeanalytics.metrics.service.StoreKpiDataQuality;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.metrics.service.StoreKpiResult;
+import com.storeanalytics.performance.repository.StorePlanDailyActual;
+import com.storeanalytics.performance.repository.StorePlanDailyActualRepository;
 import com.storeanalytics.metrics.service.StoreKpiService;
 import com.storeanalytics.product.model.AnalyticsCategoryKind;
 import com.storeanalytics.store.service.StoreDataFreshnessStatus;
@@ -39,6 +41,7 @@ class StorePlanProgressServiceTest {
     private StoreKpiService storeKpiService;
     private CategoryKpiService categoryKpiService;
     private StoreDataStatusService dataStatusService;
+    private StorePlanDailyActualRepository dailyActualRepository;
     private StorePlanProgressService service;
 
     @BeforeEach
@@ -46,11 +49,13 @@ class StorePlanProgressServiceTest {
         planService = mock(StorePerformancePlanService.class);
         storeKpiService = mock(StoreKpiService.class);
         categoryKpiService = mock(CategoryKpiService.class);
+        dailyActualRepository = mock(StorePlanDailyActualRepository.class);
         dataStatusService = mock(StoreDataStatusService.class);
         service = new StorePlanProgressService(
                 planService,
                 storeKpiService,
                 categoryKpiService,
+                dailyActualRepository,
                 dataStatusService,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
@@ -75,6 +80,14 @@ class StorePlanProgressServiceTest {
         when(dataStatusService.get(storeId)).thenReturn(dataStatus(
                 storeId, asOf, StoreDataFreshnessStatus.CURRENT, 1
         ));
+        when(dailyActualRepository.aggregate(storeId, month.atDay(1), asOf))
+                .thenReturn(List.of(new StorePlanDailyActual(
+                        asOf,
+                        new BigDecimal("15840000.00"),
+                        new BigDecimal("520000.00"),
+                        new BigDecimal("270000.00")
+                )));
+
 
         StorePlanProgressView result = service.calculate(storeId, month, asOf);
 
@@ -89,14 +102,40 @@ class StorePlanProgressServiceTest {
         StorePlanDirectionView accessory = direction(
                 result, StorePlanDirectionCode.ACCESSORY
         );
-        assertThat(accessory.targetAmount()).isEqualByComparingTo("936000.00");
-        assertThat(accessory.amountCompletionPercent()).isEqualByComparingTo("55.56");
+        assertThat(accessory.targetAmount()).isEqualByComparingTo("617760.00");
+        assertThat(accessory.amountCompletionPercent()).isEqualByComparingTo("84.18");
         assertThat(accessory.actualSharePercent()).isEqualByComparingTo("3.28");
         assertThat(accessory.shareGapPercentagePoints()).isEqualByComparingTo("-0.62");
         assertThat(accessory.criterionCompletionPercent()).isEqualByComparingTo("84.18");
-        assertThat(accessory.requiredPerRemainingDay()).isEqualByComparingTo("37818.18");
+        assertThat(accessory.requiredPerRemainingDay()).isEqualByComparingTo("8887.27");
         assertThat(accessory.achieved()).isFalse();
         assertThat(accessory.status()).isEqualTo(StorePlanProgressStatus.AT_RISK);
+
+        assertThat(result.dailyTargets()).hasSize(31);
+        StorePlanDailyTargetView completedDay = result.dailyTargets().get(19);
+        assertThat(completedDay.completed()).isTrue();
+        assertThat(completedDay.revenueBasisProjected()).isFalse();
+        assertThat(completedDay.accessory().actualSharePercent())
+                .isEqualByComparingTo("3.28");
+        assertThat(completedDay.accessory().cumulativeGapAmount())
+                .isEqualByComparingTo("-97760.00");
+
+        StorePlanDailyTargetView nextDay = result.dailyTargets().get(20);
+        assertThat(nextDay.completed()).isFalse();
+        assertThat(nextDay.revenueBasisProjected()).isTrue();
+        assertThat(nextDay.revenueBasisAmount()).isEqualByComparingTo("792000.00");
+        assertThat(nextDay.accessory().targetAmount())
+                .isEqualByComparingTo("39775.27");
+        assertThat(nextDay.accessory().targetSharePercent())
+                .isEqualByComparingTo("5.02");
+        assertThat(nextDay.service().targetAmount())
+                .isEqualByComparingTo("42414.54");
+        assertThat(result.dailyTargets().stream()
+                .filter(target -> !target.completed())
+                .map(target -> target.accessory().targetAmount())
+                .reduce(BigDecimal.ZERO, BigDecimal::add))
+                .isEqualByComparingTo("437528.00");
+
 
         assertThat(result.totalDays()).isEqualTo(31);
         assertThat(result.elapsedDays()).isEqualTo(20);
@@ -113,6 +152,42 @@ class StorePlanProgressServiceTest {
         assertThat(result.dataQuality().openQualityIssueCount()).isEqualTo(3);
         assertThat(result.calculatedAt()).isEqualTo(NOW);
     }
+    @Test
+    void lowersRemainingDailyShareWhenMonthIsAheadOfTarget() {
+        UUID storeId = UUID.randomUUID();
+        YearMonth month = YearMonth.of(2026, 7);
+        LocalDate asOf = LocalDate.of(2026, 7, 10);
+        StoreKpiPeriod period = new StoreKpiPeriod(month.atDay(1), asOf);
+        when(planService.get(storeId, month)).thenReturn(plan(storeId));
+        when(storeKpiService.calculate(storeId, period)).thenReturn(storeKpi(
+                storeId, period, "1000.00", 0
+        ));
+        when(categoryKpiService.calculate(storeId, period)).thenReturn(categoryKpi(
+                storeId,
+                period,
+                category("ACCESSORIES", AnalyticsCategoryKind.ACCESSORY, "100.00", true)
+        ));
+        when(dataStatusService.get(storeId)).thenReturn(dataStatus(
+                storeId, asOf, StoreDataFreshnessStatus.CURRENT, 0
+        ));
+        when(dailyActualRepository.aggregate(storeId, month.atDay(1), asOf))
+                .thenReturn(List.of(new StorePlanDailyActual(
+                        asOf,
+                        new BigDecimal("1000.00"),
+                        new BigDecimal("100.00"),
+                        BigDecimal.ZERO
+                )));
+
+        StorePlanProgressView result = service.calculate(storeId, month, asOf);
+
+        StorePlanDailyTargetView nextDay = result.dailyTargets().get(10);
+        assertThat(nextDay.accessory().targetAmount()).isEqualByComparingTo("0.99");
+        assertThat(nextDay.accessory().targetSharePercent()).isEqualByComparingTo("0.99");
+        assertThat(nextDay.accessory().targetSharePercent())
+                .isLessThan(plan(storeId).accessoryShareTarget());
+    }
+
+
 
     @Test
     void marksUnmetDirectionsMissedAtMonthEndWithoutInventingShares() {

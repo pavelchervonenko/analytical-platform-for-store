@@ -61,7 +61,7 @@ class StorePlanProgressControllerTest {
                         "2026-07"
                 ).queryParam("asOf", "2026-07-20"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.formulaVersion").value("store-plan-progress-v1"))
+                .andExpect(jsonPath("$.formulaVersion").value("store-plan-progress-v2"))
                 .andExpect(jsonPath("$.asOfDate").value("2026-07-20"))
                 .andExpect(jsonPath("$.directions[0].code").value("REVENUE"))
                 .andExpect(jsonPath("$.directions[0].criterionType").value("AMOUNT"))
@@ -123,7 +123,7 @@ class StorePlanProgressControllerTest {
                 31,
                 20,
                 11,
-                "store-plan-progress-v1",
+                "store-plan-progress-v2",
                 plan,
                 new StorePlanProgressDataQuality(
                         StoreDataFreshnessStatus.CURRENT,
@@ -137,6 +137,7 @@ class StorePlanProgressControllerTest {
                 false,
                 List.of(),
                 List.of(revenue),
+                List.of(),
                 now
         );
     }

@@ -43,28 +43,45 @@ criterionCompletionPercent = actualSharePercent / targetSharePercent × 100
 
 ## Денежный ориентир и темп
 
-Для долевого направления денежный ориентир рассчитывается так:
+Для долевого направления денежный ориентир считается от полной фактической чистой выручки
+на дату среза, как требует согласованная методика заказчика:
 
 ```text
-targetAmount = revenueTarget × targetSharePercent / 100
+targetAmount = actualNetRevenue × targetSharePercent / 100
 ```
 
-Он нужен для полосы выполнения, остатка и дневного темпа, но не заменяет долевой критерий. Поэтому
-`amountCompletionPercent` и `criterionCompletionPercent` могут различаться.
+Поэтому `expectedAmountToDate` для долевого направления равен `targetAmount`, а
+`paceGapAmount = actualAmount - targetAmount`. `remainingAmount` и
+`requiredPerRemainingDay` показывают только накопленное отставание на дату среза. Для выручки
+сохраняется календарный месячный темп.
 
-Все темпы первой версии используют календарные дни:
+## Дневной план аксессуаров и услуг
+
+`dailyTargets` содержит все календарные дни месяца. Для завершённых дней возвращаются фактическая
+дневная выручка, сумма и процент направления. Дневной ориентир завершённого дня равен фактической
+выручке дня, умноженной на месячный целевой процент.
+
+Для будущих дней backend сначала определяет прогнозную дневную выручку:
 
 ```text
-currentDailyPace = actualAmount / elapsedDays
-expectedAmountToDate = targetAmount × elapsedDays / totalDays
-paceGapAmount = actualAmount - expectedAmountToDate
-projectedAmount = actualAmount × totalDays / elapsedDays
-remainingAmount = max(targetAmount - actualAmount, 0)
-requiredPerRemainingDay = remainingAmount / remainingDays
+futureRevenuePerDay =
+  actualNetRevenue / elapsedDays, если actualNetRevenue > 0
+  revenueTarget / totalDays, иначе
+
+projectedMonthRevenue =
+  actualNetRevenue + futureRevenuePerDay × remainingDays
+
+futureDirectionRequired =
+  max(projectedMonthRevenue × targetSharePercent / 100 - actualDirectionAmount, 0)
 ```
 
-Если план уже набран, остаток и требуемый темп равны нулю. В последний день при ненабранном плане
-`requiredPerRemainingDay=null`, потому что оставшихся дней нет.
+`futureDirectionRequired` равномерно распределяется на оставшиеся дни. Последний день получает
+остаток копеек, поэтому сумма строк точно совпадает с требуемой суммой. Будущий дневной процент равен
+дневной целевой сумме, делённой на прогнозную выручку дня. При отставании он растёт, при опережении
+снижается, а если накопленный результат уже покрывает прогнозный месячный ориентир — равен 0%.
+
+Возвраты уменьшают выручку и соответствующее направление в дату возврата. Исходные вычисления идут
+без промежуточного округления; денежные поля ответа округляются до копеек, проценты — до 0,01 п.п.
 
 ## Статусы
 
@@ -114,6 +131,24 @@ interface StorePlanDirectionView {
   status: StorePlanProgressStatus;
 }
 
+interface StorePlanDailyDirectionView {
+  actualAmount: number | null;
+  actualSharePercent: number | null;
+  targetAmount: number;
+  targetSharePercent: number | null;
+  cumulativeGapAmount: number | null;
+}
+
+interface StorePlanDailyTargetView {
+  date: string;
+  completed: boolean;
+  revenueBasisAmount: number;
+  revenueBasisProjected: boolean;
+  accessory: StorePlanDailyDirectionView;
+  service: StorePlanDailyDirectionView;
+}
+
+
 interface StorePlanProgressDataQuality {
   freshnessStatus: StoreDataFreshnessStatus;
   dataThroughDate: string | null;
@@ -131,7 +166,7 @@ interface StorePlanProgressView {
   totalDays: number;
   elapsedDays: number;
   remainingDays: number;
-  formulaVersion: "store-plan-progress-v1";
+  formulaVersion: "store-plan-progress-v2";
   plan: StorePerformancePlanView;
   dataQuality: StorePlanProgressDataQuality;
   achievedDirectionCount: number;
@@ -139,6 +174,7 @@ interface StorePlanProgressView {
   focusDirections: StorePlanDirectionCode[];
   directions: StorePlanDirectionView[];
   calculatedAt: string;
+  dailyTargets: StorePlanDailyTargetView[];
 }
 ```
 

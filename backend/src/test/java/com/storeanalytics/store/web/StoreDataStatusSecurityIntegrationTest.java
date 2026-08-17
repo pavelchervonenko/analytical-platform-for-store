@@ -223,7 +223,7 @@ class StoreDataStatusSecurityIntegrationTest {
                         "2026-07"
                 ).queryParam("asOf", "2026-07-20").session(adminSession))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.formulaVersion").value("store-plan-progress-v1"));
+                .andExpect(jsonPath("$.formulaVersion").value("store-plan-progress-v2"));
         mockMvc.perform(get("/api/stores/{storeId}/data-status", deniedStore.getId())
                         .session(adminSession))
                 .andExpect(status().isOk())
@@ -302,6 +302,16 @@ class StoreDataStatusSecurityIntegrationTest {
                 .andExpect(jsonPath(
                         "$.components.schemas.StorePlanDirectionView.properties"
                                 + ".criterionCompletionPercent"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.components.schemas.StorePlanProgressView.properties.dailyTargets"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.components.schemas.StorePlanDailyTargetView.properties.accessory"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.components.schemas.StorePlanDailyDirectionView.properties"
+                                + ".targetSharePercent"
                 ).exists())
                 .andExpect(jsonPath(
                         "$.components.schemas.StoreDataQualityView.properties.summary"

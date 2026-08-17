@@ -945,6 +945,23 @@ export type StorePeriodQualityView = {
     checkedAt?: string;
 };
 
+export type StorePlanDailyDirectionView = {
+    actualAmount?: number;
+    actualSharePercent?: number;
+    targetAmount?: number;
+    targetSharePercent?: number;
+    cumulativeGapAmount?: number;
+};
+
+export type StorePlanDailyTargetView = {
+    date?: string;
+    completed?: boolean;
+    revenueBasisAmount?: number;
+    revenueBasisProjected?: boolean;
+    accessory?: StorePlanDailyDirectionView;
+    service?: StorePlanDailyDirectionView;
+};
+
 export type StorePlanDirectionView = {
     code?: 'REVENUE' | 'ACCESSORY' | 'SERVICE' | 'ADDITIONAL';
     criterionType?: 'AMOUNT' | 'SHARE';
@@ -990,6 +1007,7 @@ export type StorePlanProgressView = {
     allDirectionsAchieved?: boolean;
     focusDirections?: Array<'REVENUE' | 'ACCESSORY' | 'SERVICE' | 'ADDITIONAL'>;
     directions?: Array<StorePlanDirectionView>;
+    dailyTargets?: Array<StorePlanDailyTargetView>;
     calculatedAt?: string;
 };
 

@@ -11,6 +11,7 @@ import {
   getStoreStatus,
   queryKeys
 } from "../api/queries";
+import { DailyPlanTable } from "../plan-schedule/DailyPlanTable";
 import type { PlanDirection } from "../api/contracts";
 import { qualityIssueMessage, qualityStatusLabel } from "../quality/presentation";
 import { formatDate, formatMonth } from "../shared/date";
@@ -225,6 +226,8 @@ export function OverviewPage() {
           )}
         </section>
       </div>
+
+      {plan && <DailyPlanTable targets={plan.dailyTargets} />}
 
       <section className="overview-details" aria-label="Подробные показатели">
         <details className="disclosure-panel">
