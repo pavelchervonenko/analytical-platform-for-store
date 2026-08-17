@@ -90,10 +90,27 @@ bash -n \
     "${PROJECT_ROOT}/scripts/prepare-local-demo.sh" \
     "${PROJECT_ROOT}/scripts/generate-payroll-classification-review.sh" \
     "${PROJECT_ROOT}/scripts/run-local-llm-telegram-integration.sh" \
+    "${PROJECT_ROOT}/scripts/llm-eval/shadow.sh" \
     "${PROJECT_ROOT}/scripts/telegram-staging-acceptance.sh" \
     "${PROJECT_ROOT}/scripts/yandexgpt-staging-acceptance.sh" \
     "${PROJECT_ROOT}/scripts/lib/shell-security.sh" \
     "${PROJECT_ROOT}"/scripts/livesklad-discovery/*.sh
+
+shadow_script="${PROJECT_ROOT}/scripts/llm-eval/shadow.sh"
+for required_fragment in \
+    'set +x' \
+    'umask 077' \
+    'CONFIRM_YANDEX_LLM_SHADOW=CALL_YANDEX_SHADOW' \
+    'LLM_EVAL_MAX_PAID_CALLS' \
+    'LLM_EVAL_MAX_COST_RUB'; do
+    grep -F -- "${required_fragment}" "${shadow_script}" >/dev/null \
+        || fail_test "shadow runner is missing safety guard: ${required_fragment}"
+done
+if env -u YANDEX_AI_FOLDER_ID -u YANDEX_AI_MODEL_URI \
+    -u YANDEX_AI_API_KEY_FILE -u CONFIRM_YANDEX_LLM_SHADOW \
+    bash "${shadow_script}" run 1 10 >/dev/null 2>&1; then
+    fail_test 'shadow runner accepted execution without provider confirmation'
+fi
 
 [[ "$(python3 "${HELPER}" validate-base-url \
     https-or-loopback-http http://localhost:8080/)" == 'http://localhost:8080' ]] \

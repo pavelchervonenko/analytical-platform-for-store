@@ -75,6 +75,28 @@ class WeeklyTelegramMessageRendererTest {
     }
 
     @Test
+    void rendersV3PrimarySignalExactlyOnce() throws IOException {
+        JsonNode content = content(
+                "weekly-interpretation-content-v3-ready.json"
+        );
+
+        RenderedTelegramMessage result = renderer.render(
+                event(false, 3),
+                content,
+                Map.of("E01", "Анна")
+        );
+
+        assertThat(result.text())
+                .contains("✨ ГЛАВНОЕ")
+                .containsOnlyOnce(
+                        "Главным подтверждённым изменением стало "
+                                + "улучшение результата магазина."
+                )
+                .contains("Анна")
+                .doesNotContain("C001")
+                .doesNotContain("evidenceRefs");
+    }
+    @Test
     void neverLeaksEmployeeReferenceWhenSnapshotNameIsMissing()
             throws IOException {
         JsonNode content = content(

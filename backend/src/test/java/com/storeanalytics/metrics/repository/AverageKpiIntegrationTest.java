@@ -107,7 +107,7 @@ class AverageKpiIntegrationTest {
                         "450.00", "2.500", "180", "100.00", "1.000", "100", "80.0"
                 )
         );
-        assertThat(result.categoryAveragePrices()).hasSize(19);
+        assertThat(result.categoryAveragePrices()).hasSize(21);
         assertThat(result.categoryAveragePrices())
                 .extracting(CategoryAverageEntry::categoryCode)
                 .doesNotContain("EXCLUDE");
@@ -133,7 +133,7 @@ class AverageKpiIntegrationTest {
 
         AverageKpiResult result = averageKpiService.calculate(graph.storeId(), period());
 
-        assertThat(result.categoryAveragePrices()).hasSize(19);
+        assertThat(result.categoryAveragePrices()).hasSize(21);
         assertThat(result.averageReceipt().current().numerator()).isEqualByComparingTo("0.00");
         assertThat(result.averageReceipt().current().denominator()).isEqualByComparingTo("0");
         assertThat(result.averageReceipt().current().value()).isNull();

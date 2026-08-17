@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class ProductAutoClassificationRuleEngine {
 
-    public static final String RULE_VERSION = "livesklad-product-rules-v2";
+    public static final String RULE_VERSION = "livesklad-product-rules-v3";
 
     public Optional<ProductAutoClassificationDecision> classify(Product product) {
         return classify(product.getName(), product.getSourceKind());
@@ -126,17 +126,28 @@ public class ProductAutoClassificationRuleEngine {
             return notApplicable("OTHER_ACCESSORY_PRODUCT", "generic-case");
         }
 
-        if (containsAny(name, "стекло", "защита камер", "защита kамер")) {
+        if (name.contains("стекло") || isCameraProtection(name)) {
             if (isIpadOrMac(name) || name.contains("планшет")) {
                 return notApplicable("ACCESSORY_IPAD_MAC", "ipad-glass");
             }
             if (isPodsOrWatch(name)) {
                 return notApplicable("ACCESSORY_PODS_WATCH", "watch-glass");
             }
+            boolean cameraProtection = isCameraProtection(name);
             if (isSamsung(name)) {
-                return notApplicable("GLASS_CAMERA_SAMSUNG", "samsung-glass-camera");
+                return cameraProtection
+                        ? notApplicable(
+                                "GLASS_CAMERA_SAMSUNG",
+                                "samsung-camera-protection"
+                        )
+                        : notApplicable("GLASS_SAMSUNG", "samsung-glass");
             }
-            return notApplicable("GLASS_CAMERA_IPHONE", "phone-glass-camera");
+            return cameraProtection
+                    ? notApplicable(
+                            "GLASS_CAMERA_IPHONE",
+                            "iphone-camera-protection"
+                    )
+                    : notApplicable("GLASS_IPHONE", "iphone-glass");
         }
 
         if (containsAny(name, "пленк", "плёнк")) {
@@ -277,6 +288,19 @@ public class ProductAutoClassificationRuleEngine {
         return containsAny(name, "samsung", "galaxy", "самсунг")
                 || name.matches(".*\\bs2[0-9](?: ultra| plus| fe)?\\b.*")
                 || name.matches(".*\\ba5[0-9]\\b.*");
+    }
+
+    private boolean isCameraProtection(String name) {
+        return containsAny(
+                name,
+                "защита камер",
+                "защита kамер",
+                "защита kaмер",
+                "защита линз",
+                "защитные линз",
+                "линзы на камер",
+                "camera lens"
+        );
     }
 
     private boolean isIpadOrMac(String name) {

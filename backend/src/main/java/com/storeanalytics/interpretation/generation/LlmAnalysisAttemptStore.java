@@ -1,6 +1,7 @@
 package com.storeanalytics.interpretation.generation;
 
 import static com.storeanalytics.common.validation.ModelValidation.require;
+import static com.storeanalytics.common.validation.ModelValidation.requireJson;
 import static com.storeanalytics.common.validation.ModelValidation.requireNonNull;
 import static com.storeanalytics.common.validation.ModelValidation.requireText;
 
@@ -23,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class LlmAnalysisAttemptStore {
+
+    private static final int MAX_PROVIDER_INPUT_BYTES = 524_288;
 
     private static final String BY_ID_SQL =
             "SELECT * FROM llm_analysis_attempts WHERE id = ?";
@@ -66,6 +69,20 @@ public class LlmAnalysisAttemptStore {
             String requestHash,
             Instant now
     ) {
+        return startProviderCall(
+                jobId, owner, attemptType, requestHash, null, now
+        );
+    }
+
+    @Transactional
+    public LlmAnalysisAttempt startProviderCall(
+            UUID jobId,
+            String owner,
+            LlmAnalysisAttemptType attemptType,
+            String requestHash,
+            String providerInputBody,
+            Instant now
+    ) {
         Instant timestamp = requireNonNull(now, "now");
         JobContext job = requireOwnedRunningJob(jobId, owner);
         require(job.leaseUntil().isAfter(timestamp), "LLM job lease has expired");
@@ -80,14 +97,24 @@ public class LlmAnalysisAttemptStore {
         require(attemptNumber <= job.maxProviderCalls(),
                 "provider call budget is exhausted");
         String hash = requireHash(requestHash, "requestHash");
+        String inputBody = providerInputBody == null
+                ? null
+                : requireJson(providerInputBody, "providerInputBody");
+        if (inputBody != null) {
+            require(inputBody.getBytes(StandardCharsets.UTF_8).length
+                            <= MAX_PROVIDER_INPUT_BYTES,
+                    "providerInputBody exceeds retained input limit");
+        }
+        String inputHash = inputBody == null ? null : sha256(inputBody);
         UUID attemptId = UUID.randomUUID();
         jdbcTemplate.update(
                 """
                 INSERT INTO llm_analysis_attempts (
                     id, job_id, attempt_number, attempt_type, status,
                     provider_code, requested_model, request_hash,
+                    provider_input_hash, provider_input_body,
                     started_at, created_at
-                ) VALUES (?, ?, ?, ?, 'STARTED', ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, 'STARTED', ?, ?, ?, ?, ?, ?, ?)
                 """,
                 attemptId,
                 job.id(),
@@ -96,6 +123,8 @@ public class LlmAnalysisAttemptStore {
                 job.providerCode(),
                 job.requestedModel(),
                 hash,
+                inputHash,
+                inputBody,
                 Timestamp.from(timestamp),
                 Timestamp.from(timestamp)
         );
@@ -286,6 +315,8 @@ public class LlmAnalysisAttemptStore {
                 resultSet.getString("resolved_model"),
                 resultSet.getString("provider_request_id"),
                 resultSet.getString("request_hash"),
+                resultSet.getString("provider_input_hash"),
+                resultSet.getString("provider_input_body"),
                 resultSet.getString("response_hash"),
                 resultSet.getString("response_body"),
                 resultSet.getString("validated_response_hash"),

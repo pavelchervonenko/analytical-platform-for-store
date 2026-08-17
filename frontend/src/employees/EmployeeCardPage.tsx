@@ -119,8 +119,8 @@ export function EmployeeCardPage() {
                           {attachRateLabels[rate.metricCode] ?? "Другой показатель"}
                         </strong>
                         <small>
-                          {formatNumber(rate.numeratorReceiptCount)} из{" "}
-                          {formatNumber(rate.denominatorReceiptCount)} релевантных чеков
+                          {formatNumber(rate.numeratorQuantity ?? rate.numeratorReceiptCount)} на{" "}
+                          {formatNumber(rate.denominatorQuantity ?? rate.denominatorReceiptCount)} единиц техники
                         </small>
                       </div>
                       <dl className="employee-attach-metrics">

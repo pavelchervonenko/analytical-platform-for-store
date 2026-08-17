@@ -235,8 +235,8 @@ final class StoreSnapshotFactProjector {
                     var sufficiency = policy.attach(rate.denominatorReceiptCount());
                     String prefix = "STORE.ATTACH:" + rate.metricCode() + ".";
                     target.add(SnapshotFactFactory.numeric(
-                            prefix + "NUMERATOR_RECEIPT_COUNT.CURRENT",
-                            "NUMERATOR_RECEIPT_COUNT",
+                            prefix + "NUMERATOR_QUANTITY.CURRENT",
+                            "NUMERATOR_QUANTITY",
                             rate.numeratorReceiptCount(),
                             before == null ? null : before.numeratorReceiptCount(),
                             new SnapshotFactFactory.FactOptions(
@@ -248,8 +248,8 @@ final class StoreSnapshotFactProjector {
                             )
                     ));
                     target.add(SnapshotFactFactory.numeric(
-                            prefix + "DENOMINATOR_RECEIPT_COUNT.CURRENT",
-                            "DENOMINATOR_RECEIPT_COUNT",
+                            prefix + "DENOMINATOR_QUANTITY.CURRENT",
+                            "DENOMINATOR_QUANTITY",
                             rate.denominatorReceiptCount(),
                             before == null ? null : before.denominatorReceiptCount(),
                             new SnapshotFactFactory.FactOptions(

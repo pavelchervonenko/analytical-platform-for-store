@@ -46,6 +46,15 @@ server-side capability allowlist и безопасно обрабатывает 
 Атомарный `PUT /api/notifications/channels/telegram/settings` также требует текущий ETag
 и возвращает новую версию channel resource.
 
+Weekly insight evidence bundle добавлен в `current.json` как совместимое расширение v9.
+`WeeklyInsightContentView.evidence` содержит безопасные backend-форматированные значения только
+для фактов, процитированных опубликованной интерпретацией. Вложенные `evidenceRefs` используют
+response-local коды `EV001`, ... и разрешаются через `evidenceCode`; технические snapshot refs
+и псевдонимы сотрудников наружу не передаются. Frontend не разбирает код, не ищет исходный факт и
+не пересчитывает current/previous/delta: он отображает `formattedValue`,
+`previousFormattedValue`, `absoluteDeltaFormatted`, `relativeDeltaFormatted` и
+`comparisonText` как подготовленную backend presentation.
+
 ## Правила совместимости
 
 До первой production-версии текущий контракт считается frontend baseline:
@@ -101,6 +110,8 @@ interface ApiError {
 
 - UUID передается строкой, календарная дата — `YYYY-MM-DD`, месяц — первое число месяца;
 - instant всегда содержит timezone/offset;
+- в weekly insight evidence деньги, проценты и сравнения приходят готовыми display-строками;
+  это сознательное исключение, чтобы LLM и frontend не формировали бизнес-числа;
 - деньги, количества и проценты приходят JSON number; frontend их не пересчитывает;
 - `null` означает «значение отсутствует или ненадежно», а `0` — рассчитанный ноль;
 - списки всегда возвращаются массивом, включая пустой `[]`, а не `null`;

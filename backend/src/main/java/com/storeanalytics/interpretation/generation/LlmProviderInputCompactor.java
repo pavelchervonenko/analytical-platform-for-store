@@ -1,7 +1,10 @@
 package com.storeanalytics.interpretation.generation;
 
+import static com.storeanalytics.common.validation.ModelValidation.require;
+
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.EmployeeFacts;
+import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.EvidenceIndexEntry;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Fact;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Facts;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Manifest;
@@ -13,6 +16,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 
@@ -40,6 +44,9 @@ public final class LlmProviderInputCompactor {
             "COMPLETED_SALES",
             "NET_REVENUE",
             "MARGIN_PERCENT",
+            "SHIFT_COUNT",
+            "WORKED_HOURS",
+            "WORKLOAD_STATUS",
             "REVENUE_PER_HOUR",
             "ADDITIONAL_SHARE_PERCENT",
             "RATING_OVERALL_SCORE",
@@ -60,33 +67,42 @@ public final class LlmProviderInputCompactor {
             "NET_REVENUE"
     );
     private static final Set<String> STORE_ATTACH_METRICS = Set.of(
-            "NUMERATOR_RECEIPT_COUNT",
-            "DENOMINATOR_RECEIPT_COUNT",
+            "NUMERATOR_QUANTITY",
+            "DENOMINATOR_QUANTITY",
             "RATE_PER_HUNDRED"
     );
     private static final Set<String> EMPLOYEE_ATTACH_METRICS = Set.of(
-            "NUMERATOR_RECEIPT_COUNT",
-            "DENOMINATOR_RECEIPT_COUNT",
+            "NUMERATOR_QUANTITY",
+            "DENOMINATOR_QUANTITY",
             "RATE_PER_HUNDRED"
     );
 
     public WeeklyInterpretationInput compact(WeeklyInterpretationInput input) {
+        Manifest source = input.manifest();
+        Set<String> referencedEvidence = referencedEvidence(input);
         Facts compactFacts = new Facts(
-                compactStore(input.facts().store()),
+                includeReferencedFacts(
+                        input.facts().store(),
+                        compactStore(input.facts().store()),
+                        referencedEvidence
+                ),
                 input.facts().team(),
                 input.facts().employees().stream()
-                        .map(this::compactEmployee)
+                        .map(employee -> compactEmployee(
+                                employee, referencedEvidence
+                        ))
                         .toList(),
                 input.facts().candidateSignals()
         );
-        Manifest source = input.manifest();
+        List<String> categoryCodes = categoryCodes(compactFacts);
         Manifest manifest = new Manifest(
                 source.employeeRefs(),
-                List.of(),
+                evidence(source.evidence(), compactFacts, referencedEvidence),
                 source.candidateRefs(),
-                categoryCodes(compactFacts),
+                categoryCodes,
+                categoryLabels(source.categoryLabels(), categoryCodes),
                 source.competencyCodes(),
-                List.of()
+                source.limitations()
         );
         return new WeeklyInterpretationInput(
                 input.contractVersion(),
@@ -101,7 +117,7 @@ public final class LlmProviderInputCompactor {
                 facts, "CATEGORY:", "NET_REVENUE", STORE_CATEGORY_LIMIT
         );
         Set<String> attach = topIdentifiers(
-                facts, "ATTACH:", "DENOMINATOR_RECEIPT_COUNT", STORE_ATTACH_LIMIT
+                facts, "ATTACH:", "DENOMINATOR_QUANTITY", STORE_ATTACH_LIMIT
         );
         return facts.stream()
                 .filter(fact -> keepStore(fact, categories, attach))
@@ -128,25 +144,33 @@ public final class LlmProviderInputCompactor {
                 || fact.materiality() == Materiality.PRIMARY;
     }
 
-    private EmployeeFacts compactEmployee(EmployeeFacts employee) {
+    private EmployeeFacts compactEmployee(
+            EmployeeFacts employee,
+            Set<String> referencedEvidence
+    ) {
         List<Fact> source = employee.facts();
         if (employee.analysisStatus() == Sufficiency.INSUFFICIENT) {
-            return copy(employee, source.stream()
+            List<Fact> selected = source.stream()
                     .filter(fact -> INSUFFICIENT_EMPLOYEE_METRICS.contains(
                             fact.metricCode()
                     ))
-                    .toList());
+                    .toList();
+            return copy(employee, includeReferencedFacts(
+                    source, selected, referencedEvidence
+            ));
         }
         Set<String> categories = topIdentifiers(
                 source, "CATEGORY:", "NET_REVENUE", EMPLOYEE_CATEGORY_LIMIT
         );
         Set<String> attach = topIdentifiers(
-                source, "ATTACH:", "DENOMINATOR_RECEIPT_COUNT", EMPLOYEE_ATTACH_LIMIT
+                source, "ATTACH:", "DENOMINATOR_QUANTITY", EMPLOYEE_ATTACH_LIMIT
         );
         List<Fact> result = source.stream()
                 .filter(fact -> keepEmployee(fact, categories, attach))
                 .toList();
-        return copy(employee, result);
+        return copy(employee, includeReferencedFacts(
+                source, result, referencedEvidence
+        ));
     }
 
     private boolean keepEmployee(
@@ -237,6 +261,75 @@ public final class LlmProviderInputCompactor {
                 .map(Fact::categoryCode)
                 .filter(java.util.Objects::nonNull).forEach(result::add);
         return List.copyOf(result);
+    }
+
+    private Set<String> referencedEvidence(WeeklyInterpretationInput input) {
+        Set<String> result = new HashSet<>();
+        input.manifest().limitations().forEach(
+                limitation -> result.addAll(limitation.evidenceRefs())
+        );
+        input.facts().candidateSignals().forEach(
+                candidate -> result.addAll(candidate.evidenceRefs())
+        );
+        return Set.copyOf(result);
+    }
+
+    private List<Fact> includeReferencedFacts(
+            List<Fact> source,
+            List<Fact> compact,
+            Set<String> referencedEvidence
+    ) {
+        Set<String> retained = new HashSet<>(referencedEvidence);
+        compact.stream().map(Fact::evidenceRef).forEach(retained::add);
+        return source.stream()
+                .filter(fact -> retained.contains(fact.evidenceRef()))
+                .toList();
+    }
+
+    private List<EvidenceIndexEntry> evidence(
+            List<EvidenceIndexEntry> source,
+            Facts facts,
+            Set<String> referencedEvidence
+    ) {
+        Set<String> factReferences = new HashSet<>();
+        facts.store().stream().map(Fact::evidenceRef).forEach(factReferences::add);
+        facts.team().stream().map(Fact::evidenceRef).forEach(factReferences::add);
+        facts.employees().stream()
+                .flatMap(employee -> employee.facts().stream())
+                .map(Fact::evidenceRef)
+                .forEach(factReferences::add);
+        Set<String> retained = new HashSet<>(referencedEvidence);
+        retained.addAll(factReferences);
+        List<EvidenceIndexEntry> result = source.stream()
+                .filter(entry -> retained.contains(entry.evidenceRef()))
+                .toList();
+        Set<String> indexed = new HashSet<>();
+        Set<String> available = new HashSet<>();
+        result.forEach(entry -> {
+            indexed.add(entry.evidenceRef());
+            if (entry.available()) {
+                available.add(entry.evidenceRef());
+            }
+        });
+        require(available.containsAll(factReferences),
+                "Compact provider facts require available evidence entries");
+        require(indexed.containsAll(referencedEvidence),
+                "Provider metadata requires indexed evidence entries");
+        return result;
+    }
+
+    private Map<String, String> categoryLabels(
+            Map<String, String> source,
+            List<String> categoryCodes
+    ) {
+        Map<String, String> result = new java.util.TreeMap<>();
+        categoryCodes.forEach(code -> {
+            String label = source.get(code);
+            if (label != null) {
+                result.put(code, label);
+            }
+        });
+        return Map.copyOf(result);
     }
 
     private record ScoredIdentifier(String identifier, BigDecimal magnitude) {

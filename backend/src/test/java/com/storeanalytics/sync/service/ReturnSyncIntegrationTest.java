@@ -124,15 +124,19 @@ class ReturnSyncIntegrationTest {
                 """
                 SELECT returned.document_kind,
                        returned.employee_id = original.employee_id AS same_employee,
+                       attributed_employee.external_id AS attributed_employee,
                        returned.original_document_id = original.id AS linked
                 FROM sales_documents returned
                 JOIN sales_documents original
                   ON original.external_id = 'sale-return-source'
+                JOIN employees attributed_employee
+                  ON attributed_employee.id = returned.employee_id
                 WHERE returned.external_id = 'return-1'
                 """
         );
         assertThat(document.get("document_kind")).isEqualTo("RETURN");
         assertThat(document.get("same_employee")).isEqualTo(true);
+        assertThat(document.get("attributed_employee")).isEqualTo("employee-1");
         assertThat(document.get("linked")).isEqualTo(true);
         Map<String, Object> item = jdbcTemplate.queryForMap(
                 """

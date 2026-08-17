@@ -114,7 +114,7 @@ public class WeeklySnapshotPlanningService {
                 store.timezone(),
                 selectedSource.syncJobId(),
                 selectedSource.completedAt(),
-                WeeklySnapshotPolicyV2.VERSIONS,
+                WeeklySnapshotPolicyV3.VERSIONS,
                 baseSnapshotId,
                 properties.maxAttempts()
         );

@@ -6,7 +6,7 @@ import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Vers
  * Active weekly quality policy. V2 adds an explicit completed-sales sample to employee facts and
  * applies its sufficiency to category/structure facts without rewriting immutable V1 snapshots.
  */
-public final class WeeklySnapshotPolicyV2 extends WeeklySnapshotPolicyV1 {
+public class WeeklySnapshotPolicyV2 extends WeeklySnapshotPolicyV1 {
 
     public static final Versions VERSIONS = new Versions(
             1,

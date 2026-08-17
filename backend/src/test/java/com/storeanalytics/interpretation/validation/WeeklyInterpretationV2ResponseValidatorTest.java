@@ -51,7 +51,7 @@ class WeeklyInterpretationV2ResponseValidatorTest {
     }
 
     @Test
-    void acceptsFlatContentGroundedInManifest() {
+    void acceptsFlatContentGroundedInManifest() throws JacksonException {
         LlmResponseValidationResult result = validator.validate(
                 input,
                 json(validContent)
@@ -60,6 +60,8 @@ class WeeklyInterpretationV2ResponseValidatorTest {
         assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
         assertThat(result.violations()).isEmpty();
         assertThat(result.canonicalContent()).isNotBlank();
+        assertThat(objectMapper.readTree(result.canonicalContent())
+                .path("teamRelationships")).isEmpty();
     }
 
     @Test
@@ -96,7 +98,7 @@ class WeeklyInterpretationV2ResponseValidatorTest {
     }
 
     @Test
-    void restoresMissingWorkloadSummaryFromBackendOwnedSufficiency() throws JacksonException {
+    void acceptsMissingWorkloadSummaryWithoutAddingFiller() throws JacksonException {
         ArrayNode summaries = (ArrayNode) validContent.path("summaryBlocks");
         for (int index = summaries.size() - 1; index >= 0; index--) {
             JsonNode summary = summaries.get(index);
@@ -113,31 +115,15 @@ class WeeklyInterpretationV2ResponseValidatorTest {
 
         assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
         JsonNode normalized = objectMapper.readTree(result.canonicalContent());
-        JsonNode restored = null;
-        for (JsonNode summary : normalized.path("summaryBlocks")) {
-            if ("E01".equals(summary.path("employeeRef").asText())
-                    && "WORKLOAD".equals(summary.path("section").asText())) {
-                restored = summary;
-            }
-        }
-        assertThat(restored).isNotNull();
-        assertThat(restored.path("text").asText()).isEqualTo(
-                "Рабочая нагрузка достаточна для анализа доступных направлений."
-        );
-        assertThat(restored.path("evidenceRefs").get(0).asText())
-                .isEqualTo("EMP:E01.WORKLOAD.STATUS");
+        assertThat(normalized.path("summaryBlocks")).noneMatch(summary ->
+                "E01".equals(summary.path("employeeRef").asText())
+                        && "WORKLOAD".equals(
+                                summary.path("section").asText()
+                        ));
     }
 
     @Test
-    void rejectsMissingWorkloadSummaryWithoutBackendOwnedWorkloadFact() {
-        ArrayNode summaries = (ArrayNode) validContent.path("summaryBlocks");
-        for (int index = summaries.size() - 1; index >= 0; index--) {
-            JsonNode summary = summaries.get(index);
-            if ("E01".equals(summary.path("employeeRef").asText())
-                    && "WORKLOAD".equals(summary.path("section").asText())) {
-                summaries.remove(index);
-            }
-        }
+    void removesWorkloadSummaryWithoutWorkloadFact() throws JacksonException {
         Facts facts = input.facts();
         List<WeeklyInterpretationInput.EmployeeFacts> employees = facts.employees()
                 .stream()
@@ -145,7 +131,7 @@ class WeeklyInterpretationV2ResponseValidatorTest {
                         ? new WeeklyInterpretationInput.EmployeeFacts(
                                 employee.employeeRef(),
                                 employee.analysisStatus(),
-                                employee.availableSections(),
+                                List.of("RESULT"),
                                 List.of()
                         )
                         : employee)
@@ -167,11 +153,13 @@ class WeeklyInterpretationV2ResponseValidatorTest {
                 json(validContent)
         );
 
-        assertThat(result.outcome())
-                .isEqualTo(LlmValidationOutcome.SEMANTIC_INVALID);
-        assertThat(result.violations())
-                .extracting(LlmValidationViolation::code)
-                .contains("EMPLOYEE_WORKLOAD_COUNT_MISMATCH");
+        assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+        JsonNode normalized = objectMapper.readTree(result.canonicalContent());
+        assertThat(normalized.path("summaryBlocks")).noneMatch(summary ->
+                "E01".equals(summary.path("employeeRef").asText())
+                        && "WORKLOAD".equals(
+                                summary.path("section").asText()
+                        ));
     }
 
     @Test
@@ -334,6 +322,136 @@ class WeeklyInterpretationV2ResponseValidatorTest {
     }
 
     @Test
+    void normalizesBackendOwnedCandidateFields() throws Exception {
+        ObjectNode insight = (ObjectNode) validContent.path("insights").get(0);
+        insight.put("candidateRef", "C001");
+        insight.put("kind", "OPPORTUNITY");
+        insight.put("theme", "OTHER");
+        insight.put("scope", "EMPLOYEE");
+        insight.put("employeeRef", "E01");
+        insight.put("categoryCode", "SERVICE");
+        ArrayNode evidence = (ArrayNode) insight.path("evidenceRefs");
+        evidence.removeAll();
+        evidence.add("EMP:E01.WORKLOAD.STATUS");
+        input = inputWithCandidates(
+                input,
+                List.of(new WeeklyInterpretationInput.CandidateSignal(
+                        "C001",
+                        WeeklyInterpretationInput.CandidateKind.RISK,
+                        "PLAN",
+                        null,
+                        null,
+                        null,
+                        List.of(),
+                        Sufficiency.SUFFICIENT,
+                        List.of("STORE.MARGIN_PERCENT.DELTA")
+                ))
+        );
+
+        LlmResponseValidationResult result = validator.validate(
+                input,
+                json(validContent)
+        );
+
+        assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+        JsonNode normalized = objectMapper.readTree(result.canonicalContent())
+                .path("insights").get(0);
+        assertThat(normalized.path("candidateRef").asText()).isEqualTo("C001");
+        assertThat(normalized.path("kind").asText()).isEqualTo("RISK");
+        assertThat(normalized.path("theme").asText()).isEqualTo("PLAN");
+        assertThat(normalized.path("scope").asText()).isEqualTo("STORE");
+        assertThat(normalized.path("employeeRef").isNull()).isTrue();
+        assertThat(normalized.path("categoryCode").isNull()).isTrue();
+        assertThat(normalized.path("evidenceRefs"))
+                .extracting(JsonNode::asText)
+                .containsExactly("STORE.MARGIN_PERCENT.DELTA");
+    }
+
+    @Test
+    void rejectsDuplicateCandidateBackedInsights() {
+        for (JsonNode value : validContent.path("insights")) {
+            ((ObjectNode) value).put("candidateRef", "C001");
+        }
+        input = inputWithCandidates(
+                input,
+                List.of(new WeeklyInterpretationInput.CandidateSignal(
+                        "C001",
+                        WeeklyInterpretationInput.CandidateKind.RISK,
+                        "PLAN",
+                        null,
+                        null,
+                        null,
+                        List.of(),
+                        Sufficiency.SUFFICIENT,
+                        List.of("STORE.MARGIN_PERCENT.DELTA")
+                ))
+        );
+
+        LlmResponseValidationResult result = validator.validate(
+                input,
+                json(validContent)
+        );
+
+        assertThat(result.outcome())
+                .isEqualTo(LlmValidationOutcome.SEMANTIC_INVALID);
+        assertThat(result.violations())
+                .extracting(LlmValidationViolation::code)
+                .contains("DUPLICATE_CANDIDATE_REF");
+    }
+
+    @Test
+    void keepsOnlyTeamRelationshipSupportedByBackendCandidate() throws Exception {
+        String evidenceRef =
+                "EMP:E01.GROUP:SERVICE.REVENUE_SHARE_PERCENT.CURRENT";
+        input = inputWithCandidates(
+                input,
+                List.of(new WeeklyInterpretationInput.CandidateSignal(
+                        "C001",
+                        WeeklyInterpretationInput.CandidateKind.OPPORTUNITY,
+                        "COMPETENCY_LEADER",
+                        "E01",
+                        "SERVICE",
+                        "SERVICE_SALES",
+                        List.of(),
+                        Sufficiency.SUFFICIENT,
+                        List.of(evidenceRef)
+                ))
+        );
+
+        LlmResponseValidationResult supported = validator.validate(
+                input,
+                json(validContent)
+        );
+
+        assertThat(supported.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+        assertThat(objectMapper.readTree(supported.canonicalContent())
+                .path("teamRelationships")).hasSize(1);
+
+        input = inputWithCandidates(
+                input,
+                List.of(new WeeklyInterpretationInput.CandidateSignal(
+                        "C002",
+                        WeeklyInterpretationInput.CandidateKind.OPPORTUNITY,
+                        "COMPETENCY_LEADER",
+                        "E01",
+                        null,
+                        "COMMERCIAL_CONTRIBUTION",
+                        List.of(),
+                        Sufficiency.SUFFICIENT,
+                        List.of(evidenceRef)
+                ))
+        );
+        LlmResponseValidationResult unsupported = validator.validate(
+                input,
+                json(validContent)
+        );
+
+        assertThat(unsupported.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+        assertThat(objectMapper.readTree(unsupported.canonicalContent())
+                .path("teamRelationships")).isEmpty();
+    }
+
+    @Test
     void removesStructurallyInvalidOptionalTeamRelationship() throws Exception {
         ObjectNode relationship = (ObjectNode) validContent
                 .path("teamRelationships").get(0);
@@ -350,10 +468,15 @@ class WeeklyInterpretationV2ResponseValidatorTest {
     }
 
     @Test
-    void removesUnsupportedOptionalRiskInsight() throws Exception {
+    void rejectsUnsupportedRevenueNarrativeBackedOnlyByProfitability() {
         ObjectNode insight = (ObjectNode) validContent.path("insights").get(0);
         insight.put("kind", "RISK");
-        insight.put("title", "Риск снижения выручки");
+        insight.put(
+                "title",
+                "\u0420\u0438\u0441\u043a "
+                        + "\u0441\u043d\u0438\u0436\u0435\u043d\u0438\u044f "
+                        + "\u0432\u044b\u0440\u0443\u0447\u043a\u0438"
+        );
         ArrayNode evidence = (ArrayNode) insight.path("evidenceRefs");
         evidence.removeAll();
         evidence.add("STORE.MARGIN_PERCENT.DELTA");
@@ -363,9 +486,88 @@ class WeeklyInterpretationV2ResponseValidatorTest {
                 json(validContent)
         );
 
+        assertThat(result.outcome())
+                .isEqualTo(LlmValidationOutcome.SEMANTIC_INVALID);
+        assertThat(result.violations())
+                .anySatisfy(violation -> {
+                    assertThat(violation.code()).isEqualTo(
+                            "UNSUPPORTED_NARRATIVE_DIMENSION"
+                    );
+                    assertThat(violation.path()).isEqualTo(
+                            "$.insights[0]"
+                    );
+                    assertThat(violation.reference()).isEqualTo("REVENUE");
+                });
+    }
+
+    @Test
+    void rejectsProfitabilityClaimWithoutProfitabilityEvidence() {
+        ObjectNode summary = (ObjectNode) validContent
+                .path("summaryBlocks").get(0);
+        summary.put(
+                "text",
+                "\u0421\u043d\u0438\u0436\u0435\u043d\u0438\u0435 "
+                        + "\u0432\u044b\u0440\u0443\u0447\u043a\u0438 "
+                        + "\u0441\u043e\u0437\u0434\u0430\u0451\u0442 \u0440\u0438\u0441\u043a "
+                        + "\u0434\u043b\u044f \u043f\u0440\u0438\u0431\u044b\u043b\u044c\u043d\u043e\u0441\u0442\u0438."
+        );
+        ArrayNode evidence = (ArrayNode) summary.path("evidenceRefs");
+        evidence.removeAll();
+        evidence.add("STORE.NET_REVENUE.DELTA");
+
+        LlmResponseValidationResult result = validator.validate(
+                input,
+                json(validContent)
+        );
+
+        assertThat(result.outcome())
+                .isEqualTo(LlmValidationOutcome.SEMANTIC_INVALID);
+        assertThat(result.violations())
+                .anySatisfy(violation -> {
+                    assertThat(violation.code()).isEqualTo(
+                            "UNSUPPORTED_NARRATIVE_DIMENSION"
+                    );
+                    assertThat(violation.path()).isEqualTo(
+                            "$.summaryBlocks[0]"
+                    );
+                    assertThat(violation.reference()).isEqualTo(
+                            "PROFITABILITY"
+                    );
+                });
+    }
+
+    @Test
+    void treatsIncomeReturnAsProfitabilityRatherThanRevenue() {
+        ObjectNode summary = (ObjectNode) validContent
+                .path("summaryBlocks").get(0);
+        summary.put("text", "Доходность снизилась.");
+        ArrayNode evidence = (ArrayNode) summary.path("evidenceRefs");
+        evidence.removeAll();
+        evidence.add("STORE.MARGIN_PERCENT.DELTA");
+
+        LlmResponseValidationResult result = validator.validate(
+                input,
+                json(validContent)
+        );
+
         assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
-        JsonNode canonical = objectMapper.readTree(result.canonicalContent());
-        assertThat(canonical.path("insights").size()).isEqualTo(1);
+    }
+
+    @Test
+    void acceptsInflectedIncomeNarrativeWithRevenueEvidence() {
+        ObjectNode summary = (ObjectNode) validContent
+                .path("summaryBlocks").get(0);
+        summary.put("text", "Доходы снизились.");
+        ArrayNode evidence = (ArrayNode) summary.path("evidenceRefs");
+        evidence.removeAll();
+        evidence.add("STORE.NET_REVENUE.DELTA");
+
+        LlmResponseValidationResult result = validator.validate(
+                input,
+                json(validContent)
+        );
+
+        assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
     }
 
     @Test
@@ -533,6 +735,35 @@ class WeeklyInterpretationV2ResponseValidatorTest {
                         manifest.limitations()
                 ),
                 source.facts()
+        );
+    }
+
+    private WeeklyInterpretationInput inputWithCandidates(
+            WeeklyInterpretationInput source,
+            List<WeeklyInterpretationInput.CandidateSignal> candidates
+    ) {
+        Manifest manifest = source.manifest();
+        Facts facts = source.facts();
+        return new WeeklyInterpretationInput(
+                source.contractVersion(),
+                source.snapshot(),
+                new Manifest(
+                        manifest.employeeRefs(),
+                        manifest.evidence(),
+                        candidates.stream()
+                                .map(WeeklyInterpretationInput.CandidateSignal::candidateRef)
+                                .toList(),
+                        manifest.categoryCodes(),
+                        manifest.categoryLabels(),
+                        manifest.competencyCodes(),
+                        manifest.limitations()
+                ),
+                new Facts(
+                        facts.store(),
+                        facts.team(),
+                        facts.employees(),
+                        candidates
+                )
         );
     }
 

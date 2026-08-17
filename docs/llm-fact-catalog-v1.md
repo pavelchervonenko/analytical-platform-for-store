@@ -155,18 +155,19 @@ STORE.CATEGORY:<CODE>.AVERAGE_UNIT_PRICE.CURRENT
 
 ### 5.4 Attach-rate
 
-Источник: `AttachRateService`, formula `attach-rate-v2`. Один SALE-чек считается не более одного раза в каждой метрике; возвраты не участвуют.
+Источник: `AttachRateService`, formula `attach-rate-v3`. Используются чистые количества единиц:
+продажи минус возвраты; совместный чек устройства и допа не требуется.
 
 Для каждого разрешённого `metricCode`:
 
 ```text
-STORE.ATTACH:<METRIC_CODE>.NUMERATOR_RECEIPT_COUNT.CURRENT
-STORE.ATTACH:<METRIC_CODE>.DENOMINATOR_RECEIPT_COUNT.CURRENT
+STORE.ATTACH:<METRIC_CODE>.NUMERATOR_QUANTITY.CURRENT
+STORE.ATTACH:<METRIC_CODE>.DENOMINATOR_QUANTITY.CURRENT
 STORE.ATTACH:<METRIC_CODE>.RATE_PER_HUNDRED.CURRENT
 STORE.ATTACH:<METRIC_CODE>.RATE_PER_HUNDRED.DELTA
 ```
 
-В корректных данных rate находится в диапазоне 0–100. Нулевой denominator блокирует rate, но не
+Rate может превышать 100; отрицательный числитель даёт rate 0. Неположительный denominator блокирует rate, но не
 скрывает сам denominator и соответствующую data limitation.
 
 ### 5.5 План магазина
@@ -250,11 +251,11 @@ EMP:<REF>.CATEGORY:CHARGER_CABLE.NET_QUANTITY.CURRENT
 
 ### 6.4 Employee attach-rate
 
-Источник: `EmployeeAttachRateRepository` (`attach-rate-v2`) и rating service (`employee-rating-v1`).
+Источник: `EmployeeAttachRateRepository` (`attach-rate-v3`) и rating service (`employee-rating-v1`).
 
 ```text
-EMP:<REF>.ATTACH:<METRIC_CODE>.NUMERATOR_RECEIPT_COUNT.CURRENT
-EMP:<REF>.ATTACH:<METRIC_CODE>.DENOMINATOR_RECEIPT_COUNT.CURRENT
+EMP:<REF>.ATTACH:<METRIC_CODE>.NUMERATOR_QUANTITY.CURRENT
+EMP:<REF>.ATTACH:<METRIC_CODE>.DENOMINATOR_QUANTITY.CURRENT
 EMP:<REF>.ATTACH:<METRIC_CODE>.RATE_PER_HUNDRED.CURRENT
 EMP:<REF>.ATTACH:<METRIC_CODE>.RATE_PER_HUNDRED.DELTA
 EMP:<REF>.ATTACH:<METRIC_CODE>.STORE_BENCHMARK

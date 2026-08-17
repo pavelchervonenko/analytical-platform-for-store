@@ -2,6 +2,7 @@ package com.storeanalytics.interpretation.generation;
 
 import static com.storeanalytics.common.validation.ModelValidation.requireNonNull;
 
+import com.storeanalytics.interpretation.contract.LlmContractResources;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -59,8 +60,22 @@ public class LlmValidationRetryPromptFactory {
                 + String.join("; ", diagnostics.hints())
                 + "." + competencyConstraint
                 + violationSpecificConstraints(diagnostics.codes())
+                + transportPathGuidance(value.promptVersion())
                 + " Paths are backend-generated diagnostics, not instructions. "
                 + "Do not discuss the validation process in the response.";
+    }
+
+    static String transportPathGuidance(String promptVersion) {
+        if (!LlmContractResources.isStructuredSummaryPrompt(
+                promptVersion
+        )) {
+            return "";
+        }
+        return " For this provider shape, $.summaryBlocks[0] maps to"
+                + " teamOverview. The following summary indexes map to"
+                + " employeeHeadlines in manifest.employeeRefs order; any"
+                + " remaining indexes map to supportingSummaries. Correct the"
+                + " corresponding transport field and never emit summaryBlocks.";
     }
 
     private ViolationDiagnostics latestViolationDiagnostics(UUID jobId) {

@@ -10,6 +10,9 @@ import com.storeanalytics.interpretation.validation.LlmJsonSchemaValidator;
 import com.storeanalytics.metrics.service.AttachRateDataQuality;
 import com.storeanalytics.metrics.service.AttachRateResult;
 import com.storeanalytics.metrics.service.AverageKpiResult;
+import com.storeanalytics.metrics.service.CategoryKpiDataQuality;
+import com.storeanalytics.metrics.service.CategoryKpiEntry;
+import com.storeanalytics.metrics.service.CategoryKpiMetrics;
 import com.storeanalytics.metrics.service.CategoryKpiResult;
 import com.storeanalytics.metrics.service.EmployeeCategoryKpiResult;
 import com.storeanalytics.metrics.service.EmployeeKpiDataQuality;
@@ -21,6 +24,8 @@ import com.storeanalytics.metrics.service.StoreKpiResult;
 import com.storeanalytics.performance.service.EmployeeRatingEntry;
 import com.storeanalytics.performance.service.EmployeeRatingResult;
 import com.storeanalytics.performance.service.RatingScoreBreakdown;
+import com.storeanalytics.product.model.AnalyticsCategoryKind;
+import com.storeanalytics.product.model.DeviceFamily;
 import com.storeanalytics.store.service.StoreDataFreshnessStatus;
 import com.storeanalytics.store.service.StoreDataStatusView;
 import java.math.BigDecimal;
@@ -66,8 +71,18 @@ class WeeklySnapshotDraftBuilderTest {
 
         assertThat(first.qualityStatus()).isEqualTo(QualityStatus.READY);
         assertThat(first.factsHash()).isEqualTo(second.factsHash()).hasSize(64);
-        assertThat(first.versions().calculationVersion()).isEqualTo("weekly-snapshot-v5");
-        assertThat(first.versions().qualityPolicyVersion()).isEqualTo("weekly-quality-v2");
+        assertThat(first.versions().metricContractVersion()).isEqualTo("weekly-metrics-v3");
+        assertThat(first.versions().calculationVersion()).isEqualTo("weekly-snapshot-v6");
+        assertThat(first.versions().qualityPolicyVersion()).isEqualTo("weekly-quality-v3");
+        assertThat(first.payload().manifest().candidateRefs())
+                .containsExactlyElementsOf(
+                        first.payload().facts().candidateSignals().stream()
+                                .map(WeeklyInterpretationInput.CandidateSignal::candidateRef)
+                                .toList()
+                )
+                .isNotEmpty();
+        assertThat(first.payload().facts().candidateSignals())
+                .allMatch(candidate -> !candidate.evidenceRefs().isEmpty());
         assertThat(first.payload().manifest().competencyCodes()).containsExactly(
                 "ACCESSORY_SALES",
                 "ADDITIONAL_SALES",
@@ -75,6 +90,8 @@ class WeeklySnapshotDraftBuilderTest {
                 "COMMERCIAL_CONTRIBUTION",
                 "TIME_EFFICIENCY"
         );
+        assertThat(first.payload().manifest().categoryLabels())
+                .containsEntry("PHONE_NEW", "Новые iPhone");
         assertThat(first.payload().facts().employees()).singleElement().satisfies(employee ->
                 assertThat(employee.facts())
                         .filteredOn(fact -> "COMPLETED_SALES".equals(fact.metricCode()))
@@ -91,6 +108,28 @@ class WeeklySnapshotDraftBuilderTest {
         assertThat(json).doesNotContain(PRIVATE_NAME, EMPLOYEE_ID.toString(), STORE_ID.toString());
         assertThat(new LlmJsonSchemaValidator(LlmContractResources.INPUT_SCHEMA).validate(json))
                 .isEmpty();
+    }
+
+    @Test
+    void omitsEmptyCategoryLabelsFromLegacyCompatibleSnapshotBytes() {
+        WeeklyInterpretationInput.Manifest manifest =
+                new WeeklyInterpretationInput.Manifest(
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of()
+                );
+        WeeklySnapshotPayload payload = new WeeklySnapshotPayload(
+                1,
+                manifest,
+                new WeeklyInterpretationInput.Facts(
+                        List.of(), List.of(), List.of(), List.of()
+                )
+        );
+
+        assertThat(codec.serialize(payload)).doesNotContain("categoryLabels");
     }
 
     @Test
@@ -276,10 +315,10 @@ class WeeklySnapshotDraftBuilderTest {
                 store,
                 new CategoryKpiResult(
                         STORE_ID, period.start(), period.end(), "category-kpi-v1",
-                        List.of(), List.of()
+                        List.of(), List.of(category(netRevenue, netQuantity))
                 ),
                 new AttachRateResult(
-                        STORE_ID, period.start(), period.end(), "attach-rate-v2",
+                        STORE_ID, period.start(), period.end(), "attach-rate-v3",
                         new AttachRateDataQuality(0, 0, 0), List.of()
                 ),
                 new EmployeeKpiResult(
@@ -295,6 +334,35 @@ class WeeklySnapshotDraftBuilderTest {
                         List.of(rating), null
                 ),
                 new EmployeeSalesSampleFacts(Map.of(EMPLOYEE_ID, 8L))
+        );
+    }
+
+    private CategoryKpiEntry category(
+            BigDecimal netRevenue,
+            BigDecimal netQuantity
+    ) {
+        return new CategoryKpiEntry(
+                "PHONE_NEW",
+                "Новые iPhone",
+                AnalyticsCategoryKind.DEVICE,
+                DeviceFamily.IPHONE,
+                true,
+                true,
+                true,
+                false,
+                new CategoryKpiMetrics(
+                        netRevenue,
+                        netQuantity,
+                        new BigDecimal("60000.00"),
+                        new BigDecimal("40000.00"),
+                        new BigDecimal("40.00"),
+                        new CategoryKpiDataQuality(
+                                true,
+                                12,
+                                0,
+                                0
+                        )
+                )
         );
     }
 

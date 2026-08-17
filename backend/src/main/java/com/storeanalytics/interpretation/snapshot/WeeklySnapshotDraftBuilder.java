@@ -4,6 +4,7 @@ import static com.storeanalytics.common.validation.ModelValidation.require;
 import static com.storeanalytics.common.validation.ModelValidation.requireNonNull;
 import static com.storeanalytics.common.validation.ModelValidation.requireText;
 
+import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.CandidateSignal;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.EmployeeFacts;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.EvidenceIndexEntry;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Fact;
@@ -22,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import org.springframework.stereotype.Component;
 
@@ -32,6 +34,7 @@ public final class WeeklySnapshotDraftBuilder {
     private static final int MAX_TEAM_FACTS = 150;
     private static final int MAX_EMPLOYEE_FACTS = 150;
     private static final int MAX_EVIDENCE = 2000;
+    private static final int MAX_CANDIDATES = 100;
     private static final Set<String> COMMERCIAL_METRICS = Set.of(
             "NET_REVENUE",
             "GROSS_PROFIT",
@@ -55,13 +58,15 @@ public final class WeeklySnapshotDraftBuilder {
             "WARRANTY_GENERIC"
     );
 
-    private final WeeklySnapshotPolicyV2 policy = new WeeklySnapshotPolicyV2();
+    private final WeeklySnapshotPolicyV3 policy = new WeeklySnapshotPolicyV3();
     private final SnapshotEmployeePseudonymizer pseudonymizer =
             new SnapshotEmployeePseudonymizer();
     private final StoreSnapshotFactProjector storeProjector =
             new StoreSnapshotFactProjector(policy);
     private final EmployeeSnapshotFactProjector employeeProjector =
             new EmployeeSnapshotFactProjector(policy);
+    private final WeeklyAnalyticalCandidateProjector candidateProjector =
+            new WeeklyAnalyticalCandidateProjector(policy);
     private final WeeklySnapshotPayloadCodec codec;
 
     public WeeklySnapshotDraftBuilder(WeeklySnapshotPayloadCodec codec) {
@@ -80,7 +85,15 @@ public final class WeeklySnapshotDraftBuilder {
         List<SnapshotEmployeeMembership> memberships = memberships(source);
         List<Fact> storeFacts = storeProjector.project(source);
         List<EmployeeFacts> employeeFacts = employeeProjector.project(source, memberships);
-        List<Fact> teamFacts = teamFacts(employeeFacts);
+        WeeklyAnalyticalCandidateProjector.Projection analytical =
+                candidateProjector.project(storeFacts, employeeFacts);
+        List<Fact> teamFacts = java.util.stream.Stream.concat(
+                        teamFacts(employeeFacts).stream(),
+                        analytical.teamFacts().stream()
+                )
+                .sorted(Comparator.comparing(Fact::evidenceRef))
+                .toList();
+        List<CandidateSignal> candidates = analytical.candidates();
         enforceLimits(storeFacts, teamFacts, employeeFacts);
 
         List<EvidenceIndexEntry> evidence = evidence(
@@ -91,11 +104,16 @@ public final class WeeklySnapshotDraftBuilder {
         );
         require(evidence.size() <= MAX_EVIDENCE,
                 "Weekly interpretation evidence exceeds schema limit");
+        require(candidates.size() <= MAX_CANDIDATES,
+                "Weekly interpretation candidates exceed schema limit");
+        validateCandidates(candidates, evidence);
+        List<String> categoryCodes = categoryCodes(storeFacts, employeeFacts);
         Manifest manifest = new Manifest(
                 memberships.stream().map(SnapshotEmployeeMembership::employeeRef).toList(),
                 evidence,
-                List.of(),
-                categoryCodes(storeFacts, employeeFacts),
+                candidates.stream().map(CandidateSignal::candidateRef).toList(),
+                categoryCodes,
+                categoryLabels(source, categoryCodes),
                 competencyCodes(storeFacts, employeeFacts),
                 limitations(quality.limitations(), employeeFacts)
         );
@@ -103,7 +121,7 @@ public final class WeeklySnapshotDraftBuilder {
                 storeFacts,
                 teamFacts,
                 employeeFacts,
-                List.of()
+                candidates
         );
         WeeklySnapshotPayload payload = new WeeklySnapshotPayload(1, manifest, projectedFacts);
         return new WeeklySnapshotDraft(
@@ -111,7 +129,7 @@ public final class WeeklySnapshotDraftBuilder {
                 source.query(),
                 validatedTimezone,
                 quality.status(),
-                WeeklySnapshotPolicyV2.VERSIONS,
+                WeeklySnapshotPolicyV3.VERSIONS,
                 memberships,
                 payload,
                 codec.hash(payload, memberships)
@@ -278,6 +296,23 @@ public final class WeeklySnapshotDraftBuilder {
                 "Conflicting evidence entry: " + value.evidenceRef());
     }
 
+    private void validateCandidates(
+            List<CandidateSignal> candidates,
+            List<EvidenceIndexEntry> evidence
+    ) {
+        Set<String> available = evidence.stream()
+                .filter(EvidenceIndexEntry::available)
+                .map(EvidenceIndexEntry::evidenceRef)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<String> refs = new TreeSet<>();
+        candidates.forEach(candidate -> {
+            require(refs.add(candidate.candidateRef()),
+                    "Duplicate analytical candidate reference");
+            require(available.containsAll(candidate.evidenceRefs()),
+                    "Analytical candidate requires available evidence");
+        });
+    }
+
     private List<String> categoryCodes(
             List<Fact> storeFacts,
             List<EmployeeFacts> employeeFacts
@@ -294,6 +329,28 @@ public final class WeeklySnapshotDraftBuilder {
                 .forEach(codes::add);
         return List.copyOf(codes);
     }
+
+    private Map<String, String> categoryLabels(
+            WeeklyAnalyticsFacts source,
+            List<String> categoryCodes
+    ) {
+        Set<String> included = Set.copyOf(categoryCodes);
+        Map<String, String> labels = new TreeMap<>();
+        source.current().categories().categories().forEach(category -> {
+            if (included.contains(category.categoryCode())) {
+                labels.put(category.categoryCode(), category.categoryName());
+            }
+        });
+        source.previous().categories().categories().forEach(category -> {
+            if (included.contains(category.categoryCode())) {
+                labels.putIfAbsent(
+                        category.categoryCode(), category.categoryName()
+                );
+            }
+        });
+        return Map.copyOf(labels);
+    }
+
     private List<String> competencyCodes(
             List<Fact> storeFacts,
             List<EmployeeFacts> employeeFacts

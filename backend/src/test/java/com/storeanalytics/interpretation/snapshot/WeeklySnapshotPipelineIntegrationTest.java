@@ -92,6 +92,7 @@ class WeeklySnapshotPipelineIntegrationTest {
         assertThat(planned.requestsAccepted()).isOne();
         assertThat(terminal.status()).isEqualTo(WeeklySnapshotJobStatus.SUCCESS);
         assertThat(terminal.outcome()).isEqualTo(WeeklySnapshotWriteOutcome.CREATED);
+        assertThat(terminal.versions()).isEqualTo(WeeklySnapshotPolicyV3.VERSIONS);
         PersistedWeeklySnapshot snapshot = snapshotStore.findLatest(
                 graph.storeId(), period
         ).orElseThrow();
@@ -102,6 +103,7 @@ class WeeklySnapshotPipelineIntegrationTest {
         assertThat(snapshot.query().period()).isEqualTo(period);
         assertThat(snapshot.payload().facts()).isNotNull();
         assertThat(snapshotCount(graph.storeId())).isOne();
+        assertThat(snapshot.versions()).isEqualTo(WeeklySnapshotPolicyV3.VERSIONS);
         assertThat(llmAnalysisJobCount()).isZero();
     }
 

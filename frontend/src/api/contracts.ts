@@ -282,8 +282,8 @@ const attachRateEntrySchema = z.object({
   metricCode: z.string(),
   numeratorCategoryCode: z.string(),
   denominatorCode: z.string(),
-  numeratorReceiptCount: z.number().int().nonnegative(),
-  denominatorReceiptCount: z.number().int().nonnegative(),
+  numeratorReceiptCount: z.number(),
+  denominatorReceiptCount: z.number(),
   numeratorQuantity: z.number().optional(),
   denominatorQuantity: z.number().optional(),
   ratePerHundred: z.number().nullable()
@@ -446,8 +446,8 @@ const employeeAttachRatingEntrySchema = z.object({
   metricCode: z.string(),
   numeratorCategoryCode: z.string(),
   denominatorCode: z.string(),
-  numeratorReceiptCount: z.number().int().nonnegative(),
-  denominatorReceiptCount: z.number().int().nonnegative(),
+  numeratorReceiptCount: z.number(),
+  denominatorReceiptCount: z.number(),
   numeratorQuantity: z.number().optional(),
   denominatorQuantity: z.number().optional(),
   ratePercent: z.number().nullable(),
@@ -931,8 +931,8 @@ const annualCategoryTotalsSchema = z.object({
 const annualAttachRateTotalsSchema = z.object({
   formulaVersion: z.string(),
   metricCode: z.string(),
-  numeratorReceiptCount: z.number().int().nonnegative(),
-  denominatorReceiptCount: z.number().int().nonnegative(),
+  numeratorReceiptCount: z.number(),
+  denominatorReceiptCount: z.number(),
   numeratorQuantity: z.number().optional(),
   denominatorQuantity: z.number().optional(),
   ratePerHundred: z.number().nullable()

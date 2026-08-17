@@ -15,8 +15,11 @@ public class WeeklyInsightContentProjector {
 
     private static final int LEGACY_SCHEMA_VERSION = 1;
     private static final int FLAT_SCHEMA_VERSION = 2;
+    private static final int PRIMARY_SIGNAL_SCHEMA_VERSION = 3;
     private final WeeklyInsightV2ContentProjector flatProjector =
             new WeeklyInsightV2ContentProjector();
+    private final WeeklyInsightV3ContentProjector primarySignalProjector =
+            new WeeklyInsightV3ContentProjector();
 
     public WeeklyInsightContentView project(
             WeeklyInterpretationDetailView interpretation,
@@ -30,6 +33,9 @@ public class WeeklyInsightContentProjector {
                     interpretation.content(), snapshot
             );
             case FLAT_SCHEMA_VERSION -> flatProjector.project(
+                    interpretation.content(), snapshot
+            );
+            case PRIMARY_SIGNAL_SCHEMA_VERSION -> primarySignalProjector.project(
                     interpretation.content(), snapshot
             );
             default -> throw new IllegalStateException(

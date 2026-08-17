@@ -167,6 +167,14 @@
           "maxItems": 100,
           "uniqueItems": true
         },
+        "categoryLabels": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/code"},
+          "additionalProperties": {
+            "type": "string", "minLength": 1, "maxLength": 200
+          },
+          "maxProperties": 100
+        },
         "competencyCodes": {
           "type": "array",
           "items": {"$ref": "#/$defs/code"},
@@ -238,7 +246,17 @@
     "candidateSignal": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["candidateRef", "kind", "theme", "employeeRef", "evidenceRefs"],
+      "required": [
+        "candidateRef",
+        "kind",
+        "theme",
+        "employeeRef",
+        "categoryCode",
+        "competencyCode",
+        "targetEmployeeRefs",
+        "sufficiency",
+        "evidenceRefs"
+      ],
       "properties": {
         "candidateRef": {"$ref": "#/$defs/code"},
         "kind": {"enum": ["OBSERVATION", "RISK", "OPPORTUNITY"]},
@@ -246,6 +264,19 @@
         "employeeRef": {
           "anyOf": [{"$ref": "#/$defs/employeeRef"}, {"type": "null"}]
         },
+        "categoryCode": {
+          "anyOf": [{"$ref": "#/$defs/code"}, {"type": "null"}]
+        },
+        "competencyCode": {
+          "anyOf": [{"$ref": "#/$defs/code"}, {"type": "null"}]
+        },
+        "targetEmployeeRefs": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/employeeRef"},
+          "maxItems": 10,
+          "uniqueItems": true
+        },
+        "sufficiency": {"enum": ["SUFFICIENT", "LIMITED", "INSUFFICIENT"]},
         "evidenceRefs": {
           "type": "array",
           "items": {"$ref": "#/$defs/evidenceRef"},

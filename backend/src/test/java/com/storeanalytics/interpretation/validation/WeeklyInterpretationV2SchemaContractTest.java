@@ -100,7 +100,95 @@ class WeeklyInterpretationV2SchemaContractTest {
                 .isEqualTo(LlmContractResources.SYSTEM_PROMPT);
         assertThat(LlmContractResources.systemPrompt("weekly-interpretation-v4"))
                 .isEqualTo(LlmContractResources.NEXT_SYSTEM_PROMPT);
-        assertThatThrownBy(() -> LlmContractResources.contentSchema(3))
+        assertThat(LlmContractResources.systemPrompt("weekly-interpretation-v5"))
+                .isEqualTo(LlmContractResources.CONCISE_SYSTEM_PROMPT);
+        assertThat(LlmContractResources.systemPrompt("weekly-interpretation-v6"))
+                .isEqualTo(
+                        LlmContractResources.REVISED_CONCISE_SYSTEM_PROMPT
+                );
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v5", 2
+        )).isTrue();
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v6", 2
+        )).isTrue();
+        assertThat(LlmContractResources.systemPrompt("weekly-interpretation-v7"))
+                .isEqualTo(
+                        LlmContractResources.STRICT_CONCISE_SYSTEM_PROMPT
+                );
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v7", 2
+        )).isTrue();
+        assertThat(LlmContractResources.isStrictConcisePrompt(
+                "weekly-interpretation-v7"
+        )).isTrue();
+        assertThat(LlmContractResources.systemPrompt("weekly-interpretation-v8"))
+                .isEqualTo(
+                        LlmContractResources.ACTIONABLE_CONCISE_SYSTEM_PROMPT
+                );
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v8", 2
+        )).isTrue();
+        assertThat(LlmContractResources.isStrictConcisePrompt(
+                "weekly-interpretation-v8"
+        )).isTrue();
+        assertThat(LlmContractResources.systemPrompt(
+                "weekly-interpretation-v9"
+        )).isEqualTo(
+                LlmContractResources.EVIDENCE_GUARDED_SYSTEM_PROMPT
+        );
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v9", 2
+        )).isTrue();
+        assertThat(LlmContractResources.isStrictConcisePrompt(
+                "weekly-interpretation-v9"
+        )).isTrue();
+        assertThat(LlmContractResources.isEvidenceGuardedPrompt(
+                "weekly-interpretation-v9"
+        )).isTrue();
+        assertThat(LlmContractResources.systemPrompt(
+                "weekly-interpretation-v10"
+        )).isEqualTo(
+                LlmContractResources.HARDENED_EVIDENCE_SYSTEM_PROMPT
+        );
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v10", 2
+        )).isTrue();
+        assertThat(LlmContractResources.isStrictConcisePrompt(
+                "weekly-interpretation-v10"
+        )).isTrue();
+        assertThat(LlmContractResources.isEvidenceGuardedPrompt(
+                "weekly-interpretation-v10"
+        )).isTrue();
+        assertThat(LlmContractResources.systemPrompt(
+                "weekly-interpretation-v11"
+        )).isEqualTo(
+                LlmContractResources.NARRATIVE_GUARDED_SYSTEM_PROMPT
+        );
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v11", 2
+        )).isTrue();
+        assertThat(LlmContractResources.isStrictConcisePrompt(
+                "weekly-interpretation-v11"
+        )).isTrue();
+        assertThat(LlmContractResources.isEvidenceGuardedPrompt(
+                "weekly-interpretation-v11"
+        )).isTrue();
+        assertThat(LlmContractResources.systemPrompt(
+                "weekly-interpretation-v12"
+        )).isEqualTo(
+                LlmContractResources.CAUSAL_NARRATIVE_GUARDED_SYSTEM_PROMPT
+        );
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v12", 2
+        )).isTrue();
+        assertThat(LlmContractResources.isStrictConcisePrompt(
+                "weekly-interpretation-v12"
+        )).isTrue();
+        assertThat(LlmContractResources.isEvidenceGuardedPrompt(
+                "weekly-interpretation-v12"
+        )).isTrue();
+        assertThatThrownBy(() -> LlmContractResources.contentSchema(4))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

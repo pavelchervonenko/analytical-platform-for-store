@@ -184,7 +184,7 @@ class StoreSyncIntegrationTest {
                 Integer.class
         );
 
-        assertThat(tableCount).isEqualTo(57);
+        assertThat(tableCount).isEqualTo(59);
         assertThat(entityManagerFactory.getMetamodel().getEntities()).hasSize(39);
         assertThat(applicationContext.getBeanNamesForType(JpaRepository.class)).hasSize(39);
         assertThat(jdbcTemplate.queryForObject(
@@ -229,7 +229,9 @@ class StoreSyncIntegrationTest {
                       'notification_events',
                       'notification_deliveries',
                       'notification_delivery_attempts',
-                      'notification_event_fanout_receipts'
+                      'notification_event_fanout_receipts',
+                      'attach_rate_item_facts_v3',
+                      'attach_rate_metric_definitions_v3'
                   )
                 ORDER BY table_name, ordinal_position
                 """,

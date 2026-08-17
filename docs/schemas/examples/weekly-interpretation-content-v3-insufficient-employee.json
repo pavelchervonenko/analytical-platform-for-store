@@ -1,0 +1,72 @@
+{
+    "employees":  [
+                      {
+                          "employeeRef":  "E01",
+                          "analysisStatus":  "INSUFFICIENT"
+                      }
+                  ],
+    "summaryBlocks":  [
+                          {
+                              "scope":  "TEAM",
+                              "employeeRef":  null,
+                              "section":  "TEAM_OVERVIEW",
+                              "categoryCode":  null,
+                              "text":  "Сравнение команды ограничено качеством персональных данных.",
+                              "evidenceRefs":  [
+                                                   "TEAM.RATING.DISTRIBUTION"
+                                               ]
+                          },
+                          {
+                              "scope":  "EMPLOYEE",
+                              "employeeRef":  "E01",
+                              "section":  "HEADLINE",
+                              "categoryCode":  null,
+                              "text":  "Персональный разбор ограничен недостаточной выборкой.",
+                              "evidenceRefs":  [
+                                                   "EMP:E01.WORKLOAD.STATUS"
+                                               ]
+                          },
+                          {
+                              "scope":  "EMPLOYEE",
+                              "employeeRef":  "E01",
+                              "section":  "WORKLOAD",
+                              "categoryCode":  null,
+                              "text":  "Наблюдений недостаточно для оценки результата сотрудника.",
+                              "evidenceRefs":  [
+                                                   "EMP:E01.WORKLOAD.SUFFICIENCY"
+                                               ]
+                          }
+                      ],
+    "insights":  [
+
+                 ],
+    "actions":  [
+
+                ],
+    "teamRelationships":  [
+
+                          ],
+    "dataLimitations":  [
+                            {
+                                "code":  "EMPLOYEE_SAMPLE_TOO_SMALL",
+                                "scope":  "EMPLOYEE",
+                                "employeeRef":  "E01",
+                                "categoryCode":  null,
+                                "impact":  "UNAVAILABLE",
+                                "affectedSections":  [
+                                                         "RESULT",
+                                                         "DYNAMICS",
+                                                         "CATEGORY_PERFORMANCE",
+                                                         "ADDITIONAL_SALES",
+                                                         "RATING",
+                                                         "TEAM_COMPARISON",
+                                                         "RECOMMENDATIONS"
+                                                     ],
+                                "summary":  "Недостаточная выборка не позволяет подтвердить персональные выводы.",
+                                "evidenceRefs":  [
+                                                     "EMP:E01.WORKLOAD.SUFFICIENCY"
+                                                 ]
+                            }
+                        ],
+    "primarySignal":  null
+}

@@ -8,20 +8,26 @@ public class WeeklyInsightPresentationFactory {
 
     private final WeeklyInsightContentProjector contentProjector;
     private final WeeklyInsightFallbackFactory fallbackFactory;
+    private final WeeklyInsightEvidenceProjector evidenceProjector;
 
     public WeeklyInsightPresentationFactory(
             WeeklyInsightContentProjector contentProjector,
-            WeeklyInsightFallbackFactory fallbackFactory
+            WeeklyInsightFallbackFactory fallbackFactory,
+            WeeklyInsightEvidenceProjector evidenceProjector
     ) {
         this.contentProjector = contentProjector;
         this.fallbackFactory = fallbackFactory;
+        this.evidenceProjector = evidenceProjector;
     }
 
     public WeeklyInsightContentView content(
             WeeklyInterpretationDetailView interpretation,
             PersistedWeeklySnapshot snapshot
     ) {
-        return contentProjector.project(interpretation, snapshot);
+        WeeklyInsightContentView content = contentProjector.project(
+                interpretation, snapshot
+        );
+        return evidenceProjector.project(content, snapshot);
     }
 
     public WeeklyInsightFallbackView fallback(PersistedWeeklySnapshot snapshot) {

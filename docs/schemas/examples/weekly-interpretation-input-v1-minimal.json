@@ -32,6 +32,12 @@
         "available": true
       },
       {
+        "evidenceRef": "TEAM.RATING.ELIGIBLE_COUNT",
+        "scope": "TEAM",
+        "employeeRef": null,
+        "available": true
+      },
+      {
         "evidenceRef": "EMP:E01.WORKLOAD.STATUS",
         "scope": "EMPLOYEE",
         "employeeRef": "E01",
@@ -40,6 +46,7 @@
     ],
     "candidateRefs": [],
     "categoryCodes": [],
+    "categoryLabels": {},
     "competencyCodes": [],
     "limitations": []
   },
@@ -60,7 +67,18 @@
         "materiality": "PRIMARY"
       }
     ],
-    "team": [],
+    "team": [
+      {
+        "evidenceRef": "TEAM.RATING.ELIGIBLE_COUNT",
+        "metricCode": "RATING_ELIGIBLE_COUNT",
+        "categoryCode": null,
+        "unit": "COUNT",
+        "value": 1,
+        "comparison": null,
+        "sufficiency": "INSUFFICIENT",
+        "materiality": "CONTEXT"
+      }
+    ],
     "employees": [
       {
         "employeeRef": "E01",

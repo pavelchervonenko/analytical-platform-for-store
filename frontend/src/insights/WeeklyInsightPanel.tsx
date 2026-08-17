@@ -15,6 +15,7 @@ import { getWeeklyInsight, queryKeys } from "../api/queries";
 import type {
   WeeklyInsight,
   WeeklyInsightEmployee,
+  WeeklyInsightEvidence,
   WeeklyInsightStore
 } from "../api/weeklyInsightContract";
 import { formatDate } from "../shared/date";
@@ -25,6 +26,9 @@ import {
   analysisStatusLabel,
   analysisStatusTone,
   employeeAnalysisHelp,
+  insightKindHelp,
+  insightKindLabel,
+  insightKindTone,
   limitationSummary,
   uniqueNarratives
 } from "./presentation";
@@ -59,21 +63,127 @@ function InsightStatus({ insight }: { insight: WeeklyInsight }) {
   );
 }
 
+type EvidenceIndex = ReadonlyMap<string, WeeklyInsightEvidence>;
+
+function EvidenceFacts({
+  evidenceRefs,
+  evidenceByCode,
+  caption
+}: {
+  evidenceRefs?: string[];
+  evidenceByCode: EvidenceIndex;
+  caption?: string;
+}) {
+  const evidence = (evidenceRefs ?? [])
+    .map((code) => evidenceByCode.get(code))
+    .filter((value): value is WeeklyInsightEvidence => value !== undefined);
+  if (evidence.length === 0) return null;
+  const limited = evidence.some(
+    (item) => !item.available
+      || item.sufficiency === "LIMITED"
+      || item.sufficiency === "INSUFFICIENT"
+  );
+  const visibleCaption = limited
+    ? "Данные с ограничениями"
+    : caption ?? "Подтверждено данными";
+
+  return (
+    <div className="weekly-evidence" aria-label={visibleCaption}>
+      <span className={limited
+        ? "weekly-evidence__caption weekly-evidence__caption--limited"
+        : "weekly-evidence__caption"}>
+        {visibleCaption}
+      </span>
+      {evidence.map((item) => (
+        <div className="weekly-evidence__item" key={item.evidenceCode}>
+          <span>{item.label}</span>
+          <strong>{item.formattedValue ?? "Значение недоступно"}</strong>
+          {item.comparisonText && <small>{item.comparisonText}</small>}
+          {item.sufficiency && item.sufficiency !== "SUFFICIENT" && (
+            <em>
+              {item.sufficiency === "LIMITED"
+                ? "Ограниченная выборка"
+                : "Недостаточно данных"}
+            </em>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function NarrativeWithEvidence({
+  value,
+  evidenceByCode,
+  className
+}: {
+  value: { text: string; evidenceRefs?: string[] };
+  evidenceByCode: EvidenceIndex;
+  className?: string;
+}) {
+  const classes = className
+    ? `weekly-narrative ${className}`
+    : "weekly-narrative";
+  return (
+    <div className={classes}>
+      <p>{value.text}</p>
+      <EvidenceFacts
+        evidenceRefs={value.evidenceRefs}
+        evidenceByCode={evidenceByCode}
+      />
+    </div>
+  );
+}
+
+function InsightKindBadge({ kind }: { kind?: string }) {
+  if (!kind) return null;
+  return (
+    <em className={
+      `weekly-insight-kind weekly-insight-kind--${insightKindTone(kind)}`
+    }>
+      {insightKindLabel(kind)}
+    </em>
+  );
+}
+
+function HypothesisHelp({ kind }: { kind?: string }) {
+  const help = kind ? insightKindHelp(kind) : null;
+  return help
+    ? <small className="weekly-insight-hypothesis-help">{help}</small>
+    : null;
+}
+
 function InsightBlock({
   label,
   value,
-  tone = "neutral"
+  tone = "neutral",
+  evidenceByCode
 }: {
   label: string;
-  value: { title?: string; summary: string } | null;
+  value: {
+    kind: string;
+    title?: string;
+    summary: string;
+    evidenceRefs?: string[];
+  } | null;
   tone?: "neutral" | "positive" | "warning";
+  evidenceByCode: EvidenceIndex;
 }) {
   if (!value) return null;
   return (
     <article className={`weekly-insight-block weekly-insight-block--${tone}`}>
       <span>{label}</span>
+      <InsightKindBadge kind={value.kind} />
       {value.title && <strong>{value.title}</strong>}
       <p>{value.summary}</p>
+      <HypothesisHelp kind={value.kind} />
+      <EvidenceFacts
+        evidenceRefs={value.evidenceRefs}
+        evidenceByCode={evidenceByCode}
+        caption={value.kind === "HYPOTHESIS"
+          ? "Основание гипотезы"
+          : undefined}
+      />
     </article>
   );
 }
@@ -82,16 +192,19 @@ type InsightListItem = {
   kind: string;
   title: string;
   summary: string;
+  evidenceRefs: string[];
 };
 
 function InsightItemList({
   label,
   items,
-  tone = "neutral"
+  tone = "neutral",
+  evidenceByCode
 }: {
   label: string;
   items: InsightListItem[];
   tone?: "neutral" | "category" | "attach" | "team";
+  evidenceByCode: EvidenceIndex;
 }) {
   const uniqueItems = uniqueNarratives(
     items,
@@ -103,21 +216,36 @@ function InsightItemList({
       <span>{label}</span>
       {uniqueItems.map((item, index) => (
         <div key={`${item.kind}:${item.title}:${index}`}>
+          <InsightKindBadge kind={item.kind} />
           <strong>{item.title}</strong>
           <small>{item.summary}</small>
+          <HypothesisHelp kind={item.kind} />
+          <EvidenceFacts
+            evidenceRefs={item.evidenceRefs}
+            evidenceByCode={evidenceByCode}
+            caption={item.kind === "HYPOTHESIS"
+              ? "Основание гипотезы"
+              : undefined}
+          />
         </div>
       ))}
     </div>
   );
 }
 
-function EmployeeInsight({ employee }: { employee: WeeklyInsightEmployee }) {
+function EmployeeInsight({
+  employee,
+  evidenceByCode
+}: {
+  employee: WeeklyInsightEmployee;
+  evidenceByCode: EvidenceIndex;
+}) {
   const insight = employee.insight;
   const status = employee.analysisStatus || insight.analysisStatus;
   const tone = analysisStatusTone(status);
   const limitations = uniqueNarratives(
-    insight.dataLimitations.map(limitationSummary),
-    (item) => item
+    insight.dataLimitations,
+    (item) => item.summary
   );
 
   return (
@@ -144,13 +272,46 @@ function EmployeeInsight({ employee }: { employee: WeeklyInsightEmployee }) {
             </div>
           </div>
         )}
-        {insight.workloadContext && <p>{insight.workloadContext.text}</p>}
-        {insight.performanceSummary && <p>{insight.performanceSummary.text}</p>}
-        {insight.dynamicsSummary && <p>{insight.dynamicsSummary.text}</p>}
+        <EvidenceFacts
+          evidenceRefs={insight.headline.evidenceRefs}
+          evidenceByCode={evidenceByCode}
+        />
+        {insight.workloadContext && (
+          <NarrativeWithEvidence
+            value={insight.workloadContext}
+            evidenceByCode={evidenceByCode}
+          />
+        )}
+        {insight.performanceSummary && (
+          <NarrativeWithEvidence
+            value={insight.performanceSummary}
+            evidenceByCode={evidenceByCode}
+          />
+        )}
+        {insight.dynamicsSummary && (
+          <NarrativeWithEvidence
+            value={insight.dynamicsSummary}
+            evidenceByCode={evidenceByCode}
+          />
+        )}
         <div className="weekly-insight-blocks weekly-insight-blocks--employee">
-          <InsightBlock label="Сильная сторона" value={insight.strength} tone="positive" />
-          <InsightBlock label="Зона внимания" value={insight.attentionArea} />
-          <InsightBlock label="Риск" value={insight.primaryRisk} tone="warning" />
+          <InsightBlock
+            label="Сильная сторона"
+            value={insight.strength}
+            tone="positive"
+            evidenceByCode={evidenceByCode}
+          />
+          <InsightBlock
+            label="Зона внимания"
+            value={insight.attentionArea}
+            evidenceByCode={evidenceByCode}
+          />
+          <InsightBlock
+            label="Риск"
+            value={insight.primaryRisk}
+            tone="warning"
+            evidenceByCode={evidenceByCode}
+          />
         </div>
         {(insight.categoryPerformance || insight.additionalSalesPerformance) && (
           <div className="weekly-employee-details">
@@ -158,22 +319,28 @@ function EmployeeInsight({ employee }: { employee: WeeklyInsightEmployee }) {
               <article className="weekly-employee-detail weekly-employee-detail--category">
                 <strong>Категории продаж</strong>
                 {insight.categoryPerformance.summary && (
-                  <p>{insight.categoryPerformance.summary.text}</p>
+                  <NarrativeWithEvidence
+                    value={insight.categoryPerformance.summary}
+                    evidenceByCode={evidenceByCode}
+                  />
                 )}
                 <InsightItemList
                   label="Сильные категории"
                   items={insight.categoryPerformance.strengths}
                   tone="category"
+                  evidenceByCode={evidenceByCode}
                 />
                 <InsightItemList
                   label="Зоны внимания"
                   items={insight.categoryPerformance.attentionAreas}
                   tone="category"
+                  evidenceByCode={evidenceByCode}
                 />
                 <InsightItemList
                   label="Динамика"
                   items={insight.categoryPerformance.dynamics}
                   tone="category"
+                  evidenceByCode={evidenceByCode}
                 />
               </article>
             )}
@@ -181,20 +348,26 @@ function EmployeeInsight({ employee }: { employee: WeeklyInsightEmployee }) {
               <article className="weekly-employee-detail weekly-employee-detail--attach">
                 <strong>Дополнительные продажи</strong>
                 {insight.additionalSalesPerformance.summary && (
-                  <p>{insight.additionalSalesPerformance.summary.text}</p>
+                  <NarrativeWithEvidence
+                    value={insight.additionalSalesPerformance.summary}
+                    evidenceByCode={evidenceByCode}
+                  />
                 )}
                 <InsightItemList
                   label="Выручка"
                   items={insight.additionalSalesPerformance.revenueInsights}
+                  evidenceByCode={evidenceByCode}
                 />
                 <InsightItemList
-                  label="Attach-rate · доля чеков с допродажей"
+                  label="Attach-rate · допы на 100 единиц техники"
                   items={insight.additionalSalesPerformance.attachRateInsights}
                   tone="attach"
+                  evidenceByCode={evidenceByCode}
                 />
                 <InsightItemList
                   label="Возможности роста"
                   items={insight.additionalSalesPerformance.opportunities}
+                  evidenceByCode={evidenceByCode}
                 />
               </article>
             )}
@@ -202,7 +375,7 @@ function EmployeeInsight({ employee }: { employee: WeeklyInsightEmployee }) {
         )}
         {insight.recommendedActions.length > 0 && (
           <div className="weekly-insight-actions">
-            <strong>Возможные действия</strong>
+            <strong>Рекомендованные действия</strong>
             <ul>{uniqueNarratives(
               insight.recommendedActions,
               (action) => `${action.title}\n${action.summary}`
@@ -211,6 +384,11 @@ function EmployeeInsight({ employee }: { employee: WeeklyInsightEmployee }) {
                 <span>{actionTypeLabel(action.type)} · {actionHorizonLabel(action.horizon)}</span>
                 <strong>{action.title}</strong>
                 <p>{action.summary}</p>
+                <EvidenceFacts
+                  evidenceRefs={action.evidenceRefs}
+                  evidenceByCode={evidenceByCode}
+                  caption="Основание рекомендации"
+                />
               </li>
             ))}</ul>
           </div>
@@ -219,9 +397,13 @@ function EmployeeInsight({ employee }: { employee: WeeklyInsightEmployee }) {
           <div className="weekly-employee-limitations">
             <strong>Ограничения данных</strong>
             {limitations.map((limitation) => (
-              <p key={`${employee.employeeId}:limitation:${limitation}`}>
-                {limitation}
-              </p>
+              <div key={`${employee.employeeId}:limitation:${limitation.code}`}>
+                <p>{limitationSummary(limitation)}</p>
+                <EvidenceFacts
+                  evidenceRefs={limitation.evidenceRefs}
+                  evidenceByCode={evidenceByCode}
+                />
+              </div>
             ))}
           </div>
         )}
@@ -231,9 +413,11 @@ function EmployeeInsight({ employee }: { employee: WeeklyInsightEmployee }) {
 }
 
 function TeamExperience({
-  insight
+  insight,
+  evidenceByCode
 }: {
   insight: NonNullable<WeeklyInsight["content"]>["teamInsights"];
+  evidenceByCode: EvidenceIndex;
 }) {
   const hasItems = insight.competencyLeaders.length > 0
     || insight.mostImproved.length > 0
@@ -250,12 +434,20 @@ function TeamExperience({
           <article key={`leader:${index}`}>
             <strong>{leader.employeeNames.join(", ") || "Лидер команды"}</strong>
             <p>{leader.summary}</p>
+            <EvidenceFacts
+              evidenceRefs={leader.evidenceRefs}
+              evidenceByCode={evidenceByCode}
+            />
           </article>
         ))}
         {insight.mostImproved.map((employee, index) => (
           <article key={`improved:${employee.employeeRef}:${index}`}>
             <strong>{employee.displayName ?? "Заметная динамика"}</strong>
             <p>{employee.summary}</p>
+            <EvidenceFacts
+              evidenceRefs={employee.evidenceRefs}
+              evidenceByCode={evidenceByCode}
+            />
           </article>
         ))}
         {insight.learningOpportunities.map((opportunity, index) => (
@@ -267,6 +459,10 @@ function TeamExperience({
                 : ""}
             </strong>
             <p>{opportunity.summary}</p>
+            <EvidenceFacts
+              evidenceRefs={opportunity.evidenceRefs}
+              evidenceByCode={evidenceByCode}
+            />
           </article>
         ))}
       </div>
@@ -287,31 +483,70 @@ function ReadyInsight({ insight }: { insight: WeeklyInsight & { content: NonNull
     insight.content.dataLimitations,
     (item) => item.summary
   );
+  const evidenceByCode: EvidenceIndex = new Map(
+    insight.content.evidence.map((item) => [item.evidenceCode, item])
+  );
 
   return (
     <>
       <div className="weekly-insight-hero">
         <span><Sparkles size={18} /> Главное за неделю</span>
         <h2>{store.headline.text}</h2>
+        <EvidenceFacts
+          evidenceRefs={store.headline.evidenceRefs}
+          evidenceByCode={evidenceByCode}
+        />
         {hasSummaries && (
           <div className="weekly-insight-summaries">
             {store.resultSummary && (
-              <p><strong>Результат</strong>{store.resultSummary.text}</p>
+              <article>
+                <strong>Результат</strong>
+                <NarrativeWithEvidence
+                  value={store.resultSummary}
+                  evidenceByCode={evidenceByCode}
+                />
+              </article>
             )}
             {store.dynamicsSummary && (
-              <p><strong>Динамика</strong>{store.dynamicsSummary.text}</p>
+              <article>
+                <strong>Динамика</strong>
+                <NarrativeWithEvidence
+                  value={store.dynamicsSummary}
+                  evidenceByCode={evidenceByCode}
+                />
+              </article>
             )}
             {store.planOutlook && (
-              <p><strong>План</strong>{store.planOutlook.text}</p>
+              <article>
+                <strong>План</strong>
+                <NarrativeWithEvidence
+                  value={store.planOutlook}
+                  evidenceByCode={evidenceByCode}
+                />
+              </article>
             )}
           </div>
         )}
       </div>
 
       <div className="weekly-insight-blocks">
-        <InsightBlock label="Сильная сторона" value={store.strength} tone="positive" />
-        <InsightBlock label="Зона внимания" value={store.attentionArea} />
-        <InsightBlock label="Главный риск" value={store.primaryRisk} tone="warning" />
+        <InsightBlock
+          label="Сильная сторона"
+          value={store.strength}
+          tone="positive"
+          evidenceByCode={evidenceByCode}
+        />
+        <InsightBlock
+          label="Зона внимания"
+          value={store.attentionArea}
+          evidenceByCode={evidenceByCode}
+        />
+        <InsightBlock
+          label="Главный риск"
+          value={store.primaryRisk}
+          tone="warning"
+          evidenceByCode={evidenceByCode}
+        />
       </div>
 
       <div className="weekly-insight-columns">
@@ -320,22 +555,28 @@ function ReadyInsight({ insight }: { insight: WeeklyInsight & { content: NonNull
             <span className="weekly-insight-section-icon"><TrendingUp size={18} /></span>
             <h3>Категории продаж</h3>
             {store.categoryPerformance.summary && (
-              <p>{store.categoryPerformance.summary.text}</p>
+              <NarrativeWithEvidence
+                value={store.categoryPerformance.summary}
+                evidenceByCode={evidenceByCode}
+              />
             )}
             <InsightItemList
               label="Драйверы роста"
               items={store.categoryPerformance.growthDrivers}
               tone="category"
+              evidenceByCode={evidenceByCode}
             />
             <InsightItemList
               label="Снижение"
               items={store.categoryPerformance.declineDrivers}
               tone="category"
+              evidenceByCode={evidenceByCode}
             />
             <InsightItemList
               label="Структура продаж"
               items={store.categoryPerformance.mixInsights}
               tone="category"
+              evidenceByCode={evidenceByCode}
             />
           </article>
         )}
@@ -344,31 +585,41 @@ function ReadyInsight({ insight }: { insight: WeeklyInsight & { content: NonNull
             <span className="weekly-insight-section-icon"><Target size={18} /></span>
             <h3>Дополнительные продажи</h3>
             {store.additionalSalesPerformance.summary && (
-              <p>{store.additionalSalesPerformance.summary.text}</p>
+              <NarrativeWithEvidence
+                value={store.additionalSalesPerformance.summary}
+                evidenceByCode={evidenceByCode}
+              />
             )}
             <InsightItemList
               label="Выручка"
               items={store.additionalSalesPerformance.revenueInsights}
+              evidenceByCode={evidenceByCode}
             />
             <InsightItemList
-              label="Attach-rate · доля чеков с допродажей"
+              label="Attach-rate · допы на 100 единиц техники"
               items={store.additionalSalesPerformance.attachRateInsights}
               tone="attach"
+              evidenceByCode={evidenceByCode}
             />
             <InsightItemList
               label="Возможности роста"
               items={store.additionalSalesPerformance.opportunities}
+              evidenceByCode={evidenceByCode}
             />
           </article>
         )}
         <article className="weekly-insight-column weekly-insight-column--team">
           <span className="weekly-insight-section-icon"><Users size={18} /></span>
           <h3>Команда</h3>
-          <p>{insight.content.teamInsights.summary.text}</p>
+          <NarrativeWithEvidence
+            value={insight.content.teamInsights.summary}
+            evidenceByCode={evidenceByCode}
+          />
           <InsightItemList
             label="Главное по команде"
             items={insight.content.teamInsights.highlights}
             tone="team"
+            evidenceByCode={evidenceByCode}
           />
           {!teamHasDetails && (
             <div className="weekly-insight-team-note">
@@ -383,7 +634,7 @@ function ReadyInsight({ insight }: { insight: WeeklyInsight & { content: NonNull
         <section className="weekly-insight-focus weekly-insight-focus--list">
           <div className="weekly-insight-focus-heading">
             <Lightbulb size={21} />
-            <span>Действия на неделю</span>
+            <span>Рекомендованные действия</span>
           </div>
           <ul>{uniqueNarratives(
             store.recommendedActions,
@@ -393,12 +644,20 @@ function ReadyInsight({ insight }: { insight: WeeklyInsight & { content: NonNull
               <span>{actionTypeLabel(action.type)} · {actionHorizonLabel(action.horizon)}</span>
               <strong>{action.title}</strong>
               <p>{action.summary}</p>
+              <EvidenceFacts
+                evidenceRefs={action.evidenceRefs}
+                evidenceByCode={evidenceByCode}
+                caption="Основание рекомендации"
+              />
             </li>
           ))}</ul>
         </section>
       )}
 
-      <TeamExperience insight={insight.content.teamInsights} />
+      <TeamExperience
+        insight={insight.content.teamInsights}
+        evidenceByCode={evidenceByCode}
+      />
 
       {insight.content.employees.length > 0 && (
         <section className="weekly-insight-employees">
@@ -407,7 +666,11 @@ function ReadyInsight({ insight }: { insight: WeeklyInsight & { content: NonNull
             <small>{insight.content.employees.length}</small>
           </div>
           {insight.content.employees.map((employee) => (
-            <EmployeeInsight key={employee.employeeId} employee={employee} />
+            <EmployeeInsight
+              key={employee.employeeId}
+              employee={employee}
+              evidenceByCode={evidenceByCode}
+            />
           ))}
         </section>
       )}
@@ -415,9 +678,18 @@ function ReadyInsight({ insight }: { insight: WeeklyInsight & { content: NonNull
       {limitations.length > 0 && (
         <section className="weekly-insight-limitations">
           <TriangleAlert size={18} />
-          <div><strong>Ограничения данных</strong>{limitations.map((item) => (
-            <p key={`${item.code}:${item.scope}:${item.employeeRef ?? "store"}`}>{item.summary}</p>
-          ))}</div>
+          <div>
+            <strong>Ограничения данных</strong>
+            {limitations.map((item) => (
+              <div key={`${item.code}:${item.scope}:${item.employeeRef ?? "store"}`}>
+                <p>{item.summary}</p>
+                <EvidenceFacts
+                  evidenceRefs={item.evidenceRefs}
+                  evidenceByCode={evidenceByCode}
+                />
+              </div>
+            ))}
+          </div>
         </section>
       )}
     </>

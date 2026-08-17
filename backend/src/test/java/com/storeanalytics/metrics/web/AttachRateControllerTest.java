@@ -63,7 +63,7 @@ class AttachRateControllerTest {
                 .andExpect(jsonPath("$.storeId").value(storeId.toString()))
                 .andExpect(jsonPath("$.periodStart").value("2026-07-01"))
                 .andExpect(jsonPath("$.periodEnd").value("2026-07-31"))
-                .andExpect(jsonPath("$.formulaVersion").value("attach-rate-v2"))
+                .andExpect(jsonPath("$.formulaVersion").value("attach-rate-v3"))
                 .andExpect(jsonPath("$.dataQuality.unmatchedNumeratorItemCount").value(1))
                 .andExpect(jsonPath("$.rates[0].metricCode").value("CASE_APPLE_IPHONE"))
                 .andExpect(jsonPath("$.rates[0].denominatorCode").value("IPHONE"))
@@ -120,7 +120,7 @@ class AttachRateControllerTest {
                 storeId,
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 31),
-                "attach-rate-v2",
+                "attach-rate-v3",
                 new AttachRateDataQuality(1, 0, 0),
                 List.of(new AttachRateEntry(
                         "CASE_APPLE_IPHONE",

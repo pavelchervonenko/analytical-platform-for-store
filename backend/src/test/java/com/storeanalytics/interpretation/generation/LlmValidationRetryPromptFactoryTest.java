@@ -58,4 +58,22 @@ class LlmValidationRetryPromptFactoryTest {
                 .contains("employeeRef")
                 .contains("qualitative wording");
     }
+
+    @Test
+    void mapsCanonicalSummaryPathsForV14AndV15RetryTransport() {
+        String v15 = LlmValidationRetryPromptFactory.transportPathGuidance(
+                "weekly-interpretation-v15"
+        );
+        assertThat(LlmValidationRetryPromptFactory.transportPathGuidance(
+                "weekly-interpretation-v14"
+        )).isEqualTo(v15);
+        assertThat(v15)
+                .contains("$.summaryBlocks[0] maps to teamOverview")
+                .contains("employeeHeadlines in manifest.employeeRefs order")
+                .contains("remaining indexes map to supportingSummaries")
+                .contains("never emit summaryBlocks");
+        assertThat(LlmValidationRetryPromptFactory.transportPathGuidance(
+                "weekly-interpretation-v13"
+        )).isEmpty();
+    }
 }

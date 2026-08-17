@@ -402,8 +402,8 @@ final class EmployeeSnapshotFactProjector {
                     String prefix = "EMP:" + employeeRef + ".ATTACH:"
                             + rate.metricCode() + ".";
                     target.add(SnapshotFactFactory.numeric(
-                            prefix + "NUMERATOR_RECEIPT_COUNT.CURRENT",
-                            "NUMERATOR_RECEIPT_COUNT",
+                            prefix + "NUMERATOR_QUANTITY.CURRENT",
+                            "NUMERATOR_QUANTITY",
                             rate.numeratorReceiptCount(),
                             old == null ? null : old.numeratorReceiptCount(),
                             new SnapshotFactFactory.FactOptions(
@@ -415,8 +415,8 @@ final class EmployeeSnapshotFactProjector {
                             )
                     ));
                     target.add(SnapshotFactFactory.numeric(
-                            prefix + "DENOMINATOR_RECEIPT_COUNT.CURRENT",
-                            "DENOMINATOR_RECEIPT_COUNT",
+                            prefix + "DENOMINATOR_QUANTITY.CURRENT",
+                            "DENOMINATOR_QUANTITY",
                             rate.denominatorReceiptCount(),
                             old == null ? null : old.denominatorReceiptCount(),
                             new SnapshotFactFactory.FactOptions(

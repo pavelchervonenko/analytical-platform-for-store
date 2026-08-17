@@ -35,7 +35,7 @@ class AttachRateServiceTest {
     }
 
     @Test
-    void calculatesWholePercentageFromReceiptCounts() {
+    void calculatesPercentageFromNetUnitQuantities() {
         UUID storeId = UUID.randomUUID();
         when(storeRepository.existsById(storeId)).thenReturn(true);
         when(attachRateRepository.aggregate(storeId, PERIOD_START, PERIOD_END))
@@ -55,9 +55,9 @@ class AttachRateServiceTest {
 
         AttachRateResult result = service.calculate(storeId, period());
 
-        assertThat(result.formulaVersion()).isEqualTo("attach-rate-v2");
+        assertThat(result.formulaVersion()).isEqualTo("attach-rate-v3");
         assertThat(result.rates()).hasSize(2);
-        assertThat(result.rates().get(0).ratePerHundred()).isEqualByComparingTo("67");
+        assertThat(result.rates().get(0).ratePerHundred()).isEqualByComparingTo("66.67");
         assertThat(result.rates().get(1).ratePerHundred()).isEqualByComparingTo("50");
         assertThat(result.dataQuality())
                 .isEqualTo(new AttachRateDataQuality(1, 2, 3));

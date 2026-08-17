@@ -4,14 +4,16 @@ export type EmployeeFilter = "all" | "ranked" | "not-participating" | "attention
 export type EmployeeSort = "rank" | "score" | "revenue" | "improvement";
 
 export const attachRateLabels: Record<string, string> = {
-  ACCESSORY_IPAD_MAC: "Аксессуары к iPad / Mac",
+  ACCESSORY_IPAD: "Аксессуары к iPad",
   ACCESSORY_PODS_WATCH: "Аксессуары к Pods / Watch",
   CASE_APPLE_IPHONE: "Чехлы Apple / iPhone",
   CASE_SAMSUNG: "Чехлы Samsung",
   CHARGER_CABLE: "Зарядные устройства и кабели",
   FILM_PHONE: "Защитные пленки",
-  GLASS_CAMERA_IPHONE: "Стекла и защита камеры iPhone",
-  GLASS_CAMERA_SAMSUNG: "Стекла Samsung",
+  GLASS_IPHONE: "Защитное стекло iPhone",
+  GLASS_CAMERA_IPHONE: "Защита камеры iPhone",
+  GLASS_SAMSUNG: "Защитное стекло Samsung",
+  GLASS_CAMERA_SAMSUNG: "Защита камеры Samsung",
   PREMIUM_PROTECTION: "Протекция",
   SETUP_SERVICE: "Настройки и услуги",
   WARRANTY_GENERIC_NEW: "Гарантии — новые устройства",

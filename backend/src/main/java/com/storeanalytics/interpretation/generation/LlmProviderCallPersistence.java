@@ -45,10 +45,11 @@ public class LlmProviderCallPersistence {
             String owner,
             LlmAnalysisAttemptType attemptType,
             String requestHash,
+            String providerInputBody,
             Instant now
     ) {
         return attemptStore.startProviderCall(
-                jobId, owner, attemptType, requestHash, now
+                jobId, owner, attemptType, requestHash, providerInputBody, now
         );
     }
 

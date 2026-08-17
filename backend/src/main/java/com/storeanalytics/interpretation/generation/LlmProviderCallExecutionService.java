@@ -95,6 +95,7 @@ public class LlmProviderCallExecutionService {
                 leaseOwner,
                 attemptType,
                 prepared.requestHash(),
+                prepared.request().inputJson(),
                 clock.instant()
         );
         LlmProviderResponseReceipt response;

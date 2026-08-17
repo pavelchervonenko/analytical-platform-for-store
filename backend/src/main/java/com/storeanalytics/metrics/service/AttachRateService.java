@@ -16,9 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AttachRateService {
 
-    static final String FORMULA_VERSION = "attach-rate-v2";
-    private static final int RECEIPT_COUNT_SCALE = 0;
-    private static final int PERCENT_SCALE = 0;
+    static final String FORMULA_VERSION = "attach-rate-v3";
+    private static final int QUANTITY_SCALE = 3;
+    private static final int PERCENT_SCALE = 2;
 
     private final StoreRepository storeRepository;
     private final AttachRateRepository attachRateRepository;
@@ -61,11 +61,12 @@ public class AttachRateService {
     }
 
     private AttachRateEntry toEntry(AttachRateAggregate aggregate) {
-        BigDecimal numerator = receiptCount(aggregate.numeratorReceiptCount());
-        BigDecimal denominator = receiptCount(aggregate.denominatorReceiptCount());
+        BigDecimal numerator = quantity(aggregate.numeratorReceiptCount());
+        BigDecimal denominator = quantity(aggregate.denominatorReceiptCount());
         BigDecimal rate = denominator.signum() <= 0
                 ? null
-                : numerator.multiply(BigDecimal.valueOf(100))
+                : numerator.max(BigDecimal.ZERO)
+                        .multiply(BigDecimal.valueOf(100))
                         .divide(denominator, PERCENT_SCALE, RoundingMode.HALF_UP);
         return new AttachRateEntry(
                 aggregate.metricCode(),
@@ -85,7 +86,7 @@ public class AttachRateService {
         );
     }
 
-    private BigDecimal receiptCount(BigDecimal value) {
-        return value.setScale(RECEIPT_COUNT_SCALE, RoundingMode.UNNECESSARY);
+    private BigDecimal quantity(BigDecimal value) {
+        return value.setScale(QUANTITY_SCALE, RoundingMode.UNNECESSARY);
     }
 }

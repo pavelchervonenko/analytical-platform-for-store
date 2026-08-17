@@ -1,0 +1,21 @@
+{
+	auto_https off
+	admin off
+}
+
+http://{$LOCAL_WEBHOOK_PROXY_ADDRESS:127.0.0.1:18081} {
+	@telegram_webhook path /api/integrations/telegram/store-analytics-primary/webhook
+	@readiness path /readyz
+
+	handle @telegram_webhook {
+		reverse_proxy {$LOCAL_INTEGRATION_BACKEND:127.0.0.1:8081}
+	}
+
+	handle @readiness {
+		reverse_proxy {$LOCAL_INTEGRATION_BACKEND:127.0.0.1:8081}
+	}
+
+	handle {
+		respond 404
+	}
+}

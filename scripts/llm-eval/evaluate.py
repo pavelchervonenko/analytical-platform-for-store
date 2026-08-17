@@ -1,15 +1,24 @@
 #!/usr/bin/env python3
-"""Deterministic offline gate for versioned weekly interpretation fixtures."""
+"""Deterministic dataset and response gate for weekly LLM interpretations."""
 
 from __future__ import annotations
 
 import argparse
+import copy
+import hashlib
 import json
 import re
 import sys
+import uuid
+from collections import Counter, defaultdict
+from datetime import date, timedelta
 from pathlib import Path
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, FormatChecker
+
+
+EVALUATION_NAMESPACE = uuid.UUID("1eb814c7-8420-4aaf-8bf6-f915a3b54627")
+NARRATIVE_FIELDS = frozenset({"text", "title", "summary"})
 
 
 def load_json(path: Path) -> object:
@@ -17,15 +26,24 @@ def load_json(path: Path) -> object:
         return json.load(source)
 
 
-def strings(node: object, path: str = "$"):
+def repository_path(repository: Path, value: str) -> Path:
+    resolved = (repository / value).resolve()
+    try:
+        resolved.relative_to(repository)
+    except ValueError as exception:
+        raise ValueError(f"path escapes repository: {value}") from exception
+    return resolved
+
+
+def strings(node: object, path: str = "$", field: str | None = None):
     if isinstance(node, dict):
         for key, value in node.items():
-            yield from strings(value, f"{path}.{key}")
+            yield from strings(value, f"{path}.{key}", key)
     elif isinstance(node, list):
         for index, value in enumerate(node):
-            yield from strings(value, f"{path}[{index}]")
+            yield from strings(value, f"{path}[{index}]", field)
     elif isinstance(node, str):
-        yield path, node
+        yield path, field, node
 
 
 def values_for_key(node: object, target: str):
@@ -47,22 +65,1759 @@ def json_pointer(node: object, pointer: str) -> object:
     return value
 
 
-def evidence_refs(output: object) -> set[str]:
+def evidence_refs(output: object, exclude_limitations: bool = False) -> set[str]:
     result: set[str] = set()
-    for value in values_for_key(output, "evidenceRefs"):
-        if isinstance(value, list):
-            result.update(item for item in value if isinstance(item, str))
+    if isinstance(output, dict):
+        for key, value in output.items():
+            if exclude_limitations and key == "dataLimitations":
+                continue
+            if key == "evidenceRefs" and isinstance(value, list):
+                result.update(item for item in value if isinstance(item, str))
+            else:
+                result.update(evidence_refs(value, exclude_limitations))
+    elif isinstance(output, list):
+        for value in output:
+            result.update(evidence_refs(value, exclude_limitations))
     return result
 
 
-def validate_case(root: Path, validator: Draft202012Validator, case: dict) -> list[str]:
+def schema_failures(
+    validator: Draft202012Validator,
+    payload: object,
+    prefix: str,
+) -> list[str]:
+    return [
+        f"{prefix}: schema {error.json_path}: {error.message}"
+        for error in sorted(
+            validator.iter_errors(payload),
+            key=lambda item: (item.json_path, item.message),
+        )
+    ]
+
+
+def deep_merge(base: object, override: object) -> object:
+    if isinstance(base, dict) and isinstance(override, dict):
+        result = copy.deepcopy(base)
+        for key, value in override.items():
+            result[key] = deep_merge(result[key], value) if key in result else copy.deepcopy(value)
+        return result
+    return copy.deepcopy(override)
+
+
+def normalize_fact(source: dict) -> tuple[dict, bool]:
+    fact = {
+        "evidenceRef": source["evidenceRef"],
+        "metricCode": source["metricCode"],
+        "categoryCode": source.get("categoryCode"),
+        "unit": source["unit"],
+        "value": source.get("value"),
+        "comparison": source.get("comparison"),
+        "sufficiency": source.get("sufficiency", "SUFFICIENT"),
+        "materiality": source.get("materiality", "CONTEXT"),
+    }
+    return fact, source.get("available", True)
+
+
+def normalize_candidate(source: dict) -> dict:
+    return {
+        "candidateRef": source["candidateRef"],
+        "kind": source["kind"],
+        "theme": source["theme"],
+        "employeeRef": source.get("employeeRef"),
+        "categoryCode": source.get("categoryCode"),
+        "competencyCode": source.get("competencyCode"),
+        "targetEmployeeRefs": source.get("targetEmployeeRefs", []),
+        "sufficiency": source.get("sufficiency", "SUFFICIENT"),
+        "evidenceRefs": source["evidenceRefs"],
+    }
+
+
+def build_input(dataset: dict, case: dict) -> dict:
+    scenario = deep_merge(dataset.get("defaults", {}), case["scenario"])
+    if not isinstance(scenario, dict):
+        raise ValueError("scenario must be an object")
+
+    evidence: list[dict] = []
+    seen_evidence: set[str] = set()
+
+    def add_evidence(reference: str, scope: str, employee_ref: str | None, available: bool):
+        if reference in seen_evidence:
+            raise ValueError(f"duplicate evidenceRef: {reference}")
+        seen_evidence.add(reference)
+        evidence.append({
+            "evidenceRef": reference,
+            "scope": scope,
+            "employeeRef": employee_ref,
+            "available": available,
+        })
+
+    store_facts: list[dict] = []
+    for raw in scenario.get("storeFacts", []):
+        fact, available = normalize_fact(raw)
+        store_facts.append(fact)
+        add_evidence(fact["evidenceRef"], "STORE", None, available)
+
+    team_facts: list[dict] = []
+    for raw in scenario.get("teamFacts", []):
+        fact, available = normalize_fact(raw)
+        team_facts.append(fact)
+        add_evidence(fact["evidenceRef"], "TEAM", None, available)
+
+    employees: list[dict] = []
+    for raw_employee in scenario.get("employees", []):
+        employee_ref = raw_employee["employeeRef"]
+        facts: list[dict] = []
+        for raw in raw_employee.get("facts", []):
+            fact, available = normalize_fact(raw)
+            facts.append(fact)
+            add_evidence(fact["evidenceRef"], "EMPLOYEE", employee_ref, available)
+        employees.append({
+            "employeeRef": employee_ref,
+            "analysisStatus": raw_employee["analysisStatus"],
+            "availableSections": raw_employee.get("availableSections", []),
+            "facts": facts,
+        })
+
+    for unavailable in scenario.get("unavailableEvidence", []):
+        add_evidence(
+            unavailable["evidenceRef"],
+            unavailable["scope"],
+            unavailable.get("employeeRef"),
+            False,
+        )
+
+    candidates = [
+        normalize_candidate(candidate)
+        for candidate in scenario.get("candidates", [])
+    ]
+    limitations = copy.deepcopy(scenario.get("limitations", []))
+    category_labels = copy.deepcopy(scenario.get("categoryLabels", {}))
+    category_codes = set(category_labels)
+    competency_codes: set[str] = set()
+    for fact in store_facts + team_facts:
+        if fact["categoryCode"]:
+            category_codes.add(fact["categoryCode"])
+    for employee in employees:
+        for fact in employee["facts"]:
+            if fact["categoryCode"]:
+                category_codes.add(fact["categoryCode"])
+    for candidate in candidates:
+        if candidate["categoryCode"]:
+            category_codes.add(candidate["categoryCode"])
+        if candidate["competencyCode"]:
+            competency_codes.add(candidate["competencyCode"])
+    for limitation in limitations:
+        if limitation.get("categoryCode"):
+            category_codes.add(limitation["categoryCode"])
+
+    scenario_json = json.dumps(
+        scenario,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    facts_hash = hashlib.sha256(scenario_json.encode("utf-8")).hexdigest()
+    case_id = case["id"]
+    snapshot_ref = str(uuid.uuid5(EVALUATION_NAMESPACE, case_id))
+    period = scenario.get("period", {
+        "start": "2026-08-03",
+        "end": "2026-08-09",
+    })
+    comparison_period = scenario.get("comparisonPeriod", {
+        "start": "2026-07-27",
+        "end": "2026-08-02",
+    })
+    return {
+        "contractVersion": 1,
+        "snapshot": {
+            "snapshotRef": snapshot_ref,
+            "revision": 1,
+            "factsHash": facts_hash,
+            "storeRef": "S01",
+            "timezone": scenario.get("timezone", "Europe/Moscow"),
+            "period": period,
+            "comparisonPeriod": comparison_period,
+            "qualityStatus": scenario.get("qualityStatus", "READY"),
+            "versions": {
+                "factsSchemaVersion": 1,
+                "metricContractVersion": "weekly-metrics-v3",
+                "calculationVersion": "weekly-snapshot-v6",
+                "qualityPolicyVersion": "weekly-quality-v3",
+            },
+        },
+        "manifest": {
+            "employeeRefs": [employee["employeeRef"] for employee in employees],
+            "evidence": evidence,
+            "candidateRefs": [
+                candidate["candidateRef"] for candidate in candidates
+            ],
+            "categoryCodes": sorted(category_codes),
+            "categoryLabels": category_labels,
+            "competencyCodes": sorted(competency_codes),
+            "limitations": limitations,
+        },
+        "facts": {
+            "store": store_facts,
+            "team": team_facts,
+            "employees": employees,
+            "candidateSignals": candidates,
+        },
+    }
+
+
+def narrative_values(output: object):
+    for path, field, value in strings(output):
+        if field in NARRATIVE_FIELDS and ".dataLimitations" not in path:
+            yield path, value
+
+
+def normalized_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value).strip().casefold()
+
+
+ACTION_TOKEN_PATTERN = re.compile(r"[a-zа-яё]+", re.IGNORECASE)
+ACTION_STOP_WORDS = frozenset({
+    "а",
+    "без",
+    "в",
+    "для",
+    "до",
+    "и",
+    "из",
+    "или",
+    "к",
+    "на",
+    "но",
+    "о",
+    "от",
+    "по",
+    "при",
+    "с",
+    "со",
+    "у",
+})
+
+REVENUE_NARRATIVE_PATTERN = re.compile(
+    r"(?:\u0432\u044b\u0440\u0443\u0447|"
+    r"\u043e\u0431\u043e\u0440\u043e\u0442|"
+    r"\u0434\u043e\u0445\u043e\u0434(?:\u0430|\u0443|\u043e\u043c|\u0435|\u044b|\u043e\u0432|\u0430\u043c|\u0430\u043c\u0438|\u0430\u0445)?\b)",
+    re.IGNORECASE,
+)
+PROFITABILITY_NARRATIVE_PATTERN = re.compile(
+    r"(?:\u043f\u0440\u0438\u0431\u044b\u043b|"
+    r"\u043c\u0430\u0440\u0436|"
+    r"\u0440\u0435\u043d\u0442\u0430\u0431\u0435\u043b|"
+    r"\u0434\u043e\u0445\u043e\u0434\u043d|\u0437\u0430\u0440\u0430\u0431\u043e\u0442)",
+    re.IGNORECASE,
+)
+REVENUE_METRIC_FRAGMENTS = (
+    "NET_REVENUE",
+    "REVENUE_SHARE",
+    "ADDITIONAL_REVENUE",
+    "REVENUE_PER",
+)
+PROFITABILITY_METRIC_FRAGMENTS = (
+    "GROSS_PROFIT",
+    "MARGIN",
+    "PROFIT",
+)
+
+
+def action_text(action: dict) -> str:
+    return " ".join(
+        value
+        for field in ("title", "summary")
+        if isinstance((value := action.get(field)), str)
+    )
+
+
+def narrative_tokens(value: str) -> set[str]:
+    tokens = ACTION_TOKEN_PATTERN.findall(
+        value.casefold().replace("ё", "е")
+    )
+    return {
+        token[:5] if len(token) >= 6 else token
+        for token in tokens
+        if token not in ACTION_STOP_WORDS
+    }
+
+
+def action_tokens(action: dict) -> set[str]:
+    return narrative_tokens(action_text(action))
+
+
+def dice_similarity(left: set[str], right: set[str]) -> float:
+    if not left or not right:
+        return 0.0
+    return 2 * len(left & right) / (len(left) + len(right))
+
+
+def containment_similarity(left: set[str], right: set[str]) -> float:
+    if not left or not right:
+        return 0.0
+    return len(left & right) / min(len(left), len(right))
+
+
+def string_tuple(value: object) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(sorted(
+        item for item in value if isinstance(item, str)
+    ))
+
+
+def action_core(action: dict) -> tuple:
+    return (
+        action.get("targetScope"),
+        string_tuple(action.get("targetEmployeeRefs")),
+        action.get("horizon"),
+        string_tuple(action.get("evidenceRefs")),
+    )
+
+
+def action_quality(dataset: dict, output: dict) -> dict:
+    indexed_actions = [
+        (index, action)
+        for index, action in enumerate(output.get("actions", []))
+        if isinstance(action, dict)
+    ]
+    policy = dataset.get("actionQuality", {})
+    specificity_patterns = [
+        re.compile(pattern, re.IGNORECASE)
+        for pattern in policy.get("specificityPatterns", [])
+    ]
+    boilerplate_patterns = [
+        re.compile(pattern, re.IGNORECASE)
+        for pattern in policy.get("forbiddenBoilerplatePatterns", [])
+    ]
+    non_specific = {
+        index
+        for index, action in indexed_actions
+        if (
+            specificity_patterns
+            and not any(
+                pattern.search(action_text(action))
+                for pattern in specificity_patterns
+            )
+        )
+        or any(
+            pattern.search(action_text(action))
+            for pattern in boilerplate_patterns
+        )
+    }
+    strong_threshold = policy.get("nearDuplicateSimilarity", 0.72)
+    weak_threshold = policy.get(
+        "nonSpecificNearDuplicateSimilarity", 0.45
+    )
+    duplicate_pairs = []
+    tokens = {
+        index: action_tokens(action)
+        for index, action in indexed_actions
+    }
+    for position, (left_index, left) in enumerate(indexed_actions):
+        for right_index, right in indexed_actions[position + 1:]:
+            if action_core(left) != action_core(right):
+                continue
+            similarity = dice_similarity(
+                tokens[left_index], tokens[right_index]
+            )
+            same_type = left.get("type") == right.get("type")
+            involves_non_specific = (
+                left_index in non_specific or right_index in non_specific
+            )
+            if (
+                same_type
+                or similarity >= strong_threshold
+                or (
+                    involves_non_specific
+                    and similarity >= weak_threshold
+                )
+            ):
+                duplicate_pairs.append(
+                    (left_index, right_index, round(similarity, 4))
+                )
+    return {
+        "nonSpecificIndexes": non_specific,
+        "nearDuplicatePairs": duplicate_pairs,
+    }
+
+
+def narrative_quality(dataset: dict, output: dict) -> dict:
+    policy = dataset.get("narrativeQuality", {})
+    dice_threshold = policy.get("headlineInsightSimilarity", 1.0)
+    containment_threshold = policy.get("headlineInsightContainment", 1.0)
+    primary_team_dice_threshold = policy.get(
+        "primaryTeamOverviewSimilarity", dice_threshold
+    )
+    primary_team_containment_threshold = policy.get(
+        "primaryTeamOverviewContainment", containment_threshold
+    )
+    directive_patterns = [
+        re.compile(pattern, re.IGNORECASE)
+        for pattern in policy.get("insightDirectivePatterns", [])
+    ]
+    cause_patterns = [
+        re.compile(pattern, re.IGNORECASE)
+        for pattern in policy.get("unsupportedCausePatterns", [])
+    ]
+    summaries = [
+        (index, summary)
+        for index, summary in enumerate(output.get("summaryBlocks", []))
+        if isinstance(summary, dict)
+        and summary.get("scope") == "STORE"
+        and summary.get("section") == "HEADLINE"
+    ]
+    team_overviews = [
+        (index, summary)
+        for index, summary in enumerate(output.get("summaryBlocks", []))
+        if isinstance(summary, dict)
+        and summary.get("scope") == "TEAM"
+        and summary.get("section") == "TEAM_OVERVIEW"
+    ]
+    all_insights = [
+        (index, insight)
+        for index, insight in enumerate(output.get("insights", []))
+        if isinstance(insight, dict)
+    ]
+    store_insights = [
+        (index, insight)
+        for index, insight in all_insights
+        if insight.get("scope") == "STORE"
+    ]
+    near_duplicates = []
+    for summary_index, summary in summaries:
+        summary_evidence = set(summary.get("evidenceRefs", []))
+        summary_tokens = narrative_tokens(summary.get("text", ""))
+        for insight_index, insight in store_insights:
+            insight_evidence = set(insight.get("evidenceRefs", []))
+            if not summary_evidence.intersection(insight_evidence):
+                continue
+            insight_tokens = narrative_tokens(insight.get("title", ""))
+            dice = dice_similarity(summary_tokens, insight_tokens)
+            containment = containment_similarity(
+                summary_tokens, insight_tokens
+            )
+            if (
+                dice >= dice_threshold
+                or containment >= containment_threshold
+            ):
+                near_duplicates.append((
+                    summary_index,
+                    insight_index,
+                    round(dice, 4),
+                    round(containment, 4),
+                ))
+    near_primary_duplicates = []
+    near_primary_team_overviews = []
+    primary_signal = output.get("primarySignal")
+    if isinstance(primary_signal, dict):
+        primary_tokens = narrative_tokens(primary_signal.get("text", ""))
+        for insight_index, insight in store_insights:
+            insight_tokens = narrative_tokens(insight.get("title", ""))
+            dice = dice_similarity(primary_tokens, insight_tokens)
+            containment = containment_similarity(
+                primary_tokens, insight_tokens
+            )
+            if (
+                dice >= dice_threshold
+                or containment >= containment_threshold
+            ):
+                near_primary_duplicates.append((
+                    insight_index,
+                    round(dice, 4),
+                    round(containment, 4),
+                ))
+        for summary_index, summary in team_overviews:
+            summary_tokens = narrative_tokens(summary.get("text", ""))
+            dice = dice_similarity(primary_tokens, summary_tokens)
+            containment = containment_similarity(
+                primary_tokens, summary_tokens
+            )
+            if (
+                dice >= primary_team_dice_threshold
+                or containment >= primary_team_containment_threshold
+            ):
+                near_primary_team_overviews.append((
+                    summary_index, round(dice, 4), round(containment, 4)
+                ))
+    directive_insights = {
+        index
+        for index, insight in all_insights
+        if any(
+            pattern.search(action_text(insight))
+            for pattern in directive_patterns
+        )
+    }
+    unsupported_causes = []
+    for collection, field in (
+        ("summaryBlocks", "text"),
+        ("teamRelationships", "summary"),
+    ):
+        for index, value in enumerate(output.get(collection, [])):
+            if (
+                isinstance(value, dict)
+                and any(
+                    pattern.search(value.get(field, ""))
+                    for pattern in cause_patterns
+                )
+            ):
+                unsupported_causes.append((collection, index))
+    unsupported_causes.extend(
+        ("insights", index)
+        for index, insight in all_insights
+        if insight.get("kind") != "HYPOTHESIS"
+        and any(
+            pattern.search(action_text(insight))
+            for pattern in cause_patterns
+        )
+    )
+    return {
+        "nearDuplicateHeadlineInsightPairs": near_duplicates,
+        "nearDuplicatePrimaryInsightPairs": near_primary_duplicates,
+        "nearDuplicatePrimaryTeamOverviewPairs":
+            near_primary_team_overviews,
+        "directiveInsightIndexes": directive_insights,
+        "unsupportedCauseItems": unsupported_causes,
+    }
+
+
+def team_overview_evidence_failures(
+    prefix: str,
+    output: dict,
+    payload: dict,
+) -> list[str]:
+    evidence_scopes = {
+        item["evidenceRef"]: item.get("scope")
+        for item in payload["manifest"]["evidence"]
+        if isinstance(item, dict)
+        and isinstance(item.get("evidenceRef"), str)
+    }
+    failures = []
+    for index, summary in enumerate(output.get("summaryBlocks", [])):
+        if not (
+            isinstance(summary, dict)
+            and summary.get("scope") == "TEAM"
+            and summary.get("section") == "TEAM_OVERVIEW"
+        ):
+            continue
+        invalid = sorted(
+            reference
+            for reference in summary.get("evidenceRefs", [])
+            if evidence_scopes.get(reference) != "TEAM"
+        )
+        if invalid:
+            failures.append(
+                f"{prefix}: TEAM overview cites non-TEAM evidence at "
+                f"$.summaryBlocks[{index}]: {invalid}"
+            )
+    return failures
+
+
+def evidence_metric_codes(payload: dict) -> dict[str, str]:
+    facts = payload.get("facts", {})
+    values = [
+        *facts.get("store", []),
+        *facts.get("team", []),
+        *(
+            fact
+            for employee in facts.get("employees", [])
+            for fact in employee.get("facts", [])
+        ),
+    ]
+    return {
+        fact["evidenceRef"]: fact.get("metricCode", "")
+        for fact in values
+        if isinstance(fact, dict) and isinstance(fact.get("evidenceRef"), str)
+    }
+
+
+def evidence_supports_dimension(
+    reference: str,
+    metric_codes: dict[str, str],
+    fragments: tuple[str, ...],
+    extra_reference_fragments: tuple[str, ...] = (),
+) -> bool:
+    metric_code = metric_codes.get(reference, "")
+    return any(fragment in metric_code for fragment in fragments) or any(
+        fragment in reference
+        for fragment in (*fragments, *extra_reference_fragments)
+    )
+
+
+def narrative_dimension_failures(
+    prefix: str,
+    output: dict,
+    payload: dict,
+) -> list[str]:
+    failures: list[str] = []
+    metric_codes = evidence_metric_codes(payload)
+    collections = (
+        ("primarySignal", ("text",)),
+        ("summaryBlocks", ("text",)),
+        ("insights", ("title", "summary")),
+        ("actions", ("title", "summary")),
+        ("teamRelationships", ("summary",)),
+    )
+    for collection, fields in collections:
+        value = output.get(collection)
+        items = [value] if collection == "primarySignal" else (value or [])
+        for index, item in enumerate(items):
+            if not isinstance(item, dict):
+                continue
+            narrative = " ".join(
+                value
+                for field in fields
+                if isinstance((value := item.get(field)), str)
+            )
+            references = [
+                reference
+                for reference in item.get("evidenceRefs", [])
+                if isinstance(reference, str)
+            ]
+            path = (
+                "$.primarySignal"
+                if collection == "primarySignal"
+                else f"$.{collection}[{index}]"
+            )
+            if REVENUE_NARRATIVE_PATTERN.search(narrative) and not any(
+                evidence_supports_dimension(
+                    reference,
+                    metric_codes,
+                    REVENUE_METRIC_FRAGMENTS,
+                    ("PLAN:REVENUE",),
+                )
+                for reference in references
+            ):
+                failures.append(
+                    f"{prefix}: unsupported REVENUE narrative dimension "
+                    f"at {path}"
+                )
+            if PROFITABILITY_NARRATIVE_PATTERN.search(narrative) and not any(
+                evidence_supports_dimension(
+                    reference,
+                    metric_codes,
+                    PROFITABILITY_METRIC_FRAGMENTS,
+                )
+                for reference in references
+            ):
+                failures.append(
+                    f"{prefix}: unsupported PROFITABILITY narrative dimension "
+                    f"at {path}"
+                )
+    return failures
+
+
+def selector_matches(value: object, selector: dict) -> bool:
+    return isinstance(value, dict) and all(
+        value.get(key) == expected for key, expected in selector.items()
+    )
+
+
+def relationship_selector_matches(value: object, selector: dict) -> bool:
+    if not isinstance(value, dict):
+        return False
+    unordered_fields = {"sourceEmployeeRefs", "targetEmployeeRefs"}
+    return all(
+        set(value.get(key, [])) == set(expected)
+        if key in unordered_fields
+        else value.get(key) == expected
+        for key, expected in selector.items()
+    )
+
+
+RELATIONSHIP_TYPES = {
+    "COMPETENCY_LEADER",
+    "MOST_IMPROVED",
+    "LEARNING_OPPORTUNITY",
+}
+
+STORE_CANDIDATE_THEME_PRIORITY = {
+    "PLAN": 0,
+    "PROFITABILITY": 1,
+    "REVENUE_DYNAMICS": 2,
+    "ADDITIONAL_SALES": 3,
+    "ATTACH_RATE": 4,
+    "CATEGORY_MIX": 5,
+    "TEAM_PERFORMANCE": 6,
+}
+SUFFICIENCY_PRIORITY = {
+    "SUFFICIENT": 0,
+    "LIMITED": 1,
+    "INSUFFICIENT": 2,
+}
+
+
+def store_candidates(payload: dict) -> list[dict]:
+    evidence = {
+        item["evidenceRef"]: item
+        for item in payload["manifest"]["evidence"]
+    }
+    candidates = [
+        candidate
+        for candidate in payload["facts"]["candidateSignals"]
+        if candidate["theme"] not in RELATIONSHIP_TYPES
+        and candidate["employeeRef"] is None
+        and any(
+            evidence.get(reference, {}).get("scope") != "TEAM"
+            for reference in candidate["evidenceRefs"]
+        )
+    ]
+    return sorted(candidates, key=lambda candidate: (
+        SUFFICIENCY_PRIORITY.get(candidate["sufficiency"], 3),
+        STORE_CANDIDATE_THEME_PRIORITY.get(candidate["theme"], 7),
+        candidate["candidateRef"],
+    ))
+
+CANONICAL_LIMITATION_SECTIONS = {
+    "CATEGORIES": "CATEGORY_PERFORMANCE",
+    "ATTACH": "ADDITIONAL_SALES",
+    "PROFIT": "PROFITABILITY",
+    "MARGIN": "PROFITABILITY",
+    "EMPLOYEES": "TEAM_COMPARISON",
+}
+
+
+def backend_normalize_response(output: dict, payload: dict) -> dict:
+    """Apply deterministic v2 normalization performed before backend validation."""
+    normalized = copy.deepcopy(output)
+    structured_transport = any(
+        field in normalized
+        for field in (
+            "teamOverview",
+            "employeeHeadlines",
+            "supportingSummaries",
+        )
+    )
+    if structured_transport:
+        normalized["employees"] = [
+            {
+                "employeeRef": employee["employeeRef"],
+                "analysisStatus": employee["analysisStatus"],
+            }
+            for employee in payload["facts"]["employees"]
+        ]
+        summaries = []
+        team_overview = normalized.get("teamOverview")
+        if isinstance(team_overview, dict):
+            summaries.append({
+                "scope": "TEAM",
+                "employeeRef": None,
+                "section": "TEAM_OVERVIEW",
+                "categoryCode": None,
+                "text": team_overview.get("text"),
+                "evidenceRefs": team_overview.get("evidenceRefs"),
+            })
+        employee_headlines = normalized.get("employeeHeadlines", {})
+        if isinstance(employee_headlines, dict):
+            for employee_ref in payload["manifest"]["employeeRefs"]:
+                headline = employee_headlines.get(employee_ref)
+                if isinstance(headline, dict):
+                    summaries.append({
+                        "scope": "EMPLOYEE",
+                        "employeeRef": employee_ref,
+                        "section": "HEADLINE",
+                        "categoryCode": None,
+                        "text": headline.get("text"),
+                        "evidenceRefs": headline.get("evidenceRefs"),
+                    })
+        supporting = normalized.get("supportingSummaries", [])
+        if isinstance(supporting, list):
+            summaries.extend(copy.deepcopy(supporting))
+        normalized["summaryBlocks"] = summaries
+        normalized.pop("teamOverview", None)
+        normalized.pop("employeeHeadlines", None)
+        normalized.pop("supportingSummaries", None)
+
+    for summary in normalized.get("summaryBlocks", []):
+        if isinstance(summary, dict):
+            summary.setdefault("employeeRef", None)
+            summary.setdefault("categoryCode", None)
+    candidate_items = []
+    for insight in normalized.get("insights", []):
+        if isinstance(insight, dict):
+            insight.setdefault("employeeRef", None)
+            insight.setdefault("categoryCode", None)
+            insight.setdefault("candidateRef", None)
+            candidate_items.append(insight)
+    primary_signal = normalized.get("primarySignal")
+    if isinstance(primary_signal, dict):
+        primary_signal.setdefault("employeeRef", None)
+        primary_signal.setdefault("categoryCode", None)
+        candidate_items.append(primary_signal)
+    candidates = {
+        candidate["candidateRef"]: candidate
+        for candidate in payload["facts"]["candidateSignals"]
+    }
+    evidence = {
+        item["evidenceRef"]: item
+        for item in payload["manifest"]["evidence"]
+    }
+    for item in candidate_items:
+        candidate = candidates.get(item.get("candidateRef"))
+        if candidate is None:
+            continue
+        item["kind"] = candidate["kind"]
+        item["theme"] = candidate["theme"]
+        item["employeeRef"] = candidate["employeeRef"]
+        item["categoryCode"] = candidate["categoryCode"]
+        if candidate["employeeRef"] is not None:
+            item["scope"] = "EMPLOYEE"
+        elif all(
+            evidence.get(reference, {}).get("scope") == "TEAM"
+            for reference in candidate["evidenceRefs"]
+        ):
+            item["scope"] = "TEAM"
+        else:
+            item["scope"] = "STORE"
+        item["evidenceRefs"] = list(candidate["evidenceRefs"])
+    for relationship in normalized.get("teamRelationships", []):
+        if isinstance(relationship, dict):
+            relationship.setdefault("competencyCode", None)
+    for action in normalized.get("actions", []):
+        if (
+            isinstance(action, dict)
+            and action.get("targetScope") in {"STORE", "TEAM"}
+            and isinstance(action.get("targetEmployeeRefs"), list)
+        ):
+            action["targetEmployeeRefs"] = []
+
+    limitations = []
+    for source in payload["manifest"]["limitations"]:
+        sections = {
+            CANONICAL_LIMITATION_SECTIONS.get(section, section)
+            for section in source["affectedSections"]
+        }
+        limitations.append({
+            "code": source["code"],
+            "scope": source["scope"],
+            "employeeRef": source["employeeRef"],
+            "categoryCode": source["categoryCode"],
+            "impact": source["impact"],
+            "affectedSections": sorted(sections),
+            "summary": (
+                "Часть данных недоступна для подтверждённого вывода."
+                if source["impact"] == "UNAVAILABLE"
+                else "Качество данных снижает уверенность в части выводов."
+            ),
+            "evidenceRefs": list(source["evidenceRefs"]),
+        })
+    normalized["dataLimitations"] = limitations
+    return normalized
+
+
+def candidate_relationship(candidate: dict) -> dict | None:
+    if candidate["theme"] not in RELATIONSHIP_TYPES:
+        return None
+    return {
+        "type": candidate["theme"],
+        "competencyCode": candidate["competencyCode"],
+        "sourceEmployeeRefs": (
+            [candidate["employeeRef"]] if candidate["employeeRef"] else []
+        ),
+        "targetEmployeeRefs": candidate["targetEmployeeRefs"],
+    }
+
+
+def production_metric_code(evidence_ref: str) -> str | None:
+    exact = {
+        "TEAM.RATING.ELIGIBLE_COUNT": "RATING_ELIGIBLE_COUNT",
+    }
+    if evidence_ref in exact:
+        return exact[evidence_ref]
+    patterns = (
+        (r"STORE\.PLAN:(?:REVENUE|ACCESSORY|SERVICE|ADDITIONAL)\.([A-Z_]+)",
+         lambda match: "PLAN_" + match.group(1)),
+        (r"STORE\.(?:CATEGORY|GROUP):[A-Z0-9_-]+\.([A-Z_]+)\.CURRENT",
+         lambda match: match.group(1)),
+        (r"STORE\.ATTACH:[A-Z0-9_-]+\.([A-Z_]+)\.CURRENT",
+         lambda match: match.group(1)),
+        (r"STORE\.([A-Z_]+)\.CURRENT",
+         lambda match: match.group(1)),
+        (r"EMP:E[0-9]{2,4}\.(?:CATEGORY|GROUP):[A-Z0-9_-]+\."
+         r"([A-Z_]+)\.CURRENT",
+         lambda match: match.group(1)),
+        (r"EMP:E[0-9]{2,4}\.ATTACH:[A-Z0-9_-]+\.([A-Z_]+)\.CURRENT",
+         lambda match: match.group(1)),
+        (r"EMP:E[0-9]{2,4}\.RATING\.([A-Z_]+)\.CURRENT",
+         lambda match: "RATING_" + match.group(1)),
+        (r"EMP:E[0-9]{2,4}\.WORKLOAD\.([A-Z_]+)\.CURRENT",
+         lambda match: match.group(1)),
+        (r"EMP:E[0-9]{2,4}\.WORKLOAD\.STATUS",
+         lambda match: "WORKLOAD_STATUS"),
+        (r"EMP:E[0-9]{2,4}\.SALES\.([A-Z_]+)\.CURRENT",
+         lambda match: match.group(1)),
+        (r"EMP:E[0-9]{2,4}\.SALES_STRUCTURE\.STATUS",
+         lambda match: "SALES_STRUCTURE_STATUS"),
+        (r"EMP:E[0-9]{2,4}\.([A-Z_]+)\.CURRENT",
+         lambda match: match.group(1)),
+        (r"TEAM\.(?:CATEGORY|GROUP):[A-Z0-9_-]+\.([A-Z_]+)\."
+         r"(Q1|MEDIAN|Q3)",
+         lambda match: "TEAM_" + match.group(1) + "_" + match.group(2)),
+        (r"TEAM\.METRIC:([A-Z_]+)\.(Q1|MEDIAN|Q3)",
+         lambda match: "TEAM_" + match.group(1) + "_" + match.group(2)),
+    )
+    for pattern, metric in patterns:
+        match = re.fullmatch(pattern, evidence_ref)
+        if match:
+            return metric(match)
+    return None
+
+
+def input_semantic_failures(case_id: str, payload: dict, case: dict) -> list[str]:
+    failures: list[str] = []
+    manifest = payload["manifest"]
+    facts = payload["facts"]
+    snapshot = payload["snapshot"]
+    period_start = date.fromisoformat(snapshot["period"]["start"])
+    period_end = date.fromisoformat(snapshot["period"]["end"])
+    comparison_start = date.fromisoformat(
+        snapshot["comparisonPeriod"]["start"]
+    )
+    comparison_end = date.fromisoformat(snapshot["comparisonPeriod"]["end"])
+    if (
+        period_start.weekday() != 0
+        or period_end != period_start + timedelta(days=6)
+    ):
+        failures.append(f"{case_id}: period must be a Monday-Sunday week")
+    if (
+        comparison_start.weekday() != 0
+        or comparison_end != comparison_start + timedelta(days=6)
+    ):
+        failures.append(
+            f"{case_id}: comparisonPeriod must be a Monday-Sunday week"
+        )
+    if comparison_end != period_start - timedelta(days=1):
+        failures.append(f"{case_id}: comparisonPeriod must immediately precede period")
+    known_evidence = {
+        entry["evidenceRef"]: entry for entry in manifest["evidence"]
+    }
+    available_evidence = {
+        reference for reference, entry in known_evidence.items()
+        if entry["available"]
+    }
+    employee_refs = [
+        employee["employeeRef"] for employee in facts["employees"]
+    ]
+    all_facts = list(facts["store"]) + list(facts["team"])
+    for employee in facts["employees"]:
+        all_facts.extend(employee["facts"])
+    for fact in all_facts:
+        expected_metric = production_metric_code(fact["evidenceRef"])
+        if expected_metric != fact["metricCode"]:
+            failures.append(
+                f"{case_id}: fact {fact['evidenceRef']} does not match "
+                f"production metric {fact['metricCode']}"
+            )
+    if len(employee_refs) != len(set(employee_refs)):
+        failures.append(f"{case_id}: duplicate employeeRef")
+    if employee_refs != manifest["employeeRefs"]:
+        failures.append(
+            f"{case_id}: manifest employeeRefs do not match employee facts"
+        )
+    candidate_refs = [candidate["candidateRef"] for candidate in facts["candidateSignals"]]
+    invalid_candidate_refs = [
+        reference for reference in candidate_refs
+        if re.fullmatch(r"C[0-9]{3}", reference) is None
+    ]
+    if invalid_candidate_refs:
+        failures.append(f"{case_id}: non-production candidateRef format")
+    if len(candidate_refs) != len(set(candidate_refs)):
+        failures.append(f"{case_id}: duplicate candidateRef")
+    if set(candidate_refs) != set(manifest["candidateRefs"]):
+        failures.append(f"{case_id}: manifest candidateRefs do not match candidates")
+    for candidate in facts["candidateSignals"]:
+        if (
+            candidate["employeeRef"] is not None
+            and candidate["employeeRef"] not in employee_refs
+        ):
+            failures.append(
+                f"{case_id}: candidate {candidate['candidateRef']} uses "
+                f"unknown employee {candidate['employeeRef']}"
+            )
+        unknown_targets = set(candidate["targetEmployeeRefs"]) - set(employee_refs)
+        if unknown_targets:
+            failures.append(
+                f"{case_id}: candidate {candidate['candidateRef']} uses "
+                f"unknown targets: {sorted(unknown_targets)}"
+            )
+        relationship = candidate_relationship(candidate)
+        if relationship is not None:
+            valid_shape = (
+                candidate["kind"] == "OPPORTUNITY"
+                and len(relationship["sourceEmployeeRefs"]) == 1
+                and (
+                    relationship["type"] == "COMPETENCY_LEADER"
+                    and relationship["competencyCode"] is not None
+                    and not relationship["targetEmployeeRefs"]
+                    or relationship["type"] == "MOST_IMPROVED"
+                    and relationship["competencyCode"] is None
+                    and not relationship["targetEmployeeRefs"]
+                    or relationship["type"] == "LEARNING_OPPORTUNITY"
+                    and relationship["competencyCode"] is not None
+                    and bool(relationship["targetEmployeeRefs"])
+                )
+            )
+            if not valid_shape:
+                failures.append(
+                    f"{case_id}: relationship candidate "
+                    f"{candidate['candidateRef']} has invalid shape"
+                )
+        unknown = set(candidate["evidenceRefs"]) - available_evidence
+        if unknown:
+            failures.append(
+                f"{case_id}: candidate {candidate['candidateRef']} uses unavailable evidence: "
+                f"{sorted(unknown)}"
+            )
+    for limitation in manifest["limitations"]:
+        unknown = set(limitation["evidenceRefs"]) - set(known_evidence)
+        if unknown:
+            failures.append(
+                f"{case_id}: limitation {limitation['code']} uses unknown evidence: "
+                f"{sorted(unknown)}"
+            )
+    expectations = case["expectations"]
+    required = set(expectations.get("requiredCandidateRefs", []))
+    forbidden = set(expectations.get("forbiddenCandidateRefs", []))
+    if required - set(candidate_refs):
+        failures.append(
+            f"{case_id}: requiredCandidateRefs are absent from input: "
+            f"{sorted(required - set(candidate_refs))}"
+        )
+    if forbidden & set(candidate_refs):
+        failures.append(
+            f"{case_id}: forbiddenCandidateRefs are present in input: "
+            f"{sorted(forbidden & set(candidate_refs))}"
+        )
+    input_relationships = [
+        relationship
+        for candidate in facts["candidateSignals"]
+        if (relationship := candidate_relationship(candidate)) is not None
+    ]
+    for selector in expectations.get("requiredTeamRelationships", []):
+        if not any(
+            relationship_selector_matches(relationship, selector)
+            for relationship in input_relationships
+        ):
+            failures.append(
+                f"{case_id}: requiredTeamRelationship is absent from input: "
+                f"{selector}"
+            )
+    if not any(
+        expectations.get(field)
+        for field in ("requiredFindings", "acceptableFindings", "forbiddenFindings")
+    ):
+        failures.append(f"{case_id}: semantic expectations are empty")
+    return failures
+
+
+def validate_dataset(
+    repository: Path,
+    manifest_path: Path,
+    dataset: dict,
+) -> tuple[list[str], dict[str, dict]]:
+    failures: list[str] = []
+    schema_path = repository_path(
+        repository,
+        dataset.get(
+            "datasetSchema",
+            "scripts/llm-eval/dataset-v2.schema.json",
+        ),
+    )
+    dataset_validator = Draft202012Validator(
+        load_json(schema_path),
+        format_checker=FormatChecker(),
+    )
+    failures.extend(schema_failures(dataset_validator, dataset, "dataset"))
+
+    if failures:
+        return failures, {}
+
+    input_schema_path = repository_path(repository, dataset["inputSchema"])
+    input_validator = Draft202012Validator(
+        load_json(input_schema_path),
+        format_checker=FormatChecker(),
+    )
+    output_schemas = {
+        dataset["outputSchema"],
+        *(
+            configuration.get("outputSchema", dataset["outputSchema"])
+            for configuration in dataset["configurations"]
+        ),
+    }
+    for output_schema in sorted(output_schemas):
+        output_schema_path = repository_path(repository, output_schema)
+        Draft202012Validator.check_schema(load_json(output_schema_path))
+
+    for pattern in dataset.get("globalForbiddenPatterns", []):
+        try:
+            re.compile(pattern)
+        except re.error as exception:
+            failures.append(
+                f"dataset: invalid global forbidden pattern {pattern!r}: {exception}"
+            )
+    action_policy = dataset.get("actionQuality", {})
+    for pattern in action_policy.get("specificityPatterns", []):
+        try:
+            re.compile(pattern)
+        except re.error as exception:
+            failures.append(
+                f"dataset: invalid action specificity pattern "
+                f"{pattern!r}: {exception}"
+            )
+    for pattern in action_policy.get("forbiddenBoilerplatePatterns", []):
+        try:
+            re.compile(pattern)
+        except re.error as exception:
+            failures.append(
+                f"dataset: invalid action boilerplate pattern "
+                f"{pattern!r}: {exception}"
+            )
+    narrative_policy = dataset.get("narrativeQuality", {})
+    for pattern in narrative_policy.get("insightDirectivePatterns", []):
+        try:
+            re.compile(pattern)
+        except re.error as exception:
+            failures.append(
+                f"dataset: invalid insight directive pattern "
+                f"{pattern!r}: {exception}"
+            )
+    for pattern in narrative_policy.get("unsupportedCausePatterns", []):
+        try:
+            re.compile(pattern)
+        except re.error as exception:
+            failures.append(
+                f"dataset: invalid unsupported-cause pattern "
+                f"{pattern!r}: {exception}"
+            )
+    if action_policy.get(
+        "nonSpecificNearDuplicateSimilarity", 0
+    ) > action_policy.get("nearDuplicateSimilarity", 1):
+        failures.append(
+            "dataset: non-specific near-duplicate threshold must not "
+            "exceed the strong threshold"
+        )
+
+    configurations = dataset.get("configurations", [])
+    configuration_ids = [configuration.get("id") for configuration in configurations]
+    if len(configuration_ids) != len(set(configuration_ids)):
+        failures.append("dataset: configuration ids must be unique")
+    cases = dataset.get("cases", [])
+    case_ids = [case.get("id") for case in cases]
+    if len(case_ids) != len(set(case_ids)):
+        failures.append("dataset: case ids must be unique")
+
+    coverage = dataset.get("coverage", {})
+    minimum_cases = coverage.get("minimumCases", 1)
+    if len(cases) < minimum_cases:
+        failures.append(
+            f"dataset: expected at least {minimum_cases} cases, got {len(cases)}"
+        )
+    present_tags = {
+        tag for case in cases for tag in case.get("tags", [])
+    }
+    missing_tags = set(coverage.get("requiredTags", [])) - present_tags
+    if missing_tags:
+        failures.append(
+            f"dataset: missing required coverage tags: {sorted(missing_tags)}"
+        )
+
+    inputs: dict[str, dict] = {}
+    for case in cases:
+        case_id = case.get("id", "unnamed")
+        for pattern in case.get("expectations", {}).get("forbiddenPatterns", []):
+            try:
+                re.compile(pattern)
+            except re.error as exception:
+                failures.append(
+                    f"{case_id}: invalid forbidden pattern "
+                    f"{pattern!r}: {exception}"
+                )
+        try:
+            payload = build_input(dataset, case)
+        except (KeyError, TypeError, ValueError) as exception:
+            failures.append(f"{case_id}: cannot build input: {exception}")
+            continue
+        inputs[case_id] = payload
+        failures.extend(schema_failures(input_validator, payload, f"{case_id} input"))
+        failures.extend(input_semantic_failures(case_id, payload, case))
+
+    return failures, inputs
+
+
+def candidate_failures(case_id: str, output: dict, payload: dict) -> list[str]:
+    failures: list[str] = []
+    candidates = {
+        candidate["candidateRef"]: candidate
+        for candidate in payload["facts"]["candidateSignals"]
+    }
+    candidate_items = [
+        (f"insight[{index}]", insight)
+        for index, insight in enumerate(output.get("insights", []))
+        if isinstance(insight, dict)
+    ]
+    if isinstance(output.get("primarySignal"), dict):
+        candidate_items.insert(0, ("primarySignal", output["primarySignal"]))
+    for item_label, item in candidate_items:
+        reference = item.get("candidateRef")
+        if reference is None:
+            continue
+        candidate = candidates.get(reference)
+        if candidate is None:
+            failures.append(
+                f"{case_id}: {item_label} references unknown candidate {reference}"
+            )
+            continue
+        expected = {
+            "kind": candidate["kind"],
+            "theme": candidate["theme"],
+            "employeeRef": candidate["employeeRef"],
+            "categoryCode": candidate["categoryCode"],
+        }
+        mismatched = {
+            field: (expected_value, item.get(field))
+            for field, expected_value in expected.items()
+            if item.get(field) != expected_value
+        }
+        if mismatched:
+            failures.append(
+                f"{case_id}: {item_label} mismatches candidate {reference}: "
+                f"{mismatched}"
+            )
+        missing_evidence = set(candidate["evidenceRefs"]) - set(
+            item.get("evidenceRefs", [])
+        )
+        if missing_evidence:
+            failures.append(
+                f"{case_id}: {item_label} omits candidate evidence: "
+                f"{sorted(missing_evidence)}"
+            )
+    return failures
+
+def relationship_failures(case_id: str, output: dict, payload: dict) -> list[str]:
+    failures: list[str] = []
+    candidates = [
+        candidate
+        for candidate in payload["facts"]["candidateSignals"]
+        if candidate["theme"] in RELATIONSHIP_TYPES
+    ]
+    for index, relationship in enumerate(output.get("teamRelationships", [])):
+        if not isinstance(relationship, dict):
+            continue
+        matching = [
+            candidate
+            for candidate in candidates
+            if relationship.get("type") == candidate["theme"]
+            and relationship.get("competencyCode") == candidate["competencyCode"]
+            and set(relationship.get("sourceEmployeeRefs", []))
+            == set([candidate["employeeRef"]] if candidate["employeeRef"] else [])
+            and set(relationship.get("targetEmployeeRefs", []))
+            == set(candidate["targetEmployeeRefs"])
+            and set(candidate["evidenceRefs"]).issubset(
+                relationship.get("evidenceRefs", [])
+            )
+        ]
+        if not matching:
+            failures.append(
+                f"{case_id}: teamRelationship[{index}] is not backed by "
+                "an exact input candidate"
+            )
+    return failures
+
+
+def limitation_failures(case_id: str, output: dict, payload: dict) -> list[str]:
+    failures: list[str] = []
+    expected = {
+        limitation["code"]: limitation
+        for limitation in payload["manifest"]["limitations"]
+    }
+    actual = [
+        limitation
+        for limitation in output.get("dataLimitations", [])
+        if isinstance(limitation, dict)
+    ]
+    actual_codes = {
+        limitation.get("code")
+        for limitation in actual
+        if limitation.get("code")
+    }
+    if len(actual_codes) != len(actual):
+        failures.append(
+            f"{case_id}: duplicate or missing data limitation code"
+        )
+    missing = set(expected) - actual_codes
+    if missing:
+        failures.append(
+            f"{case_id}: required data limitations are absent: {sorted(missing)}"
+        )
+    for index, limitation in enumerate(actual):
+        source = expected.get(limitation.get("code"))
+        if source is None:
+            failures.append(
+                f"{case_id}: dataLimitation[{index}] is not declared by input"
+            )
+            continue
+        scalar_fields = ("scope", "employeeRef", "categoryCode", "impact")
+        mismatched = {
+            field: (source[field], limitation.get(field))
+            for field in scalar_fields
+            if limitation.get(field) != source[field]
+        }
+        if mismatched:
+            failures.append(
+                f"{case_id}: dataLimitation[{index}] mismatches input: "
+                f"{mismatched}"
+            )
+        for field in ("affectedSections", "evidenceRefs"):
+            source_values = source[field]
+            if field == "affectedSections":
+                source_values = {
+                    CANONICAL_LIMITATION_SECTIONS.get(value, value)
+                    for value in source_values
+                }
+            if set(limitation.get(field, [])) != set(source_values):
+                failures.append(
+                    f"{case_id}: dataLimitation[{index}] has different {field}"
+                )
+    return failures
+
+
+def response_metrics(output: dict, case: dict, dataset: dict) -> dict:
+    action_result = action_quality(dataset, output)
+    narrative_result = narrative_quality(dataset, output)
+    insight_candidate_refs = {
+        insight.get("candidateRef")
+        for insight in output.get("insights", [])
+        if isinstance(insight, dict) and insight.get("candidateRef")
+    }
+    primary_signal = output.get("primarySignal")
+    primary_candidate_ref = (
+        primary_signal.get("candidateRef")
+        if isinstance(primary_signal, dict) else None
+    )
+    candidate_refs = set(insight_candidate_refs)
+    if primary_candidate_ref:
+        candidate_refs.add(primary_candidate_ref)
+    texts = [normalized_text(value) for _, value in narrative_values(output)]
+    duplicate_count = sum(
+        count - 1 for count in Counter(texts).values() if count > 1
+    )
+    required = set(case["expectations"].get("requiredCandidateRefs", []))
+    return {
+        "summaryBlocks": len(output.get("summaryBlocks", [])),
+        "workloadBlocks": sum(
+            summary.get("section") == "WORKLOAD"
+            for summary in output.get("summaryBlocks", [])
+            if isinstance(summary, dict)
+        ),
+        "insights": len(output.get("insights", [])),
+        "candidateBackedInsights": len(insight_candidate_refs),
+        "primarySignals": int(primary_candidate_ref is not None),
+        "candidateBackedSignals": len(candidate_refs),
+        "actions": len(output.get("actions", [])),
+        "nonSpecificActions": len(action_result["nonSpecificIndexes"]),
+        "nearDuplicateActions": len(action_result["nearDuplicatePairs"]),
+        "nearDuplicateNarratives": (
+            len(narrative_result["nearDuplicateHeadlineInsightPairs"])
+            + len(narrative_result["nearDuplicatePrimaryInsightPairs"])
+            + len(
+                narrative_result["nearDuplicatePrimaryTeamOverviewPairs"]
+            )
+        ),
+        "nearDuplicatePrimaryTeamOverviews": len(
+            narrative_result["nearDuplicatePrimaryTeamOverviewPairs"]
+        ),
+        "directiveInsights": len(
+            narrative_result["directiveInsightIndexes"]
+        ),
+        "unsupportedCauseNarratives": len(
+            narrative_result["unsupportedCauseItems"]
+        ),
+        "teamRelationships": len(output.get("teamRelationships", [])),
+        "duplicateNarratives": duplicate_count,
+        "requiredCandidateCoverage": (
+            len(required & candidate_refs) / len(required) if required else 1.0
+        ),
+    }
+
+
+def validate_response(
+    validator: Draft202012Validator,
+    dataset: dict,
+    case: dict,
+    payload: dict,
+    output: object,
+    label: str,
+) -> tuple[list[str], dict]:
+    case_id = case["id"]
+    prefix = f"{case_id}/{label}"
+    configuration = next(
+        (
+            value
+            for value in dataset["configurations"]
+            if value["id"] == label
+        ),
+        None,
+    )
+    content_schema_version = (
+        configuration["contentSchemaVersion"]
+        if configuration is not None else 2
+    )
+    if not isinstance(output, dict):
+        return schema_failures(validator, output, prefix), {}
+    output = backend_normalize_response(output, payload)
+    failures = schema_failures(validator, output, prefix)
+
+    manifest = payload["manifest"]
+    known_evidence = {
+        entry["evidenceRef"] for entry in manifest["evidence"]
+    }
+    available_evidence = {
+        entry["evidenceRef"] for entry in manifest["evidence"]
+        if entry["available"]
+    }
+    unknown_analysis = (
+        evidence_refs(output, exclude_limitations=True) - available_evidence
+    )
+    if unknown_analysis:
+        failures.append(
+            f"{prefix}: analysis references unavailable evidence: "
+            f"{sorted(unknown_analysis)}"
+        )
+    limitation_refs = evidence_refs(output.get("dataLimitations", []))
+    if limitation_refs - known_evidence:
+        failures.append(
+            f"{prefix}: limitations reference unknown evidence: "
+            f"{sorted(limitation_refs - known_evidence)}"
+        )
+    failures.extend(limitation_failures(prefix, output, payload))
+    if (
+        configuration is not None
+        and configuration["promptVersion"]
+        == "weekly-interpretation-v15"
+    ):
+        failures.extend(
+            team_overview_evidence_failures(prefix, output, payload)
+        )
+
+    expected_employees = {
+        employee["employeeRef"]: employee["analysisStatus"]
+        for employee in payload["facts"]["employees"]
+    }
+    actual_employees = {
+        employee.get("employeeRef"): employee.get("analysisStatus")
+        for employee in output.get("employees", [])
+        if isinstance(employee, dict)
+    }
+    actual_employee_items = [
+        employee for employee in output.get("employees", [])
+        if isinstance(employee, dict)
+    ]
+    descriptors_differ = (
+        len(actual_employee_items) != len(expected_employees)
+        or actual_employees != expected_employees
+    )
+    if descriptors_differ:
+        failures.append(
+            f"{prefix}: employee descriptors differ: expected "
+            f"{expected_employees}, got {actual_employees}"
+        )
+
+    summaries = [
+        summary for summary in output.get("summaryBlocks", [])
+        if isinstance(summary, dict)
+    ]
+    mandatory = [
+        {"scope": "TEAM", "employeeRef": None, "section": "TEAM_OVERVIEW"},
+        *[
+            {
+                "scope": "EMPLOYEE",
+                "employeeRef": employee_ref,
+                "section": "HEADLINE",
+            }
+            for employee_ref in expected_employees
+        ],
+    ]
+    store_headlines = [
+        summary
+        for summary in summaries
+        if selector_matches(summary, {
+            "scope": "STORE",
+            "employeeRef": None,
+            "section": "HEADLINE",
+        })
+    ]
+    if content_schema_version < 3:
+        mandatory.insert(0, {
+            "scope": "STORE",
+            "employeeRef": None,
+            "section": "HEADLINE",
+        })
+    elif store_headlines:
+        failures.append(f"{prefix}: STORE headline is forbidden in schema v3")
+    for selector in mandatory + case["expectations"].get("requiredSummarySections", []):
+        if not any(selector_matches(summary, selector) for summary in summaries):
+            failures.append(f"{prefix}: missing summary section {selector}")
+    for selector in case["expectations"].get("forbiddenSummarySections", []):
+        if any(selector_matches(summary, selector) for summary in summaries):
+            failures.append(f"{prefix}: forbidden summary section {selector}")
+
+    insights = [
+        insight for insight in output.get("insights", [])
+        if isinstance(insight, dict)
+    ]
+    insight_candidate_refs = {
+        insight.get("candidateRef") for insight in insights
+        if isinstance(insight, dict) and insight.get("candidateRef")
+    }
+    primary_signal = output.get("primarySignal")
+    primary_candidate_ref = (
+        primary_signal.get("candidateRef")
+        if isinstance(primary_signal, dict) else None
+    )
+    actual_candidate_refs = set(insight_candidate_refs)
+    if primary_candidate_ref:
+        actual_candidate_refs.add(primary_candidate_ref)
+    candidate_ref_values = [
+        insight.get("candidateRef") for insight in insights
+        if insight.get("candidateRef")
+    ]
+    if primary_candidate_ref:
+        candidate_ref_values.append(primary_candidate_ref)
+    if len(candidate_ref_values) != len(set(candidate_ref_values)):
+        failures.append(f"{prefix}: duplicate candidateRef across primary and insights")
+    if content_schema_version >= 3:
+        expected_primary_candidates = store_candidates(payload)
+        if expected_primary_candidates and not isinstance(primary_signal, dict):
+            failures.append(f"{prefix}: primarySignal is required")
+        elif not expected_primary_candidates and primary_signal is not None:
+            failures.append(f"{prefix}: primarySignal is not allowed")
+        elif isinstance(primary_signal, dict):
+            expected_ref = expected_primary_candidates[0]["candidateRef"]
+            if primary_candidate_ref != expected_ref:
+                failures.append(
+                    f"{prefix}: primarySignal must use backend-prioritized "
+                    f"candidate {expected_ref}"
+                )
+        for index, insight in enumerate(insights):
+            if insight.get("candidateRef") is None:
+                failures.append(
+                    f"{prefix}: secondary insight[{index}] requires candidateRef"
+                )
+    required_candidates = set(
+        case["expectations"].get("requiredCandidateRefs", [])
+    )
+    missing_candidates = required_candidates - actual_candidate_refs
+    if missing_candidates:
+        failures.append(
+            f"{prefix}: required candidates are absent: {sorted(missing_candidates)}"
+        )
+    forbidden_candidates = set(
+        case["expectations"].get("forbiddenCandidateRefs", [])
+    )
+    present_forbidden = forbidden_candidates & actual_candidate_refs
+    if present_forbidden:
+        failures.append(
+            f"{prefix}: forbidden candidates are present: {sorted(present_forbidden)}"
+        )
+    failures.extend(candidate_failures(prefix, output, payload))
+    failures.extend(narrative_dimension_failures(prefix, output, payload))
+
+    expectations = case["expectations"]
+    relationships = [
+        relationship for relationship in output.get("teamRelationships", [])
+        if isinstance(relationship, dict)
+    ]
+    for selector in expectations.get("requiredTeamRelationships", []):
+        if not any(
+            relationship_selector_matches(relationship, selector)
+            for relationship in relationships
+        ):
+            failures.append(f"{prefix}: missing team relationship {selector}")
+    for selector in expectations.get("forbiddenTeamRelationships", []):
+        if any(
+            relationship_selector_matches(relationship, selector)
+            for relationship in relationships
+        ):
+            failures.append(f"{prefix}: forbidden team relationship {selector}")
+    failures.extend(relationship_failures(prefix, output, payload))
+    if len(insights) > expectations.get("maxInsights", 48):
+        failures.append(f"{prefix}: too many insights")
+    if len(output.get("actions", [])) > expectations.get("maxActions", 24):
+        failures.append(f"{prefix}: too many actions")
+
+    if (
+        configuration is not None
+        and configuration["promptVersion"] in {
+            "weekly-interpretation-v12",
+            "weekly-interpretation-v13",
+            "weekly-interpretation-v14",
+            "weekly-interpretation-v15",
+        }
+    ):
+        candidate_action_limit = sum(
+            candidate.get("theme") not in RELATIONSHIP_TYPES
+            for candidate in payload["facts"]["candidateSignals"]
+        )
+        if len(output.get("actions", [])) > candidate_action_limit:
+            failures.append(
+                f"{prefix}: action count exceeds non-relationship "
+                f"candidate count ({candidate_action_limit})"
+            )
+
+    action_result = action_quality(dataset, output)
+    for index in sorted(action_result["nonSpecificIndexes"]):
+        failures.append(
+            f"{prefix}: action lacks an observable operation "
+            f"at $.actions[{index}]"
+        )
+    for left, right, similarity in action_result["nearDuplicatePairs"]:
+        failures.append(
+            f"{prefix}: actions are near-duplicates at "
+            f"$.actions[{left}] and $.actions[{right}] "
+            f"(similarity={similarity:.4f})"
+        )
+
+    narrative_result = narrative_quality(dataset, output)
+    for summary_index, insight_index, dice, containment in (
+        narrative_result["nearDuplicateHeadlineInsightPairs"]
+    ):
+        failures.append(
+            f"{prefix}: STORE headline and insight title are near-duplicates "
+            f"at $.summaryBlocks[{summary_index}] and $.insights[{insight_index}] "
+            f"(dice={dice:.4f}, containment={containment:.4f})"
+        )
+    for insight_index, dice, containment in (
+        narrative_result["nearDuplicatePrimaryInsightPairs"]
+    ):
+        failures.append(
+            f"{prefix}: primarySignal and insight title are near-duplicates "
+            f"at $.primarySignal and $.insights[{insight_index}] "
+            f"(dice={dice:.4f}, containment={containment:.4f})"
+        )
+    for summary_index, dice, containment in (
+        narrative_result["nearDuplicatePrimaryTeamOverviewPairs"]
+    ):
+        failures.append(
+            f"{prefix}: primarySignal and TEAM overview are near-duplicates "
+            f"at $.primarySignal and $.summaryBlocks[{summary_index}] "
+            f"(dice={dice:.4f}, containment={containment:.4f})"
+        )
+    for index in sorted(narrative_result["directiveInsightIndexes"]):
+        failures.append(
+            f"{prefix}: insight contains a management directive "
+            f"at $.insights[{index}]"
+        )
+    for collection, index in narrative_result["unsupportedCauseItems"]:
+        failures.append(
+            f"{prefix}: narrative states an unsupported possible cause "
+            f"at $.{collection}[{index}]"
+        )
+
+    forbidden_patterns = [
+        *dataset.get("globalForbiddenPatterns", []),
+        *expectations.get("forbiddenPatterns", []),
+    ]
+    compiled_patterns = [
+        re.compile(pattern, re.IGNORECASE) for pattern in forbidden_patterns
+    ]
+    narratives = list(narrative_values(output))
+    for path, value in narratives:
+        for pattern in compiled_patterns:
+            if pattern.search(value):
+                failures.append(
+                    f"{prefix}: forbidden pattern {pattern.pattern!r} at {path}"
+                )
+        if re.search(r"\d", value):
+            failures.append(f"{prefix}: model narrative contains digits at {path}")
+
+    technical_identifiers = {
+        *manifest["employeeRefs"],
+        *manifest["candidateRefs"],
+        *known_evidence,
+        *manifest["categoryCodes"],
+        *manifest["competencyCodes"],
+    }
+    for path, value in narratives:
+        leaked = sorted(
+            identifier for identifier in technical_identifiers
+            if identifier and re.search(
+                rf"(?<![A-Z0-9:._-]){re.escape(identifier)}(?![A-Z0-9:._-])",
+                value, re.IGNORECASE,
+            )
+        )
+        if leaked:
+            failures.append(
+                f"{prefix}: narrative exposes technical identifiers at {path}: "
+                f"{leaked}"
+            )
+
+    counts = Counter(normalized_text(value) for _, value in narratives)
+    duplicates = {
+        text: count for text, count in counts.items()
+        if text and count > 1
+    }
+    if len(duplicates) > expectations.get("maxDuplicateNarratives", 0):
+        failures.append(f"{prefix}: duplicate narratives: {duplicates}")
+
+    employee_facts_by_ref = {
+        employee["employeeRef"]: employee
+        for employee in payload["facts"]["employees"]
+    }
+    for index, summary in enumerate(summaries):
+        if summary.get("section") != "WORKLOAD":
+            continue
+        employee = employee_facts_by_ref.get(summary.get("employeeRef"))
+        if employee is None:
+            continue
+        available = set(employee.get("availableSections", []))
+        has_workload_evidence = "WORKLOAD" in available or any(
+            fact.get("metricCode") == "WORKLOAD_STATUS"
+            or ".WORKLOAD." in fact.get("evidenceRef", "")
+            for fact in employee.get("facts", [])
+        )
+        if not has_workload_evidence:
+            failures.append(
+                f"{prefix}: workload summary lacks workload evidence "
+                f"at $.summaryBlocks[{index}]"
+            )
+
+    for policy in expectations.get("employeePolicies", []):
+        employee_ref = policy["employeeRef"]
+        if policy.get("insights") == "FORBIDDEN" and any(
+            insight.get("employeeRef") == employee_ref for insight in insights
+        ):
+            failures.append(f"{prefix}: insights forbidden for {employee_ref}")
+        if policy.get("actions") == "FORBIDDEN" and any(
+            employee_ref in action.get("targetEmployeeRefs", [])
+            for action in output.get("actions", [])
+            if isinstance(action, dict)
+        ):
+            failures.append(f"{prefix}: actions forbidden for {employee_ref}")
+        if policy.get("relationships") == "FORBIDDEN" and any(
+            employee_ref in relationship.get("sourceEmployeeRefs", [])
+            or employee_ref in relationship.get("targetEmployeeRefs", [])
+            for relationship in relationships
+        ):
+            failures.append(f"{prefix}: relationships forbidden for {employee_ref}")
+        if policy.get("workload") == "FORBIDDEN" and any(
+            summary.get("employeeRef") == employee_ref
+            and summary.get("section") == "WORKLOAD"
+            for summary in summaries
+        ):
+            failures.append(f"{prefix}: workload summary forbidden for {employee_ref}")
+
+    return failures, response_metrics(output, case, dataset)
+
+
+def validate_legacy_case(
+    root: Path,
+    validator: Draft202012Validator,
+    case: dict,
+) -> list[str]:
     case_id = case.get("id", "unnamed")
     output_path = root / case["output"]
     output = load_json(output_path)
-    failures = [
-        f"{case_id}: schema {error.json_path}: {error.message}"
-        for error in sorted(validator.iter_errors(output), key=lambda item: item.json_path)
-    ]
+    failures = schema_failures(validator, output, case_id)
 
     input_path = case.get("input")
     if input_path:
@@ -89,8 +1844,11 @@ def validate_case(root: Path, validator: Draft202012Validator, case: dict) -> li
             )
 
     assertions = case.get("assertions", {})
-    forbidden = [re.compile(pattern, re.IGNORECASE) for pattern in assertions.get("forbiddenPatterns", [])]
-    for field_path, value in strings(output):
+    forbidden = [
+        re.compile(pattern, re.IGNORECASE)
+        for pattern in assertions.get("forbiddenPatterns", [])
+    ]
+    for field_path, _, value in strings(output):
         for pattern in forbidden:
             if pattern.search(value):
                 failures.append(
@@ -109,32 +1867,237 @@ def validate_case(root: Path, validator: Draft202012Validator, case: dict) -> li
     return failures
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--manifest",
-        default="scripts/llm-eval/manifest.example.json",
-        help="Path to the versioned evaluation manifest",
-    )
-    arguments = parser.parse_args()
-    repository = Path(__file__).resolve().parents[2]
-    manifest_path = (repository / arguments.manifest).resolve()
-    manifest = load_json(manifest_path)
-    schema_path = repository / manifest["schema"]
+def evaluate_legacy(repository: Path, manifest: dict) -> tuple[list[str], int]:
+    schema_path = repository_path(repository, manifest["schema"])
     validator = Draft202012Validator(load_json(schema_path))
     failures: list[str] = []
     cases = manifest.get("cases", [])
     if not cases:
         failures.append("evaluation manifest must contain at least one case")
     for case in cases:
-        failures.extend(validate_case(repository, validator, case))
+        failures.extend(validate_legacy_case(repository, validator, case))
+    return failures, len(cases)
+
+
+def export_inputs(target: Path, inputs: dict[str, dict]):
+    target.mkdir(parents=True, exist_ok=True)
+    for case_id, payload in inputs.items():
+        path = target / f"{case_id}.json"
+        with path.open("w", encoding="utf-8") as output:
+            json.dump(payload, output, ensure_ascii=False, indent=2)
+            output.write("\n")
+
+
+def aggregate_metrics(
+    metrics: dict[str, list[dict]],
+    stats: dict[str, dict],
+) -> dict:
+    result: dict[str, dict] = {}
+    for configuration, configuration_stats in stats.items():
+        values = metrics.get(configuration, [])
+        totals: dict[str, float] = defaultdict(float)
+        for item in values:
+            for key, value in item.items():
+                totals[key] += value
+        count = len(values)
+        result[configuration] = {
+            **configuration_stats,
+            "passRate": (
+                round(
+                    configuration_stats["passedResponses"]
+                    / configuration_stats["evaluatedResponses"],
+                    4,
+                )
+                if configuration_stats["evaluatedResponses"] else None
+            ),
+            "averages": {
+                key: round(value / count, 4)
+                for key, value in sorted(totals.items())
+            } if count else {},
+        }
+    return result
+
+
+def evaluate_dataset_responses(
+    repository: Path,
+    dataset: dict,
+    inputs: dict[str, dict],
+    responses_dir: Path | None,
+    require_responses: bool,
+) -> tuple[list[str], dict]:
+    validators = {
+        configuration["id"]: Draft202012Validator(
+            load_json(repository_path(
+                repository,
+                configuration.get("outputSchema", dataset["outputSchema"]),
+            )),
+            format_checker=FormatChecker(),
+        )
+        for configuration in dataset["configurations"]
+    }
+    failures: list[str] = []
+    metrics: dict[str, list[dict]] = defaultdict(list)
+    evaluated = 0
+    configurations = dataset["configurations"]
+    expected_per_configuration = len(dataset["cases"])
+    stats = {
+        configuration["id"]: {
+            "expectedResponses": expected_per_configuration,
+            "evaluatedResponses": 0,
+            "passedResponses": 0,
+            "missingResponses": 0,
+            "violationCount": 0,
+        }
+        for configuration in configurations
+    }
+    for case in dataset["cases"]:
+        if case["id"] not in inputs:
+            continue
+        for configuration in configurations:
+            relative = Path(case["id"]) / f"{configuration['id']}.json"
+            response_path = responses_dir / relative if responses_dir else None
+            if response_path is None or not response_path.exists():
+                stats[configuration["id"]]["missingResponses"] += 1
+                if require_responses:
+                    failures.append(
+                        f"{case['id']}/{configuration['id']}: missing response "
+                        f"{relative}"
+                    )
+                continue
+            evaluated += 1
+            stats[configuration["id"]]["evaluatedResponses"] += 1
+            try:
+                output = load_json(response_path)
+            except (OSError, json.JSONDecodeError) as exception:
+                failures.append(
+                    f"{case['id']}/{configuration['id']}: unreadable response: "
+                    f"{exception}"
+                )
+                stats[configuration["id"]]["violationCount"] += 1
+                continue
+            response_failures, response_metrics_value = validate_response(
+                validators[configuration["id"]],
+                dataset,
+                case,
+                inputs[case["id"]],
+                output,
+                configuration["id"],
+            )
+            failures.extend(response_failures)
+            stats[configuration["id"]]["violationCount"] += len(
+                response_failures
+            )
+            if not response_failures:
+                stats[configuration["id"]]["passedResponses"] += 1
+            if response_metrics_value:
+                metrics[configuration["id"]].append(response_metrics_value)
+    report = {
+        "datasetVersion": dataset["version"],
+        "caseCount": len(dataset["cases"]),
+        "configurationCount": len(configurations),
+        "evaluatedResponses": evaluated,
+        "automaticMetrics": aggregate_metrics(metrics, stats),
+        "passed": not failures,
+    }
+    return failures, report
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--manifest",
+        default="scripts/llm-eval/dataset-v2.json",
+        help="Path to the versioned evaluation manifest",
+    )
+    parser.add_argument(
+        "--responses-dir",
+        help="Directory containing <case-id>/<configuration-id>.json responses",
+    )
+    parser.add_argument(
+        "--require-responses",
+        action="store_true",
+        help="Fail unless every configured case has every configured response",
+    )
+    parser.add_argument(
+        "--export-inputs",
+        help="Write deterministic provider inputs to this directory",
+    )
+    parser.add_argument(
+        "--report",
+        help="Write a machine-readable evaluation report",
+    )
+    arguments = parser.parse_args()
+    repository = Path(__file__).resolve().parents[2]
+    manifest_path = repository_path(repository, arguments.manifest)
+    manifest = load_json(manifest_path)
+    if not isinstance(manifest, dict):
+        print("LLM evaluation failed: manifest is not an object.", file=sys.stderr)
+        return 1
+
+    if manifest.get("version") == 1:
+        failures, case_count = evaluate_legacy(repository, manifest)
+        report = {
+            "datasetVersion": 1,
+            "caseCount": case_count,
+            "evaluatedResponses": case_count,
+            "passed": not failures,
+        }
+    elif manifest.get("version") == 2:
+        failures, inputs = validate_dataset(repository, manifest_path, manifest)
+        if arguments.export_inputs and not failures:
+            export_inputs(
+                repository_path(repository, arguments.export_inputs),
+                inputs,
+            )
+        if failures:
+            report = {
+                "datasetVersion": 2,
+                "caseCount": len(manifest.get("cases", [])),
+                "configurationCount": len(manifest.get("configurations", [])),
+                "evaluatedResponses": 0,
+                "automaticMetrics": {},
+                "passed": False,
+            }
+        else:
+            response_failures, report = evaluate_dataset_responses(
+                repository,
+                manifest,
+                inputs,
+                repository_path(repository, arguments.responses_dir)
+                if arguments.responses_dir else None,
+                arguments.require_responses,
+            )
+            failures.extend(response_failures)
+            report["passed"] = not failures
+    else:
+        failures = ["unsupported evaluation manifest version"]
+        report = {
+            "datasetVersion": manifest.get("version"),
+            "caseCount": 0,
+            "evaluatedResponses": 0,
+            "passed": False,
+        }
+
+    if arguments.report:
+        report_path = repository_path(repository, arguments.report)
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        with report_path.open("w", encoding="utf-8") as output:
+            json.dump(report, output, ensure_ascii=False, indent=2)
+            output.write("\n")
 
     if failures:
         print(f"LLM evaluation failed: {len(failures)} violation(s).", file=sys.stderr)
         for failure in failures:
             print(f"- {failure}", file=sys.stderr)
         return 1
-    print(f"LLM evaluation passed: {len(cases)} case(s).")
+    if report["datasetVersion"] == 2:
+        print(
+            "LLM evaluation dataset passed: "
+            f"{report['caseCount']} case(s), "
+            f"{report['evaluatedResponses']} response(s)."
+        )
+    else:
+        print(f"LLM evaluation passed: {report['caseCount']} case(s).")
     return 0
 
 

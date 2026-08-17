@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,7 +58,7 @@ class AttachRateIntegrationTest {
     }
 
     @Test
-    void countsEachSaleReceiptOncePerMetricAndDenominator() {
+    void countsNetUnitsIndependentlyOfReceiptCooccurrence() {
         TestGraph graph = createGraph();
 
         UUID iphoneWithAdditions = addSale(graph, "iphone-with-additions", PERIOD_START);
@@ -67,6 +68,14 @@ class AttachRateIntegrationTest {
         addItem(
                 graph, iphoneWithAdditions, "wrong-glass", "GLASS_CAMERA_SAMSUNG",
                 "1.000", "NOT_APPLICABLE"
+        );
+        addItem(
+                graph, iphoneWithAdditions, "iphone-glass", "GLASS_IPHONE",
+                "1.000", "NOT_APPLICABLE"
+        );
+        addItem(
+                graph, iphoneWithAdditions, "iphone-camera",
+                "GLASS_CAMERA_IPHONE", "1.000", "NOT_APPLICABLE"
         );
 
         UUID iphoneOnly = addSale(graph, "iphone-only", PERIOD_START.plusDays(1));
@@ -78,38 +87,95 @@ class AttachRateIntegrationTest {
         UUID samsung = addSale(graph, "samsung", PERIOD_START.plusDays(3));
         addItem(graph, samsung, "phone", "SAMSUNG_USED", "1.000", "USED");
         addItem(graph, samsung, "case", "CASE_SAMSUNG", "1.000", "NOT_APPLICABLE");
+        addItem(
+                graph, samsung, "samsung-glass", "GLASS_SAMSUNG",
+                "1.000", "NOT_APPLICABLE"
+        );
+        addItem(
+                graph, samsung, "samsung-camera",
+                "GLASS_CAMERA_SAMSUNG", "1.000", "NOT_APPLICABLE"
+        );
 
         UUID pods = addSale(graph, "pods", PERIOD_START.plusDays(4));
-        addItem(graph, pods, "devices", "PODS_WATCH_OTHER_DEVICE", "2.000", "NEW");
-        addItem(graph, pods, "accessory", "ACCESSORY_PODS_WATCH", "1.000", "NOT_APPLICABLE");
+        jdbcTemplate.update(
+                """
+                INSERT INTO analytics_categories (
+                    code, name, category_kind, device_family,
+                    counts_as_phone, counts_as_device
+                ) VALUES (
+                    'OTHER_PHONE_TEST', 'Other phone fixture', 'DEVICE', 'OTHER',
+                    true, true
+                )
+                ON CONFLICT (code) DO NOTHING
+                """
+        );
+        UUID otherPhone = addSale(graph, "other-phone", PERIOD_START.plusDays(4));
+        addItem(
+                graph, otherPhone, "Google Pixel 9", "OTHER_PHONE_TEST",
+                "1.000", "NEW"
+        );
+        addItem(graph, pods, "AirPods Pro", "PODS_WATCH_OTHER_DEVICE", "2.000", "NEW");
+        addItem(graph, pods, "AirPods case", "ACCESSORY_PODS_WATCH", "1.000", "NOT_APPLICABLE");
+        addItem(
+                graph,
+                pods,
+                "Samsung Galaxy Buds case",
+                "ACCESSORY_PODS_WATCH",
+                "100.000",
+                "NOT_APPLICABLE"
+        );
 
         UUID usedIpad = addSale(graph, "used-ipad", PERIOD_START.plusDays(5));
-        addItem(graph, usedIpad, "device", "IPAD_MAC", "1.000", "USED");
-        addItem(graph, usedIpad, "accessories", "ACCESSORY_IPAD_MAC", "2.000", "NOT_APPLICABLE");
+        addItem(graph, usedIpad, "iPad Pro", "IPAD_MAC", "1.000", "USED");
+        addItem(graph, usedIpad, "iPad cases", "ACCESSORY_IPAD_MAC", "2.000", "NOT_APPLICABLE");
 
         UUID newDevice = addSale(graph, "new-device", PERIOD_START.plusDays(6));
-        addItem(graph, newDevice, "device", "PODS_WATCH_OTHER_DEVICE", "1.000", "NEW");
-        addItem(graph, newDevice, "protection", "PREMIUM_PROTECTION", "2.000", "NOT_APPLICABLE");
-        addItem(graph, newDevice, "warranty", "WARRANTY_GENERIC", "1.000", "NOT_APPLICABLE");
+        addItem(graph, newDevice, "PlayStation 5", "PODS_WATCH_OTHER_DEVICE", "1.000", "NEW");
+        addItem(graph, newDevice, "FUTURE STORE ULTIMATE CARE+", "PREMIUM_PROTECTION", "2.000", "NOT_APPLICABLE");
+        addItem(graph, newDevice, "FUTURE STORE CHECK+", "WARRANTY_GENERIC", "1.000", "NOT_APPLICABLE");
 
         UUID usedDevice = addSale(graph, "used-device", PERIOD_START.plusDays(7));
-        addItem(graph, usedDevice, "device", "IPAD_MAC", "1.000", "USED");
-        addItem(graph, usedDevice, "warranty", "WARRANTY_GENERIC", "1.000", "NOT_APPLICABLE");
+        addItem(graph, usedDevice, "iPad Air", "IPAD_MAC", "1.000", "USED");
+        addItem(graph, usedDevice, "FUTURE STORE CHECK DISKOUNT +180", "WARRANTY_GENERIC", "1.000", "NOT_APPLICABLE");
 
         addOtherStoreFacts(graph);
 
         AttachRateResult result = attachRateService.calculate(graph.storeId(), period());
 
-        assertThat(result.rates()).hasSize(12);
-        assertRate(result, "CASE_APPLE_IPHONE", "1", "2", "50");
-        assertRate(result, "CHARGER_CABLE", "1", "3", "33");
+        assertThat(result.rates()).hasSize(14);
+        assertThat(result.formulaVersion()).isEqualTo("attach-rate-v3");
+        assertThat(result.rates()).extracting(AttachRateEntry::metricCode)
+                .containsExactlyElementsOf(List.of(
+                        "CASE_APPLE_IPHONE",
+                        "CHARGER_CABLE",
+                        "GLASS_IPHONE",
+                        "GLASS_CAMERA_IPHONE",
+                        "FILM_PHONE",
+                        "SETUP_SERVICE",
+                        "CASE_SAMSUNG",
+                        "GLASS_SAMSUNG",
+                        "GLASS_CAMERA_SAMSUNG",
+                        "ACCESSORY_PODS_WATCH",
+                        "ACCESSORY_IPAD",
+                        "WARRANTY_GENERIC_USED",
+                        "WARRANTY_GENERIC_NEW",
+                        "PREMIUM_PROTECTION"
+                ));
+        assertRate(result, "CASE_APPLE_IPHONE", "3", "2", "150");
+        assertRate(result, "CHARGER_CABLE", "1", "4", "25");
+        assertRate(result, "FILM_PHONE", "0", "4", "0");
+        assertRate(result, "SETUP_SERVICE", "0", "5", "0");
+        assertRate(result, "GLASS_IPHONE", "1", "2", "50");
+        assertRate(result, "GLASS_CAMERA_IPHONE", "1", "2", "50");
+        assertRate(result, "GLASS_SAMSUNG", "1", "1", "100");
+        assertRate(result, "GLASS_CAMERA_SAMSUNG", "2", "1", "200");
         assertRate(result, "CASE_SAMSUNG", "1", "1", "100");
         assertRate(result, "ACCESSORY_PODS_WATCH", "1", "2", "50");
-        assertRate(result, "ACCESSORY_IPAD_MAC", "1", "2", "50");
-        assertRate(result, "PREMIUM_PROTECTION", "1", "4", "25");
-        assertRate(result, "WARRANTY_GENERIC_NEW", "1", "4", "25");
-        assertRate(result, "WARRANTY_GENERIC_USED", "1", "3", "33");
-        assertThat(result.dataQuality().unmatchedNumeratorItemCount()).isEqualTo(2);
+        assertRate(result, "ACCESSORY_IPAD", "2", "2", "100");
+        assertRate(result, "PREMIUM_PROTECTION", "2", "8", "25");
+        assertRate(result, "WARRANTY_GENERIC_NEW", "1", "2", "50");
+        assertRate(result, "WARRANTY_GENERIC_USED", "1", "1", "100");
+        assertThat(result.dataQuality().unmatchedNumeratorItemCount()).isZero();
         assertThat(result.dataQuality().ambiguousWarrantyItemCount()).isZero();
         assertThat(result.dataQuality().unknownDeviceConditionItemCount()).isZero();
     }
@@ -124,7 +190,7 @@ class AttachRateIntegrationTest {
         addItem(graph, usedPhone, "charger", "CHARGER_CABLE", "1.000", "NOT_APPLICABLE");
         addItem(graph, usedPhone, "film", "FILM_PHONE", "1.000", "NOT_APPLICABLE");
         addItem(graph, usedPhone, "setup", "SETUP_SERVICE", "1.000", "NOT_APPLICABLE");
-        addItem(graph, usedPhone, "warranty", "WARRANTY_GENERIC", "1.000", "NOT_APPLICABLE");
+        addItem(graph, usedPhone, "FUTURE STORE CHECK DISCOUNT", "WARRANTY_GENERIC", "1.000", "NOT_APPLICABLE");
 
         AttachRateResult result = attachRateService.calculate(graph.storeId(), period());
 
@@ -140,7 +206,7 @@ class AttachRateIntegrationTest {
     }
 
     @Test
-    void excludesReturnsFromReceiptBasedAttachRate() {
+    void subtractsReturnsAndClampsNegativeRateToZero() {
         TestGraph graph = createGraph();
         UUID historicalSale = addSale(graph, "historical-sale", PERIOD_START.minusDays(10));
         addItem(graph, historicalSale, "iphone", "IPHONE_NEW_ASIS", "1.000", "NEW");
@@ -151,14 +217,14 @@ class AttachRateIntegrationTest {
         addItem(graph, currentSale, "cases", "CASE_APPLE_IPHONE", "2.000", "NOT_APPLICABLE");
 
         UUID caseReturn = addReturn(graph, "case-return", PERIOD_START.plusDays(1), historicalSale);
-        addItem(graph, caseReturn, "case", "CASE_APPLE_IPHONE", "2.000", "NOT_APPLICABLE");
+        addItem(graph, caseReturn, "case", "CASE_APPLE_IPHONE", "3.000", "NOT_APPLICABLE");
 
         UUID deviceReturn = addReturn(graph, "device-return", PERIOD_START.plusDays(2), currentSale);
-        addItem(graph, deviceReturn, "iphone", "IPHONE_NEW_ASIS", "2.000", "NEW");
+        addItem(graph, deviceReturn, "iphone", "IPHONE_NEW_ASIS", "1.000", "NEW");
 
         AttachRateResult result = attachRateService.calculate(graph.storeId(), period());
 
-        assertRate(result, "CASE_APPLE_IPHONE", "1", "1", "100");
+        assertRate(result, "CASE_APPLE_IPHONE", "-1", "1", "0");
         assertThat(result.dataQuality().unmatchedNumeratorItemCount()).isZero();
     }
 
@@ -169,18 +235,22 @@ class AttachRateIntegrationTest {
         UUID mixedCondition = addSale(graph, "mixed-condition", PERIOD_START);
         addItem(graph, mixedCondition, "new", "IPHONE_NEW_ASIS", "1.000", "NEW");
         addItem(graph, mixedCondition, "used", "SAMSUNG_USED", "1.000", "USED");
-        addItem(graph, mixedCondition, "warranty", "WARRANTY_GENERIC", "1.000", "NOT_APPLICABLE");
+        addItem(graph, mixedCondition, "unknown-warranty-one", "WARRANTY_GENERIC", "1.000", "NOT_APPLICABLE");
 
         UUID noDevice = addSale(graph, "no-device", PERIOD_START.plusDays(1));
-        addItem(graph, noDevice, "warranty", "WARRANTY_GENERIC", "1.000", "NOT_APPLICABLE");
+        addItem(graph, noDevice, "unknown-warranty-two", "WARRANTY_GENERIC", "1.000", "NOT_APPLICABLE");
 
         UUID unknownCondition = addSale(graph, "unknown-condition", PERIOD_START.plusDays(2));
         addItem(
-                graph, unknownCondition, "device", "PODS_WATCH_OTHER_DEVICE",
+                graph, unknownCondition, "unknown-iphone", "IPHONE_NEW_ASIS",
                 "1.000", "UNKNOWN"
         );
         addItem(
-                graph, unknownCondition, "protection", "PREMIUM_PROTECTION",
+                graph, unknownCondition, "Samsung ASIS", "SAMSUNG_NEW",
+                "1.000", "ASIS"
+        );
+        addItem(
+                graph, unknownCondition, "unknown-protection", "PREMIUM_PROTECTION",
                 "1.000", "NOT_APPLICABLE"
         );
 
@@ -192,9 +262,9 @@ class AttachRateIntegrationTest {
                 .isEqualByComparingTo("0.000");
         assertThat(rate(result, "PREMIUM_PROTECTION").numeratorReceiptCount())
                 .isEqualByComparingTo("0.000");
-        assertThat(result.dataQuality().unmatchedNumeratorItemCount()).isEqualTo(2);
-        assertThat(result.dataQuality().ambiguousWarrantyItemCount()).isOne();
-        assertThat(result.dataQuality().unknownDeviceConditionItemCount()).isOne();
+        assertThat(result.dataQuality().unmatchedNumeratorItemCount()).isZero();
+        assertThat(result.dataQuality().ambiguousWarrantyItemCount()).isEqualTo(3);
+        assertThat(result.dataQuality().unknownDeviceConditionItemCount()).isEqualTo(2);
     }
 
     private void addOtherStoreFacts(TestGraph graph) {
@@ -337,11 +407,12 @@ class AttachRateIntegrationTest {
                     analytics_category_id, condition_type_snapshot, quantity, unit_price,
                     gross_amount, discount_amount, net_amount, cost_amount, cost_quality,
                     is_deleted
-                ) VALUES (?, ?, ?, 'Attach product', ?, ?, ?, 0, 0, 0, 0, 0, 'KNOWN', false)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 'KNOWN', false)
                 """,
                 documentId,
                 externalId,
                 graph.productId(),
+                externalId,
                 categoryId,
                 conditionType,
                 new BigDecimal(quantity)

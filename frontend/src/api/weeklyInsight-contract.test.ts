@@ -7,8 +7,63 @@ const employeeIds = [
   "30df06fb-71fe-4477-b6b9-bbc712b1ab26"
 ];
 
+const employeeIdsByRef = new Map([
+  ["E01", employeeIds[0]],
+  ["E02", employeeIds[1]]
+]);
+
+function publicReadyContent() {
+  const evidenceCodes = new Map<string, string>();
+  const content = JSON.parse(JSON.stringify(
+    canonicalReadyContent,
+    (field, value: unknown): unknown => {
+      if (field === "evidenceRefs" && Array.isArray(value)) {
+        return value.map((reference) => {
+          if (typeof reference !== "string") return reference;
+          const existing = evidenceCodes.get(reference);
+          if (existing) return existing;
+          const code = `EV${String(evidenceCodes.size + 1).padStart(3, "0")}`;
+          evidenceCodes.set(reference, code);
+          return code;
+        });
+      }
+      if (field === "employeeRef" && typeof value === "string") {
+        return employeeIdsByRef.get(value) ?? value;
+      }
+      if (
+        Array.isArray(value)
+        && (field === "employeeRefs" || field.endsWith("EmployeeRefs"))
+      ) {
+        return value.map((reference) => typeof reference === "string"
+          ? employeeIdsByRef.get(reference) ?? reference
+          : reference);
+      }
+      return value;
+    }
+  )) as typeof canonicalReadyContent;
+  const evidence: Array<Record<string, unknown>> = Array.from(
+    evidenceCodes.values()
+  ).map((evidenceCode, index) => ({
+    evidenceCode,
+    label: `Подтверждённый показатель ${index + 1}`,
+    formattedValue: null,
+    previousFormattedValue: null,
+    absoluteDeltaFormatted: null,
+    relativeDeltaFormatted: null,
+    comparisonText: null,
+    unit: null,
+    sufficiency: null,
+    scope: "STORE",
+    employeeId: null,
+    displayName: null,
+    categoryLabel: null,
+    available: false
+  }));
+  return { content, evidence };
+}
+
 function readyResponse() {
-  const content = structuredClone(canonicalReadyContent);
+  const { content, evidence } = publicReadyContent();
   return {
     period: {
       periodStart: "2026-07-20",
@@ -38,7 +93,8 @@ function readyResponse() {
           insight: projectedInsight
         };
       }),
-      dataLimitations: content.dataLimitations
+      dataLimitations: content.dataLimitations,
+      evidence
     },
     fallback: null
   };
@@ -74,6 +130,81 @@ describe("weekly insight runtime contract", () => {
 
     expect(result.content?.store.resultSummary).toBeNull();
     expect(result.content?.store.categoryPerformance).toBeNull();
+  });
+
+  it("accepts backend-formatted evidence without internal references", () => {
+    const response = readyResponse();
+    const firstEvidence = response.content.evidence[0];
+    if (!firstEvidence || typeof firstEvidence.evidenceCode !== "string") {
+      throw new Error("Canonical projection must cite evidence");
+    }
+    response.content.evidence[0] = {
+      evidenceCode: firstEvidence.evidenceCode,
+      label: "Выручка",
+      formattedValue: "1 200 000 ₽",
+      previousFormattedValue: "1 000 000 ₽",
+      absoluteDeltaFormatted: "+200 000 ₽",
+      relativeDeltaFormatted: "+20%",
+      comparisonText: "Было 1 000 000 ₽ · изменение +200 000 ₽ (+20%)",
+      unit: "MONEY",
+      sufficiency: "SUFFICIENT",
+      scope: "STORE",
+      employeeId: null,
+      displayName: null,
+      categoryLabel: null,
+      available: true
+    };
+
+    const result = weeklyInsightSchema.parse(response);
+
+    expect(result.content?.evidence).toContainEqual(
+      expect.objectContaining({
+        evidenceCode: "EV001",
+        label: "Выручка",
+        formattedValue: "1 200 000 ₽",
+        comparisonText: expect.stringContaining("изменение"),
+        available: true
+      })
+    );
+  });
+
+  it("rejects a technical evidence code in the public bundle", () => {
+    const response = readyResponse();
+    const firstEvidence = response.content.evidence[0];
+    if (!firstEvidence) throw new Error("Canonical projection must cite evidence");
+    firstEvidence.evidenceCode = "EMP:E01.NET_REVENUE.CURRENT";
+
+    expect(weeklyInsightSchema.safeParse(response).success).toBe(false);
+  });
+
+  it("rejects a technical reference nested in public content", () => {
+    const response = readyResponse();
+    response.content.store.headline.evidenceRefs = [
+      "STORE.NET_REVENUE.CURRENT"
+    ];
+
+    expect(weeklyInsightSchema.safeParse(response).success).toBe(false);
+  });
+
+  it("rejects cited evidence missing from the public bundle", () => {
+    const response = readyResponse();
+    response.content.evidence.shift();
+
+    expect(weeklyInsightSchema.safeParse(response).success).toBe(false);
+  });
+
+  it("rejects an internal employee pseudonym in public content", () => {
+    const response = readyResponse();
+    const reference = response.content.store.headline.evidenceRefs[0];
+    if (!reference) throw new Error("Canonical projection must cite evidence");
+    response.content.teamInsights.mostImproved = [{
+      employeeRef: "E01",
+      kind: "OBSERVATION",
+      summary: "Есть положительная динамика.",
+      evidenceRefs: [reference]
+    }];
+
+    expect(weeklyInsightSchema.safeParse(response).success).toBe(false);
   });
 
   it("accepts the backend projection for an insufficient employee", () => {

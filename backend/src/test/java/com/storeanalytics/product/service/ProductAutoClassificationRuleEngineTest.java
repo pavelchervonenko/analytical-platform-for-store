@@ -100,11 +100,31 @@ class ProductAutoClassificationRuleEngineTest {
                 ),
                 arguments(
                         "Защитное стекло Remax Iphone 15 Pro прозрачное",
-                        "GLASS_CAMERA_IPHONE",
+                        "GLASS_IPHONE",
                         ProductConditionType.NOT_APPLICABLE
                 ),
                 arguments(
                         "Защитное стекло SupGLASS SG-13 17 Pro матовое",
+                        "GLASS_IPHONE",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Защитное стекло Remax GL27 Samsung S24/S25",
+                        "GLASS_SAMSUNG",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Защитное стекло на камеры Keephone Camera Lens S26 Ultra Clear",
+                        "GLASS_CAMERA_SAMSUNG",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Защита Kaмеры Keephone Samsung",
+                        "GLASS_CAMERA_SAMSUNG",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Защитные линзы SupGLASS 15 Pro/15ProMax Colorless",
                         "GLASS_CAMERA_IPHONE",
                         ProductConditionType.NOT_APPLICABLE
                 ),

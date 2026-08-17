@@ -1,9 +1,13 @@
 export type InsightTone = "positive" | "neutral" | "warning";
+export type InsightKindTone = "observation" | "synthesis" | "hypothesis"
+  | "risk" | "opportunity" | "unknown";
 
 const horizonLabels: Readonly<Record<string, string>> = {
   CURRENT_WEEK: "На этой неделе",
   NEXT_WEEK: "На следующей неделе",
-  NEXT_30_DAYS: "В течение месяца"
+  NEXT_30_DAYS: "В течение месяца",
+  MONTH_END: "До конца месяца",
+  MONITORING_PERIOD: "На период наблюдения"
 };
 
 const actionTypeLabels: Readonly<Record<string, string>> = {
@@ -11,13 +15,24 @@ const actionTypeLabels: Readonly<Record<string, string>> = {
   COACHING: "Разбор с руководителем",
   CATEGORY_FOCUS: "Фокус на категории",
   ADDITIONAL_SALES_FOCUS: "Дополнительные продажи",
+  PROCESS_REVIEW: "Проверка процесса",
   DATA_QUALITY_CHECK: "Проверка данных",
-  MONITORING: "Наблюдение"
+  MONITORING: "Наблюдение",
+  INVESTIGATION: "Дополнительная проверка"
 };
 
 const analysisStatusLabels: Readonly<Record<string, string>> = {
   SUFFICIENT: "Данных достаточно",
+  LIMITED: "Данные ограничены",
   INSUFFICIENT: "Нужно больше данных"
+};
+
+const insightKindLabels: Readonly<Record<string, string>> = {
+  OBSERVATION: "Наблюдение",
+  SYNTHESIS: "Интерпретация",
+  HYPOTHESIS: "Гипотеза",
+  RISK: "Риск",
+  OPPORTUNITY: "Возможность"
 };
 
 export function actionHorizonLabel(horizon: string): string {
@@ -34,6 +49,27 @@ export function analysisStatusLabel(status: string): string {
 
 export function analysisStatusTone(status: string): InsightTone {
   return status === "SUFFICIENT" ? "positive" : status === "INSUFFICIENT" ? "warning" : "neutral";
+}
+
+export function insightKindLabel(kind: string): string {
+  return insightKindLabels[kind] ?? "Вывод";
+}
+
+export function insightKindTone(kind: string): InsightKindTone {
+  switch (kind) {
+    case "OBSERVATION": return "observation";
+    case "SYNTHESIS": return "synthesis";
+    case "HYPOTHESIS": return "hypothesis";
+    case "RISK": return "risk";
+    case "OPPORTUNITY": return "opportunity";
+    default: return "unknown";
+  }
+}
+
+export function insightKindHelp(kind: string): string | null {
+  return kind === "HYPOTHESIS"
+    ? "Возможная причина — её нужно проверить по дополнительным данным."
+    : null;
 }
 
 export function employeeAnalysisHelp(status: string): string {

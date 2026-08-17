@@ -14,21 +14,21 @@
 - canonical SHA-256 для обнаружения реального изменения snapshot;
 - provider-neutral payload, соответствующий `WeeklyInterpretationInput v1`.
 
-Backend фиксирует числа, достаточность выборки и допустимые evidence references. Он не выбирает за
-LLM сильную сторону, слабую сторону, риск или рекомендацию. Candidate signals пока намеренно пусты:
-это не сужает интерпретацию до набора заранее запрограммированных выводов.
+Backend фиксирует числа, достаточность выборки и допустимые evidence references. LLM не вычисляет
+сравнения, лидеров или mentor/learner-пары. Backend формирует ограниченный набор candidate signals;
+модель выбирает формулировку и может связывать только подтверждённые сигналы.
 
 ## Активные версии и правила
 
 - facts schema: `1`;
-- metric contract: `weekly-metrics-v2`;
-- calculation: `weekly-snapshot-v5`;
-- quality policy: `weekly-quality-v2`.
+- metric contract: `weekly-metrics-v3`;
+- calculation: `weekly-snapshot-v6`;
+- quality policy: `weekly-quality-v3`.
 
-Активный `WeeklySnapshotPolicyV2` добавляет явный sample завершённых продаж и переносит
-receipt-based attach-rate v2. Порог нагрузки: хотя бы одна смена и положительные часы; одна смена
+Активный `WeeklySnapshotPolicyV3` использует unit-based `attach-rate-v3`
+и добавляет versioned candidate policy. Порог нагрузки: хотя бы одна смена и
 или менее 12 часов дают `LIMITED`. Структура продаж: меньше 3 завершённых чеков — `INSUFFICIENT`,
-3–5 — `LIMITED`. Attach: меньше 3 релевантных чеков — `INSUFFICIENT`, 3–4 — `LIMITED`.
+3–5 — `LIMITED`. Attach: меньше 3 единиц базы — `INSUFFICIENT`, 3–4 — `LIMITED`.
 Покрытие рейтинга ниже 50% блокирует общий анализ, 50–74% ограничивает его. Для team benchmark
 нужны минимум три достаточных сотрудника, для единственного лидера — преимущество не менее 5%.
 Изменение порогов требует новой versioned policy, а не скрытой правки prompt.
@@ -49,6 +49,29 @@ Hash считается по canonical payload и membership. Это важно:
 Все facts и evidence сортируются. При превышении schema limits builder завершает job ошибкой, а не
 молча обрезает сотрудников или категории.
 
+## Deterministic analytical candidates
+
+Candidate создаётся только при доступных evidence и фиксированной достаточности:
+
+- store revenue/profit: относительное изменение не менее 5%;
+- employee revenue/efficiency: относительное изменение не менее 10%;
+- category movement: не менее 15% при доле категории не менее 3% хотя бы в одном периоде; максимум
+  два роста и два снижения, выбранные по абсолютному вкладу;
+- plan gap: отклонение projected completion от 100% не менее чем на 5 п.п.;
+- attach gap: изменение не менее 5 на сто чеков и denominator не меньше 5 в обоих периодах;
+- employee additional share: изменение не менее 3 п.п.; rating score — не менее 5 пунктов;
+- отрицательные category/store значения и нулевая предыдущая база не получают оценку динамики.
+
+Team benchmark строится минимум по трём `SUFFICIENT` сотрудникам. Backend сохраняет Q1, медиану и
+Q3; квартили считаются nearest-rank, медиана чётной выборки — среднее двух центральных значений.
+Единственный лидер допустим только при преимуществе минимум 5% над вторым значением. Для category
+benchmark берутся максимум три крупнейшие категории. Learner находится ниже медианы; в один
+candidate входят максимум три learner. Most improved требует минимум три сопоставимых сотрудника.
+
+Каждый candidate хранит scope metadata, sufficiency и полный набор evidence refs. Semantic validator
+сверяет insight с candidate по kind/theme/scope/evidence, а team relationship допускает только
+точную backend-owned пару.
+
 ## Реализованные проекции
 
 - результат магазина, валовая прибыль и маржа при доступной себестоимости;
@@ -58,7 +81,9 @@ Hash считается по canonical payload и membership. Это важно:
 - план магазина: используется plan context с максимальной `asOfDate`, то есть актуальный контекст на
   конец отчётной недели; оба исходных контекста пограничной недели остаются в source;
 - нагрузка, результат, эффективность, структура продаж, backend rating и категории сотрудников;
-- количество сотрудников, пригодных для team benchmark.
+- количество сотрудников, пригодных для team benchmark;
+- material store/category/plan/attach movements и employee self-dynamics;
+- team Q1/median/Q3, unique leaders, most improved и mentor/learner candidates.
 
 Планы не пересчитываются в interpretation-модуле: builder переносит готовые значения
 `StorePlanProgressService`.

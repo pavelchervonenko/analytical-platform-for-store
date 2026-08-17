@@ -25,13 +25,15 @@ scripts/yandexgpt-staging-acceptance.sh verify
 
 После provider smoke-test:
 
-1. загрузить обезличенные примеры заказчика в отдельный eval-manifest;
-2. выполнить `python3 scripts/llm-eval/evaluate.py --manifest <manifest>`;
-3. включить snapshot/generation/publication только в staging;
-4. сформировать недельный snapshot и дождаться публикации через `/api/admin/llm/operations`;
-5. проверить dashboard, Telegram-текст, токены, стоимость и отсутствие PII в provider payload/logs;
-6. выполнить drills: неверный ключ, 429, timeout, невалидный JSON, отмена и ручная регенерация;
-7. зафиксировать результаты приемки и только затем повторить конфигурацию production.
+1. проверить канонический dataset: `python3 scripts/llm-eval/evaluate.py`;
+2. экспортировать одинаковые provider inputs и получить 52 shadow-ответа для v4/v5 без публикации;
+3. выполнить полный автоматический gate с `--require-responses` и ручную оценку по rubric из
+   `scripts/llm-eval/README.md`;
+4. включить snapshot/generation/publication только в staging;
+5. сформировать недельный snapshot и дождаться публикации через `/api/admin/llm/operations`;
+6. проверить dashboard, Telegram-текст, токены, стоимость и отсутствие PII в provider payload/logs;
+7. выполнить drills: неверный ключ, 429, timeout, невалидный JSON, отмена и ручная регенерация;
+8. зафиксировать результаты приемки и только затем повторить конфигурацию production.
 
 ## Подтвержденный локальный acceptance — 2026-08-06
 

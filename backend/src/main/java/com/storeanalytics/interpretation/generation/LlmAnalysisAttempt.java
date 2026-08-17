@@ -1,6 +1,7 @@
 package com.storeanalytics.interpretation.generation;
 
 import static com.storeanalytics.common.validation.ModelValidation.require;
+import static com.storeanalytics.common.validation.ModelValidation.requireJson;
 import static com.storeanalytics.common.validation.ModelValidation.requireNonNull;
 import static com.storeanalytics.common.validation.ModelValidation.requireText;
 
@@ -19,6 +20,8 @@ public record LlmAnalysisAttempt(
         String resolvedModel,
         String providerRequestId,
         String requestHash,
+        String providerInputHash,
+        String providerInputBody,
         String responseHash,
         String responseBody,
         String validatedResponseHash,
@@ -51,6 +54,14 @@ public record LlmAnalysisAttempt(
         requireText(requestedModel, "requestedModel");
         require(requestHash != null && requestHash.matches("[a-f0-9]{64}"),
                 "requestHash must be a lowercase SHA-256");
+        require(providerInputHash == null
+                        || providerInputHash.matches("[a-f0-9]{64}"),
+                "providerInputHash must be a lowercase SHA-256");
+        require((providerInputHash == null) == (providerInputBody == null),
+                "provider input body and hash must be present together");
+        if (providerInputBody != null) {
+            requireJson(providerInputBody, "providerInputBody");
+        }
         require(responseHash == null || responseHash.matches("[a-f0-9]{64}"),
                 "responseHash must be a lowercase SHA-256");
         require(validatedResponseHash == null

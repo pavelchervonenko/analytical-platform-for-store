@@ -62,13 +62,16 @@ class LlmAnalysisAttemptStoreIntegrationTest {
         LlmAnalysisJob claimed = claimStore.claimNext(
                 "worker-response", Duration.ofSeconds(10), NOW
         ).orElseThrow();
+        String providerInput = "{\"contractVersion\":1}";
 
         LlmAnalysisAttempt started = attemptStore.startProviderCall(
                 claimed.id(), "worker-response", LlmAnalysisAttemptType.INITIAL,
-                "c".repeat(64), NOW.plusSeconds(1)
+                "c".repeat(64), providerInput, NOW.plusSeconds(1)
         );
         assertThat(started.status()).isEqualTo(LlmAnalysisAttemptStatus.STARTED);
         assertThat(started.attemptNumber()).isOne();
+        assertThat(started.providerInputBody()).isEqualTo(providerInput);
+        assertThat(started.providerInputHash()).isEqualTo(sha256(providerInput));
         assertThat(jobStore.findById(queued.id()).orElseThrow().phase())
                 .isEqualTo(LlmAnalysisPhase.CALL_PROVIDER);
         assertThatThrownBy(() -> attemptStore.startProviderCall(

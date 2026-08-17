@@ -94,6 +94,17 @@ tasks.named("test") {
     dependsOn(operatorScriptSecurityTest)
 }
 
+tasks.register<JavaExec>("llmEvalShadow") {
+    group = "verification"
+    description = "Plans or executes the local v4/v14 YandexGPT shadow matrix."
+    dependsOn("testClasses")
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set(
+        "com.storeanalytics.interpretation.generation.LlmEvalShadowRunner"
+    )
+    workingDir(rootDir)
+}
+
 val generatedOpenApi = layout.buildDirectory.file("openapi/current.json")
 
 tasks.register<Test>("generateOpenApi") {

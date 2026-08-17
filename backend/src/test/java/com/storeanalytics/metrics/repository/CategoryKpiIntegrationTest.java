@@ -95,7 +95,7 @@ class CategoryKpiIntegrationTest {
 
         CategoryKpiResult result = categoryKpiService.calculate(graph.storeId(), period());
 
-        assertThat(result.categories()).hasSize(19);
+        assertThat(result.categories()).hasSize(21);
         assertThat(result.categories())
                 .extracting(CategoryKpiEntry::categoryCode)
                 .doesNotContain("EXCLUDE");

@@ -107,7 +107,7 @@ class EmployeeCategoryKpiIntegrationTest {
 
         assertThat(result.employees()).hasSize(4);
         EmployeeCategoryKpiEmployee assigned = employee(result, assignedId);
-        assertThat(assigned.categories()).hasSize(19);
+        assertThat(assigned.categories()).hasSize(21);
         assertThat(assigned.netRevenue()).isEqualByComparingTo("110.00");
         assertThat(assigned.rankingEligible()).isTrue();
         assertThat(category(assigned, "IPHONE_NEW_ASIS").metrics().netRevenue())
@@ -126,7 +126,7 @@ class EmployeeCategoryKpiIntegrationTest {
         assertThat(assigned.dataQuality().completeCostData()).isFalse();
 
         EmployeeCategoryKpiEmployee zero = employee(result, zeroId);
-        assertThat(zero.categories()).hasSize(19);
+        assertThat(zero.categories()).hasSize(21);
         assertThat(zero.netRevenue()).isEqualByComparingTo("0.00");
         assertThat(zero.rankingEligible()).isTrue();
 

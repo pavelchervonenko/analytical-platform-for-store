@@ -44,16 +44,21 @@ business audit. API не возвращает API key, folder ID, prompt, provid
 
 1. На сервере повторить `scripts/yandexgpt-staging-acceptance.sh verify` со staging key и
    синтетическим payload. Локальный provider/application acceptance уже пройден.
-2. Запустить offline evaluation на обезличенных примерах:
-   `python3 scripts/llm-eval/evaluate.py --manifest <manifest>`.
-3. Включить создание snapshots: `INTERPRETATION_SNAPSHOT_ENABLED`, snapshot planner и worker.
-4. Убедиться, что snapshot стабилен и не содержит запрещённых данных.
-5. Настроить YandexGPT secret/model/cost limits и включить generation planner/worker.
-6. Проверить tokens, known cost, retries, timeout, 401/403, 429, 5xx и invalid JSON.
-7. Включить `INTERPRETATION_PUBLICATION_ENABLED`; проверить dashboard и revision update window.
-8. Отдельно принять Telegram linking/webhook/delivery и только затем включить fanout.
-9. Включить `DAILY_STORE_PULSE_ENABLED` после проверки покрытия SALES и RETURNS за вчера.
-10. Зафиксировать результаты staging, модель, prompt/schema versions и лимиты в release evidence.
+2. Проверить канонический обезличенный dataset и его автоматический gate:
+   `python3 scripts/llm-eval/evaluate.py` и
+   `python3 -m unittest scripts/llm-eval/test_evaluate.py -v`.
+3. С заранее утверждённым бюджетом получить полную shadow-матрицу v4/v5 и проверить её:
+   `python3 scripts/llm-eval/evaluate.py --responses-dir build/llm-eval/responses
+   --require-responses --report build/llm-eval/report.json`. Затем выполнить ручную оценку по
+   rubric из dataset. Полный протокол описан в `scripts/llm-eval/README.md`.
+4. Включить создание snapshots: `INTERPRETATION_SNAPSHOT_ENABLED`, snapshot planner и worker.
+5. Убедиться, что snapshot стабилен и не содержит запрещённых данных.
+6. Настроить YandexGPT secret/model/cost limits и включить generation planner/worker.
+7. Проверить tokens, known cost, retries, timeout, 401/403, 429, 5xx и invalid JSON.
+8. Включить `INTERPRETATION_PUBLICATION_ENABLED`; проверить dashboard и revision update window.
+9. Отдельно принять Telegram linking/webhook/delivery и только затем включить fanout.
+10. Включить `DAILY_STORE_PULSE_ENABLED` после проверки покрытия SALES и RETURNS за вчера.
+11. Зафиксировать результаты staging, модель, prompt/schema versions и лимиты в release evidence.
 
 В production применяется тот же порядок с новыми customer-owned credentials и ручным approval.
 Не переносить staging key в production.
@@ -87,10 +92,12 @@ Rollback приложения разрешён только при совмес�
 
 1. перенести API key на сервер в secret file/storage с правами `0600`;
 2. закрепить folder ID, model URI `yandexgpt-5.1`, прошедшую canary версию prompt/schema и
-   snapshot calculation `weekly-snapshot-v4` в release configuration; связка
+   snapshot calculation `weekly-snapshot-v6` в release configuration; связка
    `weekly-interpretation-v4` / schema `2` прошла успешный end-to-end canary revision 7 и должна
    развёртываться без замены на плавающие или legacy-версии;
-3. подготовить 20–50 обезличенных примеров с ожидаемыми и запрещёнными выводами;
+3. канонический dataset из 26 обезличенных сценариев уже подготовлен локально; до активации нужно
+   получить и сохранить 52 shadow-ответа v4/v5, пройти автоматический gate и ручную rubric без
+   critical errors;
 4. утвердить лимит бюджета и получателей billing/technical alerts.
 
 Категории данных для текущего weekly payload уже подтверждены: агрегированные

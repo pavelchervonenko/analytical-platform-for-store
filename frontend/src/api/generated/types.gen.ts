@@ -1315,14 +1315,20 @@ export type WeeklyInterpretationSummaryView = {
 };
 
 export type JsonNode = {
-    floatingPointNumber?: boolean;
-    missingNode?: boolean;
-    integralNumber?: boolean;
     string?: boolean;
+    array?: boolean;
+    empty?: boolean;
+    null?: boolean;
+    float?: boolean;
+    container?: boolean;
+    number?: boolean;
+    missingNode?: boolean;
+    floatingPointNumber?: boolean;
     valueNode?: boolean;
     nodeType?: 'ARRAY' | 'BINARY' | 'BOOLEAN' | 'MISSING' | 'NULL' | 'NUMBER' | 'OBJECT' | 'POJO' | 'STRING';
     object?: boolean;
     pojo?: boolean;
+    integralNumber?: boolean;
     short?: boolean;
     int?: boolean;
     long?: boolean;
@@ -1335,12 +1341,6 @@ export type JsonNode = {
     textual?: boolean;
     boolean?: boolean;
     binary?: boolean;
-    number?: boolean;
-    container?: boolean;
-    array?: boolean;
-    empty?: boolean;
-    null?: boolean;
-    float?: boolean;
     embeddedValue?: boolean;
 };
 
@@ -1361,6 +1361,7 @@ export type WeeklyInsightContentView = {
     teamInsights?: JsonNode;
     employees?: Array<WeeklyInsightEmployeeView>;
     dataLimitations?: JsonNode;
+    evidence?: Array<WeeklyInsightEvidenceView>;
 };
 
 export type WeeklyInsightEmployeeView = {
@@ -1368,6 +1369,23 @@ export type WeeklyInsightEmployeeView = {
     displayName?: string;
     analysisStatus?: string;
     insight?: JsonNode;
+};
+
+export type WeeklyInsightEvidenceView = {
+    evidenceCode?: string;
+    label?: string;
+    formattedValue?: string;
+    previousFormattedValue?: string;
+    absoluteDeltaFormatted?: string;
+    relativeDeltaFormatted?: string;
+    comparisonText?: string;
+    unit?: 'MONEY' | 'COUNT' | 'PERCENT' | 'RATE_PER_HUNDRED' | 'HOURS' | 'SCORE' | 'RANK' | 'STATUS';
+    sufficiency?: 'SUFFICIENT' | 'LIMITED' | 'INSUFFICIENT';
+    scope?: 'STORE' | 'TEAM' | 'EMPLOYEE' | 'CATEGORY' | 'METRIC';
+    employeeId?: string;
+    displayName?: string;
+    categoryLabel?: string;
+    available?: boolean;
 };
 
 export type WeeklyInsightFallbackView = {
@@ -1531,9 +1549,9 @@ export type ActiveSessionResponse = {
 };
 
 export type CsrfToken = {
-    headerName?: string;
-    parameterName?: string;
     token?: string;
+    parameterName?: string;
+    headerName?: string;
 };
 
 export type CsrfConfigurationResponse = {

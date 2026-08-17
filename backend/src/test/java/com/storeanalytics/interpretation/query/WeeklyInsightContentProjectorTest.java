@@ -2,6 +2,8 @@ package com.storeanalytics.interpretation.query;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.CandidateKind;
+import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.CandidateSignal;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Facts;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Manifest;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.QualityStatus;
@@ -90,6 +92,211 @@ class WeeklyInsightContentProjectorTest {
         });
     }
 
+    @Test
+    void prefersBackendPrioritizedCandidateOverProviderOrder() throws Exception {
+        UUID employeeId = UUID.randomUUID();
+        JsonNode content = JsonMapper.builder().build().readTree("""
+                {
+                  "employees": [{
+                    "employeeRef": "E01",
+                    "analysisStatus": "SUFFICIENT"
+                  }],
+                  "summaryBlocks": [{
+                    "scope": "STORE",
+                    "employeeRef": null,
+                    "section": "HEADLINE",
+                    "text": "Итог магазина",
+                    "evidenceRefs": ["STORE.REVENUE.CURRENT"]
+                  }, {
+                    "scope": "TEAM",
+                    "employeeRef": null,
+                    "section": "TEAM_OVERVIEW",
+                    "text": "Итог команды",
+                    "evidenceRefs": ["TEAM.EMPLOYEES.CURRENT"]
+                  }, {
+                    "scope": "EMPLOYEE",
+                    "employeeRef": "E01",
+                    "section": "HEADLINE",
+                    "text": "Итог сотрудника",
+                    "evidenceRefs": ["EMPLOYEE.E01.REVENUE.CURRENT"]
+                  }],
+                  "insights": [{
+                    "scope": "STORE",
+                    "employeeRef": null,
+                    "kind": "OPPORTUNITY",
+                    "theme": "OTHER",
+                    "candidateRef": null,
+                    "title": "Общий вывод",
+                    "summary": "Не должен стать главным только из-за порядка.",
+                    "evidenceRefs": ["STORE.REVENUE.CURRENT"]
+                  }, {
+                    "scope": "STORE",
+                    "employeeRef": null,
+                    "kind": "OPPORTUNITY",
+                    "theme": "CATEGORY_MIX",
+                    "candidateRef": "C002",
+                    "title": "Категория",
+                    "summary": "Категорийный вывод.",
+                    "evidenceRefs": ["STORE.CATEGORY.CURRENT"]
+                  }, {
+                    "scope": "STORE",
+                    "employeeRef": null,
+                    "kind": "OPPORTUNITY",
+                    "theme": "PROFITABILITY",
+                    "candidateRef": "C001",
+                    "title": "Вал",
+                    "summary": "Приоритетный вывод по валовой прибыли.",
+                    "evidenceRefs": ["STORE.GROSS_PROFIT.CURRENT"]
+                  }],
+                  "actions": [],
+                  "teamRelationships": [],
+                  "dataLimitations": []
+                }
+                """);
+        WeeklyInterpretationDetailView interpretation =
+                new WeeklyInterpretationDetailView(summary(2), content, List.of());
+        List<CandidateSignal> candidates = List.of(
+                new CandidateSignal(
+                        "C001", CandidateKind.OPPORTUNITY, "PROFITABILITY",
+                        null, List.of("STORE.GROSS_PROFIT.CURRENT")
+                ),
+                new CandidateSignal(
+                        "C002", CandidateKind.OPPORTUNITY, "CATEGORY_MIX",
+                        null, List.of("STORE.CATEGORY.CURRENT")
+                )
+        );
+
+        WeeklyInsightContentView result = new WeeklyInsightContentProjector().project(
+                interpretation,
+                snapshot(employeeId, candidates)
+        );
+
+        assertThat(result.store().path("strength").path("title").asText())
+                .isEqualTo("Вал");
+    }
+
+    @Test
+    void projectsV3PrimarySignalOnceAndKeepsSecondaryRiskSeparate()
+            throws Exception {
+        UUID employeeId = UUID.randomUUID();
+        JsonNode content = JsonMapper.builder().build().readTree("""
+                {
+                  "employees": [{
+                    "employeeRef": "E01",
+                    "analysisStatus": "SUFFICIENT"
+                  }],
+                  "primarySignal": {
+                    "scope": "STORE",
+                    "employeeRef": null,
+                    "categoryCode": null,
+                    "kind": "RISK",
+                    "theme": "PLAN",
+                    "candidateRef": "C001",
+                    "text": "Главное отклонение связано с выполнением плана.",
+                    "evidenceRefs": ["STORE.PLAN.CURRENT"]
+                  },
+                  "summaryBlocks": [{
+                    "scope": "TEAM",
+                    "employeeRef": null,
+                    "section": "TEAM_OVERVIEW",
+                    "categoryCode": null,
+                    "text": "Итог команды",
+                    "evidenceRefs": ["TEAM.EMPLOYEES.CURRENT"]
+                  }, {
+                    "scope": "EMPLOYEE",
+                    "employeeRef": "E01",
+                    "section": "HEADLINE",
+                    "categoryCode": null,
+                    "text": "Итог сотрудника",
+                    "evidenceRefs": ["EMPLOYEE.E01.REVENUE.CURRENT"]
+                  }],
+                  "insights": [{
+                    "scope": "STORE",
+                    "employeeRef": null,
+                    "categoryCode": "ACCESSORY",
+                    "kind": "RISK",
+                    "theme": "CATEGORY_MIX",
+                    "candidateRef": "C002",
+                    "title": "Снижение категории",
+                    "summary": "Категория требует отдельной проверки.",
+                    "evidenceRefs": ["STORE.CATEGORY.CURRENT"]
+                  }],
+                  "actions": [],
+                  "teamRelationships": [],
+                  "dataLimitations": []
+                }
+                """);
+        List<CandidateSignal> candidates = List.of(
+                new CandidateSignal(
+                        "C001", CandidateKind.RISK, "PLAN",
+                        null, List.of("STORE.PLAN.CURRENT")
+                ),
+                new CandidateSignal(
+                        "C002", CandidateKind.RISK, "CATEGORY_MIX",
+                        null, List.of("STORE.CATEGORY.CURRENT")
+                )
+        );
+
+        WeeklyInsightContentView result = new WeeklyInsightContentProjector().project(
+                new WeeklyInterpretationDetailView(
+                        summary(3), content, List.of()
+                ),
+                snapshot(employeeId, candidates)
+        );
+
+        assertThat(result.store().path("headline").path("text").asText())
+                .isEqualTo("Главное отклонение связано с выполнением плана.");
+        assertThat(result.store().path("primaryRisk").path("candidateRef").asText())
+                .isEqualTo("C002");
+        assertThat(result.store().toString())
+                .containsOnlyOnce("Главное отклонение связано с выполнением плана.");
+    }
+
+    @Test
+    void projectsBackendOwnedNeutralHeadlineWhenV3HasNoPrimarySignal()
+            throws Exception {
+        UUID employeeId = UUID.randomUUID();
+        JsonNode content = JsonMapper.builder().build().readTree("""
+                {
+                  "employees": [{
+                    "employeeRef": "E01",
+                    "analysisStatus": "SUFFICIENT"
+                  }],
+                  "primarySignal": null,
+                  "summaryBlocks": [{
+                    "scope": "TEAM",
+                    "employeeRef": null,
+                    "section": "TEAM_OVERVIEW",
+                    "categoryCode": null,
+                    "text": "Итог команды",
+                    "evidenceRefs": ["TEAM.EMPLOYEES.CURRENT"]
+                  }, {
+                    "scope": "EMPLOYEE",
+                    "employeeRef": "E01",
+                    "section": "HEADLINE",
+                    "categoryCode": null,
+                    "text": "Итог сотрудника",
+                    "evidenceRefs": ["EMPLOYEE.E01.REVENUE.CURRENT"]
+                  }],
+                  "insights": [],
+                  "actions": [],
+                  "teamRelationships": [],
+                  "dataLimitations": []
+                }
+                """);
+
+        WeeklyInsightContentView result = new WeeklyInsightContentProjector().project(
+                new WeeklyInterpretationDetailView(
+                        summary(3), content, List.of()
+                ),
+                snapshot(employeeId)
+        );
+
+        assertThat(result.store().path("headline").path("text").asText())
+                .isEqualTo(WeeklyInsightV3ContentProjector.NEUTRAL_HEADLINE);
+        assertThat(result.store().path("headline").path("evidenceRefs"))
+                .isEmpty();
+    }
     private WeeklyInterpretationSummaryView summary(int contentSchemaVersion) {
         return new WeeklyInterpretationSummaryView(
                 UUID.randomUUID(),
@@ -113,6 +320,13 @@ class WeeklyInsightContentProjectorTest {
     }
 
     private PersistedWeeklySnapshot snapshot(UUID employeeId) {
+        return snapshot(employeeId, List.of());
+    }
+
+    private PersistedWeeklySnapshot snapshot(
+            UUID employeeId,
+            List<CandidateSignal> candidates
+    ) {
         UUID storeId = UUID.randomUUID();
         LocalDate start = LocalDate.of(2026, 7, 27);
         LocalDate end = LocalDate.of(2026, 8, 2);
@@ -137,10 +351,11 @@ class WeeklyInsightContentProjectorTest {
                 new WeeklySnapshotPayload(
                         1,
                         new Manifest(
-                                List.of("E01"), List.of(), List.of(), List.of(),
+                                List.of("E01"), List.of(), candidates.stream()
+                                .map(CandidateSignal::candidateRef).toList(), List.of(),
                                 List.of(), List.of()
                         ),
-                        new Facts(List.of(), List.of(), List.of(), List.of())
+                        new Facts(List.of(), List.of(), List.of(), candidates)
                 ),
                 "a".repeat(64),
                 List.of(new SnapshotEmployeeMembership(

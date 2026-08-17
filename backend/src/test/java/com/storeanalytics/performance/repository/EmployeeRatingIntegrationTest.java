@@ -126,10 +126,10 @@ class EmployeeRatingIntegrationTest {
         assertThat(first.accessorySharePercent()).isEqualByComparingTo("4.63");
         assertThat(first.serviceSharePercent()).isEqualByComparingTo("2.78");
         assertThat(first.scores().attachScore()).isEqualByComparingTo("150.00");
-        assertThat(first.attachRates()).hasSize(12);
+        assertThat(first.attachRates()).hasSize(14);
         assertThat(first.attachRates()).anySatisfy(rate -> {
             assertThat(rate.metricCode()).isEqualTo("CASE_APPLE_IPHONE");
-            assertThat(rate.denominatorReceiptCount()).isEqualByComparingTo("3");
+            assertThat(rate.denominatorReceiptCount()).isEqualByComparingTo("5");
             assertThat(rate.ratePercent()).isEqualByComparingTo("100");
             assertThat(rate.includedInScore()).isTrue();
         });

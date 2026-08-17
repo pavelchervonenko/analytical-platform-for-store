@@ -1,0 +1,74 @@
+{
+    "employees":  [
+                      {
+                          "employeeRef":  "E01",
+                          "analysisStatus":  "SUFFICIENT"
+                      }
+                  ],
+    "primarySignal":  {
+                          "scope":  "STORE",
+                          "employeeRef":  null,
+                          "categoryCode":  null,
+                          "kind":  "OPPORTUNITY",
+                          "theme":  "REVENUE_DYNAMICS",
+                          "candidateRef":  "C001",
+                          "text":  "Главным подтверждённым изменением стало улучшение результата магазина.",
+                          "evidenceRefs":  [
+                                               "STORE.NET_REVENUE.DELTA"
+                                           ]
+                      },
+    "summaryBlocks":  [
+                          {
+                              "scope":  "TEAM",
+                              "employeeRef":  null,
+                              "section":  "TEAM_OVERVIEW",
+                              "categoryCode":  null,
+                              "text":  "В команде есть подтверждённая практика для обмена опытом.",
+                              "evidenceRefs":  [
+                                                   "TEAM.COMPETENCY:SERVICE_SALES.LEADERS"
+                                               ]
+                          },
+                          {
+                              "scope":  "EMPLOYEE",
+                              "employeeRef":  "E01",
+                              "section":  "HEADLINE",
+                              "categoryCode":  null,
+                              "text":  "Сотрудник сохраняет заметную роль в результате команды.",
+                              "evidenceRefs":  [
+                                                   "EMP:E01.WORKLOAD.STATUS"
+                                               ]
+                          },
+                          {
+                              "scope":  "EMPLOYEE",
+                              "employeeRef":  "E01",
+                              "section":  "WORKLOAD",
+                              "categoryCode":  null,
+                              "text":  "Рабочая нагрузка достаточна для анализа доступных направлений.",
+                              "evidenceRefs":  [
+                                                   "EMP:E01.WORKLOAD.SUFFICIENCY"
+                                               ]
+                          },
+                          {
+                              "scope":  "EMPLOYEE",
+                              "employeeRef":  "E01",
+                              "section":  "CATEGORY_PERFORMANCE",
+                              "categoryCode":  "SERVICE",
+                              "text":  "Сервисное направление является подтверждённой сильной стороной сотрудника.",
+                              "evidenceRefs":  [
+                                                   "EMP:E01.GROUP:SERVICE.REVENUE_SHARE_PERCENT.CURRENT"
+                                               ]
+                          }
+                      ],
+    "insights":  [
+
+                 ],
+    "actions":  [
+
+                ],
+    "teamRelationships":  [
+
+                          ],
+    "dataLimitations":  [
+
+                        ]
+}

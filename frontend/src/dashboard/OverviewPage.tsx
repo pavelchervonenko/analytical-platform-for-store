@@ -12,7 +12,6 @@ import {
   queryKeys
 } from "../api/queries";
 import type { PlanDirection } from "../api/contracts";
-import { WeeklyInsightPanel } from "../insights/WeeklyInsightPanel";
 import { qualityIssueMessage, qualityStatusLabel } from "../quality/presentation";
 import { formatDate, formatMonth } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
@@ -49,14 +48,16 @@ const freshnessLabels: Record<string, string> = {
 };
 
 const attachLabels: Record<string, string> = {
-  ACCESSORY_IPAD_MAC: "Аксессуары к iPad / Mac",
+  ACCESSORY_IPAD: "Аксессуары к iPad",
   ACCESSORY_PODS_WATCH: "Аксессуары к Pods / Watch",
   CASE_APPLE_IPHONE: "Чехлы Apple / iPhone",
   CASE_SAMSUNG: "Чехлы Samsung",
   CHARGER_CABLE: "Зарядные устройства и кабели",
   FILM_PHONE: "Защитные пленки",
-  GLASS_CAMERA_IPHONE: "Стекла и защита камеры iPhone",
-  GLASS_CAMERA_SAMSUNG: "Стекла Samsung",
+  GLASS_IPHONE: "Защитное стекло iPhone",
+  GLASS_CAMERA_IPHONE: "Защита камеры iPhone",
+  GLASS_SAMSUNG: "Защитное стекло Samsung",
+  GLASS_CAMERA_SAMSUNG: "Защита камеры Samsung",
   PREMIUM_PROTECTION: "Протекция",
   SETUP_SERVICE: "Настройки и услуги",
   WARRANTY_GENERIC_NEW: "Гарантии — новые устройства",
@@ -167,8 +168,6 @@ export function OverviewPage() {
         </section>
       )}
 
-      <WeeklyInsightPanel storeId={storeId} />
-
       <section className="overview-summary" aria-label="Главные показатели">
         <article className="overview-summary__primary">
           <span>Чистая выручка</span>
@@ -253,9 +252,9 @@ export function OverviewPage() {
           <summary><span>Attach-rate · показатели допродаж</span><small>{attachQuery.data?.rates.length ?? 0}</small></summary>
           <div className="disclosure-panel__content">
             <div className="attach-intro">
-              <strong>Доля релевантных чеков с допродажей</strong>
+              <strong>Количество допов на 100 единиц релевантной техники</strong>
               <span>
-                Например, сколько чеков с телефоном содержали чехол, стекло, гарантию или настройку.
+                Каждая проданная единица учитывается отдельно; возвраты уменьшают результат.
               </span>
             </div>
             {attachQuery.isPending && <PanelSkeleton rows={5} />}
@@ -264,7 +263,7 @@ export function OverviewPage() {
               <div className="attach-list">
                 {attachQuery.data.rates.map((rate) => (
                   <article key={rate.metricCode}>
-                    <div><strong>{attachLabels[rate.metricCode] ?? "Другой показатель"}</strong><small>{formatNumber(rate.numeratorReceiptCount)} из {formatNumber(rate.denominatorReceiptCount)} чеков</small></div>
+                    <div><strong>{attachLabels[rate.metricCode] ?? "Другой показатель"}</strong><small>{formatNumber(rate.numeratorQuantity ?? rate.numeratorReceiptCount)} на {formatNumber(rate.denominatorQuantity ?? rate.denominatorReceiptCount)} единиц техники</small></div>
                     <span>{formatPercent(rate.ratePerHundred)}</span>
                   </article>
                 ))}

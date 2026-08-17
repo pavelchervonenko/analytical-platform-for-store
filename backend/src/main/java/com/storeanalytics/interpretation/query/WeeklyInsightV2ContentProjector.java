@@ -1,8 +1,11 @@
 package com.storeanalytics.interpretation.query;
 
+import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.CandidateSignal;
+import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Sufficiency;
 import com.storeanalytics.interpretation.snapshot.PersistedWeeklySnapshot;
 import com.storeanalytics.interpretation.snapshot.SnapshotEmployeeMembership;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +27,7 @@ final class WeeklyInsightV2ContentProjector {
             PersistedWeeklySnapshot snapshot
     ) {
         Map<String, SnapshotEmployeeMembership> employeesByRef = memberships(snapshot);
+        Map<String, Integer> priorities = candidatePriorities(snapshot);
         List<WeeklyInsightEmployeeView> employees = new ArrayList<>();
         for (JsonNode descriptor : requiredArray(content, "employees")) {
             String employeeRef = requiredText(descriptor, "employeeRef");
@@ -37,7 +41,7 @@ final class WeeklyInsightV2ContentProjector {
                     membership.employeeId(),
                     membership.displayNameSnapshot(),
                     requiredText(descriptor, "analysisStatus"),
-                    employeeInsight(content, descriptor)
+                    employeeInsight(content, descriptor, priorities)
             ));
         }
         if (employees.size() != snapshot.employees().size()) {
@@ -46,11 +50,37 @@ final class WeeklyInsightV2ContentProjector {
             );
         }
         return new WeeklyInsightContentView(
-                storeInsight(content),
-                teamInsight(content, employeesByRef),
+                storeInsight(content, priorities),
+                teamInsight(content, employeesByRef, priorities),
                 employees,
                 requiredArray(content, "dataLimitations")
         );
+    }
+
+    private Map<String, Integer> candidatePriorities(
+            PersistedWeeklySnapshot snapshot
+    ) {
+        List<CandidateSignal> candidates = new ArrayList<>(
+                snapshot.payload().facts().candidateSignals()
+        );
+        candidates.sort(Comparator
+                .comparingInt(this::sufficiencyPriority)
+                .thenComparingInt(this::themePriority)
+                .thenComparing(CandidateSignal::candidateRef));
+        Map<String, Integer> result = new HashMap<>();
+        for (int index = 0; index < candidates.size(); index++) {
+            result.put(candidates.get(index).candidateRef(), index);
+        }
+        return Map.copyOf(result);
+    }
+
+    private int sufficiencyPriority(CandidateSignal candidate) {
+        return candidate.sufficiency() == Sufficiency.SUFFICIENT ? 0
+                : candidate.sufficiency() == Sufficiency.LIMITED ? 1 : 2;
+    }
+
+    private int themePriority(CandidateSignal candidate) {
+        return themePriority(candidate.theme(), candidate.employeeRef() != null);
     }
 
     private Map<String, SnapshotEmployeeMembership> memberships(
@@ -63,8 +93,11 @@ final class WeeklyInsightV2ContentProjector {
         return result;
     }
 
-    private ObjectNode storeInsight(JsonNode root) {
-        List<JsonNode> insights = insights(root, "STORE", null);
+    private ObjectNode storeInsight(
+            JsonNode root,
+            Map<String, Integer> priorities
+    ) {
+        List<JsonNode> insights = insights(root, "STORE", null, priorities);
         ObjectNode result = NODES.objectNode();
         result.set("headline", requiredNarrative(root, "STORE", null, "HEADLINE"));
         result.set("resultSummary", narrative(root, "STORE", null, "RESULT"));
@@ -78,16 +111,16 @@ final class WeeklyInsightV2ContentProjector {
                 additionalSalesPerformance(root, "STORE", null, insights)
         );
         result.set("planOutlook", narrative(root, "STORE", null, "PLAN_OUTLOOK"));
-        result.set("strength", firstInsight(
+        result.set("strength", highestPriorityInsight(
                 insights,
                 insight -> kindIs(insight, "OBSERVATION", "OPPORTUNITY")
                         && !themeIs(insight, "DATA_QUALITY")
         ));
-        result.set("attentionArea", firstInsight(
+        result.set("attentionArea", highestPriorityInsight(
                 insights,
                 insight -> kindIs(insight, "SYNTHESIS", "HYPOTHESIS")
         ));
-        result.set("primaryRisk", firstInsight(
+        result.set("primaryRisk", highestPriorityInsight(
                 insights,
                 insight -> kindIs(insight, "RISK")
         ));
@@ -100,14 +133,17 @@ final class WeeklyInsightV2ContentProjector {
 
     private ObjectNode teamInsight(
             JsonNode root,
-            Map<String, SnapshotEmployeeMembership> employeesByRef
+            Map<String, SnapshotEmployeeMembership> employeesByRef,
+            Map<String, Integer> priorities
     ) {
         ObjectNode result = NODES.objectNode();
         result.set(
                 "summary",
                 requiredNarrative(root, "TEAM", null, "TEAM_OVERVIEW")
         );
-        result.set("highlights", projectedInsights(insights(root, "TEAM", null)));
+        result.set("highlights", projectedInsights(insights(
+                root, "TEAM", null, priorities
+        )));
 
         ArrayNode competencyLeaders = NODES.arrayNode();
         ArrayNode mostImproved = NODES.arrayNode();
@@ -137,9 +173,15 @@ final class WeeklyInsightV2ContentProjector {
         return result;
     }
 
-    private ObjectNode employeeInsight(JsonNode root, JsonNode descriptor) {
+    private ObjectNode employeeInsight(
+            JsonNode root,
+            JsonNode descriptor,
+            Map<String, Integer> priorities
+    ) {
         String employeeRef = requiredText(descriptor, "employeeRef");
-        List<JsonNode> insights = insights(root, "EMPLOYEE", employeeRef);
+        List<JsonNode> insights = insights(
+                root, "EMPLOYEE", employeeRef, priorities
+        );
         ObjectNode result = NODES.objectNode();
         result.put("analysisStatus", requiredText(descriptor, "analysisStatus"));
         result.set(
@@ -168,16 +210,16 @@ final class WeeklyInsightV2ContentProjector {
                         root, "EMPLOYEE", employeeRef, insights
                 )
         );
-        result.set("strength", firstInsight(
+        result.set("strength", highestPriorityInsight(
                 insights,
                 insight -> kindIs(insight, "OBSERVATION", "OPPORTUNITY")
                         && !themeIs(insight, "DATA_QUALITY")
         ));
-        result.set("attentionArea", firstInsight(
+        result.set("attentionArea", highestPriorityInsight(
                 insights,
                 insight -> kindIs(insight, "SYNTHESIS", "HYPOTHESIS")
         ));
-        result.set("primaryRisk", firstInsight(
+        result.set("primaryRisk", highestPriorityInsight(
                 insights,
                 insight -> kindIs(insight, "RISK")
         ));
@@ -375,7 +417,8 @@ final class WeeklyInsightV2ContentProjector {
     private List<JsonNode> insights(
             JsonNode root,
             String scope,
-            String employeeRef
+            String employeeRef,
+            Map<String, Integer> priorities
     ) {
         List<JsonNode> result = new ArrayList<>();
         for (JsonNode insight : requiredArray(root, "insights")) {
@@ -385,6 +428,10 @@ final class WeeklyInsightV2ContentProjector {
                 result.add(insight);
             }
         }
+        result.sort(Comparator.comparingInt(insight ->
+                priorities.getOrDefault(
+                        nullableText(insight.path("candidateRef")), Integer.MAX_VALUE
+                )));
         return result;
     }
 
@@ -405,7 +452,7 @@ final class WeeklyInsightV2ContentProjector {
         return result;
     }
 
-    private JsonNode firstInsight(
+    private JsonNode highestPriorityInsight(
             List<JsonNode> insights,
             Predicate<JsonNode> predicate
     ) {
@@ -415,6 +462,30 @@ final class WeeklyInsightV2ContentProjector {
                 .map(this::projectedInsight)
                 .map(JsonNode.class::cast)
                 .orElseGet(NODES::nullNode);
+    }
+
+    private int themePriority(String theme, boolean employee) {
+        if (employee) {
+            return switch (theme) {
+                case "EMPLOYEE_PERFORMANCE" -> 0;
+                case "TIME_EFFICIENCY" -> 1;
+                case "ADDITIONAL_SALES" -> 2;
+                case "ATTACH_RATE" -> 3;
+                case "CATEGORY_MIX" -> 4;
+                case "PLAN" -> 5;
+                default -> 6;
+            };
+        }
+        return switch (theme) {
+            case "PLAN" -> 0;
+            case "PROFITABILITY" -> 1;
+            case "REVENUE_DYNAMICS" -> 2;
+            case "ADDITIONAL_SALES" -> 3;
+            case "ATTACH_RATE" -> 4;
+            case "CATEGORY_MIX" -> 5;
+            case "TEAM_PERFORMANCE" -> 6;
+            default -> 7;
+        };
     }
 
     private ArrayNode actions(JsonNode root, Predicate<JsonNode> predicate) {

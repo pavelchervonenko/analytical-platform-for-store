@@ -4,9 +4,11 @@ import static com.storeanalytics.common.validation.ModelValidation.require;
 import static com.storeanalytics.common.validation.ModelValidation.requireNonNull;
 import static com.storeanalytics.common.validation.ModelValidation.requireText;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /** Provider-neutral, pseudonymized contract validated by the v1 input JSON schema. */
@@ -80,15 +82,45 @@ public record WeeklyInterpretationInput(
             List<EvidenceIndexEntry> evidence,
             List<String> candidateRefs,
             List<String> categoryCodes,
+            @JsonInclude(JsonInclude.Include.NON_EMPTY)
+            Map<String, String> categoryLabels,
             List<String> competencyCodes,
             List<Limitation> limitations
     ) {
+
+        public Manifest(
+                List<String> employeeRefs,
+                List<EvidenceIndexEntry> evidence,
+                List<String> candidateRefs,
+                List<String> categoryCodes,
+                List<String> competencyCodes,
+                List<Limitation> limitations
+        ) {
+            this(
+                    employeeRefs,
+                    evidence,
+                    candidateRefs,
+                    categoryCodes,
+                    Map.of(),
+                    competencyCodes,
+                    limitations
+            );
+        }
 
         public Manifest {
             employeeRefs = copy(employeeRefs, "employeeRefs");
             evidence = copy(evidence, "evidence");
             candidateRefs = copy(candidateRefs, "candidateRefs");
             categoryCodes = copy(categoryCodes, "categoryCodes");
+            categoryLabels = Map.copyOf(
+                    categoryLabels == null ? Map.of() : categoryLabels
+            );
+            categoryLabels.forEach((code, label) -> {
+                requireText(code, "categoryLabels code");
+                requireText(label, "categoryLabels label");
+            });
+            require(categoryCodes.containsAll(categoryLabels.keySet()),
+                    "categoryLabels must only describe manifest categoryCodes");
             competencyCodes = copy(competencyCodes, "competencyCodes");
             limitations = copy(limitations, "limitations");
         }
@@ -192,15 +224,49 @@ public record WeeklyInterpretationInput(
             CandidateKind kind,
             String theme,
             String employeeRef,
+            String categoryCode,
+            String competencyCode,
+            List<String> targetEmployeeRefs,
+            Sufficiency sufficiency,
             List<String> evidenceRefs
     ) {
+
+        public CandidateSignal(
+                String candidateRef,
+                CandidateKind kind,
+                String theme,
+                String employeeRef,
+                List<String> evidenceRefs
+        ) {
+            this(
+                    candidateRef,
+                    kind,
+                    theme,
+                    employeeRef,
+                    null,
+                    null,
+                    List.of(),
+                    Sufficiency.SUFFICIENT,
+                    evidenceRefs
+            );
+        }
 
         public CandidateSignal {
             requireText(candidateRef, "candidateRef");
             requireNonNull(kind, "kind");
             requireText(theme, "theme");
+            if (categoryCode != null) {
+                requireText(categoryCode, "categoryCode");
+            }
+            if (competencyCode != null) {
+                requireText(competencyCode, "competencyCode");
+            }
+            targetEmployeeRefs = copy(targetEmployeeRefs, "targetEmployeeRefs");
+            requireNonNull(sufficiency, "sufficiency");
             evidenceRefs = copy(evidenceRefs, "evidenceRefs");
             require(!evidenceRefs.isEmpty(), "evidenceRefs must not be empty");
+            require(new java.util.HashSet<>(evidenceRefs).size() == evidenceRefs.size(),
+                    "evidenceRefs must be unique");
         }
     }
 

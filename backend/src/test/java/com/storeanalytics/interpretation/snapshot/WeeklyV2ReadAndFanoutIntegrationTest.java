@@ -8,11 +8,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.storeanalytics.interpretation.contract.CanonicalLlmJson;
 import com.storeanalytics.interpretation.contract.LlmCanonicalJsonCodec;
+import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Comparison;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.EmployeeFacts;
+import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.EvidenceIndexEntry;
+import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Fact;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Facts;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Manifest;
+import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Materiality;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.QualityStatus;
+import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Scope;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Sufficiency;
+import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Unit;
 import com.storeanalytics.interpretation.query.WeeklyInsightQueryService;
 import com.storeanalytics.interpretation.web.WeeklyInsightController;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
@@ -20,6 +26,7 @@ import com.storeanalytics.notification.fanout.NotificationEventFanoutService;
 import com.storeanalytics.notification.fanout.NotificationFanoutOutcome;
 import com.storeanalytics.notification.fanout.NotificationFanoutResult;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -97,7 +104,7 @@ class WeeklyV2ReadAndFanoutIntegrationTest {
                 ))
                 .build();
 
-        mockMvc.perform(get(
+        String apiBody = mockMvc.perform(get(
                         "/api/stores/{storeId}/insights/weekly/current",
                         fixture.storeId()
                 ))
@@ -120,7 +127,21 @@ class WeeklyV2ReadAndFanoutIntegrationTest {
                         .doesNotExist())
                 .andExpect(jsonPath(
                         "$.content.employees[0].insight.categoryPerformance.summary.text"
-                ).value("Сервисное направление является подтверждённой сильной стороной сотрудника."));
+                ).value("Сервисное направление является подтверждённой сильной стороной сотрудника."))
+                .andExpect(jsonPath("$.content.evidence.length()").value(7))
+                .andExpect(jsonPath("$.content.evidence[0].evidenceCode").value("EV001"))
+                .andExpect(jsonPath("$.content.evidence[0].employeeId")
+                        .value(fixture.employeeId().toString()))
+                .andExpect(jsonPath("$.content.evidence[0].formattedValue").value("18%"))
+                .andExpect(jsonPath(
+                        "$.content.store.headline.evidenceRefs[0]"
+                ).value("EV006"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertThat(apiBody).doesNotContain(
+                "STORE.NET_REVENUE", "EMP:E01", "\"E01\""
+        );
 
         NotificationFanoutResult result = fanoutService.processNext().orElseThrow();
 
@@ -261,23 +282,81 @@ class WeeklyV2ReadAndFanoutIntegrationTest {
             UUID employeeId,
             UUID syncJobId
     ) {
+        Fact storeRevenue = fact(
+                "STORE.NET_REVENUE.DELTA", "NET_REVENUE", Unit.MONEY,
+                "120000", "100000", "20000", "20"
+        );
+        Fact storeMargin = fact(
+                "STORE.MARGIN_PERCENT.DELTA", "MARGIN_PERCENT", Unit.PERCENT,
+                "25", "24", "1", "4.1667"
+        );
+        Fact storeServiceShare = fact(
+                "STORE.GROUP:SERVICE.REVENUE_SHARE_PERCENT.DELTA",
+                "REVENUE_SHARE_PERCENT", Unit.PERCENT,
+                "12.5", "10", "2.5", "25"
+        );
+        Fact teamServiceLeader = fact(
+                "TEAM.COMPETENCY:SERVICE_SALES.LEADERS",
+                "RATING_ELIGIBLE_COUNT", Unit.COUNT, "1"
+        );
+        Fact employeeWorkloadStatus = fact(
+                "EMP:E01.WORKLOAD.STATUS",
+                "WORKLOAD_STATUS", Unit.STATUS, "SUFFICIENT"
+        );
+        Fact employeeWorkloadSufficiency = fact(
+                "EMP:E01.WORKLOAD.SUFFICIENCY",
+                "WORKLOAD_STATUS", Unit.STATUS, "SUFFICIENT"
+        );
+        Fact employeeServiceShare = fact(
+                "EMP:E01.GROUP:SERVICE.REVENUE_SHARE_PERCENT.CURRENT",
+                "REVENUE_SHARE_PERCENT", Unit.PERCENT,
+                "18", "14", "4", "28.5714"
+        );
         SnapshotEmployeeMembership membership = new SnapshotEmployeeMembership(
                 employeeId, "E01", "Анна"
         );
         WeeklySnapshotPayload payload = new WeeklySnapshotPayload(
                 1,
                 new Manifest(
-                        List.of("E01"), List.of(), List.of(), List.of(),
-                        List.of(), List.of()
+                        List.of("E01"),
+                        List.of(
+                                evidence(storeRevenue, Scope.STORE, null),
+                                evidence(storeMargin, Scope.STORE, null),
+                                evidence(storeServiceShare, Scope.STORE, null),
+                                evidence(
+                                        teamServiceLeader, Scope.TEAM, null
+                                ),
+                                evidence(
+                                        employeeWorkloadStatus,
+                                        Scope.EMPLOYEE, "E01"
+                                ),
+                                evidence(
+                                        employeeWorkloadSufficiency,
+                                        Scope.EMPLOYEE, "E01"
+                                ),
+                                evidence(
+                                        employeeServiceShare,
+                                        Scope.EMPLOYEE, "E01"
+                                )
+                        ),
+                        List.of(),
+                        List.of("SERVICE"),
+                        Map.of("SERVICE", "Услуги"),
+                        List.of("SERVICE_SALES"),
+                        List.of()
                 ),
                 new Facts(
-                        List.of(),
-                        List.of(),
+                        List.of(storeRevenue, storeMargin, storeServiceShare),
+                        List.of(teamServiceLeader),
                         List.of(new EmployeeFacts(
                                 "E01",
                                 Sufficiency.SUFFICIENT,
                                 List.of("RESULT", "CATEGORIES"),
-                                List.of()
+                                List.of(
+                                        employeeWorkloadStatus,
+                                        employeeWorkloadSufficiency,
+                                        employeeServiceShare
+                                )
                         )),
                         List.of()
                 )
@@ -308,6 +387,59 @@ class WeeklyV2ReadAndFanoutIntegrationTest {
                 WeeklySnapshotRevisionReason.AUTO_REVISION,
                 null
         )).snapshot();
+    }
+
+    private EvidenceIndexEntry evidence(
+            Fact fact,
+            Scope scope,
+            String employeeRef
+    ) {
+        return new EvidenceIndexEntry(
+                fact.evidenceRef(), scope, employeeRef, true
+        );
+    }
+
+    private Fact fact(
+            String evidenceRef,
+            String metricCode,
+            Unit unit,
+            String value
+    ) {
+        return new Fact(
+                evidenceRef,
+                metricCode,
+                null,
+                unit,
+                unit == Unit.STATUS ? value : new BigDecimal(value),
+                null,
+                Sufficiency.SUFFICIENT,
+                Materiality.PRIMARY
+        );
+    }
+
+    private Fact fact(
+            String evidenceRef,
+            String metricCode,
+            Unit unit,
+            String value,
+            String previous,
+            String delta,
+            String relativeDelta
+    ) {
+        return new Fact(
+                evidenceRef,
+                metricCode,
+                null,
+                unit,
+                new BigDecimal(value),
+                new Comparison(
+                        new BigDecimal(previous),
+                        new BigDecimal(delta),
+                        new BigDecimal(relativeDelta)
+                ),
+                Sufficiency.SUFFICIENT,
+                Materiality.PRIMARY
+        );
     }
 
     private PublishedInterpretation insertPublishedInterpretation(

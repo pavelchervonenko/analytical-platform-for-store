@@ -13,6 +13,8 @@ import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 @Component
 public class WeeklyTelegramMessageRenderer {
@@ -50,6 +52,7 @@ public class WeeklyTelegramMessageRenderer {
         switch (source.contentSchemaVersion()) {
             case 1 -> renderLegacy(text, root, names);
             case 2 -> renderFlat(text, root, names);
+            case 3 -> renderPrimarySignal(text, root, names);
             default -> throw new IllegalStateException(
                     "Unsupported Telegram content schema version: "
                             + source.contentSchemaVersion()
@@ -121,6 +124,42 @@ public class WeeklyTelegramMessageRenderer {
                 legacyEmployeeLine(text, employee, names));
     }
 
+    private void renderPrimarySignal(
+            StringBuilder text,
+            JsonNode root,
+            Map<String, String> names
+    ) {
+        if (!(root instanceof ObjectNode source)
+                || !(source.path("summaryBlocks") instanceof ArrayNode)) {
+            throw new IllegalStateException(
+                    "Invalid Telegram content schema v3 payload"
+            );
+        }
+        ObjectNode adapted = source.deepCopy();
+        ArrayNode summaries = (ArrayNode) adapted.path("summaryBlocks");
+        JsonNode primarySignal = adapted.path("primarySignal");
+        ObjectNode headline = summaries.insertObject(0);
+        headline.put("scope", "STORE");
+        headline.putNull("employeeRef");
+        headline.put("section", "HEADLINE");
+        headline.putNull("categoryCode");
+        if (primarySignal.isObject()) {
+            headline.set("text", primarySignal.path("text").deepCopy());
+            headline.set(
+                    "evidenceRefs",
+                    primarySignal.path("evidenceRefs").deepCopy()
+            );
+        } else {
+            headline.put(
+                    "text",
+                    "За неделю не выявлено существенных изменений, "
+                            + "требующих отдельного внимания."
+            );
+            headline.putArray("evidenceRefs");
+        }
+        adapted.remove("primarySignal");
+        renderFlat(text, adapted, names);
+    }
     private void renderFlat(
             StringBuilder text,
             JsonNode root,

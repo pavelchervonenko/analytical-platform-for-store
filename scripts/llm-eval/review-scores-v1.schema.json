@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://store-analytics.local/schemas/llm-review-scores-v1.schema.json",
+  "title": "Blinded weekly interpretation review scores v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "reviewVersion",
+    "datasetSha256",
+    "packetSha256",
+    "assignmentSha256",
+    "reviewerId",
+    "evaluations"
+  ],
+  "properties": {
+    "reviewVersion": {"const": 1},
+    "datasetSha256": {"$ref": "#/$defs/sha256"},
+    "packetSha256": {"$ref": "#/$defs/sha256"},
+    "assignmentSha256": {"$ref": "#/$defs/sha256"},
+    "reviewerId": {"type": "string", "minLength": 1, "maxLength": 160},
+    "evaluations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/evaluation"}
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "findingId": {
+      "type": "string",
+      "pattern": "^(required|forbidden)-[1-9][0-9]*$"
+    },
+    "requiredFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["findingId", "status", "notes"],
+      "properties": {
+        "findingId": {"$ref": "#/$defs/findingId"},
+        "status": {"enum": ["UNSCORED", "COVERED", "MISSING"]},
+        "notes": {"$ref": "#/$defs/notes"}
+      }
+    },
+    "forbiddenFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["findingId", "status", "notes"],
+      "properties": {
+        "findingId": {"$ref": "#/$defs/findingId"},
+        "status": {"enum": ["UNSCORED", "ABSENT", "PRESENT"]},
+        "notes": {"$ref": "#/$defs/notes"}
+      }
+    },
+    "criticalError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["errorId", "status", "notes"],
+      "properties": {
+        "errorId": {
+          "type": "string",
+          "pattern": "^critical-[1-9][0-9]*$"
+        },
+        "status": {"enum": ["UNSCORED", "ABSENT", "PRESENT"]},
+        "notes": {"$ref": "#/$defs/notes"}
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewId",
+        "dimensionScores",
+        "requiredFindings",
+        "forbiddenFindings",
+        "criticalErrors",
+        "notes"
+      ],
+      "properties": {
+        "reviewId": {"type": "string", "format": "uuid"},
+        "dimensionScores": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "maximum": 5
+          }
+        },
+        "requiredFindings": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/requiredFinding"}
+        },
+        "forbiddenFindings": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/forbiddenFinding"}
+        },
+        "criticalErrors": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/criticalError"}
+        },
+        "notes": {"$ref": "#/$defs/notes"}
+      }
+    }
+  }
+}

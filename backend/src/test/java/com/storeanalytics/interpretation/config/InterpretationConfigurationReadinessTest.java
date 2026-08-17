@@ -98,6 +98,142 @@ class InterpretationConfigurationReadinessTest {
     }
 
     @Test
+    void workerStartsWithPackagedStrictConcisePromptPair() {
+        contextRunner
+                .withPropertyValues(
+                        "app.runtime.role=WORKER",
+                        "app.interpretation.generation-enabled=true",
+                        "app.llm.prompt-version=weekly-interpretation-v7",
+                        "app.llm.content-schema-version=2",
+                        "app.llm.yandex.folder-id=folder",
+                        "app.llm.yandex.api-key=secret-value",
+                        "app.llm.yandex.model-uri=gpt://folder/yandexgpt-5.1"
+                )
+                .run(context -> assertThat(context).hasNotFailed());
+    }
+
+    @Test
+    void workerStartsWithPackagedActionableConcisePromptPair() {
+        contextRunner
+                .withPropertyValues(
+                        "app.runtime.role=WORKER",
+                        "app.interpretation.generation-enabled=true",
+                        "app.llm.prompt-version=weekly-interpretation-v8",
+                        "app.llm.content-schema-version=2",
+                        "app.llm.yandex.folder-id=folder",
+                        "app.llm.yandex.api-key=secret-value",
+                        "app.llm.yandex.model-uri=gpt://folder/yandexgpt-5.1"
+                )
+                .run(context -> assertThat(context).hasNotFailed());
+    }
+
+    @Test
+    void workerStartsWithPackagedEvidenceGuardedPromptPair() {
+        contextRunner
+                .withPropertyValues(
+                        "app.runtime.role=WORKER",
+                        "app.interpretation.generation-enabled=true",
+                        "app.llm.prompt-version=weekly-interpretation-v9",
+                        "app.llm.content-schema-version=2",
+                        "app.llm.yandex.folder-id=folder",
+                        "app.llm.yandex.api-key=secret-value",
+                        "app.llm.yandex.model-uri=gpt://folder/yandexgpt-5.1"
+                )
+                .run(context -> assertThat(context).hasNotFailed());
+    }
+
+    @Test
+    void workerStartsWithPackagedHardenedEvidencePromptPair() {
+        contextRunner
+                .withPropertyValues(
+                        "app.runtime.role=WORKER",
+                        "app.interpretation.generation-enabled=true",
+                        "app.llm.prompt-version=weekly-interpretation-v10",
+                        "app.llm.content-schema-version=2",
+                        "app.llm.yandex.folder-id=folder",
+                        "app.llm.yandex.api-key=secret-value",
+                        "app.llm.yandex.model-uri=gpt://folder/yandexgpt-5.1"
+                )
+                .run(context -> assertThat(context).hasNotFailed());
+    }
+
+    @Test
+    void workerStartsWithPackagedNarrativeGuardedPromptPair() {
+        contextRunner
+                .withPropertyValues(
+                        "app.runtime.role=WORKER",
+                        "app.interpretation.generation-enabled=true",
+                        "app.llm.prompt-version=weekly-interpretation-v11",
+                        "app.llm.content-schema-version=2",
+                        "app.llm.yandex.folder-id=folder",
+                        "app.llm.yandex.api-key=secret-value",
+                        "app.llm.yandex.model-uri=gpt://folder/yandexgpt-5.1"
+                )
+                .run(context -> assertThat(context).hasNotFailed());
+    }
+
+    @Test
+    void workerStartsWithPackagedCausalNarrativeGuardedPromptPair() {
+        contextRunner
+                .withPropertyValues(
+                        "app.runtime.role=WORKER",
+                        "app.interpretation.generation-enabled=true",
+                        "app.llm.prompt-version=weekly-interpretation-v12",
+                        "app.llm.content-schema-version=2",
+                        "app.llm.yandex.folder-id=folder",
+                        "app.llm.yandex.api-key=secret-value",
+                        "app.llm.yandex.model-uri=gpt://folder/yandexgpt-5.1"
+                )
+                .run(context -> assertThat(context).hasNotFailed());
+    }
+
+    @Test
+    void workerStartsWithPackagedPrimarySignalPromptPair() {
+        contextRunner
+                .withPropertyValues(
+                        "app.runtime.role=WORKER",
+                        "app.interpretation.generation-enabled=true",
+                        "app.llm.prompt-version=weekly-interpretation-v13",
+                        "app.llm.content-schema-version=3",
+                        "app.llm.yandex.folder-id=folder",
+                        "app.llm.yandex.api-key=secret-value",
+                        "app.llm.yandex.model-uri=gpt://folder/yandexgpt-5.1"
+                )
+                .run(context -> assertThat(context).hasNotFailed());
+    }
+
+    @Test
+    void workerStartsWithPackagedStructuredSummaryPromptPair() {
+        contextRunner
+                .withPropertyValues(
+                        "app.runtime.role=WORKER",
+                        "app.interpretation.generation-enabled=true",
+                        "app.llm.prompt-version=weekly-interpretation-v14",
+                        "app.llm.content-schema-version=3",
+                        "app.llm.yandex.folder-id=folder",
+                        "app.llm.yandex.api-key=secret-value",
+                        "app.llm.yandex.model-uri=gpt://folder/yandexgpt-5.1"
+                )
+                .run(context -> assertThat(context).hasNotFailed());
+    }
+
+    @Test
+    void workerStartsWithPackagedTeamGuardedStructuredSummaryPromptPair() {
+        contextRunner
+                .withPropertyValues(
+                        "app.runtime.role=WORKER",
+                        "app.interpretation.generation-enabled=true",
+                        "app.llm.prompt-version=weekly-interpretation-v15",
+                        "app.llm.content-schema-version=3",
+                        "app.llm.yandex.folder-id=folder",
+                        "app.llm.yandex.api-key=secret-value",
+                        "app.llm.yandex.model-uri=gpt://folder/yandexgpt-5.1"
+                )
+                .run(context -> assertThat(context).hasNotFailed());
+    }
+
+
+    @Test
     void workerRejectsUnpinnedLatestModelUri() {
         contextRunner
                 .withPropertyValues(

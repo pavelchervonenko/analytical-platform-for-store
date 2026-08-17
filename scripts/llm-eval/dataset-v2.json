@@ -1,0 +1,1964 @@
+{
+  "version": 2,
+  "datasetSchema": "scripts/llm-eval/dataset-v2.schema.json",
+  "inputSchema": "docs/schemas/weekly-interpretation-input-v1.schema.json",
+  "outputSchema": "docs/schemas/weekly-interpretation-content-v2.schema.json",
+  "configurations": [
+    {
+      "id": "v4",
+      "label": "Текущий подробный промпт",
+      "promptVersion": "weekly-interpretation-v4",
+      "contentSchemaVersion": 2
+    },
+    {
+      "id": "v15",
+      "label": "Структурные сводки с TEAM-evidence и конкретными действиями",
+      "promptVersion": "weekly-interpretation-v15",
+      "contentSchemaVersion": 3,
+      "outputSchema": "docs/schemas/weekly-interpretation-content-v3.schema.json"
+    }
+  ],
+  "coverage": {
+    "minimumCases": 25,
+    "requiredTags": [
+      "stable",
+      "growth",
+      "decline",
+      "plan",
+      "additional-sales",
+      "attach-rate",
+      "category",
+      "returns",
+      "zero-base",
+      "data-quality",
+      "employee-sufficiency",
+      "employee-self-dynamics",
+      "team-comparison",
+      "month-end",
+      "conflicting-signals"
+    ]
+  },
+  "humanRubric": {
+    "scale": {
+      "min": 1,
+      "max": 5,
+      "passAverage": 4
+    },
+    "dimensions": [
+      {
+        "id": "accuracy",
+        "question": "Все выводы подтверждены входными фактами и правильно учитывают направление изменений?"
+      },
+      {
+        "id": "manager-usefulness",
+        "question": "Помогает ли ответ руководителю понять ситуацию и принять следующее действие?"
+      },
+      {
+        "id": "priority",
+        "question": "Выделены ли действительно существенные сигналы без лишнего шума и повторов?"
+      },
+      {
+        "id": "recommendations",
+        "question": "Называет ли каждая рекомендация конкретную управленческую операцию, объект и проверяемый результат, не повторяя другую рекомендацию и не выдумывая причин?"
+      },
+      {
+        "id": "tone-and-uncertainty",
+        "question": "Нейтрален ли тон и явно ли обозначены ограничения данных и невозможность причинных выводов?"
+      }
+    ],
+    "criticalErrors": [
+      "Выдуман показатель, сотрудник, категория или числовое значение.",
+      "Перепутано направление изменения либо риск назван улучшением.",
+      "Дан персональный вывод при недостаточных данных сотрудника.",
+      "Недоступные данные использованы как доступное доказательство.",
+      "Корреляция или наблюдение представлены как доказанная причина."
+    ]
+  },
+  "defaults": {
+    "period": {
+      "start": "2026-08-03",
+      "end": "2026-08-09"
+    },
+    "comparisonPeriod": {
+      "start": "2026-07-27",
+      "end": "2026-08-02"
+    },
+    "timezone": "Europe/Moscow",
+    "qualityStatus": "READY",
+    "storeFacts": [
+      {
+        "evidenceRef": "STORE.NET_REVENUE.CURRENT",
+        "metricCode": "NET_REVENUE",
+        "unit": "MONEY",
+        "value": 1000000,
+        "comparison": {
+          "previousValue": 1000000,
+          "absoluteDelta": 0,
+          "relativeDeltaPercent": 0
+        },
+        "materiality": "PRIMARY"
+      }
+    ],
+    "teamFacts": [
+      {
+        "evidenceRef": "TEAM.RATING.ELIGIBLE_COUNT",
+        "metricCode": "RATING_ELIGIBLE_COUNT",
+        "unit": "COUNT",
+        "value": 1,
+        "sufficiency": "INSUFFICIENT",
+        "materiality": "CONTEXT"
+      }
+    ],
+    "employees": [
+      {
+        "employeeRef": "E01",
+        "analysisStatus": "SUFFICIENT",
+        "availableSections": [
+          "RESULT"
+        ],
+        "facts": [
+          {
+            "evidenceRef": "EMP:E01.NET_REVENUE.CURRENT",
+            "metricCode": "NET_REVENUE",
+            "unit": "MONEY",
+            "value": 1000000,
+            "comparison": {
+              "previousValue": 1000000,
+              "absoluteDelta": 0,
+              "relativeDeltaPercent": 0
+            },
+            "materiality": "PRIMARY"
+          }
+        ]
+      }
+    ],
+    "candidates": [],
+    "limitations": [],
+    "unavailableEvidence": [],
+    "categoryLabels": {}
+  },
+  "globalForbiddenPatterns": [
+    "как языковая модель",
+    "гарантирован",
+    "увол",
+    "оштраф",
+    "ленив",
+    "не старается"
+  ],
+  "cases": [
+    {
+      "id": "stable-week",
+      "title": "Стабильная неделя без существенных сигналов",
+      "tags": [
+        "stable"
+      ],
+      "scenario": {},
+      "expectations": {
+        "requiredFindings": [
+          "Выручка магазина и сотрудника практически не изменилась к прошлой неделе."
+        ],
+        "acceptableFindings": [
+          "Рекомендуется продолжить наблюдение без срочного вмешательства."
+        ],
+        "forbiddenFindings": [
+          "Нельзя объявлять рост, падение или кризис при нулевой динамике."
+        ],
+        "maxInsights": 1,
+        "maxActions": 1
+      }
+    },
+    {
+      "id": "plan-met",
+      "title": "План выполнен ровно на целевом уровне",
+      "tags": [
+        "plan",
+        "stable"
+      ],
+      "scenario": {
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.PLAN:REVENUE.PROJECTED_COMPLETION_PERCENT",
+            "metricCode": "PLAN_PROJECTED_COMPLETION_PERCENT",
+            "unit": "PERCENT",
+            "value": 100,
+            "materiality": "PRIMARY"
+          }
+        ],
+        "candidates": []
+      },
+      "expectations": {
+        "requiredFindings": [
+          "План выполнен, существенного отставания или опережения нет."
+        ],
+        "acceptableFindings": [
+          "Можно удерживать текущий темп и контролировать остаток периода."
+        ],
+        "forbiddenFindings": [
+          "Нельзя описывать ровное выполнение как провал или перевыполнение."
+        ],
+        "maxInsights": 1,
+        "maxActions": 1
+      }
+    },
+    {
+      "id": "revenue-growth",
+      "title": "Существенный рост выручки",
+      "tags": [
+        "growth"
+      ],
+      "scenario": {
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.NET_REVENUE.CURRENT",
+            "metricCode": "NET_REVENUE",
+            "unit": "MONEY",
+            "value": 1300000,
+            "comparison": {
+              "previousValue": 1000000,
+              "absoluteDelta": 300000,
+              "relativeDeltaPercent": 30
+            },
+            "materiality": "PRIMARY"
+          }
+        ],
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "OPPORTUNITY",
+            "theme": "REVENUE_DYNAMICS",
+            "evidenceRefs": [
+              "STORE.NET_REVENUE.CURRENT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Чистая выручка заметно выросла относительно прошлой недели."
+        ],
+        "acceptableFindings": [
+          "Стоит проверить, какие наблюдаемые направления поддержали рост, не объявляя их причиной."
+        ],
+        "forbiddenFindings": [
+          "Нельзя называть конкретную причину роста, если её нет во входных фактах."
+        ],
+        "requiredCandidateRefs": [
+          "C001"
+        ]
+      }
+    },
+    {
+      "id": "revenue-decline",
+      "title": "Существенное снижение выручки",
+      "tags": [
+        "decline"
+      ],
+      "scenario": {
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.NET_REVENUE.CURRENT",
+            "metricCode": "NET_REVENUE",
+            "unit": "MONEY",
+            "value": 720000,
+            "comparison": {
+              "previousValue": 1000000,
+              "absoluteDelta": -280000,
+              "relativeDeltaPercent": -28
+            },
+            "materiality": "PRIMARY"
+          }
+        ],
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "RISK",
+            "theme": "REVENUE_DYNAMICS",
+            "evidenceRefs": [
+              "STORE.NET_REVENUE.CURRENT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Чистая выручка заметно снизилась относительно прошлой недели."
+        ],
+        "acceptableFindings": [
+          "Нужен разбор доступных составляющих результата и мониторинг следующей недели."
+        ],
+        "forbiddenFindings": [
+          "Нельзя приписывать снижение конкретному сотруднику или причине без доказательств."
+        ],
+        "requiredCandidateRefs": [
+          "C001"
+        ]
+      }
+    },
+    {
+      "id": "severe-plan-gap",
+      "title": "Сильное отставание от плана",
+      "tags": [
+        "plan",
+        "decline"
+      ],
+      "scenario": {
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.PLAN:REVENUE.PROJECTED_COMPLETION_PERCENT",
+            "metricCode": "PLAN_PROJECTED_COMPLETION_PERCENT",
+            "unit": "PERCENT",
+            "value": 61,
+            "materiality": "PRIMARY"
+          },
+          {
+            "evidenceRef": "STORE.PLAN:REVENUE.ACTUAL_AMOUNT",
+            "metricCode": "PLAN_ACTUAL_AMOUNT",
+            "unit": "MONEY",
+            "value": 400000,
+            "materiality": "PRIMARY"
+          },
+          {
+            "evidenceRef": "STORE.PLAN:REVENUE.TARGET_AMOUNT",
+            "metricCode": "PLAN_TARGET_AMOUNT",
+            "unit": "MONEY",
+            "value": 1000000,
+            "materiality": "CONTEXT"
+          }
+        ],
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "RISK",
+            "theme": "PLAN",
+            "evidenceRefs": [
+              "STORE.PLAN:REVENUE.PROJECTED_COMPLETION_PERCENT",
+              "STORE.PLAN:REVENUE.ACTUAL_AMOUNT",
+              "STORE.PLAN:REVENUE.TARGET_AMOUNT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Фактическое выполнение существенно ниже целевого уровня."
+        ],
+        "acceptableFindings": [
+          "Приоритетом может быть ежедневный контроль темпа до конца периода."
+        ],
+        "forbiddenFindings": [
+          "Нельзя обещать гарантированное закрытие плана."
+        ],
+        "requiredCandidateRefs": [
+          "C001"
+        ]
+      }
+    },
+    {
+      "id": "plan-ahead",
+      "title": "Опережение плана",
+      "tags": [
+        "plan",
+        "growth"
+      ],
+      "scenario": {
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.PLAN:REVENUE.PROJECTED_COMPLETION_PERCENT",
+            "metricCode": "PLAN_PROJECTED_COMPLETION_PERCENT",
+            "unit": "PERCENT",
+            "value": 126,
+            "materiality": "PRIMARY"
+          },
+          {
+            "evidenceRef": "STORE.PLAN:REVENUE.ACTUAL_AMOUNT",
+            "metricCode": "PLAN_ACTUAL_AMOUNT",
+            "unit": "MONEY",
+            "value": 800000,
+            "materiality": "PRIMARY"
+          },
+          {
+            "evidenceRef": "STORE.PLAN:REVENUE.TARGET_AMOUNT",
+            "metricCode": "PLAN_TARGET_AMOUNT",
+            "unit": "MONEY",
+            "value": 1000000,
+            "materiality": "CONTEXT"
+          }
+        ],
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "OPPORTUNITY",
+            "theme": "PLAN",
+            "evidenceRefs": [
+              "STORE.PLAN:REVENUE.PROJECTED_COMPLETION_PERCENT",
+              "STORE.PLAN:REVENUE.ACTUAL_AMOUNT",
+              "STORE.PLAN:REVENUE.TARGET_AMOUNT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Магазин идёт выше целевого уровня выполнения плана."
+        ],
+        "acceptableFindings": [
+          "Можно сфокусироваться на сохранении качества продаж и устойчивости темпа."
+        ],
+        "forbiddenFindings": [
+          "Нельзя описывать опережение плана как отставание."
+        ],
+        "requiredCandidateRefs": [
+          "C001"
+        ]
+      }
+    },
+    {
+      "id": "accessory-gap",
+      "title": "Недостаточная доля аксессуаров",
+      "tags": [
+        "additional-sales",
+        "category"
+      ],
+      "scenario": {
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.CATEGORY:CHARGER_CABLE.NET_REVENUE.CURRENT",
+            "metricCode": "NET_REVENUE",
+            "unit": "MONEY",
+            "value": 38000,
+            "categoryCode": "CHARGER_CABLE",
+            "comparison": {
+              "previousValue": 52000,
+              "absoluteDelta": -14000,
+              "relativeDeltaPercent": -26.923
+            },
+            "materiality": "SECONDARY"
+          },
+          {
+            "evidenceRef": "STORE.CATEGORY:CHARGER_CABLE.REVENUE_SHARE_PERCENT.CURRENT",
+            "metricCode": "REVENUE_SHARE_PERCENT",
+            "unit": "PERCENT",
+            "value": 3.8,
+            "categoryCode": "CHARGER_CABLE",
+            "comparison": {
+              "previousValue": 5.2,
+              "absoluteDelta": -1.4000000000000004,
+              "relativeDeltaPercent": -26.923
+            },
+            "materiality": "SECONDARY"
+          }
+        ],
+        "categoryLabels": {
+          "CHARGER_CABLE": "Кабели и зарядные устройства"
+        },
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "RISK",
+            "theme": "CATEGORY_MIX",
+            "categoryCode": "CHARGER_CABLE",
+            "evidenceRefs": [
+              "STORE.CATEGORY:CHARGER_CABLE.NET_REVENUE.CURRENT",
+              "STORE.CATEGORY:CHARGER_CABLE.REVENUE_SHARE_PERCENT.CURRENT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Доля аксессуаров снизилась и является точкой роста дополнительных продаж."
+        ],
+        "acceptableFindings": [
+          "Можно проверить предложение релевантных аксессуаров в каждой подходящей продаже."
+        ],
+        "forbiddenFindings": [
+          "Нельзя смешивать аксессуары с полноценной техникой или услугами."
+        ],
+        "requiredCandidateRefs": [
+          "C001"
+        ]
+      }
+    },
+    {
+      "id": "service-gap",
+      "title": "Недостаточная доля услуг",
+      "tags": [
+        "additional-sales",
+        "category"
+      ],
+      "scenario": {
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.CATEGORY:SETUP_SERVICE.NET_REVENUE.CURRENT",
+            "metricCode": "NET_REVENUE",
+            "unit": "MONEY",
+            "value": 21000,
+            "categoryCode": "SETUP_SERVICE",
+            "comparison": {
+              "previousValue": 34000,
+              "absoluteDelta": -13000,
+              "relativeDeltaPercent": -38.235
+            },
+            "materiality": "SECONDARY"
+          },
+          {
+            "evidenceRef": "STORE.CATEGORY:SETUP_SERVICE.REVENUE_SHARE_PERCENT.CURRENT",
+            "metricCode": "REVENUE_SHARE_PERCENT",
+            "unit": "PERCENT",
+            "value": 2.1,
+            "categoryCode": "SETUP_SERVICE",
+            "comparison": {
+              "previousValue": 3.4,
+              "absoluteDelta": -1.2999999999999998,
+              "relativeDeltaPercent": -38.235
+            },
+            "materiality": "SECONDARY"
+          }
+        ],
+        "categoryLabels": {
+          "SETUP_SERVICE": "Настройки и платные работы"
+        },
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "RISK",
+            "theme": "CATEGORY_MIX",
+            "categoryCode": "SETUP_SERVICE",
+            "evidenceRefs": [
+              "STORE.CATEGORY:SETUP_SERVICE.NET_REVENUE.CURRENT",
+              "STORE.CATEGORY:SETUP_SERVICE.REVENUE_SHARE_PERCENT.CURRENT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Доля услуг снизилась и является точкой роста дополнительных продаж."
+        ],
+        "acceptableFindings": [
+          "Можно проверить полноту предложения платных услуг в подходящих продажах."
+        ],
+        "forbiddenFindings": [
+          "Нельзя выдавать услуги за товарные аксессуары."
+        ],
+        "requiredCandidateRefs": [
+          "C001"
+        ]
+      }
+    },
+    {
+      "id": "attach-gap-sufficient",
+      "title": "Низкий attach-rate при достаточной базе",
+      "tags": [
+        "attach-rate",
+        "additional-sales"
+      ],
+      "scenario": {
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.ATTACH:CHARGER_CABLE.RATE_PER_HUNDRED.CURRENT",
+            "metricCode": "RATE_PER_HUNDRED",
+            "unit": "RATE_PER_HUNDRED",
+            "value": 4,
+            "categoryCode": "CHARGER_CABLE",
+            "comparison": {
+              "previousValue": 12,
+              "absoluteDelta": -8,
+              "relativeDeltaPercent": -66.667
+            },
+            "materiality": "SECONDARY"
+          },
+          {
+            "evidenceRef": "STORE.ATTACH:CHARGER_CABLE.DENOMINATOR_RECEIPT_COUNT.CURRENT",
+            "metricCode": "DENOMINATOR_RECEIPT_COUNT",
+            "unit": "COUNT",
+            "value": 48,
+            "categoryCode": "CHARGER_CABLE",
+            "comparison": {
+              "previousValue": 42,
+              "absoluteDelta": 6,
+              "relativeDeltaPercent": 14.286
+            },
+            "materiality": "CONTEXT"
+          }
+        ],
+        "categoryLabels": {
+          "CHARGER_CABLE": "Кабели и зарядные устройства"
+        },
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "RISK",
+            "theme": "ATTACH_RATE",
+            "categoryCode": "CHARGER_CABLE",
+            "evidenceRefs": [
+              "STORE.ATTACH:CHARGER_CABLE.RATE_PER_HUNDRED.CURRENT",
+              "STORE.ATTACH:CHARGER_CABLE.DENOMINATOR_RECEIPT_COUNT.CURRENT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Attach-rate снизился на достаточном количестве продаж техники."
+        ],
+        "acceptableFindings": [
+          "Можно контролировать предложение дополнений на следующей неделе."
+        ],
+        "forbiddenFindings": [
+          "Нельзя менять формулу attach-rate или придумывать отсутствующий знаменатель."
+        ],
+        "requiredCandidateRefs": [
+          "C001"
+        ]
+      }
+    },
+    {
+      "id": "attach-small-denominator",
+      "title": "Attach-rate на слишком малой базе",
+      "tags": [
+        "attach-rate",
+        "data-quality"
+      ],
+      "scenario": {
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.ATTACH:CHARGER_CABLE.RATE_PER_HUNDRED.CURRENT",
+            "metricCode": "RATE_PER_HUNDRED",
+            "unit": "RATE_PER_HUNDRED",
+            "value": 0,
+            "categoryCode": "CHARGER_CABLE",
+            "comparison": {
+              "previousValue": 20,
+              "absoluteDelta": -20,
+              "relativeDeltaPercent": -100
+            },
+            "sufficiency": "INSUFFICIENT",
+            "materiality": "SECONDARY"
+          },
+          {
+            "evidenceRef": "STORE.ATTACH:CHARGER_CABLE.DENOMINATOR_RECEIPT_COUNT.CURRENT",
+            "metricCode": "DENOMINATOR_RECEIPT_COUNT",
+            "unit": "COUNT",
+            "value": 1,
+            "categoryCode": "CHARGER_CABLE",
+            "comparison": {
+              "previousValue": 1,
+              "absoluteDelta": 0,
+              "relativeDeltaPercent": 0
+            },
+            "sufficiency": "INSUFFICIENT",
+            "materiality": "CONTEXT"
+          }
+        ],
+        "categoryLabels": {
+          "CHARGER_CABLE": "Кабели и зарядные устройства"
+        },
+        "candidates": []
+      },
+      "expectations": {
+        "requiredFindings": [
+          "База продаж слишком мала для надёжной оценки attach-rate."
+        ],
+        "acceptableFindings": [
+          "Следует накопить больше наблюдений и не делать сильных выводов."
+        ],
+        "forbiddenFindings": [
+          "Нельзя оценивать качество продаж как низкое только по нулевой доле на одной продаже."
+        ],
+        "maxInsights": 1,
+        "maxActions": 1
+      }
+    },
+    {
+      "id": "category-growth",
+      "title": "Рост выбранной категории техники",
+      "tags": [
+        "category",
+        "growth"
+      ],
+      "scenario": {
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.CATEGORY:IPHONE_NEW_ASIS.NET_REVENUE.CURRENT",
+            "metricCode": "NET_REVENUE",
+            "unit": "MONEY",
+            "value": 640000,
+            "categoryCode": "IPHONE_NEW_ASIS",
+            "comparison": {
+              "previousValue": 400000,
+              "absoluteDelta": 240000,
+              "relativeDeltaPercent": 60.0
+            },
+            "materiality": "SECONDARY"
+          },
+          {
+            "evidenceRef": "STORE.CATEGORY:IPHONE_NEW_ASIS.REVENUE_SHARE_PERCENT.CURRENT",
+            "metricCode": "REVENUE_SHARE_PERCENT",
+            "unit": "PERCENT",
+            "value": 64,
+            "categoryCode": "IPHONE_NEW_ASIS",
+            "comparison": {
+              "previousValue": 40,
+              "absoluteDelta": 24,
+              "relativeDeltaPercent": 60.0
+            },
+            "materiality": "SECONDARY"
+          }
+        ],
+        "categoryLabels": {
+          "IPHONE_NEW_ASIS": "Новые iPhone и ASIS+"
+        },
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "OPPORTUNITY",
+            "theme": "CATEGORY_MIX",
+            "categoryCode": "IPHONE_NEW_ASIS",
+            "evidenceRefs": [
+              "STORE.CATEGORY:IPHONE_NEW_ASIS.NET_REVENUE.CURRENT",
+              "STORE.CATEGORY:IPHONE_NEW_ASIS.REVENUE_SHARE_PERCENT.CURRENT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Продажи выбранной категории техники заметно выросли."
+        ],
+        "acceptableFindings": [
+          "Рост категории можно учитывать при планировании ассортимента и фокуса команды."
+        ],
+        "forbiddenFindings": [
+          "Нельзя переносить рост одной категории на весь магазин без общего факта."
+        ],
+        "requiredCandidateRefs": [
+          "C001"
+        ]
+      }
+    },
+    {
+      "id": "category-decline",
+      "title": "Снижение выбранной категории техники",
+      "tags": [
+        "category",
+        "decline"
+      ],
+      "scenario": {
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.CATEGORY:IPHONE_USED.NET_REVENUE.CURRENT",
+            "metricCode": "NET_REVENUE",
+            "unit": "MONEY",
+            "value": 180000,
+            "categoryCode": "IPHONE_USED",
+            "comparison": {
+              "previousValue": 360000,
+              "absoluteDelta": -180000,
+              "relativeDeltaPercent": -50.0
+            },
+            "materiality": "SECONDARY"
+          },
+          {
+            "evidenceRef": "STORE.CATEGORY:IPHONE_USED.REVENUE_SHARE_PERCENT.CURRENT",
+            "metricCode": "REVENUE_SHARE_PERCENT",
+            "unit": "PERCENT",
+            "value": 18,
+            "categoryCode": "IPHONE_USED",
+            "comparison": {
+              "previousValue": 36,
+              "absoluteDelta": -18,
+              "relativeDeltaPercent": -50.0
+            },
+            "materiality": "SECONDARY"
+          }
+        ],
+        "categoryLabels": {
+          "IPHONE_USED": "iPhone с пробегом"
+        },
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "RISK",
+            "theme": "CATEGORY_MIX",
+            "categoryCode": "IPHONE_USED",
+            "evidenceRefs": [
+              "STORE.CATEGORY:IPHONE_USED.NET_REVENUE.CURRENT",
+              "STORE.CATEGORY:IPHONE_USED.REVENUE_SHARE_PERCENT.CURRENT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Продажи выбранной категории техники существенно снизились."
+        ],
+        "acceptableFindings": [
+          "Стоит проверить доступные операционные факторы категории без выдумывания причины."
+        ],
+        "forbiddenFindings": [
+          "Нельзя утверждать, что снижение вызвано отсутствием товара, если такого факта нет."
+        ],
+        "requiredCandidateRefs": [
+          "C001"
+        ]
+      }
+    },
+    {
+      "id": "returns-rise",
+      "title": "Снижение чистой выручки при неизвестном вкладе возвратов",
+      "tags": [
+        "returns",
+        "decline"
+      ],
+      "scenario": {
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.NET_REVENUE.CURRENT",
+            "metricCode": "NET_REVENUE",
+            "unit": "MONEY",
+            "value": 860000,
+            "comparison": {
+              "previousValue": 1000000,
+              "absoluteDelta": -140000,
+              "relativeDeltaPercent": -14
+            },
+            "materiality": "PRIMARY"
+          }
+        ],
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "RISK",
+            "theme": "REVENUE_DYNAMICS",
+            "evidenceRefs": [
+              "STORE.NET_REVENUE.CURRENT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Чистая выручка снизилась; показатель уже рассчитан как продажи минус возвраты."
+        ],
+        "acceptableFindings": [
+          "Без отдельного факта нельзя определить вклад возвратов в снижение."
+        ],
+        "forbiddenFindings": [
+          "Нельзя утверждать рост суммы или количества возвратов: такого факта во входе нет."
+        ],
+        "requiredCandidateRefs": [
+          "C001"
+        ],
+        "maxInsights": 2,
+        "maxActions": 1
+      }
+    },
+    {
+      "id": "zero-revenue-after-sales",
+      "title": "Нулевая выручка после ненулевой недели",
+      "tags": [
+        "zero-base",
+        "decline"
+      ],
+      "scenario": {
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.NET_REVENUE.CURRENT",
+            "metricCode": "NET_REVENUE",
+            "unit": "MONEY",
+            "value": 0,
+            "comparison": {
+              "previousValue": 850000,
+              "absoluteDelta": -850000,
+              "relativeDeltaPercent": -100
+            },
+            "materiality": "PRIMARY"
+          }
+        ],
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "RISK",
+            "theme": "REVENUE_DYNAMICS",
+            "evidenceRefs": [
+              "STORE.NET_REVENUE.CURRENT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Текущая чистая выручка равна нулю после ненулевой прошлой недели."
+        ],
+        "acceptableFindings": [
+          "Нужно проверить полноту загрузки и фактическое отсутствие продаж."
+        ],
+        "forbiddenFindings": [
+          "Нельзя делить на нулевую текущую базу или выдумывать процент поверх входного сравнения."
+        ],
+        "requiredCandidateRefs": [
+          "C001"
+        ]
+      }
+    },
+    {
+      "id": "profit-unavailable",
+      "title": "Валовая прибыль недоступна",
+      "tags": [
+        "data-quality"
+      ],
+      "scenario": {
+        "qualityStatus": "PARTIAL",
+        "limitations": [
+          {
+            "code": "COST_DATA_INCOMPLETE",
+            "scope": "STORE",
+            "employeeRef": null,
+            "categoryCode": null,
+            "impact": "UNAVAILABLE",
+            "affectedSections": [
+              "PROFIT",
+              "MARGIN"
+            ],
+            "evidenceRefs": [
+              "STORE.GROSS_PROFIT.CURRENT"
+            ]
+          }
+        ],
+        "unavailableEvidence": [
+          {
+            "evidenceRef": "STORE.GROSS_PROFIT.CURRENT",
+            "scope": "STORE"
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Валовая прибыль недоступна и не должна интерпретироваться."
+        ],
+        "acceptableFindings": [
+          "Выручку можно анализировать отдельно с явной оговоркой об ограничении."
+        ],
+        "forbiddenFindings": [
+          "Нельзя оценивать маржинальность или прибыль по недоступному показателю."
+        ],
+        "maxInsights": 1
+      }
+    },
+    {
+      "id": "classification-limited",
+      "title": "Неполная классификация категорий",
+      "tags": [
+        "data-quality",
+        "category"
+      ],
+      "scenario": {
+        "qualityStatus": "PARTIAL",
+        "limitations": [
+          {
+            "code": "CLASSIFICATION_QUALITY_LIMITED",
+            "scope": "STORE",
+            "employeeRef": null,
+            "categoryCode": null,
+            "impact": "REDUCED_CONFIDENCE",
+            "affectedSections": [
+              "CATEGORIES",
+              "ADDITIONAL_SALES"
+            ],
+            "evidenceRefs": [
+              "STORE.CLASSIFICATION_QUALITY.STATUS"
+            ]
+          }
+        ],
+        "unavailableEvidence": [
+          {
+            "evidenceRef": "STORE.CLASSIFICATION_QUALITY.STATUS",
+            "scope": "STORE"
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Неполная классификация снижает надёжность выводов по категориям и дополнительным продажам."
+        ],
+        "acceptableFindings": [
+          "Общий финансовый результат можно описать отдельно от ненадёжной разбивки."
+        ],
+        "forbiddenFindings": [
+          "Нельзя объявлять конкретную категорию лидером при неполной классификации."
+        ],
+        "maxInsights": 1
+      }
+    },
+    {
+      "id": "employee-improvement",
+      "title": "Сотрудник улучшил собственный результат",
+      "tags": [
+        "employee-self-dynamics",
+        "growth"
+      ],
+      "scenario": {
+        "employees": [
+          {
+            "employeeRef": "E01",
+            "analysisStatus": "SUFFICIENT",
+            "availableSections": [
+              "RESULT"
+            ],
+            "facts": [
+              {
+                "evidenceRef": "EMP:E01.NET_REVENUE.CURRENT",
+                "metricCode": "NET_REVENUE",
+                "unit": "MONEY",
+                "value": 420000,
+                "comparison": {
+                  "previousValue": 280000,
+                  "absoluteDelta": 140000,
+                  "relativeDeltaPercent": 50.0
+                },
+                "materiality": "PRIMARY"
+              }
+            ]
+          }
+        ],
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "OPPORTUNITY",
+            "theme": "EMPLOYEE_PERFORMANCE",
+            "employeeRef": "E01",
+            "evidenceRefs": [
+              "EMP:E01.NET_REVENUE.CURRENT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Сотрудник заметно улучшил собственный результат к своей прошлой неделе."
+        ],
+        "acceptableFindings": [
+          "Можно закрепить наблюдаемую положительную динамику и проверить её устойчивость."
+        ],
+        "forbiddenFindings": [
+          "Нельзя называть сотрудника лучшим в команде без командного сравнения."
+        ],
+        "requiredCandidateRefs": [
+          "C001"
+        ]
+      }
+    },
+    {
+      "id": "employee-decline",
+      "title": "Сотрудник снизил собственный результат",
+      "tags": [
+        "employee-self-dynamics",
+        "decline"
+      ],
+      "scenario": {
+        "employees": [
+          {
+            "employeeRef": "E01",
+            "analysisStatus": "SUFFICIENT",
+            "availableSections": [
+              "RESULT"
+            ],
+            "facts": [
+              {
+                "evidenceRef": "EMP:E01.NET_REVENUE.CURRENT",
+                "metricCode": "NET_REVENUE",
+                "unit": "MONEY",
+                "value": 190000,
+                "comparison": {
+                  "previousValue": 380000,
+                  "absoluteDelta": -190000,
+                  "relativeDeltaPercent": -50.0
+                },
+                "materiality": "PRIMARY"
+              }
+            ]
+          }
+        ],
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "RISK",
+            "theme": "EMPLOYEE_PERFORMANCE",
+            "employeeRef": "E01",
+            "evidenceRefs": [
+              "EMP:E01.NET_REVENUE.CURRENT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Сотрудник заметно снизил собственный результат к своей прошлой неделе."
+        ],
+        "acceptableFindings": [
+          "Можно обсудить наблюдаемую динамику и выбрать измеримый показатель для следующей недели."
+        ],
+        "forbiddenFindings": [
+          "Нельзя приписывать снижение мотивации или личным качествам сотрудника."
+        ],
+        "requiredCandidateRefs": [
+          "C001"
+        ]
+      }
+    },
+    {
+      "id": "employee-insufficient",
+      "title": "Недостаточно данных по сотруднику",
+      "tags": [
+        "employee-sufficiency",
+        "data-quality"
+      ],
+      "scenario": {
+        "employees": [
+          {
+            "employeeRef": "E01",
+            "analysisStatus": "INSUFFICIENT",
+            "availableSections": [
+              "WORKLOAD"
+            ],
+            "facts": [
+              {
+                "evidenceRef": "EMP:E01.WORKLOAD.STATUS",
+                "metricCode": "WORKLOAD_STATUS",
+                "unit": "STATUS",
+                "value": "INSUFFICIENT",
+                "sufficiency": "INSUFFICIENT",
+                "materiality": "CONTEXT"
+              }
+            ]
+          }
+        ],
+        "candidates": [],
+        "limitations": [
+          {
+            "code": "EMPLOYEE_ANALYSIS_INSUFFICIENT",
+            "scope": "EMPLOYEE",
+            "employeeRef": "E01",
+            "categoryCode": null,
+            "impact": "UNAVAILABLE",
+            "affectedSections": [
+              "RESULT",
+              "DYNAMICS",
+              "CATEGORY_PERFORMANCE",
+              "ADDITIONAL_SALES",
+              "TIME_EFFICIENCY",
+              "RATING",
+              "TEAM_COMPARISON",
+              "RECOMMENDATIONS"
+            ],
+            "evidenceRefs": [
+              "EMP:E01.WORKLOAD.STATUS"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "По сотруднику недостаточно данных для персональной оценки результата."
+        ],
+        "acceptableFindings": [
+          "Допустимо нейтрально указать ограничение и дождаться достаточной базы."
+        ],
+        "forbiddenFindings": [
+          "Нельзя давать сотруднику персональные инсайты, действия, рейтинг или оценку нагрузки."
+        ],
+        "forbiddenSummarySections": [
+          {
+            "scope": "EMPLOYEE",
+            "employeeRef": "E01",
+            "section": "WORKLOAD"
+          }
+        ],
+        "employeePolicies": [
+          {
+            "employeeRef": "E01",
+            "insights": "FORBIDDEN",
+            "actions": "FORBIDDEN",
+            "relationships": "FORBIDDEN",
+            "workload": "FORBIDDEN"
+          }
+        ],
+        "maxInsights": 0,
+        "maxActions": 0
+      }
+    },
+    {
+      "id": "employee-limited",
+      "title": "Ограниченный набор данных по сотруднику",
+      "tags": [
+        "employee-sufficiency",
+        "data-quality"
+      ],
+      "scenario": {
+        "employees": [
+          {
+            "employeeRef": "E01",
+            "analysisStatus": "LIMITED",
+            "availableSections": [
+              "WORKLOAD",
+              "RESULT"
+            ],
+            "facts": [
+              {
+                "evidenceRef": "EMP:E01.WORKLOAD.STATUS",
+                "metricCode": "WORKLOAD_STATUS",
+                "unit": "STATUS",
+                "value": "LIMITED",
+                "sufficiency": "LIMITED",
+                "materiality": "CONTEXT"
+              },
+              {
+                "evidenceRef": "EMP:E01.NET_REVENUE.CURRENT",
+                "metricCode": "NET_REVENUE",
+                "unit": "MONEY",
+                "value": 170000,
+                "sufficiency": "LIMITED",
+                "materiality": "PRIMARY"
+              }
+            ]
+          }
+        ],
+        "candidates": [],
+        "limitations": [
+          {
+            "code": "EMPLOYEE_ANALYSIS_LIMITED",
+            "scope": "EMPLOYEE",
+            "employeeRef": "E01",
+            "categoryCode": null,
+            "impact": "REDUCED_CONFIDENCE",
+            "affectedSections": [
+              "RESULT",
+              "DYNAMICS",
+              "CATEGORY_PERFORMANCE",
+              "ADDITIONAL_SALES",
+              "TIME_EFFICIENCY",
+              "RATING",
+              "TEAM_COMPARISON",
+              "RECOMMENDATIONS"
+            ],
+            "evidenceRefs": [
+              "EMP:E01.WORKLOAD.STATUS"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Можно описать доступный результат сотрудника, но нельзя строить недоступную динамику или сравнение."
+        ],
+        "acceptableFindings": [
+          "Следует явно обозначить ограниченность персональных данных."
+        ],
+        "forbiddenFindings": [
+          "Нельзя выдумывать прошлую неделю, рейтинг или эффективность времени."
+        ],
+        "forbiddenSummarySections": [
+          {
+            "scope": "EMPLOYEE",
+            "employeeRef": "E01",
+            "section": "DYNAMICS"
+          },
+          {
+            "scope": "EMPLOYEE",
+            "employeeRef": "E01",
+            "section": "WORKLOAD"
+          }
+        ],
+        "employeePolicies": [
+          {
+            "employeeRef": "E01",
+            "actions": "FORBIDDEN",
+            "relationships": "FORBIDDEN",
+            "workload": "FORBIDDEN"
+          }
+        ],
+        "maxInsights": 1,
+        "maxActions": 0
+      }
+    },
+    {
+      "id": "team-tie-no-leader",
+      "title": "Ничья в командном сравнении",
+      "tags": [
+        "team-comparison",
+        "stable"
+      ],
+      "scenario": {
+        "teamFacts": [
+          {
+            "evidenceRef": "TEAM.RATING.ELIGIBLE_COUNT",
+            "metricCode": "RATING_ELIGIBLE_COUNT",
+            "unit": "COUNT",
+            "value": 3,
+            "materiality": "CONTEXT"
+          },
+          {
+            "evidenceRef": "TEAM.METRIC:RATING_STRUCTURE_SCORE.Q1",
+            "metricCode": "TEAM_RATING_STRUCTURE_SCORE_Q1",
+            "unit": "SCORE",
+            "value": 50,
+            "materiality": "CONTEXT"
+          },
+          {
+            "evidenceRef": "TEAM.METRIC:RATING_STRUCTURE_SCORE.MEDIAN",
+            "metricCode": "TEAM_RATING_STRUCTURE_SCORE_MEDIAN",
+            "unit": "SCORE",
+            "value": 50,
+            "materiality": "CONTEXT"
+          },
+          {
+            "evidenceRef": "TEAM.METRIC:RATING_STRUCTURE_SCORE.Q3",
+            "metricCode": "TEAM_RATING_STRUCTURE_SCORE_Q3",
+            "unit": "SCORE",
+            "value": 50,
+            "materiality": "CONTEXT"
+          }
+        ],
+        "employees": [
+          {
+            "employeeRef": "E01",
+            "analysisStatus": "SUFFICIENT",
+            "availableSections": [
+              "RATING"
+            ],
+            "facts": [
+              {
+                "evidenceRef": "EMP:E01.RATING.STRUCTURE_SCORE.CURRENT",
+                "metricCode": "RATING_STRUCTURE_SCORE",
+                "unit": "SCORE",
+                "value": 50,
+                "materiality": "SECONDARY"
+              }
+            ]
+          },
+          {
+            "employeeRef": "E02",
+            "analysisStatus": "SUFFICIENT",
+            "availableSections": [
+              "RATING"
+            ],
+            "facts": [
+              {
+                "evidenceRef": "EMP:E02.RATING.STRUCTURE_SCORE.CURRENT",
+                "metricCode": "RATING_STRUCTURE_SCORE",
+                "unit": "SCORE",
+                "value": 50,
+                "materiality": "SECONDARY"
+              }
+            ]
+          },
+          {
+            "employeeRef": "E03",
+            "analysisStatus": "SUFFICIENT",
+            "availableSections": [
+              "RATING"
+            ],
+            "facts": [
+              {
+                "evidenceRef": "EMP:E03.RATING.STRUCTURE_SCORE.CURRENT",
+                "metricCode": "RATING_STRUCTURE_SCORE",
+                "unit": "SCORE",
+                "value": 50,
+                "materiality": "SECONDARY"
+              }
+            ]
+          }
+        ],
+        "candidates": []
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Результаты сотрудников по доступной компетенции равны."
+        ],
+        "acceptableFindings": [
+          "Командное сравнение можно описать как отсутствие единственного лидера."
+        ],
+        "forbiddenFindings": [
+          "Нельзя выбирать одного лидера при равных значениях."
+        ],
+        "forbiddenTeamRelationships": [
+          {
+            "type": "COMPETENCY_LEADER"
+          }
+        ],
+        "maxInsights": 1,
+        "maxActions": 1
+      }
+    },
+    {
+      "id": "team-unique-leader",
+      "title": "Однозначный лидер по продаже услуг",
+      "tags": [
+        "team-comparison",
+        "growth"
+      ],
+      "scenario": {
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.CATEGORY:SETUP_SERVICE.NET_REVENUE.CURRENT",
+            "metricCode": "NET_REVENUE",
+            "unit": "MONEY",
+            "value": 156000,
+            "categoryCode": "SETUP_SERVICE",
+            "materiality": "SECONDARY"
+          }
+        ],
+        "teamFacts": [
+          {
+            "evidenceRef": "TEAM.RATING.ELIGIBLE_COUNT",
+            "metricCode": "RATING_ELIGIBLE_COUNT",
+            "unit": "COUNT",
+            "value": 3,
+            "materiality": "CONTEXT"
+          },
+          {
+            "evidenceRef": "TEAM.CATEGORY:SETUP_SERVICE.NET_REVENUE.Q1",
+            "metricCode": "TEAM_NET_REVENUE_Q1",
+            "unit": "MONEY",
+            "value": 30000,
+            "categoryCode": "SETUP_SERVICE",
+            "materiality": "CONTEXT"
+          },
+          {
+            "evidenceRef": "TEAM.CATEGORY:SETUP_SERVICE.NET_REVENUE.MEDIAN",
+            "metricCode": "TEAM_NET_REVENUE_MEDIAN",
+            "unit": "MONEY",
+            "value": 44000,
+            "categoryCode": "SETUP_SERVICE",
+            "materiality": "CONTEXT"
+          },
+          {
+            "evidenceRef": "TEAM.CATEGORY:SETUP_SERVICE.NET_REVENUE.Q3",
+            "metricCode": "TEAM_NET_REVENUE_Q3",
+            "unit": "MONEY",
+            "value": 82000,
+            "categoryCode": "SETUP_SERVICE",
+            "materiality": "CONTEXT"
+          }
+        ],
+        "employees": [
+          {
+            "employeeRef": "E01",
+            "analysisStatus": "SUFFICIENT",
+            "availableSections": [
+              "CATEGORIES"
+            ],
+            "facts": [
+              {
+                "evidenceRef": "EMP:E01.CATEGORY:SETUP_SERVICE.NET_REVENUE.CURRENT",
+                "metricCode": "NET_REVENUE",
+                "unit": "MONEY",
+                "value": 82000,
+                "categoryCode": "SETUP_SERVICE",
+                "materiality": "SECONDARY"
+              }
+            ]
+          },
+          {
+            "employeeRef": "E02",
+            "analysisStatus": "SUFFICIENT",
+            "availableSections": [
+              "CATEGORIES"
+            ],
+            "facts": [
+              {
+                "evidenceRef": "EMP:E02.CATEGORY:SETUP_SERVICE.NET_REVENUE.CURRENT",
+                "metricCode": "NET_REVENUE",
+                "unit": "MONEY",
+                "value": 44000,
+                "categoryCode": "SETUP_SERVICE",
+                "materiality": "SECONDARY"
+              }
+            ]
+          },
+          {
+            "employeeRef": "E03",
+            "analysisStatus": "SUFFICIENT",
+            "availableSections": [
+              "CATEGORIES"
+            ],
+            "facts": [
+              {
+                "evidenceRef": "EMP:E03.CATEGORY:SETUP_SERVICE.NET_REVENUE.CURRENT",
+                "metricCode": "NET_REVENUE",
+                "unit": "MONEY",
+                "value": 30000,
+                "categoryCode": "SETUP_SERVICE",
+                "materiality": "SECONDARY"
+              }
+            ]
+          }
+        ],
+        "categoryLabels": {
+          "SETUP_SERVICE": "Настройки и платные работы"
+        },
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "OPPORTUNITY",
+            "theme": "COMPETENCY_LEADER",
+            "employeeRef": "E01",
+            "categoryCode": "SETUP_SERVICE",
+            "competencyCode": "CATEGORY:SETUP_SERVICE",
+            "targetEmployeeRefs": [],
+            "evidenceRefs": [
+              "EMP:E01.CATEGORY:SETUP_SERVICE.NET_REVENUE.CURRENT",
+              "EMP:E02.CATEGORY:SETUP_SERVICE.NET_REVENUE.CURRENT",
+              "TEAM.CATEGORY:SETUP_SERVICE.NET_REVENUE.MEDIAN"
+            ]
+          },
+          {
+            "candidateRef": "C002",
+            "kind": "OPPORTUNITY",
+            "theme": "LEARNING_OPPORTUNITY",
+            "employeeRef": "E01",
+            "categoryCode": "SETUP_SERVICE",
+            "competencyCode": "CATEGORY:SETUP_SERVICE",
+            "targetEmployeeRefs": [
+              "E03"
+            ],
+            "evidenceRefs": [
+              "EMP:E01.CATEGORY:SETUP_SERVICE.NET_REVENUE.CURRENT",
+              "TEAM.CATEGORY:SETUP_SERVICE.NET_REVENUE.MEDIAN",
+              "EMP:E03.CATEGORY:SETUP_SERVICE.NET_REVENUE.CURRENT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Один сотрудник имеет однозначно лучший результат по продаже услуг."
+        ],
+        "acceptableFindings": [
+          "Допустима рекомендация обмена практикой с остальной командой."
+        ],
+        "forbiddenFindings": [
+          "Нельзя расширять лидерство по услугам до лидерства по всем показателям."
+        ],
+        "requiredTeamRelationships": [
+          {
+            "type": "COMPETENCY_LEADER",
+            "competencyCode": "CATEGORY:SETUP_SERVICE",
+            "sourceEmployeeRefs": [
+              "E01"
+            ],
+            "targetEmployeeRefs": []
+          },
+          {
+            "type": "LEARNING_OPPORTUNITY",
+            "competencyCode": "CATEGORY:SETUP_SERVICE",
+            "sourceEmployeeRefs": [
+              "E01"
+            ],
+            "targetEmployeeRefs": [
+              "E03"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "team-most-improved",
+      "title": "Самая сильная положительная динамика сотрудника",
+      "tags": [
+        "team-comparison",
+        "employee-self-dynamics",
+        "growth"
+      ],
+      "scenario": {
+        "teamFacts": [
+          {
+            "evidenceRef": "TEAM.RATING.ELIGIBLE_COUNT",
+            "metricCode": "RATING_ELIGIBLE_COUNT",
+            "unit": "COUNT",
+            "value": 3,
+            "materiality": "CONTEXT"
+          }
+        ],
+        "employees": [
+          {
+            "employeeRef": "E01",
+            "analysisStatus": "SUFFICIENT",
+            "availableSections": [
+              "RATING"
+            ],
+            "facts": [
+              {
+                "evidenceRef": "EMP:E01.RATING.OVERALL_SCORE.CURRENT",
+                "metricCode": "RATING_OVERALL_SCORE",
+                "unit": "SCORE",
+                "value": 85,
+                "comparison": {
+                  "previousValue": 60,
+                  "absoluteDelta": 25,
+                  "relativeDeltaPercent": 41.667
+                },
+                "materiality": "PRIMARY"
+              }
+            ]
+          },
+          {
+            "employeeRef": "E02",
+            "analysisStatus": "SUFFICIENT",
+            "availableSections": [
+              "RATING"
+            ],
+            "facts": [
+              {
+                "evidenceRef": "EMP:E02.RATING.OVERALL_SCORE.CURRENT",
+                "metricCode": "RATING_OVERALL_SCORE",
+                "unit": "SCORE",
+                "value": 70,
+                "comparison": {
+                  "previousValue": 60,
+                  "absoluteDelta": 10,
+                  "relativeDeltaPercent": 16.667
+                },
+                "materiality": "PRIMARY"
+              }
+            ]
+          },
+          {
+            "employeeRef": "E03",
+            "analysisStatus": "SUFFICIENT",
+            "availableSections": [
+              "RATING"
+            ],
+            "facts": [
+              {
+                "evidenceRef": "EMP:E03.RATING.OVERALL_SCORE.CURRENT",
+                "metricCode": "RATING_OVERALL_SCORE",
+                "unit": "SCORE",
+                "value": 50,
+                "comparison": {
+                  "previousValue": 48,
+                  "absoluteDelta": 2,
+                  "relativeDeltaPercent": 4.167
+                },
+                "materiality": "PRIMARY"
+              }
+            ]
+          }
+        ],
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "OPPORTUNITY",
+            "theme": "EMPLOYEE_PERFORMANCE",
+            "employeeRef": "E01",
+            "evidenceRefs": [
+              "EMP:E01.RATING.OVERALL_SCORE.CURRENT"
+            ]
+          },
+          {
+            "candidateRef": "C002",
+            "kind": "OPPORTUNITY",
+            "theme": "EMPLOYEE_PERFORMANCE",
+            "employeeRef": "E02",
+            "evidenceRefs": [
+              "EMP:E02.RATING.OVERALL_SCORE.CURRENT"
+            ]
+          },
+          {
+            "candidateRef": "C003",
+            "kind": "OPPORTUNITY",
+            "theme": "MOST_IMPROVED",
+            "employeeRef": "E01",
+            "targetEmployeeRefs": [],
+            "evidenceRefs": [
+              "EMP:E01.RATING.OVERALL_SCORE.CURRENT",
+              "EMP:E02.RATING.OVERALL_SCORE.CURRENT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Один сотрудник показал самую сильную положительную динамику к собственной прошлой неделе."
+        ],
+        "acceptableFindings": [
+          "Можно отметить динамику без объявления сотрудника абсолютным лидером результата."
+        ],
+        "forbiddenFindings": [
+          "Нельзя путать самый большой рост с самым большим текущим результатом."
+        ],
+        "requiredTeamRelationships": [
+          {
+            "type": "MOST_IMPROVED",
+            "competencyCode": null,
+            "sourceEmployeeRefs": [
+              "E01"
+            ],
+            "targetEmployeeRefs": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "conflicting-revenue-margin",
+      "title": "Рост выручки при снижении прибыльности",
+      "tags": [
+        "conflicting-signals",
+        "growth",
+        "decline"
+      ],
+      "scenario": {
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.NET_REVENUE.CURRENT",
+            "metricCode": "NET_REVENUE",
+            "unit": "MONEY",
+            "value": 1400000,
+            "comparison": {
+              "previousValue": 1000000,
+              "absoluteDelta": 400000,
+              "relativeDeltaPercent": 40
+            },
+            "materiality": "PRIMARY"
+          },
+          {
+            "evidenceRef": "STORE.GROSS_PROFIT.CURRENT",
+            "metricCode": "GROSS_PROFIT",
+            "unit": "MONEY",
+            "value": 168000,
+            "comparison": {
+              "previousValue": 210000,
+              "absoluteDelta": -42000,
+              "relativeDeltaPercent": -20
+            },
+            "materiality": "PRIMARY"
+          },
+          {
+            "evidenceRef": "STORE.MARGIN_PERCENT.CURRENT",
+            "metricCode": "MARGIN_PERCENT",
+            "unit": "PERCENT",
+            "value": 12,
+            "comparison": {
+              "previousValue": 21,
+              "absoluteDelta": -9,
+              "relativeDeltaPercent": null
+            },
+            "materiality": "SECONDARY"
+          }
+        ],
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "RISK",
+            "theme": "PROFITABILITY",
+            "evidenceRefs": [
+              "STORE.GROSS_PROFIT.CURRENT"
+            ]
+          },
+          {
+            "candidateRef": "C002",
+            "kind": "OPPORTUNITY",
+            "theme": "REVENUE_DYNAMICS",
+            "evidenceRefs": [
+              "STORE.NET_REVENUE.CURRENT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Выручка выросла, одновременно валовая прибыль и маржинальность снизились."
+        ],
+        "acceptableFindings": [
+          "Ответ должен удерживать оба сигнала и предложить проверить структуру продаж."
+        ],
+        "forbiddenFindings": [
+          "Нельзя объявлять неделю однозначно успешной только по росту выручки."
+        ],
+        "requiredCandidateRefs": [
+          "C001",
+          "C002"
+        ],
+        "maxInsights": 3,
+        "maxActions": 2
+      }
+    },
+    {
+      "id": "month-end-recovery",
+      "title": "Незакрытый план на завершившемся периоде",
+      "tags": [
+        "month-end",
+        "plan",
+        "decline"
+      ],
+      "scenario": {
+        "period": {
+          "start": "2026-05-25",
+          "end": "2026-05-31"
+        },
+        "comparisonPeriod": {
+          "start": "2026-05-18",
+          "end": "2026-05-24"
+        },
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.PLAN:REVENUE.PROJECTED_COMPLETION_PERCENT",
+            "metricCode": "PLAN_PROJECTED_COMPLETION_PERCENT",
+            "unit": "PERCENT",
+            "value": 94,
+            "materiality": "PRIMARY"
+          },
+          {
+            "evidenceRef": "STORE.PLAN:REVENUE.ACTUAL_AMOUNT",
+            "metricCode": "PLAN_ACTUAL_AMOUNT",
+            "unit": "MONEY",
+            "value": 940000,
+            "materiality": "PRIMARY"
+          },
+          {
+            "evidenceRef": "STORE.PLAN:REVENUE.TARGET_AMOUNT",
+            "metricCode": "PLAN_TARGET_AMOUNT",
+            "unit": "MONEY",
+            "value": 1000000,
+            "materiality": "CONTEXT"
+          }
+        ],
+        "candidates": [
+          {
+            "candidateRef": "C001",
+            "kind": "RISK",
+            "theme": "PLAN",
+            "evidenceRefs": [
+              "STORE.PLAN:REVENUE.PROJECTED_COMPLETION_PERCENT",
+              "STORE.PLAN:REVENUE.ACTUAL_AMOUNT",
+              "STORE.PLAN:REVENUE.TARGET_AMOUNT"
+            ]
+          }
+        ]
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Период завершён ниже целевого уровня выполнения плана."
+        ],
+        "acceptableFindings": [
+          "Следует зафиксировать незакрытый результат и учесть его в разборе следующего периода."
+        ],
+        "forbiddenFindings": [
+          "Нельзя рекомендовать закрыть остаток в оставшиеся дни, когда период уже завершён."
+        ],
+        "requiredCandidateRefs": [
+          "C001"
+        ],
+        "maxActions": 1
+      }
+    },
+    {
+      "id": "zero-previous-base",
+      "title": "Рост с нулевой прошлой базы",
+      "tags": [
+        "zero-base",
+        "growth"
+      ],
+      "scenario": {
+        "storeFacts": [
+          {
+            "evidenceRef": "STORE.CATEGORY:SETUP_SERVICE.NET_REVENUE.CURRENT",
+            "metricCode": "NET_REVENUE",
+            "unit": "MONEY",
+            "value": 50000,
+            "categoryCode": "SETUP_SERVICE",
+            "comparison": {
+              "previousValue": 0,
+              "absoluteDelta": 50000,
+              "relativeDeltaPercent": null
+            },
+            "materiality": "SECONDARY"
+          },
+          {
+            "evidenceRef": "STORE.CATEGORY:SETUP_SERVICE.REVENUE_SHARE_PERCENT.CURRENT",
+            "metricCode": "REVENUE_SHARE_PERCENT",
+            "unit": "PERCENT",
+            "value": 5,
+            "categoryCode": "SETUP_SERVICE",
+            "comparison": {
+              "previousValue": 0,
+              "absoluteDelta": 5,
+              "relativeDeltaPercent": null
+            },
+            "materiality": "SECONDARY"
+          }
+        ],
+        "categoryLabels": {
+          "SETUP_SERVICE": "Настройки и платные работы"
+        },
+        "candidates": []
+      },
+      "expectations": {
+        "requiredFindings": [
+          "Выручка услуг появилась после нулевого значения прошлой недели."
+        ],
+        "acceptableFindings": [
+          "Следует описывать абсолютное появление продаж без выдуманного процента роста."
+        ],
+        "forbiddenFindings": [
+          "Нельзя рассчитывать процентное изменение относительно нулевой прошлой базы."
+        ]
+      }
+    }
+  ],
+  "actionQuality": {
+    "specificityPatterns": [
+      "\\bпровер\\w*\\s+(?:налич\\w*|остат\\w*|выклад\\w*|цен\\w*|ассортимент\\w*|документ\\w*|чек\\w*|этап\\w*|скрипт\\w*|диалог\\w*|состав\\w*)",
+      "\\bразоб\\w*\\s+(?:продаж\\w*|возврат\\w*|чек\\w*|диалог\\w*|документ\\w*|позици\\w*|случа\\w*)",
+      "\\bсравн\\w+\\s+(?:результат\\w*|динамик\\w*|выручк\\w*|дол\\w*|показател\\w*)",
+      "\\bсопостав\\w+",
+      "\\bзафикс\\w+",
+      "\\bобсуд\\w+\\s+(?:практик\\w*|скрипт\\w*|диалог\\w*|пример\\w*|ошибк\\w*)",
+      "\\bотработ\\w+\\s+(?:скрипт\\w*|диалог\\w*|предложени\\w*|возражени\\w*|сценари\\w*)",
+      "\\bпровест\\w*\\s+(?:разбор\\w*|обучени\\w*|коучинг\\w*|проверку\\w*|аудит\\w*)",
+      "\\bизмен\\w*\\s+(?:выкладк\\w*|скрипт\\w*|процесс\\w*|порядок\\w*|ассортимент\\w*)",
+      "\\bнастро\\w+\\s+(?:контрол\\w*|отч[её]т\\w*|процесс\\w*|выкладк\\w*)",
+      "\\bсгруппир\\w+",
+      "\\bраздел\\w+\\s+(?:позици\\w*|документ\\w*|категори\\w*|случа\\w*)"
+    ],
+    "forbiddenBoilerplatePatterns": [
+      "\\bпроанализир\\w*\\s+причин\\w*",
+      "\\bразработ\\w*\\s+мер\\w*",
+      "\\bвосстанов\\w*\\s+показател\\w*",
+      "\\bзафикс\\w+\\s+(?:выявлен\\w*\\s+)?(?:проблем\\w*|причин\\w*|ситуаци\\w*)",
+      "\\bпроанализир\\w*\\s+спрос\\w*",
+      "\\bпоня\\w*\\s+причин\\w*",
+      "\\bприня\\w*\\s+мер\\w*",
+      "\\bустран\\w*\\s+проблем\\w*"
+    ],
+    "nearDuplicateSimilarity": 0.72,
+    "nonSpecificNearDuplicateSimilarity": 0.35
+  },
+  "narrativeQuality": {
+    "headlineInsightSimilarity": 0.8,
+    "headlineInsightContainment": 0.85,
+    "primaryTeamOverviewSimilarity": 0.65,
+    "primaryTeamOverviewContainment": 0.8,
+    "insightDirectivePatterns": [
+      "\\bнеобходим\\w*\\b",
+      "\\bследует\\b",
+      "\\bнужно\\b",
+      "\\bстоит\\b",
+      "\\bприня\\w*\\s+мер\\w*",
+      "\\bвыяви\\w*\\s+причин\\w*",
+      "\\bразработ\\w*\\s+мер\\w*"
+    ],
+    "unsupportedCausePatterns": [
+      "\\bмож(?:ет|гут)\\s+указыва\\w*\\s+на\\b",
+      "\\bмож(?:ет|гут)\\s+быть\\s+связан\\w*\\b",
+      "\\b(?:возможн|вероятн)\\w*\\s+(?:причин|проблем|из-за|связан)\\w*",
+      "\\b(?:связан|обусловлен)\\w*\\s+с\\b",
+      "\\bпроблем\\w*\\s+с\\s+(?:ассортимент|выкладк|наличи|спрос)\\w*",
+      "\\bнехватк\\w*\\s+(?:товар|позици|ассортимент)\\w*",
+      "\\bнизк\\w*\\s+спрос\\w*",
+      "\\bиз-за\\b",
+      "\\bобусловлен\\w*\\b"
+    ]
+  }
+}

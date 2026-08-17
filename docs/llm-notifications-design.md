@@ -1575,8 +1575,9 @@ WeeklyInterpretationContent использует строгий и стабил�
 - array cardinality ограничивается JSON Schema и semantic validator;
 - employeeRef должен встретиться ровно один раз для каждого ожидаемого сотрудника.
 
-Для INSUFFICIENT employee card сохраняются employeeRef, analysisStatus, headline, workload context и
-dataLimitations; недоступные одиночные выводы равны null, коллекции — пусты. Модель не должна
+Для INSUFFICIENT employee card сохраняются employeeRef, analysisStatus, headline и
+dataLimitations; workload context необязателен и для недостаточных данных не создаётся. Недоступные
+одиночные выводы равны null, коллекции — пусты. Модель не должна
 заполнять отсутствующие выводы общими фразами ради прохождения required.
 
 Semantic validation проверяет cross-field invariants, которые неудобно или невозможно полностью
@@ -2370,9 +2371,25 @@ reason. Resend из `UNKNOWN_OUTCOME` дополнительно требует
 
 `WeeklyInsightContentView` повторяет канонические store/team/employees/dataLimitations, но является
 отдельным API DTO. `EmployeeInsightView` содержит реальный `employeeId` и текущий безопасный
-`displayName`; внутренний `employeeRef` наружу не выходит. Evidence refs преобразуются backend в
-bounded `ResolvedEvidenceView(code, label, formattedValue, comparisonText)`, поэтому frontend не
-ищет значения по snapshot JSON и не форматирует бизнес-числа самостоятельно.
+`displayName`; внутренний `employeeRef` наружу не выходит.
+
+Все процитированные моделью ссылки backend преобразует в response-local opaque-коды
+`EV001`, `EV002`, ... . Исходные snapshot `evidenceRef` и псевдонимы сотрудников вида `E01`
+consumer API не публикует. В корневом `content.evidence` возвращается не более 200 элементов
+`WeeklyInsightEvidenceView`:
+
+- `evidenceCode` и безопасный `label`;
+- `formattedValue`, `previousFormattedValue`;
+- `absoluteDeltaFormatted`, `relativeDeltaFormatted`, `comparisonText`;
+- `unit`, `sufficiency`, `scope`;
+- nullable `employeeId`, `displayName`, `categoryLabel`;
+- `available`.
+
+Каждый вложенный `evidenceRefs` в store/team/employee/dataLimitations содержит только эти
+response-local коды. Bundle строится только из evidence опубликованного immutable snapshot;
+неизвестная или противоречивая ссылка завершает projection fail-closed. Форматирование денег,
+процентов, количества, часов, рейтинга и сравнений полностью принадлежит backend. Frontend лишь
+сопоставляет `evidenceCode` и показывает уже подготовленные строки рядом с выводом.
 
 #### История
 
@@ -3305,3 +3322,4 @@ alerts, полный staging flow planner → worker → snapshot, затем to
 | 2026-08-01 | Реализована и PostgreSQL-проверена EmployeeCategoryKpiProjection; обновлён OpenAPI |
 | 2026-08-01 | Реализован typed WeeklyAnalyticsFactsSource с current/previous KPI и plan contexts |
 | 2026-08-06 | Актуализирован статус: application-контур и YandexGPT acceptance завершены; зафиксированы оставшиеся staging/production gates |
+| 2026-08-15 | Добавлен неактивный prompt v5: меньше обязательного текста, workload без заглушки и явное разделение типов выводов |

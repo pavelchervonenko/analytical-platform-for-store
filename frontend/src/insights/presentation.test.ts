@@ -4,6 +4,9 @@ import {
   actionTypeLabel,
   analysisStatusLabel,
   employeeAnalysisHelp,
+  insightKindHelp,
+  insightKindLabel,
+  insightKindTone,
   limitationSummary,
   uniqueNarratives
 } from "./presentation";
@@ -13,6 +16,18 @@ describe("weekly insight presentation", () => {
     expect(actionHorizonLabel("FUTURE_INTERNAL_CODE")).toBe("Ближайший период");
     expect(actionTypeLabel("INTERNAL_ACTION_V3")).toBe("Практический шаг");
     expect(analysisStatusLabel("NEW_MODEL_STATUS")).toBe("Статус анализа");
+    expect(insightKindLabel("NEW_INSIGHT_KIND")).toBe("Вывод");
+    expect(insightKindTone("NEW_INSIGHT_KIND")).toBe("unknown");
+  });
+
+  it("separates facts, interpretations and hypotheses for the manager", () => {
+    expect(insightKindLabel("OBSERVATION")).toBe("Наблюдение");
+    expect(insightKindLabel("SYNTHESIS")).toBe("Интерпретация");
+    expect(insightKindLabel("HYPOTHESIS")).toBe("Гипотеза");
+    expect(insightKindTone("RISK")).toBe("risk");
+    expect(insightKindHelp("HYPOTHESIS"))
+      .toContain("нужно проверить");
+    expect(insightKindHelp("OBSERVATION")).toBeNull();
   });
 
   it("removes repeated narratives independent of whitespace and case", () => {

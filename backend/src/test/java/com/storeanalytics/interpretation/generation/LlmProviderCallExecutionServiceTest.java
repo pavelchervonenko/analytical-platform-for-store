@@ -67,6 +67,7 @@ class LlmProviderCallExecutionServiceTest {
                 "provider-worker",
                 LlmAnalysisAttemptType.INITIAL,
                 prepared.requestHash(),
+                request.inputJson(),
                 NOW
         )).thenReturn(attempt);
         when(persistence.recordFailure(
@@ -197,6 +198,7 @@ class LlmProviderCallExecutionServiceTest {
                 NOW
         );
         verify(persistence, never()).start(
+                org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),

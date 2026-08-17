@@ -4,6 +4,7 @@ import static com.storeanalytics.common.validation.ModelValidation.requireNonNul
 
 import com.storeanalytics.interpretation.contract.LlmContractResources;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput;
+import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.CandidateSignal;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.EvidenceIndexEntry;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Limitation;
 import java.util.ArrayList;
@@ -27,7 +28,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /** Validates the flat WeeklyInterpretationContent v2 contract. */
 @Component
-public final class WeeklyInterpretationV2ResponseValidator
+public class WeeklyInterpretationV2ResponseValidator
         implements WeeklyInterpretationResponseValidationStrategy {
 
     private static final int MAX_VIOLATIONS = 100;
@@ -35,10 +36,10 @@ public final class WeeklyInterpretationV2ResponseValidator
             "[\\p{N}%₽$€]"
     );
     private static final Pattern REVENUE_NARRATIVE = Pattern.compile(
-            "(?iu)(выруч|оборот|доход)"
+            "(?iuU)(выруч|оборот|доход(?:а|у|ом|е|ы|ов|ам|ами|ах)?\\b)"
     );
     private static final Pattern PROFITABILITY_NARRATIVE = Pattern.compile(
-            "(?iu)(прибыл|марж|рентабель)"
+            "(?iu)(прибыл|марж|рентабель|доходн|заработ)"
     );
     private static final Set<String> NARRATIVE_FIELDS = Set.of(
             "text", "title", "summary"
@@ -49,21 +50,31 @@ public final class WeeklyInterpretationV2ResponseValidator
 
     private final ObjectMapper objectMapper;
     private final LlmJsonSchemaValidator schemaValidator;
+    private final int contentSchemaVersion;
 
     public WeeklyInterpretationV2ResponseValidator() {
+        this(
+                LlmContractResources.NEXT_CONTENT_SCHEMA,
+                LlmContractResources.NEXT_CONTENT_SCHEMA_VERSION
+        );
+    }
+
+    protected WeeklyInterpretationV2ResponseValidator(
+            String schemaResource,
+            int schemaVersion
+    ) {
         this.objectMapper = JsonMapper.builder()
                 .findAndAddModules()
                 .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
                 .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
                 .build();
-        this.schemaValidator = new LlmJsonSchemaValidator(
-                LlmContractResources.NEXT_CONTENT_SCHEMA
-        );
+        this.schemaValidator = new LlmJsonSchemaValidator(schemaResource);
+        this.contentSchemaVersion = schemaVersion;
     }
 
     @Override
     public int contentSchemaVersion() {
-        return LlmContractResources.NEXT_CONTENT_SCHEMA_VERSION;
+        return contentSchemaVersion;
     }
 
     @Override
@@ -81,8 +92,9 @@ public final class WeeklyInterpretationV2ResponseValidator
             }
             normalizeLimitations(object, source);
             normalizeOptionalNulls(object);
+            normalizeCandidateBackedInsights(object, source);
+            normalizeVersionSpecificFields(object, source);
             normalizeBroadActionTargets(object);
-            normalizeMissingWorkloadSummaries(object, source);
             body = objectMapper.writeValueAsString(object);
         } catch (JacksonException exception) {
             return invalidJson();
@@ -139,6 +151,31 @@ public final class WeeklyInterpretationV2ResponseValidator
         }
     }
 
+    protected void normalizeVersionSpecificFields(
+            ObjectNode root,
+            WeeklyInterpretationInput input
+    ) {
+        // No version-specific fields in content schema v2.
+    }
+
+    protected void validateVersionSpecificFields(
+            JsonNode root,
+            WeeklyInterpretationInput input,
+            ValidationContext context
+    ) {
+        // No version-specific fields in content schema v2.
+    }
+
+    protected void validateVersionSpecificNarrativeEvidenceDimensions(
+            JsonNode root,
+            ValidationContext context
+    ) {
+        // No version-specific fields in content schema v2.
+    }
+
+    protected boolean requiresStoreHeadline() {
+        return true;
+    }
     private boolean normalizeStructurallyRejectedOptionalItems(
             JsonNode root,
             List<StructuralValidationViolation> violations
@@ -186,10 +223,12 @@ public final class WeeklyInterpretationV2ResponseValidator
         validateEmployees(root, context);
         validateSummaryBlocks(root.path("summaryBlocks"), context);
         validateInsights(root.path("insights"), context);
+        validateVersionSpecificFields(root, source, context);
         validateActions(root.path("actions"), context);
         validateTeamRelationships(root.path("teamRelationships"), context);
         validateNarrative(root, "$", context);
-        validateRiskEvidenceDimensions(root.path("insights"), context);
+        validateNarrativeEvidenceDimensions(root, context);
+        validateVersionSpecificNarrativeEvidenceDimensions(root, context);
         return context;
     }
 
@@ -198,7 +237,7 @@ public final class WeeklyInterpretationV2ResponseValidator
             List<LlmValidationViolation> violations
     ) {
         TreeSet<Integer> relationshipIndexes = new TreeSet<>();
-        TreeSet<Integer> unsupportedRiskIndexes = new TreeSet<>();
+        TreeSet<Integer> unsupportedWorkloadIndexes = new TreeSet<>();
         for (LlmValidationViolation violation : violations) {
             Integer relationshipIndex = arrayIndex(
                     violation.path(), "$.teamRelationships["
@@ -206,20 +245,24 @@ public final class WeeklyInterpretationV2ResponseValidator
             if (relationshipIndex != null) {
                 relationshipIndexes.add(relationshipIndex);
             }
-            if ("UNSUPPORTED_RISK_DIMENSION".equals(violation.code())) {
-                Integer insightIndex = arrayIndex(violation.path(), "$.insights[");
-                if (insightIndex != null) {
-                    unsupportedRiskIndexes.add(insightIndex);
+            if ("UNAVAILABLE_EMPLOYEE_SECTION".equals(violation.code())) {
+                Integer summaryIndex = arrayIndex(
+                        violation.path(), "$.summaryBlocks["
+                );
+                if (summaryIndex != null
+                        && "WORKLOAD".equals(root.path("summaryBlocks")
+                        .path(summaryIndex).path("section").asText())) {
+                    unsupportedWorkloadIndexes.add(summaryIndex);
                 }
             }
         }
         boolean relationshipsRemoved = removeIndexes(
                 root.path("teamRelationships"), relationshipIndexes
         );
-        boolean risksRemoved = removeIndexes(
-                root.path("insights"), unsupportedRiskIndexes
+        boolean workloadRemoved = removeIndexes(
+                root.path("summaryBlocks"), unsupportedWorkloadIndexes
         );
-        return relationshipsRemoved || risksRemoved;
+        return relationshipsRemoved || workloadRemoved;
     }
 
     private Integer arrayIndex(String path, String prefix) {
@@ -279,6 +322,52 @@ public final class WeeklyInterpretationV2ResponseValidator
         }
     }
 
+    private void normalizeCandidateBackedInsights(
+            ObjectNode root,
+            WeeklyInterpretationInput input
+    ) {
+        Map<String, CandidateSignal> candidates = new HashMap<>();
+        input.facts().candidateSignals().forEach(candidate ->
+                candidates.put(candidate.candidateRef(), candidate)
+        );
+        Map<String, EvidenceIndexEntry> evidence = new HashMap<>();
+        input.manifest().evidence().forEach(value ->
+                evidence.put(value.evidenceRef(), value)
+        );
+        for (JsonNode value : root.path("insights")) {
+            if (!(value instanceof ObjectNode insight)) {
+                continue;
+            }
+            CandidateSignal candidate = candidates.get(
+                    nullableText(insight.path("candidateRef"))
+            );
+            if (candidate == null) {
+                continue;
+            }
+            insight.put("kind", candidate.kind().name());
+            insight.put("theme", candidate.theme());
+            nullable(insight, "employeeRef", candidate.employeeRef());
+            nullable(insight, "categoryCode", candidate.categoryCode());
+            insight.put("scope", candidateScope(candidate, evidence));
+            ArrayNode exactEvidence = insight.putArray("evidenceRefs");
+            candidate.evidenceRefs().forEach(exactEvidence::add);
+        }
+    }
+
+    private String candidateScope(
+            CandidateSignal candidate,
+            Map<String, EvidenceIndexEntry> evidence
+    ) {
+        if (candidate.employeeRef() != null) {
+            return "EMPLOYEE";
+        }
+        boolean teamOnly = candidate.evidenceRefs().stream()
+                .map(evidence::get)
+                .allMatch(value -> value != null
+                        && value.scope() == WeeklyInterpretationInput.Scope.TEAM);
+        return teamOnly ? "TEAM" : "STORE";
+    }
+
     private void normalizeBroadActionTargets(ObjectNode root) {
         for (JsonNode value : root.path("actions")) {
             if (!(value instanceof ObjectNode action)) {
@@ -290,68 +379,6 @@ public final class WeeklyInterpretationV2ResponseValidator
                 targets.removeAll();
             }
         }
-    }
-
-    private void normalizeMissingWorkloadSummaries(
-            ObjectNode root,
-            WeeklyInterpretationInput source
-    ) {
-        if (!(root.path("summaryBlocks") instanceof ArrayNode summaries)) {
-            return;
-        }
-        Set<String> present = new HashSet<>();
-        for (JsonNode summary : summaries) {
-            if ("EMPLOYEE".equals(summary.path("scope").asText())
-                    && "WORKLOAD".equals(summary.path("section").asText())) {
-                present.add(summary.path("employeeRef").asText());
-            }
-        }
-        Map<String, EvidenceIndexEntry> evidence = new HashMap<>();
-        for (EvidenceIndexEntry entry : source.manifest().evidence()) {
-            evidence.put(entry.evidenceRef(), entry);
-        }
-        for (WeeklyInterpretationInput.EmployeeFacts employee
-                : source.facts().employees()) {
-            if (present.contains(employee.employeeRef())) {
-                continue;
-            }
-            String evidenceRef = employee.facts().stream()
-                    .filter(fact -> "WORKLOAD_STATUS".equals(fact.metricCode()))
-                    .map(WeeklyInterpretationInput.Fact::evidenceRef)
-                    .filter(reference -> {
-                        EvidenceIndexEntry entry = evidence.get(reference);
-                        return entry != null
-                                && entry.available()
-                                && entry.scope()
-                                == WeeklyInterpretationInput.Scope.EMPLOYEE
-                                && employee.employeeRef().equals(
-                                        entry.employeeRef()
-                                );
-                    })
-                    .findFirst()
-                    .orElse(null);
-            if (evidenceRef == null) {
-                continue;
-            }
-            ObjectNode summary = summaries.addObject();
-            summary.put("scope", "EMPLOYEE");
-            summary.put("employeeRef", employee.employeeRef());
-            summary.put("section", "WORKLOAD");
-            summary.putNull("categoryCode");
-            summary.put("text", workloadSummary(employee.analysisStatus()));
-            summary.putArray("evidenceRefs").add(evidenceRef);
-        }
-    }
-
-    private String workloadSummary(WeeklyInterpretationInput.Sufficiency status) {
-        return switch (status) {
-            case SUFFICIENT ->
-                    "Рабочая нагрузка достаточна для анализа доступных направлений.";
-            case LIMITED ->
-                    "Рабочая нагрузка позволяет только ограниченный разбор доступных направлений.";
-            case INSUFFICIENT ->
-                    "Наблюдений недостаточно для оценки результата сотрудника.";
-        };
     }
 
     private void normalizeLimitations(
@@ -453,10 +480,20 @@ public final class WeeklyInterpretationV2ResponseValidator
             }
             validateEmployeeSection(employeeRef, section, path, context);
         }
-        requireSummaryCount(
-                counts, new SummaryKey("STORE", null, "HEADLINE", null),
-                "STORE_HEADLINE_COUNT_MISMATCH", context
-        );
+        if (requiresStoreHeadline()) {
+            requireSummaryCount(
+                    counts, new SummaryKey("STORE", null, "HEADLINE", null),
+                    "STORE_HEADLINE_COUNT_MISMATCH", context
+            );
+        } else if (counts.getOrDefault(
+                new SummaryKey("STORE", null, "HEADLINE", null), 0
+        ) != 0) {
+            context.add(
+                    "STORE_HEADLINE_NOT_ALLOWED",
+                    "$.summaryBlocks",
+                    null
+            );
+        }
         requireSummaryCount(
                 counts, new SummaryKey("TEAM", null, "TEAM_OVERVIEW", null),
                 "TEAM_OVERVIEW_COUNT_MISMATCH", context
@@ -466,12 +503,6 @@ public final class WeeklyInterpretationV2ResponseValidator
                     counts,
                     new SummaryKey("EMPLOYEE", employeeRef, "HEADLINE", null),
                     "EMPLOYEE_HEADLINE_COUNT_MISMATCH",
-                    context
-            );
-            requireSummaryCount(
-                    counts,
-                    new SummaryKey("EMPLOYEE", employeeRef, "WORKLOAD", null),
-                    "EMPLOYEE_WORKLOAD_COUNT_MISMATCH",
                     context
             );
         }
@@ -502,6 +533,10 @@ public final class WeeklyInterpretationV2ResponseValidator
         if (facts == null) {
             return;
         }
+        if ("WORKLOAD".equals(section) && !hasWorkloadEvidence(facts)) {
+            context.add("UNAVAILABLE_EMPLOYEE_SECTION", path, employeeRef);
+            return;
+        }
         if (facts.analysisStatus() == WeeklyInterpretationInput.Sufficiency.INSUFFICIENT
                 && !INSUFFICIENT_SECTIONS.contains(section)) {
             context.add("INSUFFICIENT_SECTION_PRESENT", path, employeeRef);
@@ -528,12 +563,31 @@ public final class WeeklyInterpretationV2ResponseValidator
         }
     }
 
+    private boolean hasWorkloadEvidence(
+            WeeklyInterpretationInput.EmployeeFacts facts
+    ) {
+        return facts.availableSections().contains("WORKLOAD")
+                || facts.facts().stream().anyMatch(fact ->
+                "WORKLOAD_STATUS".equals(fact.metricCode())
+                        || fact.evidenceRef().contains(".WORKLOAD.")
+        );
+    }
+
     private void validateInsights(JsonNode insights, ValidationContext context) {
+        Set<String> seenCandidateRefs = new HashSet<>();
         for (int index = 0; index < insights.size(); index++) {
             JsonNode insight = insights.get(index);
             String path = "$.insights[" + index + "]";
             String employeeRef = validateScope(insight, path, context);
             validateCategory(insight, path, context);
+            String candidateRef = nullableText(insight.path("candidateRef"));
+            if (candidateRef != null && !seenCandidateRefs.add(candidateRef)) {
+                context.add(
+                        "DUPLICATE_CANDIDATE_REF",
+                        path + ".candidateRef",
+                        candidateRef
+                );
+            }
             validateCandidate(insight, path, context);
             validateEvidence(
                     insight.path("evidenceRefs"),
@@ -706,6 +760,15 @@ public final class WeeklyInterpretationV2ResponseValidator
                     );
                 }
             }
+            validateRelationshipCandidate(
+                    type,
+                    competencyCode,
+                    sources,
+                    targets,
+                    stringValues(relationship.path("evidenceRefs")),
+                    path,
+                    context
+            );
             switch (type) {
                 case "COMPETENCY_LEADER" -> {
                     if (competencyCode == null || sources.isEmpty()
@@ -754,7 +817,53 @@ public final class WeeklyInterpretationV2ResponseValidator
             }
         }
     }
-    private String validateScope(
+
+    private void validateRelationshipCandidate(
+            String type,
+            String competencyCode,
+            Set<String> sources,
+            Set<String> targets,
+            Set<String> evidenceRefs,
+            String path,
+            ValidationContext context
+    ) {
+        boolean supported = context.candidateSignals().values().stream()
+                .filter(candidate -> type.equals(candidate.theme()))
+                .anyMatch(candidate -> relationshipMatches(
+                        candidate,
+                        competencyCode,
+                        sources,
+                        targets,
+                        evidenceRefs
+                ));
+        if (!supported) {
+            context.add(
+                    "UNSUPPORTED_TEAM_RELATIONSHIP",
+                    path,
+                    competencyCode
+            );
+        }
+    }
+
+    private boolean relationshipMatches(
+            CandidateSignal candidate,
+            String competencyCode,
+            Set<String> sources,
+            Set<String> targets,
+            Set<String> evidenceRefs
+    ) {
+        Set<String> expectedSources = candidate.employeeRef() == null
+                ? Set.of() : Set.of(candidate.employeeRef());
+        return java.util.Objects.equals(
+                        competencyCode,
+                        candidate.competencyCode()
+                )
+                && sources.equals(expectedSources)
+                && targets.equals(Set.copyOf(candidate.targetEmployeeRefs()))
+                && evidenceRefs.containsAll(candidate.evidenceRefs());
+    }
+
+    protected String validateScope(
             JsonNode item,
             String path,
             ValidationContext context
@@ -777,7 +886,7 @@ public final class WeeklyInterpretationV2ResponseValidator
         return "EMPLOYEE".equals(scope) ? employeeRef : null;
     }
 
-    private void validateCategory(
+    protected void validateCategory(
             JsonNode item,
             String path,
             ValidationContext context
@@ -793,16 +902,41 @@ public final class WeeklyInterpretationV2ResponseValidator
         }
     }
 
-    private void validateCandidate(
+    protected void validateCandidate(
             JsonNode insight,
             String path,
             ValidationContext context
     ) {
         String candidateRef = nullableText(insight.path("candidateRef"));
-        if (candidateRef != null
-                && !context.candidateRefs().contains(candidateRef)) {
+        if (candidateRef == null) {
+            return;
+        }
+        if (!context.candidateRefs().contains(candidateRef)) {
             context.add(
                     "UNKNOWN_CANDIDATE_REF",
+                    path + ".candidateRef",
+                    candidateRef
+            );
+            return;
+        }
+        CandidateSignal signal = context.candidateSignals().get(candidateRef);
+        if (signal == null) {
+            return;
+        }
+        Set<String> citedEvidence = stringValues(insight.path("evidenceRefs"));
+        if (!signal.kind().name().equals(insight.path("kind").asText())
+                || !signal.theme().equals(insight.path("theme").asText())
+                || !java.util.Objects.equals(
+                        signal.employeeRef(),
+                        nullableText(insight.path("employeeRef"))
+                )
+                || !java.util.Objects.equals(
+                        signal.categoryCode(),
+                        nullableText(insight.path("categoryCode"))
+                )
+                || !citedEvidence.containsAll(signal.evidenceRefs())) {
+            context.add(
+                    "CANDIDATE_SIGNAL_MISMATCH",
                     path + ".candidateRef",
                     candidateRef
             );
@@ -828,7 +962,7 @@ public final class WeeklyInterpretationV2ResponseValidator
         }
     }
 
-    private void validateEvidence(
+    protected void validateEvidence(
             JsonNode values,
             String path,
             String employeeContext,
@@ -908,49 +1042,107 @@ public final class WeeklyInterpretationV2ResponseValidator
         }
     }
 
-    private void validateRiskEvidenceDimensions(
-            JsonNode insights,
+    protected void validateNarrativeEvidenceDimensions(
+            JsonNode root,
             ValidationContext context
     ) {
-        for (int index = 0; index < insights.size(); index++) {
-            JsonNode insight = insights.get(index);
-            if (!"RISK".equals(insight.path("kind").asText())) {
-                continue;
-            }
-            String narrative = insight.path("title").asText() + " "
-                    + insight.path("summary").asText();
+        validateNarrativeEvidenceDimensions(
+                root.path("summaryBlocks"),
+                List.of("text"),
+                "$.summaryBlocks",
+                context
+        );
+        validateNarrativeEvidenceDimensions(
+                root.path("insights"),
+                List.of("title", "summary"),
+                "$.insights",
+                context
+        );
+        validateNarrativeEvidenceDimensions(
+                root.path("actions"),
+                List.of("title", "summary"),
+                "$.actions",
+                context
+        );
+        validateNarrativeEvidenceDimensions(
+                root.path("teamRelationships"),
+                List.of("summary"),
+                "$.teamRelationships",
+                context
+        );
+    }
+
+    protected void validateNarrativeEvidenceDimensions(
+            JsonNode values,
+            List<String> narrativeFields,
+            String path,
+            ValidationContext context
+    ) {
+        for (int index = 0; index < values.size(); index++) {
+            JsonNode value = values.get(index);
+            StringBuilder narrative = new StringBuilder();
+            narrativeFields.forEach(field -> narrative.append(' ')
+                    .append(value.path(field).asText()));
             Set<String> evidenceRefs = stringValues(
-                    insight.path("evidenceRefs")
+                    value.path("evidenceRefs")
             );
-            String path = "$.insights[" + index + "]";
+            String itemPath = path + "[" + index + "]";
             if (REVENUE_NARRATIVE.matcher(narrative).find()
-                    && evidenceRefs.stream().noneMatch(
-                    WeeklyInterpretationV2ResponseValidator::isRevenueEvidence
+                    && evidenceRefs.stream().noneMatch(reference ->
+                    isRevenueEvidence(reference, context)
             )) {
-                context.add("UNSUPPORTED_RISK_DIMENSION", path, "REVENUE");
+                context.add(
+                        "UNSUPPORTED_NARRATIVE_DIMENSION",
+                        itemPath,
+                        "REVENUE"
+                );
             }
             if (PROFITABILITY_NARRATIVE.matcher(narrative).find()
-                    && evidenceRefs.stream().noneMatch(
-                    WeeklyInterpretationV2ResponseValidator::isProfitabilityEvidence
+                    && evidenceRefs.stream().noneMatch(reference ->
+                    isProfitabilityEvidence(reference, context)
             )) {
-                context.add("UNSUPPORTED_RISK_DIMENSION", path, "PROFITABILITY");
+                context.add(
+                        "UNSUPPORTED_NARRATIVE_DIMENSION",
+                        itemPath,
+                        "PROFITABILITY"
+                );
             }
         }
     }
 
-    private static boolean isRevenueEvidence(String reference) {
-        return reference.contains("NET_REVENUE")
+    private static boolean isRevenueEvidence(
+            String reference,
+            ValidationContext context
+    ) {
+        String metricCode = context.evidenceMetricCodes().get(reference);
+        return metricContains(metricCode, "NET_REVENUE")
+                || metricContains(metricCode, "REVENUE_SHARE")
+                || metricContains(metricCode, "ADDITIONAL_REVENUE")
+                || metricContains(metricCode, "REVENUE_PER")
+                || reference.contains("NET_REVENUE")
                 || reference.contains("REVENUE_SHARE")
                 || reference.contains("ADDITIONAL_REVENUE")
                 || reference.contains("REVENUE_PER")
                 || reference.contains("PLAN:REVENUE");
     }
 
-    private static boolean isProfitabilityEvidence(String reference) {
-        return reference.contains("GROSS_PROFIT")
+    private static boolean isProfitabilityEvidence(
+            String reference,
+            ValidationContext context
+    ) {
+        String metricCode = context.evidenceMetricCodes().get(reference);
+        return metricContains(metricCode, "GROSS_PROFIT")
+                || metricContains(metricCode, "MARGIN")
+                || metricContains(metricCode, "PROFIT")
+                || reference.contains("GROSS_PROFIT")
                 || reference.contains("MARGIN")
                 || reference.contains("PROFIT");
     }
+
+    private static boolean metricContains(String metricCode, String fragment) {
+        return metricCode != null && metricCode.contains(fragment);
+    }
+
     private void validateArrayMembers(
             JsonNode values,
             Set<String> allowed,
@@ -966,7 +1158,7 @@ public final class WeeklyInterpretationV2ResponseValidator
         }
     }
 
-    private Set<String> stringValues(JsonNode values) {
+    protected Set<String> stringValues(JsonNode values) {
         Set<String> result = new LinkedHashSet<>();
         values.forEach(value -> result.add(value.asText()));
         return result;
@@ -1012,7 +1204,7 @@ public final class WeeklyInterpretationV2ResponseValidator
         };
     }
 
-    private static String nullableText(JsonNode value) {
+    protected static String nullableText(JsonNode value) {
         return value.isNull() ? null : value.asText();
     }
 
@@ -1042,12 +1234,14 @@ public final class WeeklyInterpretationV2ResponseValidator
         }
     }
 
-    private static final class ValidationContext {
+    protected static final class ValidationContext {
 
         private final Set<String> employeeRefs;
         private final Map<String, WeeklyInterpretationInput.EmployeeFacts> employeeFacts;
         private final Map<String, EvidenceIndexEntry> evidence;
+        private final Map<String, String> evidenceMetricCodes;
         private final Set<String> candidateRefs;
+        private final Map<String, CandidateSignal> candidateSignals;
         private final Set<String> categoryCodes;
         private final Set<String> competencyCodes;
         private final Set<String> technicalIdentifiers;
@@ -1061,6 +1255,7 @@ public final class WeeklyInterpretationV2ResponseValidator
                     value
             ));
             this.evidence = new HashMap<>();
+            this.evidenceMetricCodes = new HashMap<>();
             input.facts().store().forEach(value -> addFactEvidence(
                     value,
                     WeeklyInterpretationInput.Scope.STORE,
@@ -1082,6 +1277,10 @@ public final class WeeklyInterpretationV2ResponseValidator
                     value
             ));
             this.candidateRefs = Set.copyOf(input.manifest().candidateRefs());
+            this.candidateSignals = new HashMap<>();
+            input.facts().candidateSignals().forEach(candidate ->
+                    candidateSignals.put(candidate.candidateRef(), candidate)
+            );
             this.categoryCodes = Set.copyOf(input.manifest().categoryCodes());
             this.competencyCodes = Set.copyOf(input.manifest().competencyCodes());
             Set<String> identifiers = new HashSet<>();
@@ -1108,9 +1307,13 @@ public final class WeeklyInterpretationV2ResponseValidator
                             true
                     )
             );
+            evidenceMetricCodes.putIfAbsent(
+                    fact.evidenceRef(),
+                    fact.metricCode()
+            );
         }
 
-        private void add(String code, String path, String reference) {
+        void add(String code, String path, String reference) {
             if (violations.size() < MAX_VIOLATIONS) {
                 violations.add(new LlmValidationViolation(
                         code,
@@ -1132,8 +1335,16 @@ public final class WeeklyInterpretationV2ResponseValidator
             return evidence;
         }
 
+        private Map<String, String> evidenceMetricCodes() {
+            return evidenceMetricCodes;
+        }
+
         private Set<String> candidateRefs() {
             return candidateRefs;
+        }
+
+        private Map<String, CandidateSignal> candidateSignals() {
+            return candidateSignals;
         }
 
         private Set<String> categoryCodes() {

@@ -100,6 +100,16 @@ class AnnualReportAggregationService {
                 .divide(denominator, 2, RoundingMode.HALF_UP);
     }
 
+    private static BigDecimal attachPercentage(
+            BigDecimal numerator,
+            BigDecimal denominator
+    ) {
+        return denominator == null || denominator.signum() <= 0
+                ? null
+                : numerator.max(BigDecimal.ZERO).multiply(BigDecimal.valueOf(100))
+                        .divide(denominator, 2, RoundingMode.HALF_UP);
+    }
+
     private static final class StoreAccumulator {
 
         private BigDecimal revenue = BigDecimal.ZERO;
@@ -208,7 +218,7 @@ class AnnualReportAggregationService {
                     code,
                     numerator,
                     denominator,
-                    percentage(numerator, denominator)
+                    attachPercentage(numerator, denominator)
             );
         }
     }
