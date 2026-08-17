@@ -1,11 +1,13 @@
 # Production-эксплуатация LLM-контура
 
-Статус на 2026-08-07: инфраструктурный контур реализован. Prompt v4 / schema v2 прошёл свежий
-локальный end-to-end canary revision 7 через initial call, validation retry, immutable publication
-и единственное MANAGER notification event. Retry завершился с нулём violations; Telegram fanout
-был выключен и deliveries не создавались. Validator не ослаблен, universal narrative safety
-invariants подтверждены реальным provider response. Локальный LLM publication gate закрыт.
-Оставшиеся gates: server-side staging, failure drills, offline quality evaluation,
+Статус на 2026-08-17: инфраструктурный контур реализован. Prompt v4 / schema v2 остаётся
+текущей безопасной конфигурацией по умолчанию и прошёл локальный end-to-end canary revision 7
+через initial call, validation retry, immutable publication и единственное MANAGER notification
+event. Retry завершился с нулём violations; Telegram fanout был выключен и deliveries не
+создавались. Validator не ослаблен, universal narrative safety invariants подтверждены реальным
+provider response. Prompt v15 / schema v3 является release candidate: контрольная пара прошла,
+но до замены конфигурации по умолчанию обязательны полная матрица v4/v15, слепая оценка и новый
+end-to-end canary. Оставшиеся production gates: server-side staging, failure drills,
 alerts/budget controls, Telegram webhook/delivery приёмка и production approval.
 
 ## Что уже входит в контур
@@ -47,10 +49,11 @@ business audit. API не возвращает API key, folder ID, prompt, provid
 2. Проверить канонический обезличенный dataset и его автоматический gate:
    `python3 scripts/llm-eval/evaluate.py` и
    `python3 -m unittest scripts/llm-eval/test_evaluate.py -v`.
-3. С заранее утверждённым бюджетом получить полную shadow-матрицу v4/v5 и проверить её:
+3. С заранее утверждённым бюджетом получить полную shadow-матрицу v4/v15 и проверить её:
    `python3 scripts/llm-eval/evaluate.py --responses-dir build/llm-eval/responses
-   --require-responses --report build/llm-eval/report.json`. Затем выполнить ручную оценку по
-   rubric из dataset. Полный протокол описан в `scripts/llm-eval/README.md`.
+   --require-responses --report build/llm-eval/report.json`. Затем проверить candidate-aware
+   gate и выполнить слепую ручную оценку по rubric из dataset. Полный протокол описан в
+   `scripts/llm-eval/README.md`.
 4. Включить создание snapshots: `INTERPRETATION_SNAPSHOT_ENABLED`, snapshot planner и worker.
 5. Убедиться, что snapshot стабилен и не содержит запрещённых данных.
 6. Настроить YandexGPT secret/model/cost limits и включить generation planner/worker.
@@ -93,11 +96,12 @@ Rollback приложения разрешён только при совмес�
 1. перенести API key на сервер в secret file/storage с правами `0600`;
 2. закрепить folder ID, model URI `yandexgpt-5.1`, прошедшую canary версию prompt/schema и
    snapshot calculation `weekly-snapshot-v6` в release configuration; связка
-   `weekly-interpretation-v4` / schema `2` прошла успешный end-to-end canary revision 7 и должна
-   развёртываться без замены на плавающие или legacy-версии;
-3. канонический dataset из 26 обезличенных сценариев уже подготовлен локально; до активации нужно
-   получить и сохранить 52 shadow-ответа v4/v5, пройти автоматический gate и ручную rubric без
-   critical errors;
+   `weekly-interpretation-v4` / schema `2` прошла успешный end-to-end canary revision 7 и
+   остаётся конфигурацией по умолчанию. Переход на `weekly-interpretation-v15` / schema `3`
+   разрешается только после полной матрицы, слепой оценки и нового canary;
+3. канонический dataset из 26 обезличенных сценариев уже подготовлен локально; до активации v15
+   нужно получить и сохранить 52 shadow-ответа v4/v15. Gate отдельно проверяет целостность всей
+   матрицы, отсутствие автоматических нарушений у кандидата и ручную rubric без critical errors;
 4. утвердить лимит бюджета и получателей billing/technical alerts.
 
 Категории данных для текущего weekly payload уже подтверждены: агрегированные

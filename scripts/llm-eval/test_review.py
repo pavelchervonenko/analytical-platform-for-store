@@ -63,9 +63,17 @@ def sample_dataset(case_count: int = 4) -> dict:
 
 def automatic_report() -> dict:
     return {
+        "caseCount": 4,
+        "configurationCount": 2,
+        "evaluatedResponses": 8,
         "passed": True,
         "automaticMetrics": {
             configuration: {
+                "expectedResponses": 4,
+                "evaluatedResponses": 4,
+                "passedResponses": 4,
+                "missingResponses": 0,
+                "violationCount": 0,
                 "passRate": 1.0,
                 "averages": {
                     "requiredCandidateCoverage": 1.0,
@@ -302,6 +310,89 @@ class BlindedReviewTest(unittest.TestCase):
         )
         self.assertEqual(decision["code"], "KEEP_BASELINE_AND_REVISE_CANDIDATE")
         self.assertFalse(decision["candidateEligibleForCanary"])
+
+
+    def test_baseline_violations_do_not_block_candidate_review(self):
+        report = automatic_report()
+        report["passed"] = False
+        report["automaticMetrics"]["v4"].update({
+            "passedResponses": 3,
+            "violationCount": 1,
+            "passRate": 0.75,
+        })
+
+        failures = REVIEW.review_eligibility_failures(
+            self.dataset,
+            ["case-1/v4: known baseline narrative violation"],
+            report,
+            "v4",
+            "v12",
+        )
+
+        self.assertEqual(failures, [])
+        self.assertEqual(
+            report["reviewEligibility"]["baselineViolationCount"],
+            1,
+        )
+        self.assertTrue(
+            report["reviewEligibility"]["candidateEligibleForBlindedReview"]
+        )
+
+    def test_candidate_violation_blocks_blinded_review(self):
+        report = automatic_report()
+        report["passed"] = False
+        report["automaticMetrics"]["v12"].update({
+            "passedResponses": 3,
+            "violationCount": 1,
+            "passRate": 0.75,
+        })
+
+        failures = REVIEW.review_eligibility_failures(
+            self.dataset,
+            ["case-1/v12: candidate narrative violation"],
+            report,
+            "v4",
+            "v12",
+        )
+
+        self.assertTrue(any("case-1/v12" in failure for failure in failures))
+        self.assertTrue(report["reviewEligibility"]["matrixComplete"])
+        self.assertFalse(
+            report["reviewEligibility"]["candidateEligibleForBlindedReview"]
+        )
+
+    def test_incomplete_or_unreadable_matrix_blocks_review(self):
+        incomplete = automatic_report()
+        incomplete["evaluatedResponses"] = 7
+        incomplete["automaticMetrics"]["v4"].update({
+            "evaluatedResponses": 3,
+            "passedResponses": 3,
+            "missingResponses": 1,
+        })
+        failures = REVIEW.review_eligibility_failures(
+            self.dataset,
+            ["case-1/v4: missing response case-1/v4.json"],
+            incomplete,
+            "v4",
+            "v12",
+        )
+        self.assertTrue(any("missing response" in failure for failure in failures))
+        self.assertFalse(incomplete["reviewEligibility"]["matrixComplete"])
+
+        unreadable = automatic_report()
+        unreadable["automaticMetrics"]["v4"].update({
+            "passedResponses": 3,
+            "violationCount": 1,
+        })
+        failures = REVIEW.review_eligibility_failures(
+            self.dataset,
+            ["case-1/v4: unreadable response: invalid JSON"],
+            unreadable,
+            "v4",
+            "v12",
+        )
+        self.assertTrue(any("unreadable response" in failure for failure in failures))
+        self.assertFalse(unreadable["reviewEligibility"]["matrixComplete"])
 
 
 if __name__ == "__main__":

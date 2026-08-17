@@ -109,6 +109,107 @@ def missing_response_count(report: dict) -> int:
     )
 
 
+def failure_configuration(dataset: dict, failure: str) -> str | None:
+    for case in dataset.get("cases", []):
+        case_id = case.get("id")
+        for configuration in dataset.get("configurations", []):
+            configuration_id = configuration.get("id")
+            if failure.startswith(f"{case_id}/{configuration_id}:"):
+                return configuration_id
+    return None
+
+
+def review_eligibility_failures(
+    dataset: dict,
+    response_failures: list[str],
+    report: dict,
+    baseline: str,
+    candidate: str,
+) -> list[str]:
+    configured = {
+        configuration.get("id")
+        for configuration in dataset.get("configurations", [])
+    }
+    if (
+        baseline not in configured
+        or candidate not in configured
+        or baseline == candidate
+    ):
+        return ["baseline and candidate must be different configured ids"]
+
+    blocking: list[str] = []
+    baseline_violations: list[str] = []
+    integrity_markers = ("missing response", "unreadable response")
+    matrix_complete = True
+    for failure in response_failures:
+        configuration = failure_configuration(dataset, failure)
+        is_integrity_failure = any(
+            marker in failure for marker in integrity_markers
+        )
+        if is_integrity_failure or configuration is None:
+            matrix_complete = False
+        if configuration == baseline and not is_integrity_failure:
+            baseline_violations.append(failure)
+        else:
+            blocking.append(failure)
+
+    expected = len(dataset.get("cases", []))
+    metrics = report.get("automaticMetrics", {})
+    if set(metrics) != configured:
+        matrix_complete = False
+        blocking.append(
+            "automatic metrics do not contain the exact configured matrix"
+        )
+    if report.get("caseCount") != expected:
+        matrix_complete = False
+        blocking.append("automatic report case count differs from dataset")
+    if report.get("configurationCount") != len(configured):
+        matrix_complete = False
+        blocking.append(
+            "automatic report configuration count differs from dataset"
+        )
+    for configuration_id in configured:
+        values = metrics.get(configuration_id, {})
+        if values.get("expectedResponses") != expected:
+            matrix_complete = False
+            blocking.append(
+                f"{configuration_id}: expected response count differs from dataset"
+            )
+        if values.get("evaluatedResponses") != expected:
+            matrix_complete = False
+            blocking.append(
+                f"{configuration_id}: matrix is incomplete or unreadable"
+            )
+        if values.get("missingResponses") != 0:
+            matrix_complete = False
+            blocking.append(
+                f"{configuration_id}: matrix contains missing responses"
+            )
+
+    expected_total = expected * len(configured)
+    if report.get("evaluatedResponses") != expected_total:
+        matrix_complete = False
+        blocking.append("evaluated response count differs from the complete matrix")
+
+    candidate_metrics = metrics.get(candidate, {})
+    if candidate_metrics.get("violationCount") != 0:
+        blocking.append(f"{candidate}: candidate has automatic violations")
+    if candidate_metrics.get("passedResponses") != expected:
+        blocking.append(f"{candidate}: not every candidate response passed")
+
+    blocking = list(dict.fromkeys(blocking))
+    report["reviewEligibility"] = {
+        "baselineConfigurationId": baseline,
+        "candidateConfigurationId": candidate,
+        "matrixComplete": matrix_complete,
+        "baselineViolationCount": len(baseline_violations),
+        "candidateViolationCount": candidate_metrics.get("violationCount"),
+        "blockingViolationCount": len(blocking),
+        "candidateEligibleForBlindedReview": not blocking,
+    }
+    return blocking
+
+
 def counterbalanced_flips(dataset_sha256: str, case_ids: list[str]) -> set[str]:
     ranked = sorted(
         case_ids,
@@ -689,7 +790,10 @@ def command_status(repository: Path, arguments: argparse.Namespace) -> int:
         response_failures, report = automatic_gate(
             repository, dataset, inputs, responses_dir, False
         )
-        failures.extend(response_failures)
+        failures.extend(review_eligibility_failures(
+            dataset, response_failures, report,
+            arguments.baseline, arguments.candidate,
+        ))
     else:
         report = {"automaticMetrics": {}, "evaluatedResponses": 0}
     missing = missing_response_count(report)
@@ -699,6 +803,7 @@ def command_status(repository: Path, arguments: argparse.Namespace) -> int:
         "evaluatedResponses": report.get("evaluatedResponses", 0),
         "missingResponses": missing,
         "automaticMetrics": report.get("automaticMetrics", {}),
+        "reviewEligibility": report.get("reviewEligibility"),
         "violations": failures,
     }, ensure_ascii=False, indent=2))
     return 1 if failures else 0
@@ -713,7 +818,10 @@ def command_prepare(repository: Path, arguments: argparse.Namespace) -> int:
         response_failures, automatic_report = automatic_gate(
             repository, dataset, inputs, responses_dir, True
         )
-        failures.extend(response_failures)
+        failures.extend(review_eligibility_failures(
+            dataset, response_failures, automatic_report,
+            arguments.baseline, arguments.candidate,
+        ))
     else:
         automatic_report = {}
     if failures:
@@ -773,7 +881,10 @@ def command_finalize(repository: Path, arguments: argparse.Namespace) -> int:
         response_failures, automatic_report = automatic_gate(
             repository, dataset, inputs, responses_dir, True
         )
-        failures.extend(response_failures)
+        failures.extend(review_eligibility_failures(
+            dataset, response_failures, automatic_report,
+            arguments.baseline, arguments.candidate,
+        ))
     else:
         automatic_report = {}
     expected_dataset_hash = file_sha256(manifest_path)
@@ -824,6 +935,11 @@ def add_common_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--responses-dir", default=DEFAULT_RESPONSES)
 
 
+def add_gate_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--baseline", default="v4")
+    parser.add_argument("--candidate", default="v15")
+
+
 def main() -> int:
     os.umask(0o077)
     parser = argparse.ArgumentParser(
@@ -832,14 +948,16 @@ def main() -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     status = commands.add_parser("status", help="Check readiness without writing artifacts")
     add_common_arguments(status)
+    add_gate_arguments(status)
     prepare = commands.add_parser("prepare", help="Create blinded packet and blank scores")
     add_common_arguments(prepare)
+    add_gate_arguments(prepare)
     prepare.add_argument("--output-dir", default=DEFAULT_REVIEW_DIR)
     finalize = commands.add_parser("finalize", help="Validate scores and unblind decision")
     add_common_arguments(finalize)
     finalize.add_argument("--review-dir", default=DEFAULT_REVIEW_DIR)
     finalize.add_argument("--baseline", default="v4")
-    finalize.add_argument("--candidate", default="v8")
+    finalize.add_argument("--candidate", default="v15")
     finalize.add_argument(
         "--report",
         default="build/llm-eval/review/decision-report.json",
