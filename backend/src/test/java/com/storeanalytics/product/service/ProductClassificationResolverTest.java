@@ -91,6 +91,6 @@ class ProductClassificationResolverTest {
         assertThat(result.orElseThrow().category()).isSameAs(category);
         assertThat(result.orElseThrow().assignment()).isNull();
         assertThat(result.orElseThrow().version())
-                .isEqualTo("livesklad-product-rules-v3:charger-cable");
+                .isEqualTo("livesklad-product-rules-v4:charger-cable");
     }
 }

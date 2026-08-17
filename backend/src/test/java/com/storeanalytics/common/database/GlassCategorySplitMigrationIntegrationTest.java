@@ -30,7 +30,7 @@ class GlassCategorySplitMigrationIntegrationTest {
 
         flyway(null).migrate();
 
-        assertThat(currentVersion()).isEqualTo("38");
+        assertThat(currentVersion()).isEqualTo("39");
         assertClassification("glass-iphone", "GLASS_IPHONE");
         assertClassification("camera-iphone", "GLASS_CAMERA_IPHONE");
         assertClassification("glass-samsung", "GLASS_SAMSUNG");
@@ -44,6 +44,11 @@ class GlassCategorySplitMigrationIntegrationTest {
                 .isEqualTo("Защитное стекло Samsung");
         assertThat(categoryName("GLASS_CAMERA_SAMSUNG"))
                 .isEqualTo("Защита камеры Samsung");
+
+        assertThat(payrollCategory("GLASS_IPHONE")).isEqualTo("ACCESSORY");
+        assertThat(payrollCategory("GLASS_SAMSUNG")).isEqualTo("ACCESSORY");
+        assertThat(payrollCategory("GLASS_CAMERA_IPHONE")).isEqualTo("ACCESSORY");
+        assertThat(payrollCategory("GLASS_CAMERA_SAMSUNG")).isEqualTo("ACCESSORY");
 
         assertThat(itemAmount("net_amount")).isEqualByComparingTo("400.00");
         assertThat(itemAmount("cost_amount")).isEqualByComparingTo("40.00");
@@ -263,6 +268,14 @@ class GlassCategorySplitMigrationIntegrationTest {
     private String categoryName(String categoryCode) throws SQLException {
         return queryString("""
                 SELECT name
+                FROM analytics_categories
+                WHERE code = ?
+                """, categoryCode);
+    }
+
+    private String payrollCategory(String categoryCode) throws SQLException {
+        return queryString("""
+                SELECT payroll_category_code
                 FROM analytics_categories
                 WHERE code = ?
                 """, categoryCode);

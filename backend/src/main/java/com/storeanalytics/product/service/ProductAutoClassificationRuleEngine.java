@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class ProductAutoClassificationRuleEngine {
 
-    public static final String RULE_VERSION = "livesklad-product-rules-v3";
+    public static final String RULE_VERSION = "livesklad-product-rules-v4";
 
     public Optional<ProductAutoClassificationDecision> classify(Product product) {
         return classify(product.getName(), product.getSourceKind());
@@ -96,7 +96,12 @@ public class ProductAutoClassificationRuleEngine {
                 "чистка устройства",
                 "гравировк",
                 "перезагрузка устройства",
-                "защитного покрытия"
+                "защитного покрытия",
+                "подзаряд",
+                "подпис",
+                "subscription",
+                "ремонт",
+                "repair"
         )) {
             return decision(
                     "SETUP_SERVICE",
@@ -126,7 +131,7 @@ public class ProductAutoClassificationRuleEngine {
             return notApplicable("OTHER_ACCESSORY_PRODUCT", "generic-case");
         }
 
-        if (name.contains("стекло") || isCameraProtection(name)) {
+        if (containsAny(name, "стекл", "стекол") || isCameraProtection(name)) {
             if (isIpadOrMac(name) || name.contains("планшет")) {
                 return notApplicable("ACCESSORY_IPAD_MAC", "ipad-glass");
             }
@@ -167,9 +172,13 @@ public class ProductAutoClassificationRuleEngine {
                 "бзу",
                 "power bank",
                 "powerbank",
+                "пауэрбанк",
                 "magsafe battery",
-                "адаптер питания"
-        )) {
+                "адаптер питания",
+                "блок питания",
+                "провод"
+        ) || name.contains("аккумулятор")
+                && containsAny(name, "портативн", "внешн")) {
             return notApplicable("CHARGER_CABLE", "charger-cable");
         }
 
@@ -208,6 +217,7 @@ public class ProductAutoClassificationRuleEngine {
                 "держатель",
                 "переходник",
                 "адаптер",
+                "монопод",
                 "стилус",
                 "сумка",
                 "рюкзак"

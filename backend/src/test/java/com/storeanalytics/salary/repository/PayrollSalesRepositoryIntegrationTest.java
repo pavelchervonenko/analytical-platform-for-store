@@ -212,6 +212,21 @@ class PayrollSalesRepositoryIntegrationTest {
                 "salary-ps5-new",
                 "Sony PlayStation 5 Slim"
         );
+        UUID applePencil = addProduct(
+                graph.connectionId(),
+                "salary-apple-pencil-new",
+                "Apple Pencil USB-C"
+        );
+        UUID magicMouse = addProduct(
+                graph.connectionId(),
+                "salary-magic-mouse-new",
+                "Apple Magic Mouse USB-C Black"
+        );
+        UUID magicKeyboard = addProduct(
+                graph.connectionId(),
+                "salary-magic-keyboard-new",
+                "Magic Keyboard Black"
+        );
         UUID macbookCase = addProduct(
                 graph.connectionId(),
                 "salary-macbook-case",
@@ -235,19 +250,40 @@ class PayrollSalesRepositoryIntegrationTest {
                 "1.000", "700.00", "450.00"
         );
         addItem(
+                saleId, applePencil, "IPAD_MAC",
+                "1.000", "100.00", "50.00"
+        );
+        addItem(
+                saleId, magicMouse, "IPAD_MAC",
+                "1.000", "100.00", "50.00"
+        );
+        addItem(
+                saleId, magicKeyboard, "IPAD_MAC",
+                "1.000", "100.00", "50.00"
+        );
+        addItem(
                 saleId, macbookCase, "CASE_APPLE_IPHONE",
                 "1.000", "50.00", "20.00"
         );
 
         assertThat(repository.sourceFacts(
                 graph.storeId(), saleDate, saleDate
-        )).hasSize(5).allSatisfy(fact ->
+        )).hasSize(8).allSatisfy(fact ->
                 assertThat(fact.overrideAssignmentId()).isNull()
         ).anySatisfy(fact -> {
             assertThat(fact.productId()).isEqualTo(graph.macbookProductId());
             assertThat(fact.effectivePayrollCategory()).isEqualTo("TECH_TIER_1");
         }).anySatisfy(fact -> {
             assertThat(fact.productId()).isEqualTo(ipad);
+            assertThat(fact.effectivePayrollCategory()).isEqualTo("TECH_TIER_2");
+        }).anySatisfy(fact -> {
+            assertThat(fact.productId()).isEqualTo(applePencil);
+            assertThat(fact.effectivePayrollCategory()).isEqualTo("TECH_TIER_2");
+        }).anySatisfy(fact -> {
+            assertThat(fact.productId()).isEqualTo(magicMouse);
+            assertThat(fact.effectivePayrollCategory()).isEqualTo("TECH_TIER_2");
+        }).anySatisfy(fact -> {
+            assertThat(fact.productId()).isEqualTo(magicKeyboard);
             assertThat(fact.effectivePayrollCategory()).isEqualTo("TECH_TIER_2");
         }).anySatisfy(fact -> {
             assertThat(fact.productId()).isEqualTo(dyson);
@@ -264,7 +300,7 @@ class PayrollSalesRepositoryIntegrationTest {
                 graph.storeId(), saleDate, saleDate
         )).singleElement().satisfies(day -> {
             assertThat(day.tier1Quantity()).isEqualByComparingTo("3.000");
-            assertThat(day.tier2Quantity()).isEqualByComparingTo("1.000");
+            assertThat(day.tier2Quantity()).isEqualByComparingTo("4.000");
             assertThat(day.accessoryTurnover()).isEqualByComparingTo("50.00");
             assertThat(day.unmappedItemCount()).isZero();
         });

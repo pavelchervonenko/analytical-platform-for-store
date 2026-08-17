@@ -31,7 +31,7 @@ class CustomerMonetaryClassificationMigrationIntegrationTest {
 
         flyway(null).migrate();
 
-        assertThat(currentVersion()).isEqualTo("38");
+        assertThat(currentVersion()).isEqualTo("39");
         try (Connection connection = connection();
              Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery("""
@@ -86,6 +86,7 @@ class CustomerMonetaryClassificationMigrationIntegrationTest {
         }
         assertCorrectedFinancialGroupsWithoutChangingSourceAmounts();
         assertAdditionalRevenueFlagMatchesMonetaryKinds();
+        assertConfirmedAppleDevicesUseTierTwoPayrollDefault();
     }
 
     private Flyway flyway(String target) {
@@ -408,6 +409,33 @@ class CustomerMonetaryClassificationMigrationIntegrationTest {
                      """)) {
             assertThat(result.next()).isTrue();
             assertThat(result.getInt("mismatch_count")).isZero();
+        }
+    }
+
+    private void assertConfirmedAppleDevicesUseTierTwoPayrollDefault()
+            throws SQLException {
+        try (Connection connection = connection();
+             Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("""
+                     SELECT count(*) AS correctly_resolved_count
+                     FROM products product
+                     JOIN product_category_assignments assignment
+                       ON assignment.product_id = product.id
+                     JOIN analytics_categories category
+                       ON category.id = assignment.analytics_category_id
+                     WHERE product.external_id IN (
+                         '2579', '2591', '2972', '2973',
+                         '3325', '3784', '3901'
+                     )
+                       AND category.code = 'IPAD_MAC'
+                       AND resolve_default_payroll_category(
+                           category.code,
+                           product.name,
+                           category.payroll_category_code
+                       ) = 'TECH_TIER_2'
+                     """)) {
+            assertThat(result.next()).isTrue();
+            assertThat(result.getInt("correctly_resolved_count")).isEqualTo(7);
         }
     }
 

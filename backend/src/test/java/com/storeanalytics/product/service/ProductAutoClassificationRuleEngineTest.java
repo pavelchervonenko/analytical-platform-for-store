@@ -16,7 +16,7 @@ class ProductAutoClassificationRuleEngineTest {
             new ProductAutoClassificationRuleEngine();
 
     @ParameterizedTest
-    @MethodSource("productionDryRunCases")
+    @MethodSource({"productionDryRunCases", "customerMethodologyCases"})
     void classifiesApprovedProductionDryRun(
             String name,
             String expectedCategory,
@@ -191,6 +191,56 @@ class ProductAutoClassificationRuleEngineTest {
                 arguments(
                         "Док-станция PS5 DualSense ChargingStation",
                         "OTHER_ACCESSORY_PRODUCT",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Подзарядка устройства",
+                        "SETUP_SERVICE",
+                        ProductConditionType.NOT_APPLICABLE
+                )
+        );
+    }
+
+    private static Stream<Arguments> customerMethodologyCases() {
+        return Stream.of(
+                arguments(
+                        "Подписка PlayStation Plus",
+                        "SETUP_SERVICE",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Платный ремонт iPhone",
+                        "SETUP_SERVICE",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Блок питания Apple USB-C 20W",
+                        "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Провод USB-C to Lightning",
+                        "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Пауэрбанк MagSafe 10000 mAh",
+                        "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Портативный аккумулятор Baseus 20000 mAh",
+                        "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Монопод для смартфона",
+                        "OTHER_ACCESSORY_PRODUCT",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Комплект защитных стекол Samsung S25",
+                        "GLASS_SAMSUNG",
                         ProductConditionType.NOT_APPLICABLE
                 )
         );

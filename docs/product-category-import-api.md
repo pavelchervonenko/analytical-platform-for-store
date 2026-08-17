@@ -72,7 +72,7 @@ Manual backfill returns 409 SYNC_CLASSIFICATION_REQUIRED when readiness is false
 incremental enqueuer skips creation and writes a warning. This is a bootstrap safety barrier. After bootstrap, classification uses two
 ordered layers:
 an effective customer-approved assignment by exact LiveSklad product identity first, then the
-versioned high-confidence rule set `livesklad-product-rules-v3`. A rule result is stored directly in
+versioned high-confidence rule set `livesklad-product-rules-v4`. A rule result is stored directly in
 the sale or return snapshot with its rule version. Ambiguous names are never forced into a fallback
 category and remain visible as `UNMAPPED` for review.
 
