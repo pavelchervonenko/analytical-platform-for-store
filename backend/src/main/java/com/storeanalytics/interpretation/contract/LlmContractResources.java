@@ -31,6 +31,14 @@ public final class LlmContractResources {
             "weekly-interpretation-v14";
     public static final String TEAM_GUARDED_STRUCTURED_SUMMARY_PROMPT_VERSION =
             "weekly-interpretation-v15";
+    public static final String MATRIX_HARDENED_STRUCTURED_SUMMARY_PROMPT_VERSION =
+            "weekly-interpretation-v16";
+    public static final String PRODUCTION_HARDENED_STRUCTURED_SUMMARY_PROMPT_VERSION =
+            "weekly-interpretation-v17";
+    public static final String DETERMINISTIC_NARRATIVE_PROMPT_VERSION =
+            "weekly-interpretation-v18";
+    public static final String PRIVACY_REDUCED_PROMPT_VERSION =
+            "weekly-interpretation-v19";
     public static final String INPUT_SCHEMA =
             "contracts/llm/weekly-interpretation-input-v1.schema.json";
     public static final String CONTENT_SCHEMA =
@@ -65,6 +73,14 @@ public final class LlmContractResources {
             "prompts/llm/weekly-interpretation-v14.md";
     public static final String TEAM_GUARDED_STRUCTURED_SUMMARY_SYSTEM_PROMPT =
             "prompts/llm/weekly-interpretation-v15.md";
+    public static final String MATRIX_HARDENED_STRUCTURED_SUMMARY_SYSTEM_PROMPT =
+            "prompts/llm/weekly-interpretation-v16.md";
+    public static final String PRODUCTION_HARDENED_STRUCTURED_SUMMARY_SYSTEM_PROMPT =
+            "prompts/llm/weekly-interpretation-v17.md";
+    public static final String DETERMINISTIC_NARRATIVE_SYSTEM_PROMPT =
+            "prompts/llm/weekly-interpretation-v18.md";
+    public static final String PRIVACY_REDUCED_SYSTEM_PROMPT =
+            "prompts/llm/weekly-interpretation-v19.md";
 
     private LlmContractResources() {
     }
@@ -103,6 +119,14 @@ public final class LlmContractResources {
                     PRIMARY_SIGNAL_SYSTEM_PROMPT;
             case TEAM_GUARDED_STRUCTURED_SUMMARY_PROMPT_VERSION ->
                     TEAM_GUARDED_STRUCTURED_SUMMARY_SYSTEM_PROMPT;
+            case MATRIX_HARDENED_STRUCTURED_SUMMARY_PROMPT_VERSION ->
+                    MATRIX_HARDENED_STRUCTURED_SUMMARY_SYSTEM_PROMPT;
+            case PRODUCTION_HARDENED_STRUCTURED_SUMMARY_PROMPT_VERSION ->
+                    PRODUCTION_HARDENED_STRUCTURED_SUMMARY_SYSTEM_PROMPT;
+            case DETERMINISTIC_NARRATIVE_PROMPT_VERSION ->
+                    DETERMINISTIC_NARRATIVE_SYSTEM_PROMPT;
+            case PRIVACY_REDUCED_PROMPT_VERSION ->
+                    PRIVACY_REDUCED_SYSTEM_PROMPT;
             case STRUCTURED_SUMMARY_PROMPT_VERSION ->
                     STRUCTURED_SUMMARY_SYSTEM_PROMPT;
             case NEXT_PROMPT_VERSION -> NEXT_SYSTEM_PROMPT;
@@ -128,11 +152,7 @@ public final class LlmContractResources {
                 || NARRATIVE_GUARDED_PROMPT_VERSION.equals(promptVersion)
                 || CAUSAL_NARRATIVE_GUARDED_PROMPT_VERSION.equals(promptVersion))
                 && NEXT_CONTENT_SCHEMA_VERSION == contentSchemaVersion;
-        boolean primarySignal = (PRIMARY_SIGNAL_PROMPT_VERSION.equals(
-                promptVersion
-        ) || STRUCTURED_SUMMARY_PROMPT_VERSION.equals(promptVersion)
-                || TEAM_GUARDED_STRUCTURED_SUMMARY_PROMPT_VERSION.equals(
-                promptVersion))
+        boolean primarySignal = isPrimarySignalPrompt(promptVersion)
                 && PRIMARY_SIGNAL_CONTENT_SCHEMA_VERSION == contentSchemaVersion;
         return current || flat || primarySignal;
     }
@@ -140,34 +160,26 @@ public final class LlmContractResources {
     public static boolean isConcisePrompt(String promptVersion) {
         return CONCISE_PROMPT_VERSION.equals(promptVersion)
                 || REVISED_CONCISE_PROMPT_VERSION.equals(promptVersion)
-                || STRICT_CONCISE_PROMPT_VERSION.equals(promptVersion)
-                || ACTIONABLE_CONCISE_PROMPT_VERSION.equals(promptVersion)
-                || EVIDENCE_GUARDED_PROMPT_VERSION.equals(promptVersion)
-                || HARDENED_EVIDENCE_PROMPT_VERSION.equals(promptVersion)
-                || NARRATIVE_GUARDED_PROMPT_VERSION.equals(promptVersion)
-                || CAUSAL_NARRATIVE_GUARDED_PROMPT_VERSION.equals(promptVersion)
-                || PRIMARY_SIGNAL_PROMPT_VERSION.equals(promptVersion)
-                || STRUCTURED_SUMMARY_PROMPT_VERSION.equals(promptVersion)
-                || TEAM_GUARDED_STRUCTURED_SUMMARY_PROMPT_VERSION.equals(
-                promptVersion);
+                || isStrictConcisePrompt(promptVersion);
     }
 
     public static boolean isStrictConcisePrompt(String promptVersion) {
         return STRICT_CONCISE_PROMPT_VERSION.equals(promptVersion)
                 || ACTIONABLE_CONCISE_PROMPT_VERSION.equals(promptVersion)
-                || EVIDENCE_GUARDED_PROMPT_VERSION.equals(promptVersion)
-                || HARDENED_EVIDENCE_PROMPT_VERSION.equals(promptVersion)
-                || NARRATIVE_GUARDED_PROMPT_VERSION.equals(promptVersion)
-                || CAUSAL_NARRATIVE_GUARDED_PROMPT_VERSION.equals(promptVersion)
-                || PRIMARY_SIGNAL_PROMPT_VERSION.equals(promptVersion)
-                || STRUCTURED_SUMMARY_PROMPT_VERSION.equals(promptVersion)
-                || TEAM_GUARDED_STRUCTURED_SUMMARY_PROMPT_VERSION.equals(
-                promptVersion);
+                || isEvidenceGuardedPrompt(promptVersion);
     }
 
     public static boolean isStructuredSummaryPrompt(String promptVersion) {
         return STRUCTURED_SUMMARY_PROMPT_VERSION.equals(promptVersion)
                 || TEAM_GUARDED_STRUCTURED_SUMMARY_PROMPT_VERSION.equals(
+                promptVersion
+        ) || MATRIX_HARDENED_STRUCTURED_SUMMARY_PROMPT_VERSION.equals(
+                promptVersion
+        ) || PRODUCTION_HARDENED_STRUCTURED_SUMMARY_PROMPT_VERSION.equals(
+                promptVersion
+        ) || DETERMINISTIC_NARRATIVE_PROMPT_VERSION.equals(
+                promptVersion
+        ) || PRIVACY_REDUCED_PROMPT_VERSION.equals(
                 promptVersion
         );
     }
@@ -177,10 +189,12 @@ public final class LlmContractResources {
                 || HARDENED_EVIDENCE_PROMPT_VERSION.equals(promptVersion)
                 || NARRATIVE_GUARDED_PROMPT_VERSION.equals(promptVersion)
                 || CAUSAL_NARRATIVE_GUARDED_PROMPT_VERSION.equals(promptVersion)
-                || PRIMARY_SIGNAL_PROMPT_VERSION.equals(promptVersion)
-                || STRUCTURED_SUMMARY_PROMPT_VERSION.equals(promptVersion)
-                || TEAM_GUARDED_STRUCTURED_SUMMARY_PROMPT_VERSION.equals(
-                promptVersion);
+                || isPrimarySignalPrompt(promptVersion);
+    }
+
+    private static boolean isPrimarySignalPrompt(String promptVersion) {
+        return PRIMARY_SIGNAL_PROMPT_VERSION.equals(promptVersion)
+                || isStructuredSummaryPrompt(promptVersion);
     }
 
 }

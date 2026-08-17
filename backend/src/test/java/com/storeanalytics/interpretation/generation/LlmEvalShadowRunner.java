@@ -1,5 +1,6 @@
 package com.storeanalytics.interpretation.generation;
 
+import com.storeanalytics.interpretation.contract.LlmContractResources;
 import com.storeanalytics.integration.llm.yandex.YandexLlmMetrics;
 import com.storeanalytics.integration.llm.yandex.YandexLlmPolicyProperties;
 import com.storeanalytics.integration.llm.yandex.YandexLlmProperties;
@@ -29,9 +30,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -39,7 +42,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.SerializationFeature;
 
 /**
- * Local-only v4/v15 shadow harness. It lives in test sources and is never packaged
+ * Local-only v4/v19 shadow harness. It lives in test sources and is never packaged
  * into the production application.
  */
 public final class LlmEvalShadowRunner {
@@ -145,11 +148,30 @@ public final class LlmEvalShadowRunner {
             );
         }
         List<Configuration> configurations = configurations(settings.datasetPath());
+        boolean privacyReducedMatrix = configurations.stream()
+                .anyMatch(configuration -> LlmContractResources
+                        .PRIVACY_REDUCED_PROMPT_VERSION
+                        .equals(configuration.promptVersion()));
         List<Path> inputFiles;
         try (var files = Files.list(settings.inputsDirectory())) {
             inputFiles = files
                     .filter(path -> path.getFileName().toString().endsWith(".json"))
                     .sorted(Comparator.comparing(path -> path.getFileName().toString()))
+                    .toList();
+        }
+        if (!settings.caseIds().isEmpty()) {
+            Set<String> availableCaseIds = inputFiles.stream()
+                    .map(LlmEvalShadowRunner::caseId)
+                    .collect(java.util.stream.Collectors.toSet());
+            if (!availableCaseIds.containsAll(settings.caseIds())) {
+                Set<String> missing = new LinkedHashSet<>(settings.caseIds());
+                missing.removeAll(availableCaseIds);
+                throw new IllegalArgumentException(
+                        "Unknown LLM_EVAL_CASE_IDS: " + missing
+                );
+            }
+            inputFiles = inputFiles.stream()
+                    .filter(path -> settings.caseIds().contains(caseId(path)))
                     .toList();
         }
         if (inputFiles.isEmpty()) {
@@ -158,8 +180,7 @@ public final class LlmEvalShadowRunner {
         LlmProviderClient preflightProvider = provider(settings, true);
         List<PreparedEntry> matrix = new ArrayList<>();
         for (Path inputFile : inputFiles) {
-            String filename = inputFile.getFileName().toString();
-            String caseId = filename.substring(0, filename.length() - ".json".length());
+            String caseId = caseId(inputFile);
             WeeklyInterpretationInput input = objectMapper.readValue(
                     Files.readString(inputFile, StandardCharsets.UTF_8),
                     WeeklyInterpretationInput.class
@@ -171,7 +192,8 @@ public final class LlmEvalShadowRunner {
                 );
                 if (providerInput == null) {
                     providerInput = prepared.request().inputJson();
-                } else if (!providerInput.equals(prepared.request().inputJson())) {
+                } else if (!providerInput.equals(prepared.request().inputJson())
+                        && !privacyReducedMatrix) {
                     throw new IllegalStateException(
                             "evaluation provider inputs differ for case " + caseId
                     );
@@ -192,6 +214,11 @@ public final class LlmEvalShadowRunner {
         return List.copyOf(matrix);
     }
 
+    private static String caseId(Path inputFile) {
+        String filename = inputFile.getFileName().toString();
+        return filename.substring(0, filename.length() - ".json".length());
+    }
+
     private List<Configuration> configurations(Path datasetPath) throws IOException {
         JsonNode root = objectMapper.readTree(
                 Files.readString(datasetPath, StandardCharsets.UTF_8)
@@ -204,16 +231,16 @@ public final class LlmEvalShadowRunner {
                     node.path("contentSchemaVersion").asInt()
             );
             if (!("v4".equals(configuration.id())
-                    || "v15".equals(configuration.id()))) {
+                    || "v19".equals(configuration.id()))) {
                 throw new IllegalArgumentException(
-                        "Shadow runner only supports the reviewed v4/v15 matrix"
+                        "Shadow runner only supports the reviewed v4/v19 matrix"
                 );
             }
             values.add(configuration);
         }
         if (values.size() != 2) {
             throw new IllegalArgumentException(
-                    "Shadow dataset must contain exactly the v4 and v15 configurations"
+                    "Shadow dataset must contain exactly the v4 and v19 configurations"
             );
         }
         return List.copyOf(values);
@@ -724,6 +751,7 @@ public final class LlmEvalShadowRunner {
     record Settings(
             String mode,
             Path datasetPath,
+            Set<String> caseIds,
             Path inputsDirectory,
             Path responsesDirectory,
             Path receiptsDirectory,
@@ -778,6 +806,7 @@ public final class LlmEvalShadowRunner {
                     mode,
                     path(environment, "LLM_EVAL_DATASET",
                             "scripts/llm-eval/dataset-v2.json"),
+                    caseIds(environment),
                     path(environment, "LLM_EVAL_INPUTS_DIR",
                             "build/llm-eval/inputs"),
                     responses,
@@ -834,6 +863,26 @@ public final class LlmEvalShadowRunner {
                 );
             }
             return settings;
+        }
+
+        private static Set<String> caseIds(
+                Map<String, String> environment
+        ) {
+            String configured = value(environment, "LLM_EVAL_CASE_IDS", "");
+            if (configured.isBlank()) {
+                return Set.of();
+            }
+            Set<String> result = new LinkedHashSet<>();
+            for (String item : configured.split(",")) {
+                String caseId = item.trim();
+                if (!caseId.matches("[a-z0-9]+(?:-[a-z0-9]+)*")
+                        || !result.add(caseId)) {
+                    throw new IllegalArgumentException(
+                            "LLM_EVAL_CASE_IDS must contain unique case ids"
+                    );
+                }
+            }
+            return Set.copyOf(result);
         }
 
         private static Path path(

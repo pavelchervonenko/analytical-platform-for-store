@@ -2,9 +2,12 @@ package com.storeanalytics.interpretation.validation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.storeanalytics.interpretation.contract.LlmContractResources;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput;
+import com.storeanalytics.interpretation.generation.LlmProviderInputCompactor;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.CandidateKind;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.CandidateSignal;
+import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Comparison;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.EmployeeFacts;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.EvidenceIndexEntry;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Fact;
@@ -18,6 +21,7 @@ import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Snap
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Sufficiency;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Unit;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Versions;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -242,6 +246,156 @@ class WeeklyInterpretationV3ResponseValidatorTest {
     }
 
     @Test
+    void explainsZeroRevenueAfterANonZeroPreviousPeriod() throws Exception {
+        CandidateSignal candidate = new CandidateSignal(
+                "C001",
+                CandidateKind.RISK,
+                "REVENUE_DYNAMICS",
+                null,
+                List.of(STORE_EVIDENCE)
+        );
+        WeeklyInterpretationInput base = input(List.of(candidate));
+        Fact zeroRevenue = new Fact(
+                STORE_EVIDENCE,
+                "NET_REVENUE",
+                null,
+                Unit.MONEY,
+                0,
+                new Comparison(
+                        new BigDecimal("850000"),
+                        new BigDecimal("-850000"),
+                        new BigDecimal("-100")
+                ),
+                Sufficiency.SUFFICIENT,
+                Materiality.PRIMARY
+        );
+        WeeklyInterpretationInput zero = new WeeklyInterpretationInput(
+                base.contractVersion(),
+                base.snapshot(),
+                base.manifest(),
+                new Facts(
+                        List.of(zeroRevenue),
+                        base.facts().team(),
+                        base.facts().employees(),
+                        base.facts().candidateSignals()
+                )
+        );
+        ObjectNode transport = structuredTransport();
+        transport.set(
+                "primarySignal",
+                content.path("primarySignal").deepCopy()
+        );
+
+        LlmResponseValidationResult result = validator.validate(
+                zero,
+                json(transport)
+        );
+
+        assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+        JsonNode primary = objectMapper.readTree(result.canonicalContent())
+                .path("primarySignal");
+        assertThat(primary.path("text").asText()).isEqualTo(
+                "Чистая выручка равна нулю после ненулевого значения "
+                        + "прошлого периода."
+        );
+    }
+
+    @Test
+    void includesVerifiedMarginDirectionWithGrossProfitSignal()
+            throws Exception {
+        String grossEvidence = "STORE.GROSS_PROFIT.CURRENT";
+        String marginEvidence = "STORE.MARGIN_PERCENT.CURRENT";
+        CandidateSignal candidate = new CandidateSignal(
+                "C001",
+                CandidateKind.RISK,
+                "PROFITABILITY",
+                null,
+                List.of(grossEvidence)
+        );
+        WeeklyInterpretationInput base = input(List.of(candidate));
+        List<EvidenceIndexEntry> evidence = new ArrayList<>(
+                base.manifest().evidence()
+        );
+        evidence.add(new EvidenceIndexEntry(
+                grossEvidence, Scope.STORE, null, true
+        ));
+        evidence.add(new EvidenceIndexEntry(
+                marginEvidence, Scope.STORE, null, true
+        ));
+        Manifest manifest = new Manifest(
+                base.manifest().employeeRefs(),
+                evidence,
+                List.of("C001"),
+                List.of(),
+                List.of(),
+                List.of()
+        );
+        Fact grossProfit = new Fact(
+                grossEvidence,
+                "GROSS_PROFIT",
+                null,
+                Unit.MONEY,
+                168000,
+                new Comparison(
+                        new BigDecimal("210000"),
+                        new BigDecimal("-42000"),
+                        new BigDecimal("-20")
+                ),
+                Sufficiency.SUFFICIENT,
+                Materiality.PRIMARY
+        );
+        Fact margin = new Fact(
+                marginEvidence,
+                "MARGIN_PERCENT",
+                null,
+                Unit.PERCENT,
+                12,
+                new Comparison(
+                        new BigDecimal("21"),
+                        new BigDecimal("-9"),
+                        null
+                ),
+                Sufficiency.SUFFICIENT,
+                Materiality.SECONDARY
+        );
+        WeeklyInterpretationInput profitability =
+                new WeeklyInterpretationInput(
+                        base.contractVersion(),
+                        base.snapshot(),
+                        manifest,
+                        new Facts(
+                                List.of(grossProfit, margin),
+                                base.facts().team(),
+                                base.facts().employees(),
+                                List.of(candidate)
+                        )
+                );
+        ObjectNode transport = structuredTransport();
+        transport.set(
+                "primarySignal",
+                content.path("primarySignal").deepCopy()
+        );
+
+        LlmResponseValidationResult result = validator.validate(
+                profitability,
+                json(transport)
+        );
+
+        assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+        JsonNode primary = objectMapper.readTree(result.canonicalContent())
+                .path("primarySignal");
+        assertThat(primary.path("text").asText()).isEqualTo(
+                "Валовая прибыль и маржинальность существенно снизились "
+                        + "относительно прошлого периода."
+        );
+        assertThat(primary.path("evidenceRefs"))
+                .containsExactly(
+                        objectMapper.getNodeFactory().textNode(grossEvidence),
+                        objectMapper.getNodeFactory().textNode(marginEvidence)
+                );
+    }
+
+    @Test
     void normalizesStructuredProviderSummariesIntoCanonicalV3() throws Exception {
         ObjectNode transport = content.deepCopy();
         transport.remove("employees");
@@ -275,6 +429,12 @@ class WeeklyInterpretationV3ResponseValidatorTest {
         assertThat(canonical.path("employees")).hasSize(1);
         assertThat(canonical.at("/employees/0/employeeRef").asText())
                 .isEqualTo("E01");
+        assertThat(canonical.at("/primarySignal/text").asText())
+                .isEqualTo(
+                        "Чистая выручка (продажи за вычетом "
+                                + "возвратов) существенно выросла "
+                                + "относительно прошлого периода."
+                );
         assertThat(canonical.path("summaryBlocks"))
                 .extracting(block -> block.path("scope").asText()
                         + ":" + block.path("section").asText())
@@ -282,6 +442,310 @@ class WeeklyInterpretationV3ResponseValidatorTest {
                         "TEAM:TEAM_OVERVIEW",
                         "EMPLOYEE:HEADLINE"
                 );
+    }
+
+    @Test
+    void materializesBackendOwnedEmployeeHeadlinesFromFullSnapshot()
+            throws Exception {
+        ObjectNode transport = content.deepCopy();
+        transport.remove("employees");
+        transport.remove("summaryBlocks");
+        ObjectNode teamOverview = transport.putObject("teamOverview");
+        teamOverview.put("text", "A confirmed team context is available.");
+        teamOverview.putArray("evidenceRefs").add(TEAM_EVIDENCE);
+        transport.putArray("supportingSummaries");
+        transport.put("backendEmployeeHeadlines", true);
+        CandidateSignal employeeCandidate = new CandidateSignal(
+                "C002",
+                CandidateKind.OPPORTUNITY,
+                "EMPLOYEE_PERFORMANCE",
+                "E01",
+                List.of(EMPLOYEE_EVIDENCE)
+        );
+
+        LlmResponseValidationResult result = validator.validate(
+                input(List.of(
+                        storeCandidate("C001", "REVENUE_DYNAMICS"),
+                        employeeCandidate
+                )),
+                json(transport)
+        );
+
+        assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+        JsonNode canonical = objectMapper.readTree(result.canonicalContent());
+        assertThat(canonical.has("backendEmployeeHeadlines")).isFalse();
+        JsonNode headline = canonical.path("summaryBlocks").get(1);
+        assertThat(headline.path("scope").asText()).isEqualTo("EMPLOYEE");
+        assertThat(headline.path("employeeRef").asText()).isEqualTo("E01");
+        assertThat(headline.path("text").asText()).isEqualTo(
+                "Результат сотрудника существенно улучшился относительно "
+                        + "его прошлого периода."
+        );
+        assertThat(headline.path("evidenceRefs"))
+                .containsExactly(objectMapper.getNodeFactory().textNode(
+                        EMPLOYEE_EVIDENCE
+                ));
+    }
+
+    @Test
+    void buildsStructuredTeamRelationshipsFromBackendCandidates()
+            throws Exception {
+        ObjectNode transport = content.deepCopy();
+        transport.remove("employees");
+        transport.remove("summaryBlocks");
+        ObjectNode teamOverview = transport.putObject("teamOverview");
+        teamOverview.put("text", "A confirmed team context is available.");
+        teamOverview.putArray("evidenceRefs").add(TEAM_EVIDENCE);
+        ObjectNode employeeHeadline = transport
+                .putObject("employeeHeadlines")
+                .putObject("E01");
+        employeeHeadline.put(
+                "text",
+                "Employee result is comparable with the previous week."
+        );
+        employeeHeadline.putArray("evidenceRefs").add(EMPLOYEE_EVIDENCE);
+        transport.putArray("supportingSummaries");
+        transport.putArray("teamRelationships");
+
+        CandidateSignal relationship = new CandidateSignal(
+                "C002",
+                CandidateKind.OPPORTUNITY,
+                "MOST_IMPROVED",
+                "E01",
+                null,
+                null,
+                List.of(),
+                Sufficiency.SUFFICIENT,
+                List.of(EMPLOYEE_EVIDENCE)
+        );
+        LlmResponseValidationResult result = validator.validate(
+                input(List.of(
+                        storeCandidate("C001", "REVENUE_DYNAMICS"),
+                        relationship
+                )),
+                json(transport)
+        );
+
+        assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+        JsonNode canonical = objectMapper.readTree(result.canonicalContent());
+        JsonNode normalized = canonical.at("/teamRelationships/0");
+        assertThat(canonical.path("teamRelationships")).hasSize(1);
+        assertThat(normalized.path("type").asText())
+                .isEqualTo("MOST_IMPROVED");
+        assertThat(normalized.path("sourceEmployeeRefs"))
+                .containsExactly(objectMapper.getNodeFactory().textNode("E01"));
+        assertThat(normalized.path("targetEmployeeRefs")).isEmpty();
+        assertThat(normalized.path("evidenceRefs"))
+                .containsExactly(objectMapper.getNodeFactory().textNode(
+                        EMPLOYEE_EVIDENCE
+                ));
+    }
+
+    @Test
+    void addsBackendOwnedStoreResultWhenNoStoreCandidateExists()
+            throws Exception {
+        LlmResponseValidationResult result = validator.validate(
+                input(List.of()),
+                json(structuredTransport())
+        );
+
+        assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+        JsonNode canonical = objectMapper.readTree(result.canonicalContent());
+        JsonNode storeResult = canonical.path("summaryBlocks").get(0);
+        assertThat(storeResult.path("scope").asText()).isEqualTo("STORE");
+        assertThat(storeResult.path("section").asText()).isEqualTo("RESULT");
+        assertThat(storeResult.path("text").asText()).isEqualTo(
+                "По магазину нет отдельного существенного изменения за период."
+        );
+        assertThat(storeResult.path("evidenceRefs"))
+                .containsExactly(objectMapper.getNodeFactory().textNode(
+                        STORE_EVIDENCE
+                ));
+    }
+
+    @Test
+    void describesLimitedEmployeeWithoutInventingWeeklyDynamics()
+            throws Exception {
+        WeeklyInterpretationInput base = input(List.of());
+        EmployeeFacts source = base.facts().employees().get(0);
+        WeeklyInterpretationInput limited = new WeeklyInterpretationInput(
+                base.contractVersion(),
+                base.snapshot(),
+                base.manifest(),
+                new Facts(
+                        base.facts().store(),
+                        base.facts().team(),
+                        List.of(new EmployeeFacts(
+                                source.employeeRef(),
+                                Sufficiency.LIMITED,
+                                List.of("RESULT"),
+                                source.facts()
+                        )),
+                        List.of()
+                )
+        );
+
+        LlmResponseValidationResult result = validator.validate(
+                limited,
+                json(structuredTransport())
+        );
+
+        assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+        JsonNode canonical = objectMapper.readTree(result.canonicalContent());
+        assertThat(canonical.path("summaryBlocks").get(2).path("text").asText())
+                .isEqualTo(
+                        "По сотруднику доступен только ограниченный "
+                                + "текущий результат."
+                );
+    }
+
+    @Test
+    void reportsExactTieFromBackendOwnedEmployeeRatings() throws Exception {
+        String employeeTwoEvidence =
+                "EMP:E02.RATING.STRUCTURE_SCORE.CURRENT";
+        WeeklyInterpretationInput base = input(List.of());
+        Fact ratingOne = fact(
+                EMPLOYEE_EVIDENCE,
+                "RATING_STRUCTURE_SCORE",
+                Unit.SCORE
+        );
+        Fact ratingTwo = fact(
+                employeeTwoEvidence,
+                "RATING_STRUCTURE_SCORE",
+                Unit.SCORE
+        );
+        Fact eligible = new Fact(
+                TEAM_EVIDENCE,
+                "RATING_ELIGIBLE_COUNT",
+                null,
+                Unit.COUNT,
+                2,
+                null,
+                Sufficiency.SUFFICIENT,
+                Materiality.CONTEXT
+        );
+        List<EvidenceIndexEntry> evidence = new ArrayList<>(
+                base.manifest().evidence()
+        );
+        evidence.add(new EvidenceIndexEntry(
+                employeeTwoEvidence, Scope.EMPLOYEE, "E02", true
+        ));
+        Manifest manifest = new Manifest(
+                List.of("E01", "E02"),
+                evidence,
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()
+        );
+        WeeklyInterpretationInput tied = new WeeklyInterpretationInput(
+                base.contractVersion(),
+                base.snapshot(),
+                manifest,
+                new Facts(
+                        base.facts().store(),
+                        List.of(eligible),
+                        List.of(
+                                new EmployeeFacts(
+                                        "E01",
+                                        Sufficiency.SUFFICIENT,
+                                        List.of("RATING"),
+                                        List.of(ratingOne)
+                                ),
+                                new EmployeeFacts(
+                                        "E02",
+                                        Sufficiency.SUFFICIENT,
+                                        List.of("RATING"),
+                                        List.of(ratingTwo)
+                                )
+                        ),
+                        List.of()
+                )
+        );
+
+        LlmResponseValidationResult result = validator.validate(
+                tied,
+                json(structuredTransport())
+        );
+
+        assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+        JsonNode overview = objectMapper.readTree(result.canonicalContent())
+                .path("summaryBlocks").get(1);
+        assertThat(overview.path("text").asText()).isEqualTo(
+                "Результаты сотрудников по доступной компетенции равны."
+        );
+        assertThat(overview.path("evidenceRefs"))
+                .containsExactly(
+                        objectMapper.getNodeFactory().textNode(
+                                EMPLOYEE_EVIDENCE
+                        ),
+                        objectMapper.getNodeFactory().textNode(
+                                employeeTwoEvidence
+                        )
+                );
+    }
+
+    @Test
+    void privacyReducedProductionDispatchUsesFullSnapshotForEmployees()
+            throws Exception {
+        WeeklyInterpretationInput full = input(List.of());
+        WeeklyInterpretationInput provider =
+                new LlmProviderInputCompactor().compact(full, true);
+        VersionedWeeklyInterpretationResponseValidator versioned =
+                new VersionedWeeklyInterpretationResponseValidator(
+                        List.of(validator)
+                );
+
+        LlmResponseValidationResult result = versioned.validate(
+                LlmContractResources.PRIMARY_SIGNAL_CONTENT_SCHEMA_VERSION,
+                LlmContractResources.PRIVACY_REDUCED_PROMPT_VERSION,
+                provider,
+                full,
+                json(structuredTransport())
+        );
+
+        assertThat(result.outcome())
+                .withFailMessage(() -> result.violations().toString())
+                .isEqualTo(LlmValidationOutcome.VALID);
+        JsonNode canonical = objectMapper.readTree(result.canonicalContent());
+        assertThat(canonical.path("employees")).hasSize(1);
+        assertThat(canonical.path("employees").get(0)
+                .path("employeeRef").asText()).isEqualTo("E01");
+        assertThat(canonical.path("summaryBlocks")).anySatisfy(summary -> {
+            assertThat(summary.path("scope").asText()).isEqualTo("EMPLOYEE");
+            assertThat(summary.path("employeeRef").asText()).isEqualTo("E01");
+        });
+        assertThat(provider.manifest().employeeRefs()).isEmpty();
+        assertThat(provider.facts().employees()).isEmpty();
+    }
+
+    @Test
+    void privacyReducedValidationRejectsCandidateNotSentToProvider() {
+        WeeklyInterpretationInput provider =
+                new LlmProviderInputCompactor().compact(
+                        input(List.of()),
+                        true
+                );
+        WeeklyInterpretationInput full = input(List.of(
+                storeCandidate("C001", "REVENUE_DYNAMICS")
+        ));
+        ObjectNode transport = structuredTransport();
+        transport.set(
+                "primarySignal",
+                content.path("primarySignal").deepCopy()
+        );
+
+        LlmResponseValidationResult result = validator.validatePrivacyReduced(
+                provider,
+                full,
+                json(transport)
+        );
+
+        assertThat(result.outcome())
+                .isEqualTo(LlmValidationOutcome.SEMANTIC_INVALID);
+        assertThat(result.violations())
+                .extracting(LlmValidationViolation::code)
+                .contains("PROVIDER_CANDIDATE_NOT_SENT");
     }
 
     @Test
@@ -308,6 +772,20 @@ class WeeklyInterpretationV3ResponseValidatorTest {
         assertThat(result.violations())
                 .extracting(LlmValidationViolation::code)
                 .contains("EMPLOYEE_HEADLINE_COUNT_MISMATCH");
+    }
+
+    private ObjectNode structuredTransport() {
+        ObjectNode transport = content.deepCopy();
+        transport.remove("employees");
+        transport.remove("summaryBlocks");
+        transport.remove("dataLimitations");
+        transport.putNull("primarySignal");
+        ObjectNode teamOverview = transport.putObject("teamOverview");
+        teamOverview.put("text", "Provider team transport.");
+        teamOverview.putArray("evidenceRefs").add(TEAM_EVIDENCE);
+        transport.putArray("supportingSummaries");
+        transport.put("backendEmployeeHeadlines", true);
+        return transport;
     }
 
     private void addInsight(String candidateRef) {

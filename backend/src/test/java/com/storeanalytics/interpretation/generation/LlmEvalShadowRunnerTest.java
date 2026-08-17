@@ -36,6 +36,37 @@ class LlmEvalShadowRunnerTest {
     }
 
     @Test
+    void parsesAnExplicitUniqueCaseSelection() {
+        Map<String, String> environment = new HashMap<>();
+        environment.put(
+                "LLM_EVAL_CASE_IDS",
+                "team-most-improved, conflicting-revenue-margin"
+        );
+
+        LlmEvalShadowRunner.Settings settings =
+                LlmEvalShadowRunner.Settings.from(environment);
+
+        assertThat(settings.caseIds()).containsExactlyInAnyOrder(
+                "team-most-improved",
+                "conflicting-revenue-margin"
+        );
+    }
+
+    @Test
+    void rejectsDuplicateOrMalformedCaseSelection() {
+        assertThatThrownBy(() -> LlmEvalShadowRunner.Settings.from(Map.of(
+                "LLM_EVAL_CASE_IDS",
+                "team-most-improved,team-most-improved"
+        ))).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("unique case ids");
+        assertThatThrownBy(() -> LlmEvalShadowRunner.Settings.from(Map.of(
+                "LLM_EVAL_CASE_IDS",
+                "../outside"
+        ))).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("unique case ids");
+    }
+
+    @Test
     void rejectsMutableLatestModelBeforeAnyProviderCall() {
         Map<String, String> environment = executionEnvironment();
         environment.put(

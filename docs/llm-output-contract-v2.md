@@ -1,23 +1,23 @@
 # Плоский контракт недельной интерпретации v2
 
 Статус на 2026-08-17: content schema v2 и prompt v4 являются текущей парой application defaults.
-V5–v14 сохранены как immutable-версии выполненных и отклонённых ограниченных shadow-пилотов.
-Content schema v3 структурно обеспечивает единый `primarySignal`, а локальный prompt-кандидат v15
-дополнительно ограничивает `teamOverview` только TEAM evidence и требует конкретные одноцелевые
-actions. Контрольная пара v4/v15 прошла, но v15 не активирован: полная матрица и blinded review
-ещё не выполнены. Ни один shadow-результат не публиковался, production не изменялся и
+V5–v18 сохранены как immutable-версии выполненных и отклонённых shadow-пилотов. V15 отклонён
+полной матрицей. Content schema v3 структурно обеспечивает единый `primarySignal`, а кандидат v19
+использует store-only provider input и backend-owned employee/team presentation. V19 прошёл
+26/26 automatic и 26/26 blinded manual gate и допущен только к отдельному canary.
+Ни один shadow-результат не публиковался, production не изменялся и
 Telegram-события не создавались.
 
 Validation service выбирает стратегию по immutable contentSchemaVersion из durable job. v1, v2 и
 v3 имеют независимые structural/semantic validators; неизвестная версия не может быть проверена
 другой стратегией по умолчанию. Provider request factory принимает только согласованные пары
-prompt/content schema, включая v2 с prompt v4–v12 и v3 с prompt v13–v15. Для v2
+prompt/content schema, включая v2 с prompt v4–v12 и v3 с prompt v13–v19. Для v2
 он передаёт полные плоские item schemas без shape pruning и ограничивает ссылки значениями exact
 compact provider input. Если во входе нет relationship-кандидатов, provider schema требует
 `teamRelationships.maxItems = 0`; иначе допустимые типы и верхняя граница выводятся из кандидатов.
-Для v7–v15 каждый insight обязан использовать non-relationship candidateRef, а maxItems, kind и
+Для v7–v19 каждый insight обязан использовать non-relationship candidateRef, а maxItems, kind и
 theme ограничиваются фактическими backend candidates. Свободные insights с null candidateRef
-запрещены. Для v9–v15 action count ограничен количеством non-relationship candidates.
+запрещены. Для v9–v19 action count ограничен количеством non-relationship candidates.
 Nullable-поля остальных коллекций остаются необязательными, backend-owned dataLimitations
 исключаются.
 
@@ -125,10 +125,13 @@ v2 убирает неоднозначную вложенность. Все ан
 34. Сохранить v14 как immutable-историю и оформить v15 с TEAM-only provider evidence,
     primary/team duplicate gate и усиленным action policy — выполнено локально без активации.
 35. Выполнить одну контрольную пару v4/v15 — выполнено; кандидат прошёл automatic и ручной gate.
-36. Полную платную матрицу запускать только после отдельного явного согласования.
-37. Только после automatic и blinded human acceptance рассматривать отдельный canary; default
-    prompt до этого остаётся v4.
-38. Оставить v1 reader на весь срок хранения исторических интерпретаций.
+36. Выполнить полную v4/v15 матрицу — выполнено; v15 отклонён: 18/26 и 43 violations.
+37. Оформить v16–v18 как immutable исправления воспроизводимых дефектов матрицы — выполнено.
+38. Убрать person-level provider input/output и перенести employee/team presentation в backend —
+    выполнено в privacy-reduced v19.
+39. Выполнить полную v4/v19 матрицу и blinded review — выполнено; v19 прошёл 26/26 + 26/26.
+40. Рассматривать только отдельный canary; default до его приёмки остаётся v4.
+41. Оставить v1 reader на весь срок хранения исторических интерпретаций.
 
 ## Артефакты
 
@@ -151,7 +154,11 @@ v2 убирает неоднозначную вложенность. Все ан
 - `schemas/examples/weekly-interpretation-content-v3-insufficient-employee.json`;
 - `prompts/weekly-interpretation-v13.md` — immutable отклонённый structural candidate;
 - `prompts/weekly-interpretation-v14.md` — immutable отклонённый structured-summary candidate;
-- `prompts/weekly-interpretation-v15.md` — локальный неактивный TEAM-evidence/action candidate;
+- `prompts/weekly-interpretation-v15.md` — immutable кандидат, отклонённый полной матрицей;
+- `prompts/weekly-interpretation-v16.md` — matrix-hardening история;
+- `prompts/weekly-interpretation-v17.md` — production-hardening история;
+- `prompts/weekly-interpretation-v18.md` — deterministic narrative история;
+- `prompts/weekly-interpretation-v19.md` — privacy-reduced кандидат, допущенный к canary;
 - `../scripts/llm-eval/dataset-v2.json` — versioned сценарии, quality policy и human expectations;
 - `../scripts/llm-eval/dataset-v2.schema.json` — схема dataset;
 - `../scripts/llm-eval/evaluate.py` — локальный автоматический gate и нормализация provider transport.
@@ -200,8 +207,12 @@ TEAM-only `teamOverview`, ноль вторичных insights и WORKLOAD, ко
 результатом. Ручной просмотр подтвердил отсутствие повторов, причинных домыслов и технических
 идентификаторов, а также соответствие обязательному category signal.
 
-Контрольная пара считается успешной только как разрешение рассматривать полную evaluation-матрицу.
-Оставшиеся 50 платных вызовов имеют консервативный максимум 689.018400 RUB и требуют отдельного
-явного согласования. Полная матрица, blinded review, canary и production не запускались.
+Полная v4/v15 матрица выполнена после согласования бюджета. V15 вернул все 26 ответов, но прошёл
+только 18 сценариев и получил 43 automatic violations, поэтому отклонён.
 
-До отдельного controlled rollout default prompt должен оставаться на v4.
+V19 удаляет из provider input employee facts/refs/candidates и возвращает person-level presentation
+backend. Полная v4/v19 матрица: 26/26 automatic pass, 0 violations. Blinded review: 26/26 manual
+pass, средняя оценка 4,8/5, 0 missing/forbidden findings и 0 critical errors. Решение —
+`CANDIDATE_ELIGIBLE_FOR_CANARY`.
+
+До отдельного controlled canary и решения о rollout default prompt должен оставаться на v4.

@@ -49,7 +49,7 @@ class WeeklyInterpretationV3SchemaContractTest {
     }
 
     @Test
-    void registryPreservesOldPairsAndAddsV13ThroughV15WithSchemaV3() {
+    void registryPreservesOldPairsAndAddsV13ThroughV19WithSchemaV3() {
         assertThat(LlmContractResources.contentSchema(1))
                 .isEqualTo(LlmContractResources.CONTENT_SCHEMA);
         assertThat(LlmContractResources.contentSchema(2))
@@ -63,6 +63,18 @@ class WeeklyInterpretationV3SchemaContractTest {
         assertThat(LlmContractResources.systemPrompt("weekly-interpretation-v15"))
                 .isEqualTo(LlmContractResources
                         .TEAM_GUARDED_STRUCTURED_SUMMARY_SYSTEM_PROMPT);
+        assertThat(LlmContractResources.systemPrompt("weekly-interpretation-v16"))
+                .isEqualTo(LlmContractResources
+                        .MATRIX_HARDENED_STRUCTURED_SUMMARY_SYSTEM_PROMPT);
+        assertThat(LlmContractResources.systemPrompt("weekly-interpretation-v17"))
+                .isEqualTo(LlmContractResources
+                        .PRODUCTION_HARDENED_STRUCTURED_SUMMARY_SYSTEM_PROMPT);
+        assertThat(LlmContractResources.systemPrompt("weekly-interpretation-v18"))
+                .isEqualTo(LlmContractResources
+                        .DETERMINISTIC_NARRATIVE_SYSTEM_PROMPT);
+        assertThat(LlmContractResources.systemPrompt("weekly-interpretation-v19"))
+                .isEqualTo(LlmContractResources
+                        .PRIVACY_REDUCED_SYSTEM_PROMPT);
         assertThat(LlmContractResources.isSupportedPair(
                 "weekly-interpretation-v13", 3
         )).isTrue();
@@ -73,6 +85,18 @@ class WeeklyInterpretationV3SchemaContractTest {
                 "weekly-interpretation-v15", 3
         )).isTrue();
         assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v16", 3
+        )).isTrue();
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v17", 3
+        )).isTrue();
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v18", 3
+        )).isTrue();
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v19", 3
+        )).isTrue();
+        assertThat(LlmContractResources.isSupportedPair(
                 "weekly-interpretation-v13", 2
         )).isFalse();
         assertThat(LlmContractResources.isSupportedPair(
@@ -80,6 +104,18 @@ class WeeklyInterpretationV3SchemaContractTest {
         )).isFalse();
         assertThat(LlmContractResources.isSupportedPair(
                 "weekly-interpretation-v15", 2
+        )).isFalse();
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v16", 2
+        )).isFalse();
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v17", 2
+        )).isFalse();
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v19", 2
+        )).isFalse();
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v18", 2
         )).isFalse();
         assertThat(LlmContractResources.isSupportedPair(
                 "weekly-interpretation-v12", 3

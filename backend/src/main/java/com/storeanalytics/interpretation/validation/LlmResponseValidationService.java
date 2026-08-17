@@ -66,11 +66,17 @@ public class LlmResponseValidationService {
                 .orElseThrow(() -> new IllegalStateException(
                         "Validation job snapshot does not exist"
                 ));
-        WeeklyInterpretationInput input = inputFactory.create(attempt, snapshot);
+        WeeklyInterpretationInput providerInput = inputFactory.create(
+                attempt,
+                snapshot
+        );
+        WeeklyInterpretationInput snapshotInput = inputFactory.create(snapshot);
         Instant startedAt = clock.instant();
         LlmResponseValidationResult result = validator.validate(
                 claimed.contentSchemaVersion(),
-                input,
+                claimed.promptVersion(),
+                providerInput,
+                snapshotInput,
                 attempt.responseBody()
         );
         Instant completedAt = clock.instant();

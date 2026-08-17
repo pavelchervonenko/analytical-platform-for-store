@@ -1,5 +1,10 @@
 # ИИ-интерпретация v15: состояние, проверенные изменения и план выпуска
 
+> Исторический документ. Полная матрица показала, что v15 проходит только 18 из 26 сценариев и
+> получает 43 automatic violations, поэтому кандидат отклонён. Актуальная точка продолжения —
+> [AI_INTERPRETATION_V19_RELEASE_HANDOFF_2026-08-17.md](AI_INTERPRETATION_V19_RELEASE_HANDOFF_2026-08-17.md).
+> V19 прошёл 26/26 automatic и 26/26 blinded manual gate и допущен только к отдельному canary.
+
 Дата фиксации: 2026-08-17
 Статус: локальный release candidate; полный evaluation gate, canary и production-активация ещё не
 выполнены.

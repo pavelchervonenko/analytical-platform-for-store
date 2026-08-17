@@ -227,6 +227,131 @@ class LlmProviderInputCompactorTest {
                 .containsExactly("SHIFT_COUNT", "WORKED_HOURS", "WORKLOAD_STATUS");
     }
 
+    @Test
+    void keepsEmployeeRatingStructureEvidence() {
+        Fact structureScore = fact(
+                "EMPLOYEE:E01.RATING_STRUCTURE_SCORE",
+                "RATING_STRUCTURE_SCORE",
+                null,
+                Unit.SCORE,
+                new BigDecimal("50"),
+                Materiality.SECONDARY
+        );
+        WeeklyInterpretationInput source = input(
+                List.of(),
+                new EmployeeFacts(
+                        "E01",
+                        Sufficiency.SUFFICIENT,
+                        List.of("RATING"),
+                        List.of(structureScore)
+                )
+        );
+
+        WeeklyInterpretationInput result = compactor.compact(source);
+
+        assertThat(result.facts().employees().getFirst().facts())
+                .containsExactly(structureScore);
+        assertThat(result.manifest().evidence())
+                .extracting(EvidenceIndexEntry::evidenceRef)
+                .containsExactly(structureScore.evidenceRef());
+    }
+
+    @Test
+    void storeOnlyProjectionExcludesEmployeeAndRelationshipData() {
+        Fact storeFact = category("A", "100");
+        Fact employeeFact = fact(
+                "EMPLOYEE:E01.NET_REVENUE",
+                "NET_REVENUE",
+                null,
+                Unit.MONEY,
+                new BigDecimal("120000"),
+                Materiality.PRIMARY
+        );
+        WeeklyInterpretationInput base = input(
+                List.of(storeFact),
+                new EmployeeFacts(
+                        "E01",
+                        Sufficiency.SUFFICIENT,
+                        List.of("RESULT"),
+                        List.of(employeeFact)
+                )
+        );
+        Fact teamFact = fact(
+                "TEAM.RATING.ELIGIBLE_COUNT",
+                "RATING_ELIGIBLE_COUNT",
+                null,
+                Unit.COUNT,
+                new BigDecimal("2"),
+                Materiality.CONTEXT
+        );
+        List<EvidenceIndexEntry> evidence = new ArrayList<>(
+                base.manifest().evidence()
+        );
+        evidence.add(new EvidenceIndexEntry(
+                teamFact.evidenceRef(), Scope.TEAM, null, true
+        ));
+        List<WeeklyInterpretationInput.CandidateSignal> candidates = List.of(
+                new WeeklyInterpretationInput.CandidateSignal(
+                        "C001",
+                        WeeklyInterpretationInput.CandidateKind.RISK,
+                        "CATEGORY_MIX",
+                        null,
+                        List.of(storeFact.evidenceRef())
+                ),
+                new WeeklyInterpretationInput.CandidateSignal(
+                        "C002",
+                        WeeklyInterpretationInput.CandidateKind.OPPORTUNITY,
+                        "EMPLOYEE_PERFORMANCE",
+                        "E01",
+                        List.of(employeeFact.evidenceRef())
+                ),
+                new WeeklyInterpretationInput.CandidateSignal(
+                        "C003",
+                        WeeklyInterpretationInput.CandidateKind.OPPORTUNITY,
+                        "MOST_IMPROVED",
+                        "E01",
+                        List.of(employeeFact.evidenceRef())
+                )
+        );
+        WeeklyInterpretationInput source = new WeeklyInterpretationInput(
+                base.contractVersion(),
+                base.snapshot(),
+                new Manifest(
+                        base.manifest().employeeRefs(),
+                        evidence,
+                        candidates.stream()
+                                .map(WeeklyInterpretationInput.CandidateSignal
+                                        ::candidateRef)
+                                .toList(),
+                        base.manifest().categoryCodes(),
+                        base.manifest().categoryLabels(),
+                        List.of("RATING"),
+                        List.of()
+                ),
+                new Facts(
+                        base.facts().store(),
+                        List.of(teamFact),
+                        base.facts().employees(),
+                        candidates
+                )
+        );
+
+        WeeklyInterpretationInput result = compactor.compact(source, true);
+
+        assertThat(result.manifest().employeeRefs()).isEmpty();
+        assertThat(result.manifest().competencyCodes()).isEmpty();
+        assertThat(result.facts().employees()).isEmpty();
+        assertThat(result.facts().team()).containsExactly(teamFact);
+        assertThat(result.facts().candidateSignals())
+                .extracting(WeeklyInterpretationInput.CandidateSignal
+                        ::candidateRef)
+                .containsExactly("C001");
+        assertThat(result.manifest().candidateRefs()).containsExactly("C001");
+        assertThat(result.manifest().evidence())
+                .extracting(EvidenceIndexEntry::scope)
+                .doesNotContain(Scope.EMPLOYEE);
+    }
+
     private WeeklyInterpretationInput input(
             List<Fact> storeFacts,
             EmployeeFacts employee

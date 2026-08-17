@@ -26,8 +26,9 @@ scripts/yandexgpt-staging-acceptance.sh verify
 После provider smoke-test:
 
 1. проверить канонический dataset: `python3 scripts/llm-eval/evaluate.py`;
-2. экспортировать одинаковые provider inputs и получить 52 shadow-ответа для v4/v15 без публикации;
-3. выполнить полный автоматический gate с `--require-responses` и ручную оценку по rubric из
+2. повторно проверить сохранённые 52 shadow-ответа v4/v19; различие input v4/v19 ожидаемо из-за
+   privacy-reduced store-only payload кандидата;
+3. подтвердить полный автоматический gate с `--require-responses` и blinded report по rubric из
    `scripts/llm-eval/README.md`;
 4. включить snapshot/generation/publication только в staging;
 5. сформировать недельный snapshot и дождаться публикации через `/api/admin/llm/operations`;

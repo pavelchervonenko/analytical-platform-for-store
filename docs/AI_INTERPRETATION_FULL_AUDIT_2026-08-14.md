@@ -1638,3 +1638,63 @@ workload evidence. V15 прошёл automatic gate с нулём нарушен�
 максимумом 689.018400 RUB. До успешного полного automatic gate и blinded review v15 не допускается
 к canary или default. Production, публикация и Telegram не менялись; default остаётся
 v4/content schema v2.
+## 47. Полная матрица v4/v15 и отклонение v15 (2026-08-17)
+
+После подтверждения бюджета получены все 52 ответа v4/v15 без публикации и Telegram. Все provider
+calls завершились успешно. Учётная стоимость матрицы — 149.109600 RUB; новые вызовы с учётом уже
+готовой контрольной пары — 143.088000 RUB.
+
+V15 прошёл только 18 из 26 сценариев и получил 43 automatic violations. Полный прогон выявил
+дефекты, которых не было видно на одной контрольной паре: нестабильные person-level narratives,
+неверные командные сравнения, слабую обработку tie/insufficient/limited случаев и недостаточно
+детерминированную presentation. V15 отклонён и не допускается к canary.
+
+Candidate-aware review gate отделён от baseline: известные нарушения v4 измеряются и сравниваются,
+но не должны скрывать состояние кандидата. Completeness и integrity всей матрицы остаются
+обязательными.
+
+## 48. Переход v16–v19 к backend-owned presentation (2026-08-17)
+
+Каждый следующий prompt создан только после воспроизводимого дефекта и сохранён immutable:
+
+- v16 усилил matrix-specific schema, employee evidence и relationship cardinality;
+- v17 перенёс team overview и relationships в детерминированный backend path;
+- v18 ограничил candidate narratives точными provider enum;
+- v19 удалил из provider input person-level facts, refs и candidates и оставил модели только
+  агрегированные STORE signals.
+
+В v19 provider возвращает marker `backendEmployeeHeadlines=true`, пустые relationships и
+ограниченную store interpretation. Backend формирует employee headlines, team overview,
+relationships, neutral result и limitations из verified full snapshot. Review оценивает canonical
+production document, а raw provider response остаётся связан SHA-256.
+
+Контрольные v19 team-сценарии: 3/3, 0 violations, стоимость 2.716800 RUB. Затем получены оставшиеся
+23 ответа. Полный v19 набор: 26/26 успешных provider calls, стоимость 26.984800 RUB, refusals и
+moderation blocks отсутствуют.
+
+## 49. Финальный automatic и blinded gate v19 (2026-08-17)
+
+Финальный automatic report:
+
+- v19: 26/26 passed, 0 violations, required coverage 1.0;
+- v4: 0/26 passed, 131 violations;
+- matrix completeness и integrity подтверждены.
+
+Blinded packet подготовлен из backend-canonical response. До выставления оценок assignments не
+открывался. Integrity checker исправлен так, чтобы отдельно проверять SHA сырого provider artifact
+и равенство packet каноническому production response; добавлен regression-тест.
+
+Итог ручной оценки:
+
+- v19: 26/26 passed, average 4.8/5;
+- accuracy 5.0, usefulness 4.0, priority 5.0, recommendations 5.0, uncertainty 5.0;
+- 0 missing required, 0 present forbidden, 0 critical errors;
+- v4: 4/26 manual pass, average 3.1462, 4 critical errors.
+
+Финальное решение: `CANDIDATE_ELIGIBLE_FOR_CANARY`. Оно не меняет application default и не
+разрешает публикацию или Telegram. Следующий шаг — один controlled end-to-end canary
+`weekly-interpretation-v19` / schema 3; до его приёмки default остаётся v4/schema 2.
+
+Новые расходы полного v15→v19 этапа: 143.088000 RUB за оставшуюся v4/v15 матрицу,
+60.936800 RUB за успешные итерационные вызовы v16–v18 и 26.984800 RUB за v19; всего
+231.009600 RUB.

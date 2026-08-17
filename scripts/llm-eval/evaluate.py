@@ -10,7 +10,7 @@ import json
 import re
 import sys
 import uuid
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -273,6 +273,41 @@ def narrative_values(output: object):
 
 def normalized_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip().casefold()
+
+
+def duplicate_narrative_groups(output: dict) -> dict[str, list[str]]:
+    grouped: dict[str, list[str]] = {}
+    for path, value in narrative_values(output):
+        normalized = normalized_text(value)
+        if normalized:
+            grouped.setdefault(normalized, []).append(path)
+    summaries = output.get("summaryBlocks", [])
+
+    def mandatory_employee_headlines(paths: list[str]) -> bool:
+        employee_refs = []
+        for path in paths:
+            match = re.fullmatch(r"\$\.summaryBlocks\[(\d+)]\.text", path)
+            if match is None:
+                return False
+            index = int(match.group(1))
+            if index >= len(summaries):
+                return False
+            summary = summaries[index]
+            if (
+                not isinstance(summary, dict)
+                or summary.get("scope") != "EMPLOYEE"
+                or summary.get("section") != "HEADLINE"
+                or not summary.get("employeeRef")
+            ):
+                return False
+            employee_refs.append(summary["employeeRef"])
+        return len(employee_refs) == len(set(employee_refs))
+
+    return {
+        text: paths
+        for text, paths in grouped.items()
+        if len(paths) > 1 and not mandatory_employee_headlines(paths)
+    }
 
 
 ACTION_TOKEN_PATTERN = re.compile(r"[a-zа-яё]+", re.IGNORECASE)
@@ -600,6 +635,13 @@ def team_overview_evidence_failures(
             and summary.get("section") == "TEAM_OVERVIEW"
         ):
             continue
+        expected = backend_team_overview(payload)
+        if (
+            expected is not None
+            and summary.get("text") == expected["text"]
+            and summary.get("evidenceRefs") == expected["evidenceRefs"]
+        ):
+            continue
         invalid = sorted(
             reference
             for reference in summary.get("evidenceRefs", [])
@@ -768,6 +810,210 @@ def store_candidates(payload: dict) -> list[dict]:
         candidate["candidateRef"],
     ))
 
+
+PRIVACY_STORE_CORE_METRICS = {
+    "NET_REVENUE",
+    "GROSS_PROFIT",
+    "MARGIN_PERCENT",
+    "AVERAGE_RECEIPT",
+    "ADDITIONAL_REVENUE_PER_PHONE",
+}
+PRIVACY_PLAN_METRICS = {
+    "PLAN_ACTUAL_AMOUNT",
+    "PLAN_PROJECTED_COMPLETION_PERCENT",
+}
+PRIVACY_CATEGORY_METRICS = {"NET_REVENUE", "REVENUE_SHARE_PERCENT"}
+PRIVACY_ATTACH_METRICS = {
+    "NUMERATOR_QUANTITY",
+    "DENOMINATOR_QUANTITY",
+    "RATE_PER_HUNDRED",
+}
+
+
+def compact_identifier(reference: str, marker: str) -> str:
+    start = reference.index(marker)
+    end = reference.index(".", start + len(marker))
+    return reference[start + len(marker):end]
+
+
+def top_compact_identifiers(
+    facts: list[dict],
+    marker: str,
+    metric_code: str,
+    limit: int,
+) -> set[str]:
+    scored: dict[str, float] = {}
+    for fact in facts:
+        reference = fact["evidenceRef"]
+        if f".{marker}" not in reference or fact["metricCode"] != metric_code:
+            continue
+        identifier = compact_identifier(reference, marker)
+        comparison = fact.get("comparison") or {}
+        current = abs(float(fact["value"]))
+        previous = abs(float(comparison.get("previousValue") or 0))
+        scored.setdefault(identifier, max(current, previous))
+    return {
+        identifier
+        for identifier, _ in sorted(
+            scored.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[:limit]
+    }
+
+
+def privacy_reduced_provider_allowlists(
+    payload: dict,
+) -> tuple[set[str], set[str], set[str]]:
+    evidence_scopes = {
+        item["evidenceRef"]: item["scope"]
+        for item in payload["manifest"]["evidence"]
+    }
+    candidates = [
+        candidate
+        for candidate in payload["facts"]["candidateSignals"]
+        if candidate["employeeRef"] is None
+        and not candidate["targetEmployeeRefs"]
+        and all(
+            evidence_scopes.get(reference) not in {"EMPLOYEE", "TEAM"}
+            for reference in candidate["evidenceRefs"]
+        )
+    ]
+    referenced_evidence = {
+        reference
+        for candidate in candidates
+        for reference in candidate["evidenceRefs"]
+    }
+    source = payload["facts"]["store"]
+    categories = top_compact_identifiers(
+        source, "CATEGORY:", "NET_REVENUE", 2
+    )
+    attach = top_compact_identifiers(
+        source, "ATTACH:", "DENOMINATOR_QUANTITY", 1
+    )
+
+    def keep_store(fact: dict) -> bool:
+        reference = fact["evidenceRef"]
+        metric = fact["metricCode"]
+        if ".CATEGORY:" in reference:
+            return (
+                compact_identifier(reference, "CATEGORY:") in categories
+                and metric in PRIVACY_CATEGORY_METRICS
+            )
+        if ".GROUP:" in reference:
+            return False
+        if ".ATTACH:" in reference:
+            return (
+                compact_identifier(reference, "ATTACH:") in attach
+                and metric in PRIVACY_ATTACH_METRICS
+            )
+        if ".PLAN:" in reference:
+            return metric in PRIVACY_PLAN_METRICS
+        return (
+            metric in PRIVACY_STORE_CORE_METRICS
+            or fact["materiality"] == "PRIMARY"
+        )
+
+    retained_store = [
+        fact for fact in source
+        if keep_store(fact)
+        or fact["evidenceRef"] in referenced_evidence
+    ]
+    retained_team = [
+        fact for fact in payload["facts"]["team"]
+        if fact["metricCode"] == "RATING_ELIGIBLE_COUNT"
+    ]
+    evidence_refs = referenced_evidence | {
+        fact["evidenceRef"]
+        for fact in [*retained_store, *retained_team]
+    }
+    category_codes = {
+        fact["categoryCode"]
+        for fact in retained_store
+        if fact.get("categoryCode") is not None
+    }
+    return (
+        {candidate["candidateRef"] for candidate in candidates},
+        evidence_refs,
+        category_codes,
+    )
+
+
+def privacy_reduced_provider_failures(
+    prefix: str,
+    output: dict,
+    payload: dict,
+) -> list[str]:
+    failures: list[str] = []
+    for field in (
+        "employees",
+        "employeeHeadlines",
+        "summaryBlocks",
+        "dataLimitations",
+    ):
+        if field in output:
+            failures.append(
+                f"{prefix}: backend-owned provider field at $.{field}"
+            )
+    if output.get("teamRelationships"):
+        failures.append(
+            f"{prefix}: provider relationship is not allowed"
+        )
+    candidate_refs, evidence_refs_allowed, category_codes = (
+        privacy_reduced_provider_allowlists(payload)
+    )
+
+    def visit(node: object, path: str) -> None:
+        if isinstance(node, dict):
+            for field, value in node.items():
+                child = f"{path}.{field}"
+                if (
+                    field == "candidateRef"
+                    and isinstance(value, str)
+                    and value not in candidate_refs
+                ):
+                    failures.append(
+                        f"{prefix}: provider candidate was not sent at {child}"
+                    )
+                elif (
+                    field == "categoryCode"
+                    and isinstance(value, str)
+                    and value not in category_codes
+                ):
+                    failures.append(
+                        f"{prefix}: provider category was not sent at {child}"
+                    )
+                elif field == "employeeRef" and value is not None:
+                    failures.append(
+                        f"{prefix}: provider employee reference at {child}"
+                    )
+                elif (
+                    field in {"sourceEmployeeRefs", "targetEmployeeRefs"}
+                    and isinstance(value, list)
+                    and value
+                ):
+                    failures.append(
+                        f"{prefix}: provider employee reference at {child}"
+                    )
+                elif field == "evidenceRefs" and isinstance(value, list):
+                    for index, reference in enumerate(value):
+                        if (
+                            isinstance(reference, str)
+                            and reference not in evidence_refs_allowed
+                        ):
+                            failures.append(
+                                f"{prefix}: provider evidence was not sent "
+                                f"at {child}[{index}]"
+                            )
+                visit(value, child)
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                visit(value, f"{path}[{index}]")
+
+    visit(output, "$")
+    return failures
+
+
+
 CANONICAL_LIMITATION_SECTIONS = {
     "CATEGORIES": "CATEGORY_PERFORMANCE",
     "ATTACH": "ADDITIONAL_SALES",
@@ -780,6 +1026,9 @@ CANONICAL_LIMITATION_SECTIONS = {
 def backend_normalize_response(output: dict, payload: dict) -> dict:
     """Apply deterministic v2 normalization performed before backend validation."""
     normalized = copy.deepcopy(output)
+    if normalized.pop("backendEmployeeHeadlines", False) is True:
+        normalized["employeeHeadlines"] = backend_employee_headlines(payload)
+
     structured_transport = any(
         field in normalized
         for field in (
@@ -789,6 +1038,11 @@ def backend_normalize_response(output: dict, payload: dict) -> dict:
         )
     )
     if structured_transport:
+        team_overview = normalized.get("teamOverview")
+        if isinstance(team_overview, dict):
+            backend_overview = backend_team_overview(payload)
+            if backend_overview is not None:
+                normalized["teamOverview"] = backend_overview
         normalized["employees"] = [
             {
                 "employeeRef": employee["employeeRef"],
@@ -797,6 +1051,9 @@ def backend_normalize_response(output: dict, payload: dict) -> dict:
             for employee in payload["facts"]["employees"]
         ]
         summaries = []
+        store_summary = backend_store_summary(payload)
+        if store_summary is not None:
+            summaries.append(store_summary)
         team_overview = normalized.get("teamOverview")
         if isinstance(team_overview, dict):
             summaries.append({
@@ -827,6 +1084,15 @@ def backend_normalize_response(output: dict, payload: dict) -> dict:
         normalized.pop("teamOverview", None)
         normalized.pop("employeeHeadlines", None)
         normalized.pop("supportingSummaries", None)
+        normalized["teamRelationships"] = [
+            {
+                **candidate_relationship(candidate),
+                "summary": relationship_summary(candidate["theme"]),
+                "evidenceRefs": list(candidate["evidenceRefs"]),
+            }
+            for candidate in payload["facts"]["candidateSignals"]
+            if candidate_relationship(candidate) is not None
+        ]
 
     for summary in normalized.get("summaryBlocks", []):
         if isinstance(summary, dict):
@@ -870,6 +1136,16 @@ def backend_normalize_response(output: dict, payload: dict) -> dict:
         else:
             item["scope"] = "STORE"
         item["evidenceRefs"] = list(candidate["evidenceRefs"])
+        if structured_transport:
+            item["evidenceRefs"] = candidate_evidence_refs(
+                candidate, payload
+            )
+            title, summary = candidate_narrative(candidate, payload)
+            if "text" in item:
+                item["text"] = summary
+            else:
+                item["title"] = title
+                item["summary"] = summary
     for relationship in normalized.get("teamRelationships", []):
         if isinstance(relationship, dict):
             relationship.setdefault("competencyCode", None)
@@ -894,20 +1170,162 @@ def backend_normalize_response(output: dict, payload: dict) -> dict:
             "categoryCode": source["categoryCode"],
             "impact": source["impact"],
             "affectedSections": sorted(sections),
-            "summary": (
-                "Часть данных недоступна для подтверждённого вывода."
-                if source["impact"] == "UNAVAILABLE"
-                else "Качество данных снижает уверенность в части выводов."
-            ),
+            "summary": limitation_summary(source),
             "evidenceRefs": list(source["evidenceRefs"]),
         })
     normalized["dataLimitations"] = limitations
     return normalized
 
 
+def _number(value: object) -> float:
+    return float(str(value))
+
+
+def backend_team_overview(payload: dict) -> dict | None:
+    rating_facts = [
+        fact
+        for employee in payload["facts"]["employees"]
+        for fact in employee["facts"]
+        if fact["metricCode"] == "RATING_STRUCTURE_SCORE"
+    ]
+    if (
+        len(rating_facts) >= 2
+        and len({_number(fact["value"]) for fact in rating_facts}) == 1
+    ):
+        return {
+            "text": (
+                "Результаты сотрудников по доступной компетенции равны."
+            ),
+            "evidenceRefs": [
+                fact["evidenceRef"] for fact in rating_facts
+            ],
+        }
+
+    eligible = next((
+        fact
+        for fact in payload["facts"]["team"]
+        if fact["metricCode"] == "RATING_ELIGIBLE_COUNT"
+    ), None)
+    if eligible is None:
+        return None
+    comparable = _number(eligible["value"]) >= 2
+    return {
+        "text": (
+            "Командные данные позволяют сопоставить сотрудников."
+            if comparable
+            else "Сопоставление сотрудников ограничено недостаточной "
+            "командной базой."
+        ),
+        "evidenceRefs": [eligible["evidenceRef"]],
+    }
+
+
+def backend_store_summary(payload: dict) -> dict | None:
+    if store_candidates(payload):
+        return None
+    facts = payload["facts"]["store"]
+
+    narrative = None
+    for fact in facts:
+        if fact["metricCode"] == "PLAN_PROJECTED_COMPLETION_PERCENT":
+            value = _number(fact["value"])
+            if value == 100:
+                text = "План выполнен на целевом уровне."
+            elif value > 100:
+                text = "Выполнение плана выше целевого уровня."
+            else:
+                text = "Выполнение плана ниже целевого уровня."
+            narrative = (text, fact["evidenceRef"])
+            break
+
+    if narrative is None:
+        for fact in facts:
+            small_denominator = (
+                fact["metricCode"].startswith("DENOMINATOR_")
+                and _number(fact["value"]) < 5
+            )
+            if (
+                ".ATTACH:" in fact["evidenceRef"]
+                and (
+                    fact["sufficiency"] != "SUFFICIENT"
+                    or small_denominator
+                )
+            ):
+                narrative = (
+                    "База продаж недостаточна для надёжной оценки "
+                    "частоты дополнительных продаж.",
+                    fact["evidenceRef"],
+                )
+                break
+
+    if narrative is None:
+        for fact in facts:
+            comparison = fact.get("comparison")
+            if (
+                ".CATEGORY:" in fact["evidenceRef"]
+                and comparison is not None
+                and comparison.get("previousValue") == 0
+                and _number(fact["value"]) > 0
+            ):
+                narrative = (
+                    "Выручка категории появилась после нулевого "
+                    "значения прошлого периода.",
+                    fact["evidenceRef"],
+                )
+                break
+
+    if narrative is None:
+        for fact in facts:
+            comparison = fact.get("comparison")
+            if (
+                fact["metricCode"] == "NET_REVENUE"
+                and comparison is not None
+                and comparison.get("absoluteDelta") == 0
+            ):
+                narrative = (
+                    "Выручка магазина существенно не изменилась "
+                    "относительно прошлого периода.",
+                    fact["evidenceRef"],
+                )
+                break
+
+    if narrative is None and facts:
+        narrative = (
+            "По магазину нет отдельного существенного изменения за период.",
+            facts[0]["evidenceRef"],
+        )
+    if narrative is None:
+        return None
+    return {
+        "scope": "STORE",
+        "employeeRef": None,
+        "section": "RESULT",
+        "categoryCode": None,
+        "text": narrative[0],
+        "evidenceRefs": [narrative[1]],
+    }
+
+
+def limitation_summary(limitation: dict) -> str:
+    if limitation["code"] == "COST_DATA_INCOMPLETE":
+        return (
+            "Валовая прибыль и маржинальность недоступны из-за "
+            "неполных данных о себестоимости."
+        )
+    if limitation["code"] == "CLASSIFICATION_QUALITY_LIMITED":
+        return (
+            "Неполная классификация снижает уверенность в выводах "
+            "по категориям и дополнительным продажам."
+        )
+    if limitation["impact"] == "UNAVAILABLE":
+        return "Часть данных недоступна для подтверждённого вывода."
+    return "Качество данных снижает уверенность в части выводов."
+
+
 def candidate_relationship(candidate: dict) -> dict | None:
     if candidate["theme"] not in RELATIONSHIP_TYPES:
         return None
+
     return {
         "type": candidate["theme"],
         "competencyCode": candidate["competencyCode"],
@@ -916,6 +1334,352 @@ def candidate_relationship(candidate: dict) -> dict | None:
         ),
         "targetEmployeeRefs": candidate["targetEmployeeRefs"],
     }
+
+
+def backend_employee_candidates(payload: dict) -> dict[str, dict]:
+    result = {}
+    candidates = payload["facts"]["candidateSignals"]
+    for employee in payload["facts"]["employees"]:
+        if (
+            employee["analysisStatus"] == "INSUFFICIENT"
+            or not employee["facts"]
+        ):
+            continue
+        employee_evidence = {
+            fact["evidenceRef"] for fact in employee["facts"]
+        }
+        candidate = next((
+            value for value in candidates
+            if value["employeeRef"] == employee["employeeRef"]
+            and value["theme"] not in RELATIONSHIP_TYPES
+            and set(value["evidenceRefs"]) <= employee_evidence
+        ), None)
+        if candidate is not None:
+            result[employee["employeeRef"]] = candidate
+    return result
+
+
+def backend_employee_candidate_refs(output: dict, payload: dict) -> set[str]:
+    result = set()
+    summaries = output.get("summaryBlocks", [])
+    for employee_ref, candidate in backend_employee_candidates(payload).items():
+        _, expected_text = candidate_narrative(candidate, payload)
+        expected_evidence = candidate_evidence_refs(candidate, payload)
+        if any(
+            isinstance(summary, dict)
+            and summary.get("scope") == "EMPLOYEE"
+            and summary.get("employeeRef") == employee_ref
+            and summary.get("section") == "HEADLINE"
+            and summary.get("text") == expected_text
+            and summary.get("evidenceRefs") == expected_evidence
+            for summary in summaries
+        ):
+            result.add(candidate["candidateRef"])
+    return result
+
+
+def backend_employee_headlines(payload: dict) -> dict:
+    employees = {
+        employee["employeeRef"]: employee
+        for employee in payload["facts"]["employees"]
+    }
+    candidates = backend_employee_candidates(payload)
+    result = {}
+    for employee_ref in payload["manifest"]["employeeRefs"]:
+        employee = employees.get(employee_ref)
+        if not employee or not employee["facts"]:
+            continue
+        facts = employee["facts"]
+        employee_evidence = {fact["evidenceRef"] for fact in facts}
+        candidate = candidates.get(employee_ref)
+        if employee["analysisStatus"] == "INSUFFICIENT":
+            evidence = next((
+                fact["evidenceRef"] for fact in facts
+                if fact["metricCode"] == "WORKLOAD_STATUS"
+            ), facts[0]["evidenceRef"])
+            result[employee_ref] = {
+                "text": (
+                    "Данных недостаточно для персонального анализа "
+                    "сотрудника."
+                ),
+                "evidenceRefs": [evidence],
+            }
+        elif candidate is not None:
+            _, summary = candidate_narrative(candidate, payload)
+            result[employee_ref] = {
+                "text": summary,
+                "evidenceRefs": candidate_evidence_refs(candidate, payload),
+            }
+        else:
+            if employee["analysisStatus"] == "LIMITED":
+                fact = next((
+                    value for value in facts
+                    if value["metricCode"] != "WORKLOAD_STATUS"
+                ), facts[0])
+                text = (
+                    "По сотруднику доступен только ограниченный текущий "
+                    "результат."
+                )
+            else:
+                fact = next((
+                    value for value in facts
+                    if value["metricCode"] == "NET_REVENUE"
+                    and value.get("comparison") is not None
+                    and value["comparison"].get("absoluteDelta") == 0
+                ), facts[0])
+                text = (
+                    "Выручка сотрудника существенно не изменилась "
+                    "относительно прошлого периода."
+                    if fact["metricCode"] == "NET_REVENUE"
+                    and fact.get("comparison") is not None
+                    and fact["comparison"].get("absoluteDelta") == 0
+                    else "По сотруднику нет отдельного существенного "
+                    "изменения за период."
+                )
+            result[employee_ref] = {
+                "text": text,
+                "evidenceRefs": [fact["evidenceRef"]],
+            }
+    return result
+
+
+def relationship_summary(theme: str) -> str:
+    summaries = {
+        "COMPETENCY_LEADER": (
+            "В команде подтверждён лидер по соответствующей компетенции."
+        ),
+        "MOST_IMPROVED": (
+            "Подтверждена наиболее заметная положительная динамика "
+            "среди сопоставимых сотрудников."
+        ),
+        "LEARNING_OPPORTUNITY": (
+            "Подтверждена возможность обмена практикой по "
+            "соответствующей компетенции."
+        ),
+    }
+    return summaries[theme]
+
+
+def all_input_facts(payload: dict) -> list[dict]:
+    return [
+        *payload["facts"]["store"],
+        *(
+            fact
+            for employee in payload["facts"]["employees"]
+            for fact in employee["facts"]
+        ),
+    ]
+
+
+def direction_matches(kind: str, fact: dict) -> bool:
+    comparison = fact.get("comparison")
+    if comparison is None or comparison.get("absoluteDelta") is None:
+        return False
+    delta = _number(comparison["absoluteDelta"])
+    return kind == "RISK" and delta < 0 or (
+        kind == "OPPORTUNITY" and delta > 0
+    )
+
+
+def candidate_evidence_refs(candidate: dict, payload: dict) -> list[str]:
+    result = list(candidate["evidenceRefs"])
+    if candidate["theme"] == "PROFITABILITY":
+        available = {
+            evidence["evidenceRef"]
+            for evidence in payload["manifest"]["evidence"]
+            if evidence["available"]
+        }
+        for fact in payload["facts"]["store"]:
+            if (
+                fact["metricCode"] == "MARGIN_PERCENT"
+                and direction_matches(candidate["kind"], fact)
+                and fact["evidenceRef"] in available
+                and fact["evidenceRef"] not in result
+            ):
+                result.append(fact["evidenceRef"])
+    return result
+
+
+def candidate_narrative(
+    candidate: dict,
+    payload: dict | None = None,
+) -> tuple[str, str]:
+    if payload is not None and candidate["theme"] == "PLAN":
+        period_end = date.fromisoformat(payload["snapshot"]["period"]["end"])
+        completed_month = (period_end + timedelta(days=1)).month != (
+            period_end.month
+        )
+        if candidate["kind"] == "RISK" and completed_month:
+            return (
+                "Выполнение плана",
+                "Завершившийся период закрыт существенно ниже целевого "
+                "уровня выполнения плана.",
+            )
+
+    if payload is not None and candidate["theme"] == "REVENUE_DYNAMICS":
+        facts = {
+            fact["evidenceRef"]: fact for fact in all_input_facts(payload)
+        }
+        candidate_facts = [
+            facts[reference]
+            for reference in candidate["evidenceRefs"]
+            if reference in facts
+        ]
+        zero_after_sales = any(
+            fact["metricCode"] == "NET_REVENUE"
+            and _number(fact["value"]) == 0
+            and fact.get("comparison") is not None
+            and fact["comparison"].get("previousValue") is not None
+            and _number(fact["comparison"]["previousValue"]) > 0
+            for fact in candidate_facts
+        )
+        if candidate["kind"] == "RISK" and zero_after_sales:
+            return (
+                "Динамика чистой выручки",
+                "Чистая выручка равна нулю после ненулевого "
+                "значения прошлого периода.",
+            )
+        narratives = {
+            "RISK": (
+                "Чистая выручка (продажи за вычетом возвратов) "
+                "существенно снизилась относительно прошлого периода."
+            ),
+            "OPPORTUNITY": (
+                "Чистая выручка (продажи за вычетом возвратов) "
+                "существенно выросла относительно прошлого периода."
+            ),
+            "OBSERVATION": (
+                "Динамика чистой выручки: зафиксировано существенное "
+                "изменение."
+            ),
+        }
+        return "Динамика чистой выручки", narratives[candidate["kind"]]
+
+    if payload is not None and candidate["theme"] == "PROFITABILITY":
+        margin_changed = any(
+            fact["metricCode"] == "MARGIN_PERCENT"
+            and direction_matches(candidate["kind"], fact)
+            for fact in payload["facts"]["store"]
+        )
+        if margin_changed:
+            narratives = {
+                "RISK": (
+                    "Валовая прибыль и маржинальность существенно снизились "
+                    "относительно прошлого периода."
+                ),
+                "OPPORTUNITY": (
+                    "Валовая прибыль и маржинальность существенно выросли "
+                    "относительно прошлого периода."
+                ),
+                "OBSERVATION": (
+                    "Динамика прибыльности: зафиксировано существенное "
+                    "изменение."
+                ),
+            }
+            return "Динамика прибыльности", narratives[candidate["kind"]]
+
+    label = None
+    if payload is not None and candidate.get("categoryCode") is not None:
+        label = payload["manifest"]["categoryLabels"].get(
+            candidate["categoryCode"]
+        )
+    if label:
+        quoted = f"«{label}»"
+        contextual = {
+            "CATEGORY_MIX": (
+                f"Динамика категории {quoted}",
+                f"Выручка и доля категории {quoted} существенно снизились.",
+                f"Выручка и доля категории {quoted} существенно выросли.",
+            ),
+            "ADDITIONAL_SALES": (
+                f"Дополнительные продажи категории {quoted}",
+                f"Выручка категории {quoted} существенно снизилась.",
+                f"Выручка категории {quoted} существенно выросла.",
+            ),
+            "ATTACH_RATE": (
+                f"Частота дополнительных продаж категории {quoted}",
+                f"Частота дополнительных продаж категории {quoted} "
+                "существенно снизилась при достаточной базе.",
+                f"Частота дополнительных продаж категории {quoted} "
+                "существенно выросла при достаточной базе.",
+            ),
+        }.get(candidate["theme"])
+        if contextual is not None:
+            title, risk, opportunity = contextual
+            summaries = {
+                "RISK": risk,
+                "OPPORTUNITY": opportunity,
+                "OBSERVATION": (
+                    f"{title}: зафиксировано существенное изменение."
+                ),
+            }
+            return title, summaries[candidate["kind"]]
+
+    narratives = {
+        "PLAN": (
+            "Выполнение плана",
+            "Выполнение плана существенно ниже целевого уровня.",
+            "Выполнение плана выше целевого уровня.",
+        ),
+        "REVENUE_DYNAMICS": (
+            "Динамика выручки",
+            "Выручка существенно снизилась относительно прошлого периода.",
+            "Выручка существенно выросла относительно прошлого периода.",
+        ),
+        "PROFITABILITY": (
+            "Динамика валовой прибыли",
+            "Валовая прибыль существенно снизилась относительно прошлого периода.",
+            "Валовая прибыль существенно выросла относительно прошлого периода.",
+        ),
+        "CATEGORY_MIX": (
+            "Динамика категории",
+            "Выручка и доля выбранной категории существенно снизились.",
+            "Выручка и доля выбранной категории существенно выросли.",
+        ),
+        "ADDITIONAL_SALES": (
+            "Дополнительные продажи",
+            "Выручка дополнительных продаж существенно снизилась.",
+            "Выручка дополнительных продаж существенно выросла.",
+        ),
+        "ATTACH_RATE": (
+            "Прикрепление дополнительных позиций",
+            "Частота дополнительных продаж существенно снизилась при достаточной базе.",
+            "Частота дополнительных продаж существенно выросла при достаточной базе.",
+        ),
+        "EMPLOYEE_PERFORMANCE": (
+            "Динамика результата сотрудника",
+            "Результат сотрудника существенно снизился относительно его прошлого периода.",
+            "Результат сотрудника существенно улучшился относительно его прошлого периода.",
+        ),
+    }
+    narrative = narratives.get(candidate["theme"])
+    if narrative is not None:
+        title, risk, opportunity = narrative
+        summaries = {
+            "RISK": risk,
+            "OPPORTUNITY": opportunity,
+            "OBSERVATION": (
+                f"{title}: зафиксировано существенное изменение."
+            ),
+        }
+        return title, summaries[candidate["kind"]]
+
+    titles = {
+        "FINANCIAL_RESULT": "Финансовый результат",
+        "RETURNS": "Динамика возвратов",
+        "TIME_EFFICIENCY": "Эффективность рабочего времени",
+        "TEAM_PERFORMANCE": "Командный результат",
+        "SALES_QUALITY": "Качество продаж",
+        "DATA_QUALITY": "Качество данных",
+        "OTHER": "Подтверждённый бизнес-сигнал",
+    }
+    title = titles.get(candidate["theme"], titles["OTHER"])
+    summaries = {
+        "RISK": f"{title} требует внимания.",
+        "OPPORTUNITY": f"{title}: подтверждён положительный сигнал.",
+        "OBSERVATION": f"{title}: подтверждено изменение.",
+    }
+    return title, summaries[candidate["kind"]]
 
 
 def production_metric_code(evidence_ref: str) -> str | None:
@@ -1381,7 +2145,13 @@ def limitation_failures(case_id: str, output: dict, payload: dict) -> list[str]:
     return failures
 
 
-def response_metrics(output: dict, case: dict, dataset: dict) -> dict:
+def response_metrics(
+    output: dict,
+    case: dict,
+    dataset: dict,
+    payload: dict | None = None,
+    configuration: dict | None = None,
+) -> dict:
     action_result = action_quality(dataset, output)
     narrative_result = narrative_quality(dataset, output)
     insight_candidate_refs = {
@@ -1397,9 +2167,17 @@ def response_metrics(output: dict, case: dict, dataset: dict) -> dict:
     candidate_refs = set(insight_candidate_refs)
     if primary_candidate_ref:
         candidate_refs.add(primary_candidate_ref)
-    texts = [normalized_text(value) for _, value in narrative_values(output)]
+    if (
+        configuration is not None
+        and configuration["promptVersion"]
+        == "weekly-interpretation-v19"
+    ):
+        candidate_refs.update(
+            backend_employee_candidate_refs(output, payload)
+        )
     duplicate_count = sum(
-        count - 1 for count in Counter(texts).values() if count > 1
+        len(paths) - 1
+        for paths in duplicate_narrative_groups(output).values()
     )
     required = set(case["expectations"].get("requiredCandidateRefs", []))
     return {
@@ -1464,8 +2242,17 @@ def validate_response(
     )
     if not isinstance(output, dict):
         return schema_failures(validator, output, prefix), {}
+    failures: list[str] = []
+    if (
+        configuration is not None
+        and configuration["promptVersion"]
+        == "weekly-interpretation-v19"
+    ):
+        failures.extend(
+            privacy_reduced_provider_failures(prefix, output, payload)
+        )
     output = backend_normalize_response(output, payload)
-    failures = schema_failures(validator, output, prefix)
+    failures.extend(schema_failures(validator, output, prefix))
 
     manifest = payload["manifest"]
     known_evidence = {
@@ -1492,8 +2279,13 @@ def validate_response(
     failures.extend(limitation_failures(prefix, output, payload))
     if (
         configuration is not None
-        and configuration["promptVersion"]
-        == "weekly-interpretation-v15"
+        and configuration["promptVersion"] in {
+            "weekly-interpretation-v15",
+            "weekly-interpretation-v16",
+            "weekly-interpretation-v17",
+            "weekly-interpretation-v18",
+            "weekly-interpretation-v19",
+        }
     ):
         failures.extend(
             team_overview_evidence_failures(prefix, output, payload)
@@ -1577,6 +2369,14 @@ def validate_response(
     actual_candidate_refs = set(insight_candidate_refs)
     if primary_candidate_ref:
         actual_candidate_refs.add(primary_candidate_ref)
+    if (
+        configuration is not None
+        and configuration["promptVersion"]
+        == "weekly-interpretation-v19"
+    ):
+        actual_candidate_refs.update(
+            backend_employee_candidate_refs(output, payload)
+        )
     candidate_ref_values = [
         insight.get("candidateRef") for insight in insights
         if insight.get("candidateRef")
@@ -1652,6 +2452,10 @@ def validate_response(
             "weekly-interpretation-v13",
             "weekly-interpretation-v14",
             "weekly-interpretation-v15",
+            "weekly-interpretation-v16",
+            "weekly-interpretation-v17",
+            "weekly-interpretation-v18",
+            "weekly-interpretation-v19",
         }
     ):
         candidate_action_limit = sum(
@@ -1751,10 +2555,9 @@ def validate_response(
                 f"{leaked}"
             )
 
-    counts = Counter(normalized_text(value) for _, value in narratives)
     duplicates = {
-        text: count for text, count in counts.items()
-        if text and count > 1
+        text: len(paths)
+        for text, paths in duplicate_narrative_groups(output).items()
     }
     if len(duplicates) > expectations.get("maxDuplicateNarratives", 0):
         failures.append(f"{prefix}: duplicate narratives: {duplicates}")
@@ -1806,7 +2609,9 @@ def validate_response(
         ):
             failures.append(f"{prefix}: workload summary forbidden for {employee_ref}")
 
-    return failures, response_metrics(output, case, dataset)
+    return failures, response_metrics(
+        output, case, dataset, payload, configuration
+    )
 
 
 def validate_legacy_case(

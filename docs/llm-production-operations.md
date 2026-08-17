@@ -5,9 +5,10 @@
 через initial call, validation retry, immutable publication и единственное MANAGER notification
 event. Retry завершился с нулём violations; Telegram fanout был выключен и deliveries не
 создавались. Validator не ослаблен, universal narrative safety invariants подтверждены реальным
-provider response. Prompt v15 / schema v3 является release candidate: контрольная пара прошла,
-но до замены конфигурации по умолчанию обязательны полная матрица v4/v15, слепая оценка и новый
-end-to-end canary. Оставшиеся production gates: server-side staging, failure drills,
+provider response. V15 отклонён после полного gate. Prompt v19 / schema v3 прошёл полную матрицу
+v4/v19: 26/26 automatic и 26/26 blinded manual pass, 0 candidate violations; решение разрешает
+только отдельный end-to-end canary. Оставшиеся production gates: v19 canary, server-side staging,
+failure drills,
 alerts/budget controls, Telegram webhook/delivery приёмка и production approval.
 
 ## Что уже входит в контур
@@ -49,10 +50,11 @@ business audit. API не возвращает API key, folder ID, prompt, provid
 2. Проверить канонический обезличенный dataset и его автоматический gate:
    `python3 scripts/llm-eval/evaluate.py` и
    `python3 -m unittest scripts/llm-eval/test_evaluate.py -v`.
-3. С заранее утверждённым бюджетом получить полную shadow-матрицу v4/v15 и проверить её:
+3. Полная shadow-матрица v4/v19 уже получена с утверждённым бюджетом. Перед rollout повторно
+   проверить сохранённые ответы:
    `python3 scripts/llm-eval/evaluate.py --responses-dir build/llm-eval/responses
    --require-responses --report build/llm-eval/report.json`. Затем проверить candidate-aware
-   gate и выполнить слепую ручную оценку по rubric из dataset. Полный протокол описан в
+   gate и финальный blinded decision report по rubric из dataset. Полный протокол описан в
    `scripts/llm-eval/README.md`.
 4. Включить создание snapshots: `INTERPRETATION_SNAPSHOT_ENABLED`, snapshot planner и worker.
 5. Убедиться, что snapshot стабилен и не содержит запрещённых данных.
@@ -97,11 +99,10 @@ Rollback приложения разрешён только при совмес�
 2. закрепить folder ID, model URI `yandexgpt-5.1`, прошедшую canary версию prompt/schema и
    snapshot calculation `weekly-snapshot-v6` в release configuration; связка
    `weekly-interpretation-v4` / schema `2` прошла успешный end-to-end canary revision 7 и
-   остаётся конфигурацией по умолчанию. Переход на `weekly-interpretation-v15` / schema `3`
-   разрешается только после полной матрицы, слепой оценки и нового canary;
-3. канонический dataset из 26 обезличенных сценариев уже подготовлен локально; до активации v15
-   нужно получить и сохранить 52 shadow-ответа v4/v15. Gate отдельно проверяет целостность всей
-   матрицы, отсутствие автоматических нарушений у кандидата и ручную rubric без critical errors;
+   остаётся конфигурацией по умолчанию. `weekly-interpretation-v19` / schema `3` прошёл матрицу
+   и слепую оценку, но разрешается к активации только после нового canary;
+3. канонический dataset из 26 обезличенных сценариев и 52 shadow-ответа v4/v19 сохранены локально.
+   Gate подтвердил целостность матрицы, 0 automatic violations и 0 manual critical errors у v19;
 4. утвердить лимит бюджета и получателей billing/technical alerts.
 
 Категории данных для текущего weekly payload уже подтверждены: агрегированные

@@ -585,6 +585,65 @@ class WeeklyInterpretationV2ResponseValidatorTest {
     }
 
     @Test
+    void explainsKnownDataLimitationsWithExactBusinessImpact()
+            throws Exception {
+        Manifest manifest = input.manifest();
+        String evidenceRef = manifest.evidence().get(0).evidenceRef();
+        List<WeeklyInterpretationInput.Limitation> limitations = List.of(
+                new WeeklyInterpretationInput.Limitation(
+                        "COST_DATA_INCOMPLETE",
+                        Scope.STORE,
+                        null,
+                        null,
+                        WeeklyInterpretationInput.LimitationImpact.UNAVAILABLE,
+                        List.of("PROFITABILITY"),
+                        List.of(evidenceRef)
+                ),
+                new WeeklyInterpretationInput.Limitation(
+                        "CLASSIFICATION_QUALITY_LIMITED",
+                        Scope.STORE,
+                        null,
+                        null,
+                        WeeklyInterpretationInput.LimitationImpact.REDUCED_CONFIDENCE,
+                        List.of("CATEGORY_PERFORMANCE"),
+                        List.of(evidenceRef)
+                )
+        );
+        input = new WeeklyInterpretationInput(
+                input.contractVersion(),
+                input.snapshot(),
+                new Manifest(
+                        manifest.employeeRefs(),
+                        manifest.evidence(),
+                        manifest.candidateRefs(),
+                        manifest.categoryCodes(),
+                        manifest.categoryLabels(),
+                        manifest.competencyCodes(),
+                        limitations
+                ),
+                input.facts()
+        );
+
+        LlmResponseValidationResult result = validator.validate(
+                input,
+                json(validContent)
+        );
+
+        assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+        JsonNode normalized = objectMapper.readTree(result.canonicalContent());
+        assertThat(normalized.at("/dataLimitations/0/summary").asText())
+                .isEqualTo(
+                        "Валовая прибыль и маржинальность недоступны из-за "
+                                + "неполных данных о себестоимости."
+                );
+        assertThat(normalized.at("/dataLimitations/1/summary").asText())
+                .isEqualTo(
+                        "Неполная классификация снижает уверенность в выводах "
+                                + "по категориям и дополнительным продажам."
+                );
+    }
+
+    @Test
     void versionRouterSelectsExactStrategyAndRejectsUnknownVersion() {
         VersionedWeeklyInterpretationResponseValidator router =
                 new VersionedWeeklyInterpretationResponseValidator(List.of(

@@ -141,6 +141,38 @@ class BlindedReviewTest(unittest.TestCase):
     def tearDown(self):
         self.temporary.cleanup()
 
+    def test_review_packet_uses_backend_canonical_response(self):
+        manifest = ROOT / "scripts/llm-eval/dataset-v2.json"
+        dataset = EVALUATE.load_json(manifest)
+        failures, inputs = EVALUATE.validate_dataset(
+            ROOT, manifest, dataset
+        )
+        self.assertEqual([], failures)
+        response = {
+            "actions": [],
+            "insights": [],
+            "teamRelationships": [],
+            "primarySignal": None,
+            "supportingSummaries": [],
+            "teamOverview": {
+                "text": "Team comparison is limited.",
+                "evidenceRefs": ["TEAM.RATING.ELIGIBLE_COUNT"],
+            },
+            "backendEmployeeHeadlines": True,
+        }
+
+        canonical = REVIEW.canonical_review_response(
+            response, inputs["stable-week"]
+        )
+
+        self.assertNotIn("backendEmployeeHeadlines", canonical)
+        self.assertNotIn("teamOverview", canonical)
+        self.assertEqual(1, len(canonical["employees"]))
+        self.assertEqual(
+            ["RESULT", "TEAM_OVERVIEW", "HEADLINE"],
+            [summary["section"] for summary in canonical["summaryBlocks"]],
+        )
+
     def test_packet_is_deterministic_blinded_and_counterbalanced(self):
         packet_again, mapping_again, scores_again = REVIEW.build_review_artifacts(
             self.dataset,
@@ -210,6 +242,73 @@ class BlindedReviewTest(unittest.TestCase):
             self.packet, self.mapping, self.responses
         )
         self.assertTrue(any("response hash differs" in failure for failure in failures))
+
+    def test_integrity_compares_packet_with_canonical_response(self):
+        manifest = ROOT / "scripts/llm-eval/dataset-v2.json"
+        dataset = EVALUATE.load_json(manifest)
+        failures, inputs = EVALUATE.validate_dataset(
+            ROOT, manifest, dataset
+        )
+        self.assertEqual([], failures)
+        case_id = "stable-week"
+        response_root = self.responses / "canonical"
+        response_dir = response_root / case_id
+        response_dir.mkdir(parents=True)
+        raw_response = {
+            "actions": [],
+            "insights": [],
+            "teamRelationships": [],
+            "primarySignal": None,
+            "supportingSummaries": [],
+            "teamOverview": {
+                "text": "Team comparison is limited.",
+                "evidenceRefs": ["TEAM.RATING.ELIGIBLE_COUNT"],
+            },
+            "backendEmployeeHeadlines": True,
+        }
+        for configuration in ("v4", "v19"):
+            (response_dir / f"{configuration}.json").write_text(
+                json.dumps(raw_response),
+                encoding="utf-8",
+            )
+        review_dataset = copy.deepcopy(dataset)
+        review_dataset["cases"] = [
+            case for case in dataset["cases"] if case["id"] == case_id
+        ]
+        review_dataset["configurations"] = [
+            configuration
+            for configuration in dataset["configurations"]
+            if configuration["id"] in {"v4", "v19"}
+        ]
+        metrics = copy.deepcopy(
+            automatic_report()["automaticMetrics"]["v4"]
+        )
+        metrics["expectedResponses"] = 1
+        metrics["evaluatedResponses"] = 1
+        report = {
+            "caseCount": 1,
+            "configurationCount": 2,
+            "evaluatedResponses": 2,
+            "passed": True,
+            "automaticMetrics": {
+                configuration: copy.deepcopy(metrics)
+                for configuration in ("v4", "v19")
+            },
+        }
+        packet, mapping, _ = REVIEW.build_review_artifacts(
+            review_dataset,
+            {case_id: inputs[case_id]},
+            response_root,
+            "b" * 64,
+            report,
+        )
+
+        self.assertEqual(
+            [],
+            REVIEW.verify_artifact_integrity(
+                packet, mapping, response_root
+            ),
+        )
 
     def test_artifact_writer_refuses_to_overwrite_existing_file(self):
         target = self.responses / "artifact.json"

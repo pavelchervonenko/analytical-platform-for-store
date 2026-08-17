@@ -96,7 +96,7 @@ tasks.named("test") {
 
 tasks.register<JavaExec>("llmEvalShadow") {
     group = "verification"
-    description = "Plans or executes the local v4/v14 YandexGPT shadow matrix."
+    description = "Plans or executes the local candidate YandexGPT shadow matrix."
     dependsOn("testClasses")
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set(

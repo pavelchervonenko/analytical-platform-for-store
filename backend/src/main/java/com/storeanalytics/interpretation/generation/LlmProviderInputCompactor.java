@@ -9,6 +9,7 @@ import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Fact
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Facts;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Manifest;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Materiality;
+import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Scope;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Sufficiency;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -50,6 +51,7 @@ public final class LlmProviderInputCompactor {
             "REVENUE_PER_HOUR",
             "ADDITIONAL_SHARE_PERCENT",
             "RATING_OVERALL_SCORE",
+            "RATING_STRUCTURE_SCORE",
             "RATING_COVERAGE_PERCENT"
     );
     private static final Set<String> INSUFFICIENT_EMPLOYEE_METRICS = Set.of(
@@ -78,6 +80,16 @@ public final class LlmProviderInputCompactor {
     );
 
     public WeeklyInterpretationInput compact(WeeklyInterpretationInput input) {
+        return compact(input, false);
+    }
+
+    public WeeklyInterpretationInput compact(
+            WeeklyInterpretationInput input,
+            boolean privacyReduced
+    ) {
+        if (privacyReduced) {
+            return compactStoreOnly(input);
+        }
         Manifest source = input.manifest();
         Set<String> referencedEvidence = referencedEvidence(input);
         Facts compactFacts = new Facts(
@@ -109,6 +121,60 @@ public final class LlmProviderInputCompactor {
                 input.snapshot(),
                 manifest,
                 compactFacts
+        );
+    }
+
+    private WeeklyInterpretationInput compactStoreOnly(
+            WeeklyInterpretationInput input
+    ) {
+        Manifest source = input.manifest();
+        Map<String, Scope> evidenceScopes = source.evidence().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        EvidenceIndexEntry::evidenceRef,
+                        EvidenceIndexEntry::scope
+                ));
+        List<WeeklyInterpretationInput.CandidateSignal> candidates =
+                input.facts().candidateSignals().stream()
+                        .filter(candidate -> candidate.employeeRef() == null)
+                        .filter(candidate ->
+                                candidate.targetEmployeeRefs().isEmpty())
+                        .filter(candidate -> candidate.evidenceRefs().stream()
+                                .map(evidenceScopes::get)
+                                .noneMatch(scope -> scope == Scope.EMPLOYEE
+                                        || scope == Scope.TEAM))
+                        .toList();
+        Set<String> referencedEvidence = new HashSet<>();
+        candidates.forEach(candidate ->
+                referencedEvidence.addAll(candidate.evidenceRefs()));
+        List<Fact> store = includeReferencedFacts(
+                input.facts().store(),
+                compactStore(input.facts().store()),
+                referencedEvidence
+        );
+        List<Fact> team = input.facts().team().stream()
+                .filter(fact -> "RATING_ELIGIBLE_COUNT".equals(
+                        fact.metricCode()
+                ))
+                .toList();
+        Facts facts = new Facts(store, team, List.of(), candidates);
+        List<String> categoryCodes = categoryCodes(facts);
+        Manifest manifest = new Manifest(
+                List.of(),
+                evidence(source.evidence(), facts, referencedEvidence),
+                candidates.stream()
+                        .map(WeeklyInterpretationInput.CandidateSignal
+                                ::candidateRef)
+                        .toList(),
+                categoryCodes,
+                categoryLabels(source.categoryLabels(), categoryCodes),
+                List.of(),
+                List.of()
+        );
+        return new WeeklyInterpretationInput(
+                input.contractVersion(),
+                input.snapshot(),
+                manifest,
+                facts
         );
     }
 

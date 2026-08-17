@@ -397,15 +397,27 @@ public class WeeklyInterpretationV2ResponseValidator
             canonicalSections(limitation.affectedSections()).forEach(sections::add);
             node.put(
                     "summary",
-                    limitation.impact()
-                                    == WeeklyInterpretationInput.LimitationImpact.UNAVAILABLE
-                            ? "Часть данных недоступна для подтверждённого вывода."
-                            : "Качество данных снижает уверенность в части выводов."
+                    limitationSummary(limitation)
             );
             ArrayNode evidence = node.putArray("evidenceRefs");
             limitation.evidenceRefs().forEach(evidence::add);
         }
         root.set("dataLimitations", values);
+    }
+
+    private String limitationSummary(Limitation limitation) {
+        return switch (limitation.code()) {
+            case "COST_DATA_INCOMPLETE" ->
+                    "Валовая прибыль и маржинальность недоступны из-за "
+                            + "неполных данных о себестоимости.";
+            case "CLASSIFICATION_QUALITY_LIMITED" ->
+                    "Неполная классификация снижает уверенность в выводах "
+                            + "по категориям и дополнительным продажам.";
+            default -> limitation.impact()
+                            == WeeklyInterpretationInput.LimitationImpact.UNAVAILABLE
+                    ? "Часть данных недоступна для подтверждённого вывода."
+                    : "Качество данных снижает уверенность в части выводов.";
+        };
     }
 
     private void nullable(ObjectNode node, String field, String value) {

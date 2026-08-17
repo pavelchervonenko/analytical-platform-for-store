@@ -4,6 +4,7 @@ import static com.storeanalytics.common.validation.ModelValidation.require;
 import static com.storeanalytics.common.validation.ModelValidation.requireNonNull;
 
 import com.storeanalytics.interpretation.contract.LlmContractResources;
+import com.storeanalytics.interpretation.contract.WeeklyCandidateNarrativePolicy;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput;
 import com.storeanalytics.interpretation.contract.WeeklyPrimarySignalPolicy;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Period;
@@ -154,6 +155,36 @@ public class LlmProviderRequestFactory {
                                 LlmContractResources
                                         .TEAM_GUARDED_STRUCTURED_SUMMARY_SYSTEM_PROMPT
                         )
+                ),
+                Map.entry(
+                        LlmContractResources
+                                .MATRIX_HARDENED_STRUCTURED_SUMMARY_PROMPT_VERSION,
+                        resource(
+                                LlmContractResources
+                                        .MATRIX_HARDENED_STRUCTURED_SUMMARY_SYSTEM_PROMPT
+                        )
+                ),
+                Map.entry(
+                        LlmContractResources
+                                .PRODUCTION_HARDENED_STRUCTURED_SUMMARY_PROMPT_VERSION,
+                        resource(
+                                LlmContractResources
+                                        .PRODUCTION_HARDENED_STRUCTURED_SUMMARY_SYSTEM_PROMPT
+                        )
+                ),
+                Map.entry(
+                        LlmContractResources.DETERMINISTIC_NARRATIVE_PROMPT_VERSION,
+                        resource(
+                                LlmContractResources
+                                        .DETERMINISTIC_NARRATIVE_SYSTEM_PROMPT
+                        )
+                ),
+                Map.entry(
+                        LlmContractResources.PRIVACY_REDUCED_PROMPT_VERSION,
+                        resource(
+                                LlmContractResources
+                                        .PRIVACY_REDUCED_SYSTEM_PROMPT
+                        )
                 )
         );
         this.responseSchemas = Map.of(
@@ -191,7 +222,12 @@ public class LlmProviderRequestFactory {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "LLM job snapshot does not exist: " + value.snapshotId()
                 ));
-        WeeklyInterpretationInput input = inputCompactor.compact(input(snapshot));
+        boolean privacyReduced = LlmContractResources
+                .PRIVACY_REDUCED_PROMPT_VERSION
+                .equals(value.promptVersion());
+        WeeklyInterpretationInput input = inputCompactor.compact(
+                input(snapshot), privacyReduced
+        );
         String inputJson = serialize(input, "LLM input");
         List<StructuralValidationViolation> violations = inputValidator.validate(inputJson);
         if (!violations.isEmpty()) {
@@ -295,14 +331,42 @@ public class LlmProviderRequestFactory {
                     constrainStructuredSummaryTransport(schema, input);
                 }
                 constrainProviderReferences(schema, input);
-                if (LlmContractResources
+                boolean teamGuarded = LlmContractResources
                         .TEAM_GUARDED_STRUCTURED_SUMMARY_PROMPT_VERSION
-                        .equals(promptVersion)) {
+                        .equals(promptVersion);
+                boolean privacyReduced = LlmContractResources
+                        .PRIVACY_REDUCED_PROMPT_VERSION
+                        .equals(promptVersion);
+                boolean deterministicNarrative = privacyReduced
+                        || LlmContractResources
+                        .DETERMINISTIC_NARRATIVE_PROMPT_VERSION
+                        .equals(promptVersion);
+                boolean productionHardened = deterministicNarrative
+                        || LlmContractResources
+                        .PRODUCTION_HARDENED_STRUCTURED_SUMMARY_PROMPT_VERSION
+                        .equals(promptVersion);
+                boolean matrixHardened = productionHardened
+                        || LlmContractResources
+                        .MATRIX_HARDENED_STRUCTURED_SUMMARY_PROMPT_VERSION
+                        .equals(promptVersion);
+                if (teamGuarded || matrixHardened) {
                     constrainTeamOverviewEvidence(schema, input);
+                }
+                if (matrixHardened) {
+                    constrainMatrixHardenedTransport(schema, input);
                 }
                 constrainPrimarySignal(schema, input, contentSchemaVersion);
                 if (LlmContractResources.isStrictConcisePrompt(promptVersion)) {
                     constrainStrictInsights(schema, input, contentSchemaVersion);
+                }
+                if (productionHardened) {
+                    constrainProductionHardenedTransport(schema, input);
+                }
+                if (deterministicNarrative) {
+                    constrainDeterministicCandidateNarratives(schema, input);
+                }
+                if (privacyReduced) {
+                    constrainPrivacyReducedTransport(schema);
                 }
                 if (LlmContractResources.isEvidenceGuardedPrompt(promptVersion)) {
                     constrainCandidateBoundedActions(schema, input);
@@ -581,6 +645,233 @@ public class LlmProviderRequestFactory {
                 ),
                 teamEvidenceRefs
         );
+    }
+
+    private void constrainMatrixHardenedTransport(
+            ObjectNode schema,
+            WeeklyInterpretationInput input
+    ) {
+        for (WeeklyInterpretationInput.EmployeeFacts employee
+                : input.facts().employees()) {
+            JsonNode headline = schema.at(
+                    "/properties/employeeHeadlines/properties/"
+                            + employee.employeeRef()
+            );
+            List<String> employeeEvidence = employee.facts().stream()
+                    .map(WeeklyInterpretationInput.Fact::evidenceRef)
+                    .sorted()
+                    .toList();
+            require(
+                    !employeeEvidence.isEmpty(),
+                    "Employee headline requires employee evidence"
+            );
+            setStringEnum(
+                    headline.at("/properties/evidenceRefs/items"),
+                    employeeEvidence
+            );
+            if (employee.analysisStatus()
+                    == WeeklyInterpretationInput.Sufficiency.INSUFFICIENT) {
+                setRequiredStringEnum(
+                        headline.at("/properties/text"),
+                        List.of(
+                                "Данных недостаточно для персонального "
+                                        + "анализа сотрудника."
+                        )
+                );
+            }
+        }
+
+        boundCollection(schema.at("/properties/actions"), 1);
+        constrainMatrixHardenedRelationships(schema, input);
+    }
+
+    private void constrainProductionHardenedTransport(
+            ObjectNode schema,
+            WeeklyInterpretationInput input
+    ) {
+        setRequiredStringEnum(
+                schema.at("/properties/teamOverview/properties/text"),
+                List.of(teamOverviewText(input))
+        );
+        if (schema.at("/properties/teamRelationships")
+                instanceof ObjectNode relationships) {
+            relationships.put("minItems", 0);
+            relationships.put("maxItems", 0);
+        }
+    }
+
+    private void constrainPrivacyReducedTransport(ObjectNode schema) {
+        removeProviderOwnedProperty(schema, "employeeHeadlines");
+        ObjectNode marker = objectMapper.createObjectNode();
+        marker.put("type", "boolean");
+        marker.putArray("enum").add(true);
+        ((ObjectNode) schema.path("properties")).set(
+                "backendEmployeeHeadlines", marker
+        );
+        addRequiredProperty(schema, "backendEmployeeHeadlines");
+    }
+
+    private void constrainDeterministicCandidateNarratives(
+            ObjectNode schema,
+            WeeklyInterpretationInput input
+    ) {
+        List<WeeklyInterpretationInput.CandidateSignal> primaryCandidates =
+                WeeklyPrimarySignalPolicy.orderedStoreCandidates(input);
+        String primaryRef = null;
+        if (!primaryCandidates.isEmpty()) {
+            WeeklyInterpretationInput.CandidateSignal primary =
+                    primaryCandidates.get(0);
+            primaryRef = primary.candidateRef();
+            setRequiredStringEnum(
+                    concreteNullableAlternative(
+                            schema.at("/properties/primarySignal")
+                    ).at("/properties/text"),
+                    List.of(WeeklyCandidateNarrativePolicy
+                            .forCandidate(primary).summary())
+            );
+        }
+
+        String consumedRef = primaryRef;
+        List<WeeklyInterpretationInput.CandidateSignal> secondary =
+                nonRelationshipCandidates(input).stream()
+                        .filter(candidate -> !candidate.candidateRef().equals(
+                                consumedRef
+                        ))
+                        .toList();
+        if (secondary.isEmpty()) {
+            return;
+        }
+        JsonNode insight = schema.at("/properties/insights/items");
+        setRequiredStringEnum(
+                insight.at("/properties/title"),
+                secondary.stream()
+                        .map(WeeklyCandidateNarrativePolicy::forCandidate)
+                        .map(WeeklyCandidateNarrativePolicy.Narrative::title)
+                        .distinct()
+                        .sorted()
+                        .toList()
+        );
+        setRequiredStringEnum(
+                insight.at("/properties/summary"),
+                secondary.stream()
+                        .map(WeeklyCandidateNarrativePolicy::forCandidate)
+                        .map(WeeklyCandidateNarrativePolicy.Narrative::summary)
+                        .distinct()
+                        .sorted()
+                        .toList()
+        );
+    }
+
+    private String teamOverviewText(WeeklyInterpretationInput input) {
+        boolean comparable = input.facts().team().stream()
+                .filter(fact -> "RATING_ELIGIBLE_COUNT".equals(
+                        fact.metricCode()
+                ))
+                .map(WeeklyInterpretationInput.Fact::value)
+                .map(Object::toString)
+                .map(BigDecimal::new)
+                .anyMatch(value -> value.compareTo(
+                        new BigDecimal("2")
+                ) >= 0);
+        return comparable
+                ? "Командные данные позволяют сопоставить сотрудников."
+                : "Сопоставление сотрудников ограничено недостаточной "
+                        + "командной базой.";
+    }
+
+    private void constrainMatrixHardenedRelationships(
+            ObjectNode schema,
+            WeeklyInterpretationInput input
+    ) {
+        List<WeeklyInterpretationInput.CandidateSignal> candidates =
+                input.facts().candidateSignals().stream()
+                        .filter(candidate -> RELATIONSHIP_THEMES.contains(
+                                candidate.theme()
+                        ))
+                        .toList();
+        JsonNode collection = schema.at("/properties/teamRelationships");
+        if (!(collection instanceof ObjectNode relationships)) {
+            return;
+        }
+        relationships.put("minItems", candidates.size());
+        relationships.put("maxItems", candidates.size());
+        if (candidates.isEmpty()) {
+            return;
+        }
+
+        ObjectNode item = (ObjectNode) relationships.path("items");
+        setRequiredStringEnum(
+                item.at("/properties/summary"),
+                candidates.stream()
+                        .map(candidate -> relationshipSummary(
+                                candidate.theme()
+                        ))
+                        .distinct()
+                        .sorted()
+                        .toList()
+        );
+        if (candidates.size() != 1) {
+            return;
+        }
+
+        WeeklyInterpretationInput.CandidateSignal candidate =
+                candidates.get(0);
+        setRequiredStringEnum(
+                item.at("/properties/type"),
+                List.of(candidate.theme())
+        );
+        if (candidate.competencyCode() == null) {
+            setNullOnly(item.at("/properties/competencyCode"));
+        } else {
+            setRequiredStringEnum(
+                    item.at("/properties/competencyCode"),
+                    List.of(candidate.competencyCode())
+            );
+        }
+        constrainExactStringArray(
+                item.at("/properties/sourceEmployeeRefs"),
+                candidate.employeeRef() == null
+                        ? List.of() : List.of(candidate.employeeRef())
+        );
+        constrainExactStringArray(
+                item.at("/properties/targetEmployeeRefs"),
+                candidate.targetEmployeeRefs()
+        );
+        constrainExactStringArray(
+                item.at("/properties/evidenceRefs"),
+                candidate.evidenceRefs()
+        );
+    }
+
+    private void constrainExactStringArray(
+            JsonNode node,
+            List<String> values
+    ) {
+        if (!(node instanceof ObjectNode collection)) {
+            return;
+        }
+        collection.put("minItems", values.size());
+        collection.put("maxItems", values.size());
+        if (!values.isEmpty()) {
+            setStringEnum(collection.path("items"), values);
+        }
+    }
+
+    private String relationshipSummary(String theme) {
+        return switch (theme) {
+            case "COMPETENCY_LEADER" ->
+                    "В команде подтверждён лидер по соответствующей "
+                            + "компетенции.";
+            case "MOST_IMPROVED" ->
+                    "Подтверждена наиболее заметная положительная динамика "
+                            + "среди сопоставимых сотрудников.";
+            case "LEARNING_OPPORTUNITY" ->
+                    "Подтверждена возможность обмена практикой по "
+                            + "соответствующей компетенции.";
+            default -> throw new IllegalArgumentException(
+                    "Unsupported relationship theme: " + theme
+            );
+        };
     }
 
     private ObjectNode summaryNarrativeSchema(ObjectNode summaryItem) {

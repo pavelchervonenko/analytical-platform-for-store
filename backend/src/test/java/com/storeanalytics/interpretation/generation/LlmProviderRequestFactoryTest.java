@@ -621,6 +621,299 @@ class LlmProviderRequestFactoryTest {
     }
 
     @Test
+    void buildsV16SchemaWithScopedHeadlinesAndBoundedActions()
+            throws IOException {
+        WeeklySnapshotStore snapshotStore = mock(WeeklySnapshotStore.class);
+        when(snapshotStore.findById(SNAPSHOT_ID)).thenReturn(
+                Optional.of(snapshotWithInsightCandidate())
+        );
+        LlmValidationRetryPromptFactory retryPromptFactory = mock(
+                LlmValidationRetryPromptFactory.class
+        );
+        when(retryPromptFactory.appendRetryInstruction(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        LlmProviderRequestFactory factory = new LlmProviderRequestFactory(
+                snapshotStore,
+                retryPromptFactory,
+                new LlmProviderInputCompactor()
+        );
+
+        PreparedLlmProviderRequest prepared = factory.prepare(
+                job("weekly-interpretation-v16", 3),
+                NOW,
+                Duration.ofSeconds(90)
+        );
+
+        assertThat(prepared.request().systemPrompt()).contains(
+                "routing key such as `E01`",
+                "Treat each candidate-backed narrative as an isolated task",
+                "safe default is an empty `actions` array",
+                "Return exactly one relationship for every relationship candidate"
+        );
+        JsonNode responseSchema = new ObjectMapper().readTree(
+                prepared.request().responseSchemaJson()
+        );
+        assertThat(responseSchema.at(
+                "/properties/employeeHeadlines/properties/E01/"
+                        + "properties/evidenceRefs/items/enum"
+        )).extracting(JsonNode::asText)
+                .containsExactly("EMP:E01.WORKLOAD.STATUS");
+        assertThat(responseSchema.at(
+                "/properties/actions/maxItems"
+        ).asInt()).isEqualTo(1);
+        assertThat(responseSchema.at(
+                "/properties/teamRelationships/minItems"
+        ).asInt()).isZero();
+        assertThat(responseSchema.at(
+                "/properties/teamRelationships/maxItems"
+        ).asInt()).isZero();
+        assertAllObjectPropertiesAreRequired(responseSchema);
+    }
+
+    @Test
+    void buildsV16SchemaWithExactSingleRelationshipCandidate()
+            throws IOException {
+        WeeklyInterpretationInput.CandidateSignal relationship =
+                new WeeklyInterpretationInput.CandidateSignal(
+                        "C001",
+                        WeeklyInterpretationInput.CandidateKind.OPPORTUNITY,
+                        "MOST_IMPROVED",
+                        "E01",
+                        null,
+                        null,
+                        List.of(),
+                        WeeklyInterpretationInput.Sufficiency.SUFFICIENT,
+                        List.of("EMP:E01.WORKLOAD.STATUS")
+                );
+        WeeklySnapshotStore snapshotStore = mock(WeeklySnapshotStore.class);
+        when(snapshotStore.findById(SNAPSHOT_ID)).thenReturn(
+                Optional.of(snapshotWithInsightCandidates(
+                        List.of(relationship)
+                ))
+        );
+        LlmValidationRetryPromptFactory retryPromptFactory = mock(
+                LlmValidationRetryPromptFactory.class
+        );
+        when(retryPromptFactory.appendRetryInstruction(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        LlmProviderRequestFactory factory = new LlmProviderRequestFactory(
+                snapshotStore,
+                retryPromptFactory,
+                new LlmProviderInputCompactor()
+        );
+
+        JsonNode schema = new ObjectMapper().readTree(
+                factory.prepare(
+                        job("weekly-interpretation-v16", 3),
+                        NOW,
+                        Duration.ofSeconds(90)
+                ).request().responseSchemaJson()
+        );
+
+        assertThat(schema.at(
+                "/properties/teamRelationships/minItems"
+        ).asInt()).isOne();
+        assertThat(schema.at(
+                "/properties/teamRelationships/maxItems"
+        ).asInt()).isOne();
+        assertThat(schema.at(
+                "/properties/teamRelationships/items/properties/type/enum"
+        )).extracting(JsonNode::asText).containsExactly("MOST_IMPROVED");
+        assertThat(schema.at(
+                "/properties/teamRelationships/items/properties/"
+                        + "sourceEmployeeRefs/items/enum"
+        )).extracting(JsonNode::asText).containsExactly("E01");
+        assertThat(schema.at(
+                "/properties/teamRelationships/items/properties/"
+                        + "targetEmployeeRefs/maxItems"
+        ).asInt()).isZero();
+        assertThat(schema.at(
+                "/properties/teamRelationships/items/properties/summary/enum"
+        )).extracting(JsonNode::asText).containsExactly(
+                "Подтверждена наиболее заметная положительная динамика "
+                        + "среди сопоставимых сотрудников."
+        );
+    }
+
+    @Test
+    void buildsV17SchemaWithBackendOwnedTeamTextAndRelationships()
+            throws IOException {
+        WeeklyInterpretationInput.CandidateSignal relationship =
+                new WeeklyInterpretationInput.CandidateSignal(
+                        "C001",
+                        WeeklyInterpretationInput.CandidateKind.OPPORTUNITY,
+                        "MOST_IMPROVED",
+                        "E01",
+                        null,
+                        null,
+                        List.of(),
+                        WeeklyInterpretationInput.Sufficiency.SUFFICIENT,
+                        List.of("EMP:E01.WORKLOAD.STATUS")
+                );
+        WeeklySnapshotStore snapshotStore = mock(WeeklySnapshotStore.class);
+        when(snapshotStore.findById(SNAPSHOT_ID)).thenReturn(
+                Optional.of(snapshotWithInsightCandidates(
+                        List.of(relationship)
+                ))
+        );
+        LlmValidationRetryPromptFactory retryPromptFactory = mock(
+                LlmValidationRetryPromptFactory.class
+        );
+        when(retryPromptFactory.appendRetryInstruction(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        LlmProviderRequestFactory factory = new LlmProviderRequestFactory(
+                snapshotStore,
+                retryPromptFactory,
+                new LlmProviderInputCompactor()
+        );
+
+        PreparedLlmProviderRequest prepared = factory.prepare(
+                job("weekly-interpretation-v17", 3),
+                NOW,
+                Duration.ofSeconds(90)
+        );
+        JsonNode schema = new ObjectMapper().readTree(
+                prepared.request().responseSchemaJson()
+        );
+
+        assertThat(prepared.request().systemPrompt()).contains(
+                "Return an empty `teamRelationships` array",
+                "text allowed by the supplied schema"
+        );
+        assertThat(schema.at(
+                "/properties/teamOverview/properties/text/enum"
+        )).extracting(JsonNode::asText).containsExactly(
+                "Сопоставление сотрудников ограничено недостаточной "
+                        + "командной базой."
+        );
+        assertThat(schema.at(
+                "/properties/teamRelationships/minItems"
+        ).asInt()).isZero();
+        assertThat(schema.at(
+                "/properties/teamRelationships/maxItems"
+        ).asInt()).isZero();
+        assertAllObjectPropertiesAreRequired(schema);
+    }
+
+    @Test
+    void buildsV18SchemaWithDeterministicCandidateNarratives()
+            throws IOException {
+        WeeklySnapshotStore snapshotStore = mock(WeeklySnapshotStore.class);
+        when(snapshotStore.findById(SNAPSHOT_ID)).thenReturn(
+                Optional.of(snapshotWithInsightCandidates(List.of(
+                        insightCandidate(
+                                "C001",
+                                WeeklyInterpretationInput.CandidateKind.RISK,
+                                "REVENUE_DYNAMICS"
+                        ),
+                        insightCandidate(
+                                "C002",
+                                WeeklyInterpretationInput.CandidateKind.OPPORTUNITY,
+                                "CATEGORY_MIX"
+                        )
+                )))
+        );
+        LlmValidationRetryPromptFactory retryPromptFactory = mock(
+                LlmValidationRetryPromptFactory.class
+        );
+        when(retryPromptFactory.appendRetryInstruction(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        LlmProviderRequestFactory factory = new LlmProviderRequestFactory(
+                snapshotStore,
+                retryPromptFactory,
+                new LlmProviderInputCompactor()
+        );
+
+        PreparedLlmProviderRequest prepared = factory.prepare(
+                job("weekly-interpretation-v18", 3),
+                NOW,
+                Duration.ofSeconds(90)
+        );
+        JsonNode schema = new ObjectMapper().readTree(
+                prepared.request().responseSchemaJson()
+        );
+
+        assertThat(prepared.request().systemPrompt()).contains(
+                "backend reconstructs those narratives",
+                "use exactly an allowed enum value"
+        );
+        assertThat(schema.at(
+                "/properties/primarySignal/anyOf/0/properties/text/enum"
+        )).extracting(JsonNode::asText).containsExactly(
+                "Динамика выручки требует внимания."
+        );
+        assertThat(schema.at(
+                "/properties/insights/items/properties/title/enum"
+        )).extracting(JsonNode::asText).containsExactly(
+                "Динамика категории"
+        );
+        assertThat(schema.at(
+                "/properties/insights/items/properties/summary/enum"
+        )).extracting(JsonNode::asText).containsExactly(
+                "Динамика категории: подтверждён положительный сигнал."
+        );
+        assertAllObjectPropertiesAreRequired(schema);
+    }
+
+    @Test
+    void buildsV19StoreOnlyRequestWithBackendOwnedEmployeeMarker()
+            throws IOException {
+        WeeklySnapshotStore snapshotStore = mock(WeeklySnapshotStore.class);
+        when(snapshotStore.findById(SNAPSHOT_ID)).thenReturn(
+                Optional.of(snapshotWithInsightCandidates(List.of(
+                        insightCandidate(
+                                "C001",
+                                WeeklyInterpretationInput.CandidateKind.RISK,
+                                "REVENUE_DYNAMICS"
+                        ),
+                        insightCandidate(
+                                "C002",
+                                WeeklyInterpretationInput.CandidateKind.OPPORTUNITY,
+                                "CATEGORY_MIX"
+                        )
+                )))
+        );
+        LlmValidationRetryPromptFactory retryPromptFactory = mock(
+                LlmValidationRetryPromptFactory.class
+        );
+        when(retryPromptFactory.appendRetryInstruction(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        LlmProviderRequestFactory factory = new LlmProviderRequestFactory(
+                snapshotStore,
+                retryPromptFactory,
+                new LlmProviderInputCompactor()
+        );
+
+        PreparedLlmProviderRequest prepared = factory.prepare(
+                job("weekly-interpretation-v19", 3),
+                NOW,
+                Duration.ofSeconds(90)
+        );
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode input = mapper.readTree(prepared.request().inputJson());
+        JsonNode schema = mapper.readTree(
+                prepared.request().responseSchemaJson()
+        );
+
+        assertThat(prepared.request().systemPrompt()).contains(
+                "backendEmployeeHeadlines",
+                "aggregated retail"
+        );
+        assertThat(input.at("/manifest/employeeRefs")).isEmpty();
+        assertThat(input.at("/facts/employees")).isEmpty();
+        assertThat(input.at("/manifest/competencyCodes")).isEmpty();
+        assertThat(schema.at(
+                "/properties/backendEmployeeHeadlines/enum/0"
+        ).asBoolean()).isTrue();
+        assertThat(schema.at("/properties/employeeHeadlines").isMissingNode())
+                .isTrue();
+        assertThat(schema.at(
+                "/properties/teamRelationships/maxItems"
+        ).asInt()).isZero();
+        assertAllObjectPropertiesAreRequired(schema);
+    }
+
+    @Test
     void keepsV15SchemaWithinProviderPropertyBudgetForNineEmployees()
             throws IOException {
         WeeklySnapshotStore snapshotStore = mock(WeeklySnapshotStore.class);

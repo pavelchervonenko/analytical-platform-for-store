@@ -124,6 +124,28 @@ def valid_v3_output(payload: dict) -> dict:
     }
     return output
 
+def valid_v19_transport(payload: dict) -> dict:
+    canonical = valid_v3_output(payload)
+    team = next(
+        summary
+        for summary in canonical["summaryBlocks"]
+        if summary["scope"] == "TEAM"
+    )
+    transport = {
+        key: copy.deepcopy(value)
+        for key, value in canonical.items()
+        if key not in {"employees", "summaryBlocks", "dataLimitations"}
+    }
+    transport["teamOverview"] = {
+        "text": team["text"],
+        "evidenceRefs": team["evidenceRefs"],
+    }
+    transport["backendEmployeeHeadlines"] = True
+    transport["supportingSummaries"] = []
+    transport["teamRelationships"] = []
+    return transport
+
+
 def store_action(
     payload: dict,
     action_type: str,
@@ -173,21 +195,21 @@ class EvaluationDatasetTest(unittest.TestCase):
         )
         return failures
 
-    def test_candidate_configuration_is_primary_signal_v15(self):
+    def test_candidate_configuration_is_primary_signal_v19(self):
         configurations = self.dataset["configurations"]
 
-        self.assertEqual(["v4", "v15"], [
+        self.assertEqual(["v4", "v19"], [
             value["id"] for value in configurations
         ])
         self.assertEqual(
-            "weekly-interpretation-v15",
+            "weekly-interpretation-v19",
             configurations[1]["promptVersion"],
         )
 
-    def test_v15_primary_signal_satisfies_required_candidate(self):
+    def test_v19_primary_signal_satisfies_required_candidate(self):
         case_id = "accessory-gap"
         case = case_by_id(self.dataset, case_id)
-        output = valid_v3_output(self.inputs[case_id])
+        output = valid_v19_transport(self.inputs[case_id])
 
         failures, metrics = EVALUATE.validate_response(
             self.v3_validator,
@@ -195,17 +217,17 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             self.inputs[case_id],
             output,
-            "v15",
+            "v19",
         )
 
         self.assertEqual([], failures)
         self.assertEqual(1, metrics["primarySignals"])
         self.assertEqual(1.0, metrics["requiredCandidateCoverage"])
 
-    def test_v15_rejects_primary_candidate_repeated_in_insights(self):
+    def test_v19_rejects_primary_candidate_repeated_in_insights(self):
         case_id = "accessory-gap"
         case = case_by_id(self.dataset, case_id)
-        output = valid_v3_output(self.inputs[case_id])
+        output = valid_v19_transport(self.inputs[case_id])
         primary = output["primarySignal"]
         output["insights"] = [{
             "scope": "STORE",
@@ -225,7 +247,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             self.inputs[case_id],
             output,
-            "v15",
+            "v19",
         )
 
         self.assertTrue(any(
@@ -233,10 +255,10 @@ class EvaluationDatasetTest(unittest.TestCase):
             for failure in failures
         ))
 
-    def test_v15_accepts_null_primary_without_store_candidate(self):
+    def test_v19_accepts_null_primary_without_store_candidate(self):
         case_id = "stable-week"
         case = case_by_id(self.dataset, case_id)
-        output = valid_v3_output(self.inputs[case_id])
+        output = valid_v19_transport(self.inputs[case_id])
 
         failures, metrics = EVALUATE.validate_response(
             self.v3_validator,
@@ -244,13 +266,13 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             self.inputs[case_id],
             output,
-            "v15",
+            "v19",
         )
 
         self.assertEqual([], failures)
         self.assertEqual(0, metrics["primarySignals"])
 
-    def test_v15_structured_transport_normalizes_to_canonical_v3(self):
+    def test_v19_rejects_provider_owned_employee_headlines(self):
         case_id = "accessory-gap"
         case = case_by_id(self.dataset, case_id)
         payload = self.inputs[case_id]
@@ -286,18 +308,351 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             payload,
             transport,
-            "v15",
+            "v19",
+        )
+
+        self.assertTrue(any(
+            "backend-owned provider field at $.employeeHeadlines" in failure
+            for failure in failures
+        ))
+
+    def test_v19_rejects_employee_candidate_not_sent_to_provider(self):
+        payload = self.inputs["employee-improvement"]
+        candidate = next(
+            value
+            for value in payload["facts"]["candidateSignals"]
+            if value["employeeRef"] is not None
+        )
+
+        failures = EVALUATE.privacy_reduced_provider_failures(
+            "employee-improvement/v19",
+            {
+                "primarySignal": {
+                    "candidateRef": candidate["candidateRef"],
+                    "employeeRef": candidate["employeeRef"],
+                    "evidenceRefs": list(candidate["evidenceRefs"]),
+                },
+            },
+            payload,
+        )
+
+        self.assertTrue(any(
+            "provider candidate was not sent" in failure
+            for failure in failures
+        ))
+        self.assertTrue(any(
+            "provider employee reference" in failure
+            for failure in failures
+        ))
+
+    def test_v19_backend_marker_builds_employee_and_team_content(self):
+        case_id = "team-most-improved"
+        case = case_by_id(self.dataset, case_id)
+        payload = self.inputs[case_id]
+        canonical = valid_v3_output(payload)
+        team = next(
+            summary
+            for summary in canonical["summaryBlocks"]
+            if summary["scope"] == "TEAM"
+        )
+        transport = {
+            key: copy.deepcopy(value)
+            for key, value in canonical.items()
+            if key not in {"employees", "summaryBlocks", "dataLimitations"}
+        }
+        transport["teamOverview"] = {
+            "text": team["text"],
+            "evidenceRefs": team["evidenceRefs"],
+        }
+        transport["backendEmployeeHeadlines"] = True
+        transport["supportingSummaries"] = []
+        transport["teamRelationships"] = []
+
+        failures, metrics = EVALUATE.validate_response(
+            self.v3_validator,
+            self.dataset,
+            case,
+            payload,
+            transport,
+            "v19",
         )
 
         self.assertEqual([], failures)
-        self.assertEqual(1, metrics["primarySignals"])
         normalized = EVALUATE.backend_normalize_response(transport, payload)
-        self.assertNotIn("teamOverview", normalized)
-        self.assertNotIn("employeeHeadlines", normalized)
-        self.assertNotIn("supportingSummaries", normalized)
+        self.assertNotIn("backendEmployeeHeadlines", normalized)
+        employee_summaries = [
+            summary for summary in normalized["summaryBlocks"]
+            if summary["scope"] == "EMPLOYEE"
+        ]
         self.assertEqual(
-            ["TEAM_OVERVIEW", "HEADLINE"],
-            [summary["section"] for summary in normalized["summaryBlocks"]],
+            len(payload["manifest"]["employeeRefs"]),
+            len(employee_summaries),
+        )
+        self.assertEqual(1, metrics["teamRelationships"])
+
+    def test_v19_backend_employee_headline_counts_exact_candidate(self):
+        case_id = "employee-improvement"
+        case = case_by_id(self.dataset, case_id)
+        payload = self.inputs[case_id]
+        canonical = valid_v3_output(payload)
+        team = next(
+            summary
+            for summary in canonical["summaryBlocks"]
+            if summary["scope"] == "TEAM"
+        )
+        transport = {
+            key: copy.deepcopy(value)
+            for key, value in canonical.items()
+            if key not in {"employees", "summaryBlocks", "dataLimitations"}
+        }
+        transport["teamOverview"] = {
+            "text": team["text"],
+            "evidenceRefs": team["evidenceRefs"],
+        }
+        transport["backendEmployeeHeadlines"] = True
+        transport["supportingSummaries"] = []
+        transport["teamRelationships"] = []
+
+        failures, metrics = EVALUATE.validate_response(
+            self.v3_validator,
+            self.dataset,
+            case,
+            payload,
+            transport,
+            "v19",
+        )
+
+        self.assertEqual([], failures)
+        self.assertEqual(1.0, metrics["requiredCandidateCoverage"])
+        self.assertEqual(1, metrics["candidateBackedSignals"])
+
+    def test_backend_store_results_explain_neutral_and_limited_cases(self):
+        expected = {
+            "stable-week": (
+                "Выручка магазина существенно не изменилась "
+                "относительно прошлого периода."
+            ),
+            "plan-met": "План выполнен на целевом уровне.",
+            "attach-small-denominator": (
+                "База продаж недостаточна для надёжной оценки "
+                "частоты дополнительных продаж."
+            ),
+            "zero-previous-base": (
+                "Выручка категории появилась после нулевого "
+                "значения прошлого периода."
+            ),
+        }
+
+        for case_id, text in expected.items():
+            with self.subTest(case_id=case_id):
+                summary = EVALUATE.backend_store_summary(
+                    self.inputs[case_id]
+                )
+                self.assertIsNotNone(summary)
+                self.assertEqual("RESULT", summary["section"])
+                self.assertEqual(text, summary["text"])
+                self.assertEqual(1, len(summary["evidenceRefs"]))
+
+    def test_backend_team_overview_states_an_exact_tie(self):
+        overview = EVALUATE.backend_team_overview(
+            self.inputs["team-tie-no-leader"]
+        )
+
+        self.assertEqual(
+            "Результаты сотрудников по доступной компетенции равны.",
+            overview["text"],
+        )
+        self.assertEqual(
+            [
+                "EMP:E01.RATING.STRUCTURE_SCORE.CURRENT",
+                "EMP:E02.RATING.STRUCTURE_SCORE.CURRENT",
+                "EMP:E03.RATING.STRUCTURE_SCORE.CURRENT",
+            ],
+            overview["evidenceRefs"],
+        )
+
+    def test_backend_employee_text_distinguishes_change_and_limited_data(self):
+        decline = self.inputs["employee-decline"]
+        candidate = next(
+            value
+            for value in decline["facts"]["candidateSignals"]
+            if value["employeeRef"] == "E01"
+        )
+        _, decline_text = EVALUATE.candidate_narrative(candidate)
+        limited = EVALUATE.backend_employee_headlines(
+            self.inputs["employee-limited"]
+        )
+
+        self.assertEqual(
+            "Результат сотрудника существенно снизился относительно "
+            "его прошлого периода.",
+            decline_text,
+        )
+        self.assertEqual(
+            "По сотруднику доступен только ограниченный текущий результат.",
+            limited["E01"]["text"],
+        )
+
+    def test_backend_limitations_name_the_affected_business_metrics(self):
+        profit = self.inputs["profit-unavailable"]
+        classification = self.inputs["classification-limited"]
+
+        self.assertEqual(
+            "Валовая прибыль и маржинальность недоступны из-за "
+            "неполных данных о себестоимости.",
+            EVALUATE.limitation_summary(
+                profit["manifest"]["limitations"][0]
+            ),
+        )
+        self.assertEqual(
+            "Неполная классификация снижает уверенность в выводах "
+            "по категориям и дополнительным продажам.",
+            EVALUATE.limitation_summary(
+                classification["manifest"]["limitations"][0]
+            ),
+        )
+
+    def test_backend_candidate_text_uses_full_verified_context(self):
+        zero = self.inputs["zero-revenue-after-sales"]
+        zero_candidate = zero["facts"]["candidateSignals"][0]
+        returns = self.inputs["returns-rise"]
+        returns_candidate = returns["facts"]["candidateSignals"][0]
+        conflict = self.inputs["conflicting-revenue-margin"]
+        profit_candidate = next(
+            value
+            for value in conflict["facts"]["candidateSignals"]
+            if value["theme"] == "PROFITABILITY"
+        )
+        accessory = self.inputs["accessory-gap"]
+        accessory_candidate = accessory["facts"]["candidateSignals"][0]
+        month_end = self.inputs["month-end-recovery"]
+        month_end_candidate = month_end["facts"]["candidateSignals"][0]
+
+        self.assertEqual(
+            "Чистая выручка равна нулю после ненулевого значения "
+            "прошлого периода.",
+            EVALUATE.candidate_narrative(
+                zero_candidate, zero
+            )[1],
+        )
+        self.assertEqual(
+            "Чистая выручка (продажи за вычетом возвратов) существенно "
+            "снизилась относительно прошлого периода.",
+            EVALUATE.candidate_narrative(
+                returns_candidate, returns
+            )[1],
+        )
+        self.assertEqual(
+            "Валовая прибыль и маржинальность существенно снизились "
+            "относительно прошлого периода.",
+            EVALUATE.candidate_narrative(
+                profit_candidate, conflict
+            )[1],
+        )
+        self.assertEqual(
+            [
+                "STORE.GROSS_PROFIT.CURRENT",
+                "STORE.MARGIN_PERCENT.CURRENT",
+            ],
+            EVALUATE.candidate_evidence_refs(
+                profit_candidate, conflict
+            ),
+        )
+        self.assertEqual(
+            "Выручка и доля категории «Кабели и зарядные устройства» "
+            "существенно снизились.",
+            EVALUATE.candidate_narrative(
+                accessory_candidate, accessory
+            )[1],
+        )
+
+        self.assertEqual(
+            "Завершившийся период закрыт существенно ниже целевого "
+            "уровня выполнения плана.",
+            EVALUATE.candidate_narrative(
+                month_end_candidate, month_end
+            )[1],
+        )
+
+    def test_v19_allows_identical_mandatory_employee_headlines(self):
+        case_id = "team-tie-no-leader"
+        case = case_by_id(self.dataset, case_id)
+        output = valid_v3_output(self.inputs[case_id])
+        for summary in output["summaryBlocks"]:
+            if summary["scope"] == "EMPLOYEE":
+                summary["text"] = (
+                    "По сотруднику нет отдельного существенного изменения."
+                )
+
+        failures, metrics = EVALUATE.validate_response(
+            self.v3_validator,
+            self.dataset,
+            case,
+            self.inputs[case_id],
+            output,
+            "v19",
+        )
+
+        self.assertFalse(any(
+            "duplicate narratives" in failure for failure in failures
+        ))
+        self.assertEqual(0, metrics["duplicateNarratives"])
+
+    def test_v19_structured_transport_builds_backend_relationships(self):
+        case_id = "team-most-improved"
+        case = case_by_id(self.dataset, case_id)
+        payload = self.inputs[case_id]
+        canonical = valid_v3_output(payload)
+        team = next(
+            summary
+            for summary in canonical["summaryBlocks"]
+            if summary["scope"] == "TEAM"
+        )
+        transport = {
+            key: copy.deepcopy(value)
+            for key, value in canonical.items()
+            if key not in {"employees", "summaryBlocks", "dataLimitations"}
+        }
+        transport["teamOverview"] = {
+            "text": team["text"],
+            "evidenceRefs": team["evidenceRefs"],
+        }
+        transport["employeeHeadlines"] = {
+            summary["employeeRef"]: {
+                "text": summary["text"],
+                "evidenceRefs": summary["evidenceRefs"],
+            }
+            for summary in canonical["summaryBlocks"]
+            if summary["scope"] == "EMPLOYEE"
+        }
+        transport["supportingSummaries"] = []
+        transport["teamRelationships"] = []
+
+        failures, metrics = EVALUATE.validate_response(
+            self.v3_validator,
+            self.dataset,
+            case,
+            payload,
+            transport,
+            "v19",
+        )
+
+        self.assertFalse(any(
+            "teamRelationship" in failure for failure in failures
+        ))
+        normalized = EVALUATE.backend_normalize_response(transport, payload)
+        self.assertEqual(1, metrics["teamRelationships"])
+        self.assertEqual(
+            "MOST_IMPROVED",
+            normalized["teamRelationships"][0]["type"],
+        )
+        self.assertEqual(
+            ["E01"],
+            normalized["teamRelationships"][0]["sourceEmployeeRefs"],
+        )
+        self.assertEqual(
+            [],
+            normalized["teamRelationships"][0]["targetEmployeeRefs"],
         )
 
     def test_dataset_is_valid_and_has_required_coverage(self):
@@ -496,7 +851,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             for failure in failures
         ))
 
-    def test_v15_action_count_cannot_exceed_candidate_count(self):
+    def test_v19_action_count_cannot_exceed_candidate_count(self):
         case_id = "accessory-gap"
         case = case_by_id(self.dataset, case_id)
         output = valid_output(self.inputs[case_id])
@@ -514,7 +869,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             self.inputs[case_id],
             output,
-            "v15",
+            "v19",
         )
 
         self.assertTrue(any(
@@ -833,7 +1188,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             self.inputs[case_id],
             output,
-            "v15",
+            "v19",
         )
 
         self.assertTrue(any(
@@ -844,7 +1199,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             1, metrics["nearDuplicatePrimaryTeamOverviews"]
         )
 
-    def test_v15_team_overview_rejects_non_team_evidence(self):
+    def test_v19_team_overview_rejects_non_team_evidence(self):
         case_id = "accessory-gap"
         case = case_by_id(self.dataset, case_id)
         output = valid_v3_output(self.inputs[case_id])
@@ -864,7 +1219,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             self.inputs[case_id],
             output,
-            "v15",
+            "v19",
         )
 
         self.assertTrue(any(

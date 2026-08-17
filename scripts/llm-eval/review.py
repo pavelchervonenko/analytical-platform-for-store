@@ -227,6 +227,17 @@ def indexed_findings(values: list[str], prefix: str) -> list[dict]:
     ]
 
 
+def canonical_review_response(response: object, payload: object) -> object:
+    if (
+        not isinstance(response, dict)
+        or not isinstance(payload, dict)
+        or not isinstance(payload.get("manifest"), dict)
+        or not isinstance(payload.get("facts"), dict)
+    ):
+        return response
+    return evaluate.backend_normalize_response(response, payload)
+
+
 def build_review_artifacts(
     dataset: dict,
     inputs: dict[str, dict],
@@ -255,7 +266,9 @@ def build_review_artifacts(
         for alias, configuration_id in zip(("A", "B"), ordered_configurations):
             relative_path = Path(case_id) / f"{configuration_id}.json"
             response_path = responses_dir / relative_path
-            response = evaluate.load_json(response_path)
+            response = canonical_review_response(
+                evaluate.load_json(response_path), inputs[case_id]
+            )
             response_hash = file_sha256(response_path)
             review_id = str(uuid.uuid5(
                 REVIEW_NAMESPACE,
@@ -541,12 +554,17 @@ def verify_artifact_integrity(
             failures.append(f"{review_id}: response artifact is missing")
             continue
         actual_hash = file_sha256(response_path)
-        _, variant = variants[review_id]
+        case, variant = variants[review_id]
         if actual_hash != assignment["responseSha256"]:
             failures.append(f"{review_id}: response hash differs from mapping")
         if actual_hash != variant["responseSha256"]:
             failures.append(f"{review_id}: response hash differs from packet")
-        if evaluate.load_json(response_path) != variant["response"]:
+        raw_response = evaluate.load_json(response_path)
+        canonical_response = canonical_review_response(
+            raw_response,
+            case["providerInput"],
+        )
+        if canonical_response != variant["response"]:
             failures.append(f"{review_id}: response body differs from packet")
     return failures
 
@@ -937,7 +955,7 @@ def add_common_arguments(parser: argparse.ArgumentParser) -> None:
 
 def add_gate_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--baseline", default="v4")
-    parser.add_argument("--candidate", default="v15")
+    parser.add_argument("--candidate", default="v19")
 
 
 def main() -> int:
@@ -957,7 +975,7 @@ def main() -> int:
     add_common_arguments(finalize)
     finalize.add_argument("--review-dir", default=DEFAULT_REVIEW_DIR)
     finalize.add_argument("--baseline", default="v4")
-    finalize.add_argument("--candidate", default="v15")
+    finalize.add_argument("--candidate", default="v19")
     finalize.add_argument(
         "--report",
         default="build/llm-eval/review/decision-report.json",
