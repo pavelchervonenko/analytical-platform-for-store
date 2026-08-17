@@ -49,7 +49,7 @@ class WeeklyInterpretationV3SchemaContractTest {
     }
 
     @Test
-    void registryPreservesOldPairsAndAddsV13ThroughV19WithSchemaV3() {
+    void registryPreservesOldPairsAndAddsV13ThroughV21WithSchemaV3() {
         assertThat(LlmContractResources.contentSchema(1))
                 .isEqualTo(LlmContractResources.CONTENT_SCHEMA);
         assertThat(LlmContractResources.contentSchema(2))
@@ -75,6 +75,12 @@ class WeeklyInterpretationV3SchemaContractTest {
         assertThat(LlmContractResources.systemPrompt("weekly-interpretation-v19"))
                 .isEqualTo(LlmContractResources
                         .PRIVACY_REDUCED_SYSTEM_PROMPT);
+        assertThat(LlmContractResources.systemPrompt("weekly-interpretation-v20"))
+                .isEqualTo(LlmContractResources
+                        .MODERATION_SAFE_PRIVACY_REDUCED_SYSTEM_PROMPT);
+        assertThat(LlmContractResources.systemPrompt("weekly-interpretation-v21"))
+                .isEqualTo(LlmContractResources
+                        .BOUNDED_PRIVACY_REDUCED_SYSTEM_PROMPT);
         assertThat(LlmContractResources.isSupportedPair(
                 "weekly-interpretation-v13", 3
         )).isTrue();
@@ -97,6 +103,12 @@ class WeeklyInterpretationV3SchemaContractTest {
                 "weekly-interpretation-v19", 3
         )).isTrue();
         assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v20", 3
+        )).isTrue();
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v21", 3
+        )).isTrue();
+        assertThat(LlmContractResources.isSupportedPair(
                 "weekly-interpretation-v13", 2
         )).isFalse();
         assertThat(LlmContractResources.isSupportedPair(
@@ -113,6 +125,12 @@ class WeeklyInterpretationV3SchemaContractTest {
         )).isFalse();
         assertThat(LlmContractResources.isSupportedPair(
                 "weekly-interpretation-v19", 2
+        )).isFalse();
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v20", 2
+        )).isFalse();
+        assertThat(LlmContractResources.isSupportedPair(
+                "weekly-interpretation-v21", 2
         )).isFalse();
         assertThat(LlmContractResources.isSupportedPair(
                 "weekly-interpretation-v18", 2

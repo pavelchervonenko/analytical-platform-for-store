@@ -17,6 +17,18 @@ from pathlib import Path
 from jsonschema import Draft202012Validator, FormatChecker
 
 
+PRIVACY_REDUCED_PROMPTS = frozenset({
+    "weekly-interpretation-v19",
+    "weekly-interpretation-v20",
+    "weekly-interpretation-v21",
+})
+
+
+def is_privacy_reduced_prompt(configuration: dict | None) -> bool:
+    return configuration is not None and (
+        configuration.get("promptVersion") in PRIVACY_REDUCED_PROMPTS
+    )
+
 EVALUATION_NAMESPACE = uuid.UUID("1eb814c7-8420-4aaf-8bf6-f915a3b54627")
 NARRATIVE_FIELDS = frozenset({"text", "title", "summary"})
 
@@ -2167,11 +2179,7 @@ def response_metrics(
     candidate_refs = set(insight_candidate_refs)
     if primary_candidate_ref:
         candidate_refs.add(primary_candidate_ref)
-    if (
-        configuration is not None
-        and configuration["promptVersion"]
-        == "weekly-interpretation-v19"
-    ):
+    if is_privacy_reduced_prompt(configuration):
         candidate_refs.update(
             backend_employee_candidate_refs(output, payload)
         )
@@ -2243,11 +2251,7 @@ def validate_response(
     if not isinstance(output, dict):
         return schema_failures(validator, output, prefix), {}
     failures: list[str] = []
-    if (
-        configuration is not None
-        and configuration["promptVersion"]
-        == "weekly-interpretation-v19"
-    ):
+    if is_privacy_reduced_prompt(configuration):
         failures.extend(
             privacy_reduced_provider_failures(prefix, output, payload)
         )
@@ -2285,6 +2289,8 @@ def validate_response(
             "weekly-interpretation-v17",
             "weekly-interpretation-v18",
             "weekly-interpretation-v19",
+            "weekly-interpretation-v20",
+            "weekly-interpretation-v21",
         }
     ):
         failures.extend(
@@ -2369,11 +2375,7 @@ def validate_response(
     actual_candidate_refs = set(insight_candidate_refs)
     if primary_candidate_ref:
         actual_candidate_refs.add(primary_candidate_ref)
-    if (
-        configuration is not None
-        and configuration["promptVersion"]
-        == "weekly-interpretation-v19"
-    ):
+    if is_privacy_reduced_prompt(configuration):
         actual_candidate_refs.update(
             backend_employee_candidate_refs(output, payload)
         )
@@ -2456,6 +2458,8 @@ def validate_response(
             "weekly-interpretation-v17",
             "weekly-interpretation-v18",
             "weekly-interpretation-v19",
+            "weekly-interpretation-v20",
+            "weekly-interpretation-v21",
         }
     ):
         candidate_action_limit = sum(

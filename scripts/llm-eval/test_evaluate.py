@@ -206,6 +206,17 @@ class EvaluationDatasetTest(unittest.TestCase):
             configurations[1]["promptVersion"],
         )
 
+    def test_v20_and_v21_use_privacy_reduced_validation_path(self):
+        self.assertTrue(EVALUATE.is_privacy_reduced_prompt({
+            "promptVersion": "weekly-interpretation-v20",
+        }))
+        self.assertTrue(EVALUATE.is_privacy_reduced_prompt({
+            "promptVersion": "weekly-interpretation-v21",
+        }))
+        self.assertFalse(EVALUATE.is_privacy_reduced_prompt({
+            "promptVersion": "weekly-interpretation-v18",
+        }))
+
     def test_v19_primary_signal_satisfies_required_candidate(self):
         case_id = "accessory-gap"
         case = case_by_id(self.dataset, case_id)

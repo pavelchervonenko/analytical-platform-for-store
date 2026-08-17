@@ -10,6 +10,11 @@ import com.storeanalytics.interpretation.snapshot.PersistedWeeklySnapshot;
 import com.storeanalytics.interpretation.snapshot.WeeklyAnalyticsFactsQuery;
 import com.storeanalytics.interpretation.snapshot.WeeklySnapshotPayload;
 import com.storeanalytics.interpretation.snapshot.WeeklySnapshotStore;
+import com.storeanalytics.interpretation.validation.LlmResponseValidationResult;
+import com.storeanalytics.interpretation.validation.VersionedWeeklyInterpretationResponseValidator;
+import com.storeanalytics.interpretation.validation.WeeklyInterpretationResponseValidator;
+import com.storeanalytics.interpretation.validation.WeeklyInterpretationV2ResponseValidator;
+import com.storeanalytics.interpretation.validation.WeeklyInterpretationV3ResponseValidator;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
@@ -42,7 +47,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.SerializationFeature;
 
 /**
- * Local-only v4/v19 shadow harness. It lives in test sources and is never packaged
+ * Local-only baseline/candidate harness. It is never packaged
  * into the production application.
  */
 public final class LlmEvalShadowRunner {
@@ -87,12 +92,31 @@ public final class LlmEvalShadowRunner {
     int run(Map<String, String> environment) throws IOException {
         Settings settings = Settings.from(environment);
         List<PreparedEntry> matrix = prepareMatrix(settings);
-        MatrixState state = inspectState(matrix, settings);
+        if (!settings.configurationIds().isEmpty()) {
+            Set<String> available = matrix.stream()
+                    .map(entry -> entry.configuration().id())
+                    .collect(java.util.stream.Collectors.toSet());
+            if (!available.containsAll(settings.configurationIds())) {
+                throw new IllegalArgumentException(
+                        "Unknown LLM_EVAL_CONFIGURATION_IDS"
+                );
+            }
+        }
+        List<PreparedEntry> activeMatrix = matrix.stream()
+                .filter(entry -> settings.configurationIds().isEmpty()
+                        || settings.configurationIds().contains(
+                        entry.configuration().id()
+                ))
+                .toList();
+        MatrixState state = inspectState(activeMatrix, settings);
         List<PreparedEntry> candidates = state.candidates();
         int selectionLimit = MODE_EXECUTE.equals(settings.mode())
                 ? settings.maxPaidCalls()
                 : candidates.size();
         List<PreparedEntry> selected = candidates.stream()
+                .filter(entry -> settings.configurationIds().isEmpty()
+                        || settings.configurationIds().contains(
+                        entry.configuration().id()))
                 .limit(selectionLimit)
                 .toList();
         BigDecimal selectedMaximumCost = selected.stream()
@@ -118,6 +142,7 @@ public final class LlmEvalShadowRunner {
                         withFreshDeadline(entry.prepared().request(), settings)
                 );
                 persistSuccess(settings, entry, receipt);
+                validateResponse(entry, receipt.responseBody());
                 succeeded++;
                 actualCost = actualCost.add(receipt.costAmount());
                 System.out.printf(
@@ -150,8 +175,7 @@ public final class LlmEvalShadowRunner {
         List<Configuration> configurations = configurations(settings.datasetPath());
         boolean privacyReducedMatrix = configurations.stream()
                 .anyMatch(configuration -> LlmContractResources
-                        .PRIVACY_REDUCED_PROMPT_VERSION
-                        .equals(configuration.promptVersion()));
+                        .isPrivacyReducedPrompt(configuration.promptVersion()));
         List<Path> inputFiles;
         try (var files = Files.list(settings.inputsDirectory())) {
             inputFiles = files
@@ -205,6 +229,7 @@ public final class LlmEvalShadowRunner {
                 matrix.add(new PreparedEntry(
                         caseId,
                         configuration,
+                        input,
                         prepared,
                         preflight,
                         requestBytes(prepared.request())
@@ -230,17 +255,34 @@ public final class LlmEvalShadowRunner {
                     node.path("promptVersion").asText(),
                     node.path("contentSchemaVersion").asInt()
             );
-            if (!("v4".equals(configuration.id())
-                    || "v19".equals(configuration.id()))) {
+            boolean baseline = "v4".equals(configuration.id())
+                    && LlmContractResources.NEXT_PROMPT_VERSION.equals(
+                    configuration.promptVersion()
+            ) && LlmContractResources.NEXT_CONTENT_SCHEMA_VERSION
+                    == configuration.contentSchemaVersion();
+            boolean privacyReducedCandidate =
+                    ("v19".equals(configuration.id())
+                            || "v20".equals(configuration.id())
+                            || "v21".equals(configuration.id()))
+                    && LlmContractResources.isPrivacyReducedPrompt(
+                            configuration.promptVersion()
+                    ) && LlmContractResources
+                            .PRIMARY_SIGNAL_CONTENT_SCHEMA_VERSION
+                            == configuration.contentSchemaVersion();
+            if (!(baseline || privacyReducedCandidate)) {
                 throw new IllegalArgumentException(
-                        "Shadow runner only supports the reviewed v4/v19 matrix"
+                        "Shadow runner supports v4 and one reviewed "
+                                + "privacy-reduced candidate"
                 );
             }
             values.add(configuration);
         }
-        if (values.size() != 2) {
+        long baselines = values.stream()
+                .filter(configuration -> "v4".equals(configuration.id()))
+                .count();
+        if (values.size() != 2 || baselines != 1) {
             throw new IllegalArgumentException(
-                    "Shadow dataset must contain exactly the v4 and v19 configurations"
+                    "Shadow dataset must contain v4 and exactly one candidate"
             );
         }
         return List.copyOf(values);
@@ -357,14 +399,16 @@ public final class LlmEvalShadowRunner {
                         receipt, evaluationHash(entry.prepared().request()),
                         "completed response"
                 );
-                JsonNode parsed = objectMapper.readTree(
-                        Files.readString(response, StandardCharsets.UTF_8)
+                String responseBody = Files.readString(
+                        response, StandardCharsets.UTF_8
                 );
+                JsonNode parsed = objectMapper.readTree(responseBody);
                 if (parsed == null || !parsed.isObject()) {
                     throw new IllegalStateException(
                             "Existing shadow response is not a JSON object: " + response
                     );
                 }
+                validateResponse(entry, responseBody);
                 completed++;
             } else if (Files.exists(failure)) {
                 failed++;
@@ -376,6 +420,42 @@ public final class LlmEvalShadowRunner {
             }
         }
         return new MatrixState(completed, failed, List.copyOf(candidates));
+    }
+
+    private void validateResponse(
+            PreparedEntry entry,
+            String responseBody
+    ) {
+        WeeklyInterpretationInput providerInput = objectMapper.readValue(
+                entry.prepared().request().inputJson(),
+                WeeklyInterpretationInput.class
+        );
+        VersionedWeeklyInterpretationResponseValidator validator =
+                new VersionedWeeklyInterpretationResponseValidator(List.of(
+                        new WeeklyInterpretationResponseValidator(),
+                        new WeeklyInterpretationV2ResponseValidator(),
+                        new WeeklyInterpretationV3ResponseValidator()
+                ));
+        LlmResponseValidationResult result = validator.validate(
+                entry.configuration().contentSchemaVersion(),
+                entry.configuration().promptVersion(),
+                providerInput,
+                entry.snapshotInput(),
+                responseBody
+        );
+        if (result.canonicalContent() == null) {
+            String violations = result.violations().stream()
+                    .map(value -> value.code())
+                    .distinct()
+                    .sorted()
+                    .collect(java.util.stream.Collectors.joining(","));
+            throw new IllegalStateException(
+                    "Shadow response failed semantic validation: "
+                            + entry.caseId() + "/" + entry.configuration().id()
+                            + " outcome=" + result.outcome()
+                            + " violations=" + violations
+            );
+        }
     }
 
     void verifyEvaluationArtifact(
@@ -735,6 +815,7 @@ public final class LlmEvalShadowRunner {
     record PreparedEntry(
             String caseId,
             Configuration configuration,
+            WeeklyInterpretationInput snapshotInput,
             PreparedLlmProviderRequest prepared,
             LlmProviderPreflight preflight,
             int requestBytes
@@ -752,6 +833,7 @@ public final class LlmEvalShadowRunner {
             String mode,
             Path datasetPath,
             Set<String> caseIds,
+            Set<String> configurationIds,
             Path inputsDirectory,
             Path responsesDirectory,
             Path receiptsDirectory,
@@ -807,6 +889,7 @@ public final class LlmEvalShadowRunner {
                     path(environment, "LLM_EVAL_DATASET",
                             "scripts/llm-eval/dataset-v2.json"),
                     caseIds(environment),
+                    configurationIds(environment),
                     path(environment, "LLM_EVAL_INPUTS_DIR",
                             "build/llm-eval/inputs"),
                     responses,
@@ -864,6 +947,30 @@ public final class LlmEvalShadowRunner {
             }
             return settings;
         }
+        private static Set<String> configurationIds(
+                Map<String, String> environment
+        ) {
+            String configured = value(
+                    environment,
+                    "LLM_EVAL_CONFIGURATION_IDS",
+                    ""
+            );
+            if (configured.isBlank()) {
+                return Set.of();
+            }
+            Set<String> result = new LinkedHashSet<>();
+            for (String item : configured.split(",")) {
+                String configurationId = item.trim();
+                if (!configurationId.matches("v[0-9]+")
+                        || !result.add(configurationId)) {
+                    throw new IllegalArgumentException(
+                            "LLM_EVAL_CONFIGURATION_IDS must contain unique ids"
+                    );
+                }
+            }
+            return Set.copyOf(result);
+        }
+
 
         private static Set<String> caseIds(
                 Map<String, String> environment

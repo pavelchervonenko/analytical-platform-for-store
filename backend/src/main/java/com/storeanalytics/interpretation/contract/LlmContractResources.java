@@ -39,6 +39,10 @@ public final class LlmContractResources {
             "weekly-interpretation-v18";
     public static final String PRIVACY_REDUCED_PROMPT_VERSION =
             "weekly-interpretation-v19";
+    public static final String MODERATION_SAFE_PRIVACY_REDUCED_PROMPT_VERSION =
+            "weekly-interpretation-v20";
+    public static final String BOUNDED_PRIVACY_REDUCED_PROMPT_VERSION =
+            "weekly-interpretation-v21";
     public static final String INPUT_SCHEMA =
             "contracts/llm/weekly-interpretation-input-v1.schema.json";
     public static final String CONTENT_SCHEMA =
@@ -81,6 +85,10 @@ public final class LlmContractResources {
             "prompts/llm/weekly-interpretation-v18.md";
     public static final String PRIVACY_REDUCED_SYSTEM_PROMPT =
             "prompts/llm/weekly-interpretation-v19.md";
+    public static final String MODERATION_SAFE_PRIVACY_REDUCED_SYSTEM_PROMPT =
+            "prompts/llm/weekly-interpretation-v20.md";
+    public static final String BOUNDED_PRIVACY_REDUCED_SYSTEM_PROMPT =
+            "prompts/llm/weekly-interpretation-v21.md";
 
     private LlmContractResources() {
     }
@@ -127,6 +135,10 @@ public final class LlmContractResources {
                     DETERMINISTIC_NARRATIVE_SYSTEM_PROMPT;
             case PRIVACY_REDUCED_PROMPT_VERSION ->
                     PRIVACY_REDUCED_SYSTEM_PROMPT;
+            case MODERATION_SAFE_PRIVACY_REDUCED_PROMPT_VERSION ->
+                    MODERATION_SAFE_PRIVACY_REDUCED_SYSTEM_PROMPT;
+            case BOUNDED_PRIVACY_REDUCED_PROMPT_VERSION ->
+                    BOUNDED_PRIVACY_REDUCED_SYSTEM_PROMPT;
             case STRUCTURED_SUMMARY_PROMPT_VERSION ->
                     STRUCTURED_SUMMARY_SYSTEM_PROMPT;
             case NEXT_PROMPT_VERSION -> NEXT_SYSTEM_PROMPT;
@@ -179,7 +191,20 @@ public final class LlmContractResources {
                 promptVersion
         ) || DETERMINISTIC_NARRATIVE_PROMPT_VERSION.equals(
                 promptVersion
-        ) || PRIVACY_REDUCED_PROMPT_VERSION.equals(
+        ) || isPrivacyReducedPrompt(promptVersion);
+    }
+
+    public static boolean isPrivacyReducedPrompt(String promptVersion) {
+        return PRIVACY_REDUCED_PROMPT_VERSION.equals(promptVersion)
+                || MODERATION_SAFE_PRIVACY_REDUCED_PROMPT_VERSION.equals(
+                promptVersion
+        ) || isBoundedPrivacyReducedPrompt(promptVersion);
+    }
+
+    public static boolean isBoundedPrivacyReducedPrompt(
+            String promptVersion
+    ) {
+        return BOUNDED_PRIVACY_REDUCED_PROMPT_VERSION.equals(
                 promptVersion
         );
     }

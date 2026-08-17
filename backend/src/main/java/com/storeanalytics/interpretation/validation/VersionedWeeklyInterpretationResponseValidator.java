@@ -42,9 +42,7 @@ public final class VersionedWeeklyInterpretationResponseValidator {
             String responseBody
     ) {
         String prompt = requireNonNull(promptVersion, "promptVersion");
-        if (!LlmContractResources.PRIVACY_REDUCED_PROMPT_VERSION.equals(
-                prompt
-        )) {
+        if (!LlmContractResources.isPrivacyReducedPrompt(prompt)) {
             return validate(
                     contentSchemaVersion,
                     providerInput,

@@ -53,6 +53,31 @@ class LlmEvalShadowRunnerTest {
     }
 
     @Test
+    void parsesAnExplicitUniqueConfigurationSelection() {
+        LlmEvalShadowRunner.Settings settings =
+                LlmEvalShadowRunner.Settings.from(Map.of(
+                        "LLM_EVAL_CONFIGURATION_IDS",
+                        "v20"
+                ));
+
+        assertThat(settings.configurationIds()).containsExactly("v20");
+    }
+
+    @Test
+    void rejectsDuplicateOrMalformedConfigurationSelection() {
+        assertThatThrownBy(() -> LlmEvalShadowRunner.Settings.from(Map.of(
+                "LLM_EVAL_CONFIGURATION_IDS",
+                "v20,v20"
+        ))).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("unique ids");
+        assertThatThrownBy(() -> LlmEvalShadowRunner.Settings.from(Map.of(
+                "LLM_EVAL_CONFIGURATION_IDS",
+                "../v20"
+        ))).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("unique ids");
+    }
+
+    @Test
     void rejectsDuplicateOrMalformedCaseSelection() {
         assertThatThrownBy(() -> LlmEvalShadowRunner.Settings.from(Map.of(
                 "LLM_EVAL_CASE_IDS",

@@ -696,25 +696,33 @@ class WeeklyInterpretationV3ResponseValidatorTest {
                         List.of(validator)
                 );
 
-        LlmResponseValidationResult result = versioned.validate(
-                LlmContractResources.PRIMARY_SIGNAL_CONTENT_SCHEMA_VERSION,
+        for (String promptVersion : List.of(
                 LlmContractResources.PRIVACY_REDUCED_PROMPT_VERSION,
-                provider,
-                full,
-                json(structuredTransport())
-        );
+                LlmContractResources
+                        .MODERATION_SAFE_PRIVACY_REDUCED_PROMPT_VERSION,
+                LlmContractResources
+                        .BOUNDED_PRIVACY_REDUCED_PROMPT_VERSION
+        )) {
+            LlmResponseValidationResult result = versioned.validate(
+                    LlmContractResources.PRIMARY_SIGNAL_CONTENT_SCHEMA_VERSION,
+                    promptVersion,
+                    provider,
+                    full,
+                    json(structuredTransport())
+            );
 
-        assertThat(result.outcome())
-                .withFailMessage(() -> result.violations().toString())
-                .isEqualTo(LlmValidationOutcome.VALID);
-        JsonNode canonical = objectMapper.readTree(result.canonicalContent());
-        assertThat(canonical.path("employees")).hasSize(1);
-        assertThat(canonical.path("employees").get(0)
-                .path("employeeRef").asText()).isEqualTo("E01");
-        assertThat(canonical.path("summaryBlocks")).anySatisfy(summary -> {
-            assertThat(summary.path("scope").asText()).isEqualTo("EMPLOYEE");
-            assertThat(summary.path("employeeRef").asText()).isEqualTo("E01");
-        });
+            assertThat(result.outcome())
+                    .withFailMessage(() -> result.violations().toString())
+                    .isEqualTo(LlmValidationOutcome.VALID);
+            JsonNode canonical = objectMapper.readTree(result.canonicalContent());
+            assertThat(canonical.path("employees")).hasSize(1);
+            assertThat(canonical.path("employees").get(0)
+                    .path("employeeRef").asText()).isEqualTo("E01");
+            assertThat(canonical.path("summaryBlocks")).anySatisfy(summary -> {
+                assertThat(summary.path("scope").asText()).isEqualTo("EMPLOYEE");
+                assertThat(summary.path("employeeRef").asText()).isEqualTo("E01");
+            });
+        }
         assertThat(provider.manifest().employeeRefs()).isEmpty();
         assertThat(provider.facts().employees()).isEmpty();
     }

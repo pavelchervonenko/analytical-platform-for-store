@@ -856,7 +856,7 @@ class LlmProviderRequestFactoryTest {
     }
 
     @Test
-    void buildsV19StoreOnlyRequestWithBackendOwnedEmployeeMarker()
+    void buildsV20StoreOnlyRequestWithModerationSafePurposeAndBackendMarker()
             throws IOException {
         WeeklySnapshotStore snapshotStore = mock(WeeklySnapshotStore.class);
         when(snapshotStore.findById(SNAPSHOT_ID)).thenReturn(
@@ -885,7 +885,7 @@ class LlmProviderRequestFactoryTest {
         );
 
         PreparedLlmProviderRequest prepared = factory.prepare(
-                job("weekly-interpretation-v19", 3),
+                job("weekly-interpretation-v20", 3),
                 NOW,
                 Duration.ofSeconds(90)
         );
@@ -897,7 +897,9 @@ class LlmProviderRequestFactoryTest {
 
         assertThat(prepared.request().systemPrompt()).contains(
                 "backendEmployeeHeadlines",
-                "aggregated retail"
+                "descriptive weekly retail performance summary",
+                "does not evaluate people",
+                "Aggregate retail process checks"
         );
         assertThat(input.at("/manifest/employeeRefs")).isEmpty();
         assertThat(input.at("/facts/employees")).isEmpty();
@@ -910,6 +912,69 @@ class LlmProviderRequestFactoryTest {
         assertThat(schema.at(
                 "/properties/teamRelationships/maxItems"
         ).asInt()).isZero();
+        assertAllObjectPropertiesAreRequired(schema);
+    }
+
+    @Test
+    void buildsV21RequestWithTwoDifferentStoreSignalThemes()
+            throws IOException {
+        WeeklySnapshotStore snapshotStore = mock(WeeklySnapshotStore.class);
+        when(snapshotStore.findById(SNAPSHOT_ID)).thenReturn(
+                Optional.of(snapshotWithInsightCandidates(List.of(
+                        insightCandidate(
+                                "C001",
+                                WeeklyInterpretationInput.CandidateKind.RISK,
+                                "PLAN"
+                        ),
+                        insightCandidate(
+                                "C002",
+                                WeeklyInterpretationInput.CandidateKind.OPPORTUNITY,
+                                "PLAN"
+                        ),
+                        insightCandidate(
+                                "C003",
+                                WeeklyInterpretationInput.CandidateKind.OPPORTUNITY,
+                                "PROFITABILITY"
+                        )
+                )))
+        );
+        LlmValidationRetryPromptFactory retryPromptFactory = mock(
+                LlmValidationRetryPromptFactory.class
+        );
+        when(retryPromptFactory.appendRetryInstruction(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        LlmProviderRequestFactory factory = new LlmProviderRequestFactory(
+                snapshotStore,
+                retryPromptFactory,
+                new LlmProviderInputCompactor()
+        );
+
+        PreparedLlmProviderRequest prepared = factory.prepare(
+                job("weekly-interpretation-v21", 3),
+                NOW,
+                Duration.ofSeconds(90)
+        );
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode input = mapper.readTree(prepared.request().inputJson());
+        JsonNode schema = mapper.readTree(
+                prepared.request().responseSchemaJson()
+        );
+
+        assertThat(prepared.request().systemPrompt()).contains(
+                "no more than two store candidates",
+                "Return at most one insight"
+        );
+        assertThat(input.at("/manifest/candidateRefs"))
+                .extracting(JsonNode::asText)
+                .containsExactly("C001", "C003");
+        assertThat(input.at("/facts/candidateSignals"))
+                .extracting(node -> node.path("theme").asText())
+                .containsExactly("PLAN", "PROFITABILITY");
+        assertThat(schema.at("/properties/insights/maxItems").asInt())
+                .isEqualTo(1);
+        assertThat(schema.at(
+                "/properties/insights/items/properties/candidateRef/enum"
+        )).extracting(JsonNode::asText).containsExactly("C003");
         assertAllObjectPropertiesAreRequired(schema);
     }
 

@@ -185,7 +185,11 @@ public class LlmProviderRequestFactory {
                                 LlmContractResources
                                         .PRIVACY_REDUCED_SYSTEM_PROMPT
                         )
-                )
+                ),
+                promptEntry(LlmContractResources
+                        .MODERATION_SAFE_PRIVACY_REDUCED_PROMPT_VERSION),
+                promptEntry(LlmContractResources
+                        .BOUNDED_PRIVACY_REDUCED_PROMPT_VERSION)
         );
         this.responseSchemas = Map.of(
                 LlmContractResources.CONTENT_SCHEMA_VERSION,
@@ -198,6 +202,13 @@ public class LlmProviderRequestFactory {
                 minifiedJsonResource(
                         LlmContractResources.PRIMARY_SIGNAL_CONTENT_SCHEMA
                 )
+        );
+    }
+
+    private Map.Entry<String, String> promptEntry(String promptVersion) {
+        return Map.entry(
+                promptVersion,
+                resource(LlmContractResources.systemPrompt(promptVersion))
         );
     }
 
@@ -223,10 +234,13 @@ public class LlmProviderRequestFactory {
                         "LLM job snapshot does not exist: " + value.snapshotId()
                 ));
         boolean privacyReduced = LlmContractResources
-                .PRIVACY_REDUCED_PROMPT_VERSION
-                .equals(value.promptVersion());
+                .isPrivacyReducedPrompt(value.promptVersion());
         WeeklyInterpretationInput input = inputCompactor.compact(
-                input(snapshot), privacyReduced
+                input(snapshot),
+                privacyReduced,
+                LlmContractResources.isBoundedPrivacyReducedPrompt(
+                        value.promptVersion()
+                )
         );
         String inputJson = serialize(input, "LLM input");
         List<StructuralValidationViolation> violations = inputValidator.validate(inputJson);
@@ -335,8 +349,7 @@ public class LlmProviderRequestFactory {
                         .TEAM_GUARDED_STRUCTURED_SUMMARY_PROMPT_VERSION
                         .equals(promptVersion);
                 boolean privacyReduced = LlmContractResources
-                        .PRIVACY_REDUCED_PROMPT_VERSION
-                        .equals(promptVersion);
+                        .isPrivacyReducedPrompt(promptVersion);
                 boolean deterministicNarrative = privacyReduced
                         || LlmContractResources
                         .DETERMINISTIC_NARRATIVE_PROMPT_VERSION

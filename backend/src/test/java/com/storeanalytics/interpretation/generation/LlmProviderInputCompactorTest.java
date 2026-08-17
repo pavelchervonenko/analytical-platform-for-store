@@ -352,6 +352,82 @@ class LlmProviderInputCompactorTest {
                 .doesNotContain(Scope.EMPLOYEE);
     }
 
+    @Test
+    void boundedStoreProjectionKeepsPrimaryAndOneDifferentTheme() {
+        Fact firstPlan = category("A", "100");
+        Fact secondPlan = category("B", "200");
+        Fact profitability = category("C", "300");
+        WeeklyInterpretationInput base = input(
+                List.of(firstPlan, secondPlan, profitability),
+                new EmployeeFacts(
+                        "E01",
+                        Sufficiency.SUFFICIENT,
+                        List.of(),
+                        List.of()
+                )
+        );
+        List<WeeklyInterpretationInput.CandidateSignal> candidates = List.of(
+                new WeeklyInterpretationInput.CandidateSignal(
+                        "C001",
+                        WeeklyInterpretationInput.CandidateKind.RISK,
+                        "PLAN",
+                        null,
+                        List.of(firstPlan.evidenceRef())
+                ),
+                new WeeklyInterpretationInput.CandidateSignal(
+                        "C002",
+                        WeeklyInterpretationInput.CandidateKind.OPPORTUNITY,
+                        "PLAN",
+                        null,
+                        List.of(secondPlan.evidenceRef())
+                ),
+                new WeeklyInterpretationInput.CandidateSignal(
+                        "C003",
+                        WeeklyInterpretationInput.CandidateKind.OPPORTUNITY,
+                        "PROFITABILITY",
+                        null,
+                        List.of(profitability.evidenceRef())
+                )
+        );
+        Manifest manifest = base.manifest();
+        WeeklyInterpretationInput source = new WeeklyInterpretationInput(
+                base.contractVersion(),
+                base.snapshot(),
+                new Manifest(
+                        manifest.employeeRefs(),
+                        manifest.evidence(),
+                        candidates.stream()
+                                .map(WeeklyInterpretationInput.CandidateSignal
+                                        ::candidateRef)
+                                .toList(),
+                        manifest.categoryCodes(),
+                        manifest.categoryLabels(),
+                        manifest.competencyCodes(),
+                        manifest.limitations()
+                ),
+                new Facts(
+                        base.facts().store(),
+                        base.facts().team(),
+                        base.facts().employees(),
+                        candidates
+                )
+        );
+
+        WeeklyInterpretationInput result = compactor.compact(
+                source, true, true
+        );
+
+        assertThat(result.facts().candidateSignals())
+                .extracting(WeeklyInterpretationInput.CandidateSignal
+                        ::candidateRef)
+                .containsExactly("C001", "C003");
+        assertThat(result.facts().candidateSignals())
+                .extracting(WeeklyInterpretationInput.CandidateSignal::theme)
+                .containsExactly("PLAN", "PROFITABILITY");
+        assertThat(result.manifest().candidateRefs())
+                .containsExactly("C001", "C003");
+    }
+
     private WeeklyInterpretationInput input(
             List<Fact> storeFacts,
             EmployeeFacts employee

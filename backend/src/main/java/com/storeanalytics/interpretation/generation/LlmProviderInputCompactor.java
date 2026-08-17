@@ -2,6 +2,7 @@ package com.storeanalytics.interpretation.generation;
 
 import static com.storeanalytics.common.validation.ModelValidation.require;
 
+import com.storeanalytics.interpretation.contract.WeeklyPrimarySignalPolicy;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.EmployeeFacts;
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.EvidenceIndexEntry;
@@ -87,9 +88,19 @@ public final class LlmProviderInputCompactor {
             WeeklyInterpretationInput input,
             boolean privacyReduced
     ) {
+        return compact(input, privacyReduced, false);
+    }
+
+    public WeeklyInterpretationInput compact(
+            WeeklyInterpretationInput input,
+            boolean privacyReduced,
+            boolean boundedStoreSignals
+    ) {
         if (privacyReduced) {
-            return compactStoreOnly(input);
+            return compactStoreOnly(input, boundedStoreSignals);
         }
+        require(!boundedStoreSignals,
+                "Bounded store signals require privacy-reduced input");
         Manifest source = input.manifest();
         Set<String> referencedEvidence = referencedEvidence(input);
         Facts compactFacts = new Facts(
@@ -125,7 +136,8 @@ public final class LlmProviderInputCompactor {
     }
 
     private WeeklyInterpretationInput compactStoreOnly(
-            WeeklyInterpretationInput input
+            WeeklyInterpretationInput input,
+            boolean boundedStoreSignals
     ) {
         Manifest source = input.manifest();
         Map<String, Scope> evidenceScopes = source.evidence().stream()
@@ -143,6 +155,9 @@ public final class LlmProviderInputCompactor {
                                 .noneMatch(scope -> scope == Scope.EMPLOYEE
                                         || scope == Scope.TEAM))
                         .toList();
+        if (boundedStoreSignals) {
+            candidates = boundedStoreCandidates(input, candidates);
+        }
         Set<String> referencedEvidence = new HashSet<>();
         candidates.forEach(candidate ->
                 referencedEvidence.addAll(candidate.evidenceRefs()));
@@ -176,6 +191,36 @@ public final class LlmProviderInputCompactor {
                 manifest,
                 facts
         );
+    }
+
+    private List<WeeklyInterpretationInput.CandidateSignal>
+            boundedStoreCandidates(
+                    WeeklyInterpretationInput input,
+                    List<WeeklyInterpretationInput.CandidateSignal> candidates
+            ) {
+        if (candidates.size() <= 2) {
+            return candidates;
+        }
+        Set<String> allowed = candidates.stream()
+                .map(WeeklyInterpretationInput.CandidateSignal::candidateRef)
+                .collect(java.util.stream.Collectors.toSet());
+        List<WeeklyInterpretationInput.CandidateSignal> ordered =
+                WeeklyPrimarySignalPolicy.orderedStoreCandidates(input).stream()
+                        .filter(candidate -> allowed.contains(
+                                candidate.candidateRef()
+                        ))
+                        .toList();
+        require(!ordered.isEmpty(),
+                "Bounded provider projection requires a store candidate");
+        WeeklyInterpretationInput.CandidateSignal primary = ordered.get(0);
+        WeeklyInterpretationInput.CandidateSignal secondary = ordered.stream()
+                .skip(1)
+                .filter(candidate -> !candidate.theme().equals(
+                        primary.theme()
+                ))
+                .findFirst()
+                .orElse(ordered.get(1));
+        return List.of(primary, secondary);
     }
 
     private List<Fact> compactStore(List<Fact> facts) {
