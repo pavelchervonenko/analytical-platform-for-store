@@ -43,6 +43,10 @@ final class CategoryKpiMetricsCalculator {
         BigDecimal grossProfit = completeCostData
                 ? money(scaledRevenue.subtract(costAmount))
                 : null;
+        BigDecimal averageGrossProfitPerUnit =
+                grossProfit == null || scaledQuantity.signum() <= 0
+                        ? null
+                        : grossProfit.divide(scaledQuantity, MONEY_SCALE, RoundingMode.HALF_UP);
         BigDecimal marginPercent = grossProfit == null || scaledRevenue.signum() == 0
                 ? null
                 : grossProfit.multiply(BigDecimal.valueOf(100))
@@ -52,6 +56,7 @@ final class CategoryKpiMetricsCalculator {
                 scaledQuantity,
                 costAmount,
                 grossProfit,
+                averageGrossProfitPerUnit,
                 marginPercent,
                 new CategoryKpiDataQuality(
                         completeCostData,

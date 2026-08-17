@@ -372,6 +372,10 @@ class StoreDataStatusSecurityIntegrationTest {
                         "$.components.schemas.PayrollDailyAllocationView.properties.workedHours"
                 ).exists())
                 .andExpect(jsonPath(
+                        "$.components.schemas.CategoryKpiMetrics.properties"
+                                + ".averageGrossProfitPerUnit"
+                ).exists())
+                .andExpect(jsonPath(
                         "$.components.schemas.SystemStatusView.properties.apiContractVersion"
                 ).exists())
                 .andReturn();

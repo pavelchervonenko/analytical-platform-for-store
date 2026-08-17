@@ -60,12 +60,17 @@ class CategoryKpiServiceTest {
 
         CategoryKpiResult result = service.calculate(storeId, period());
 
-        assertThat(result.formulaVersion()).isEqualTo("category-kpi-v1");
+        assertThat(result.formulaVersion()).isEqualTo("category-kpi-v2");
         assertThat(result.categories()).hasSize(3);
         assertThat(group(result, "PHONES").metrics().netRevenue())
                 .isEqualByComparingTo("100.00");
         assertThat(group(result, "DEVICES").metrics().netRevenue())
                 .isEqualByComparingTo("100.00");
+        assertThat(category(result, "IPHONE_NEW_ASIS")
+                .metrics().averageGrossProfitPerUnit())
+                .isEqualByComparingTo("40.00");
+        assertThat(group(result, "DEVICES").metrics().averageGrossProfitPerUnit())
+                .isEqualByComparingTo("40.00");
         assertThat(group(result, "ADDITIONAL_REVENUE").metrics().netRevenue())
                 .isEqualByComparingTo("20.00");
         assertThat(group(result, "ADDITIONAL_REVENUE").metrics().marginPercent())
@@ -103,6 +108,7 @@ class CategoryKpiServiceTest {
         assertThat(setupMetrics.costAmount()).isNull();
         assertThat(setupMetrics.grossProfit()).isNull();
         assertThat(setupMetrics.marginPercent()).isNull();
+        assertThat(setupMetrics.averageGrossProfitPerUnit()).isNull();
         assertThat(setupMetrics.dataQuality().completeCostData()).isFalse();
 
         CategoryKpiMetrics additional = group(result, "ADDITIONAL_REVENUE").metrics();
@@ -113,6 +119,25 @@ class CategoryKpiServiceTest {
         assertThat(group(result, "PHONES").metrics().costAmount())
                 .isEqualByComparingTo("60.00");
     }
+
+    @Test
+    void leavesAverageGrossProfitUnknownForNonPositiveNetQuantity() {
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.existsById(storeId)).thenReturn(true);
+        when(categoryKpiRepository.aggregate(storeId, PERIOD_START, PERIOD_END))
+                .thenReturn(List.of(aggregate(
+                        "IPHONE_NEW_ASIS",
+                        new CategoryFlags(true, true, false),
+                        new AggregateValues("10.00", "0.000", "5.00", 2, 0)
+                )));
+
+        CategoryKpiMetrics metrics = service.calculate(storeId, period())
+                .categories().getFirst().metrics();
+
+        assertThat(metrics.grossProfit()).isEqualByComparingTo("5.00");
+        assertThat(metrics.averageGrossProfitPerUnit()).isNull();
+    }
+
 
     @Test
     void rejectsUnknownStoreBeforeRunningCategoryQuery() {

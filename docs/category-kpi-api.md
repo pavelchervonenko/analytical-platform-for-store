@@ -15,14 +15,14 @@ GET /api/stores/{storeId}/kpi/categories?periodStart=2026-07-01&periodEnd=2026-0
 Both dates are required and inclusive `business_date` boundaries. The caller must be authenticated,
 must have completed a required password change and must have access to the requested store.
 
-The response uses formula version `category-kpi-v1`:
+The response uses formula version `category-kpi-v2`:
 
 ```json
 {
   "storeId": "00000000-0000-0000-0000-000000000000",
   "periodStart": "2026-07-01",
   "periodEnd": "2026-07-31",
-  "formulaVersion": "category-kpi-v1",
+  "formulaVersion": "category-kpi-v2",
   "groups": [
     {
       "groupCode": "PHONES",
@@ -32,6 +32,7 @@ The response uses formula version `category-kpi-v1`:
         "netQuantity": 25.000,
         "costAmount": 190000.00,
         "grossProfit": 60000.00,
+        "averageGrossProfitPerUnit": 2400.00,
         "marginPercent": 24.00,
         "dataQuality": {
           "completeCostData": true,
@@ -57,6 +58,7 @@ The response uses formula version `category-kpi-v1`:
         "netQuantity": 15.000,
         "costAmount": 110000.00,
         "grossProfit": 40000.00,
+        "averageGrossProfitPerUnit": 2666.67,
         "marginPercent": 26.67,
         "dataQuality": {
           "completeCostData": true,
@@ -102,12 +104,15 @@ Net revenue = sales net amount - return net amount
 Net quantity = sold quantity - returned quantity
 Cost amount = sales cost - return cost
 Gross profit = net revenue - cost amount
+Average gross profit per unit = gross profit / net quantity
 Margin percent = gross profit / net revenue * 100
 ```
 
-Margin is `null` when net revenue is zero. If any included item in one category or group has missing
-cost, only that category or group receives `completeCostData = false`; its `costAmount`,
-`grossProfit` and `marginPercent` are `null`. Revenue and quantity remain available.
+Average gross profit per unit is `null` when net quantity is zero or negative. The frontend displays
+it only for categories where `countsAsDevice = true`. Margin is `null` when net revenue is zero.
+If any included item in one category or group has missing cost, only that category or group receives
+`completeCostData = false`; its `costAmount`, `grossProfit`, `averageGrossProfitPerUnit` and
+`marginPercent` are `null`. Revenue and quantity remain available.
 
 `ZERO_UNEXPECTED` does not make cost incomplete, but its count is exposed as a warning. Returns are
 signed financial facts while `includedItemCount` and quality counters count physical item rows.

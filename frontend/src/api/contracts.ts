@@ -213,6 +213,7 @@ const categoryMetricsSchema = z.object({
   netQuantity: z.number(),
   costAmount: z.number().nullable(),
   grossProfit: z.number().nullable(),
+  averageGrossProfitPerUnit: z.number().nullable(),
   marginPercent: z.number().nullable(),
   dataQuality: categoryDataQualitySchema
 });

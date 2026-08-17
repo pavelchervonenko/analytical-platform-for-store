@@ -116,7 +116,7 @@ Cost/gross-profit/margin facts отсутствуют для затронуто�
 ### 5.2 Категории и группы
 
 Источники: `CategoryKpiService`, `EmployeeCategoryKpiProjection`;
-`category-kpi-v1` и `employee-category-kpi-v1`.
+`category-kpi-v2` и `employee-category-kpi-v1`.
 
 Метрики:
 

@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CategoryKpiService {
 
-    static final String FORMULA_VERSION = "category-kpi-v1";
+    static final String FORMULA_VERSION = "category-kpi-v2";
 
     private final StoreRepository storeRepository;
     private final CategoryKpiRepository categoryKpiRepository;

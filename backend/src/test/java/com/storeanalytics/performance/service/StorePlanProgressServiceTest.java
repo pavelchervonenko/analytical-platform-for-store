@@ -308,7 +308,7 @@ class StorePlanProgressServiceTest {
                 storeId,
                 period.start(),
                 period.end(),
-                "category-kpi-v1",
+                "category-kpi-v2",
                 List.of(),
                 List.of(categories)
         );
@@ -334,6 +334,7 @@ class StorePlanProgressServiceTest {
                         BigDecimal.ZERO,
                         BigDecimal.ZERO,
                         new BigDecimal(revenue),
+                        null,
                         null,
                         new CategoryKpiDataQuality(true, 1, 0, 0)
                 )

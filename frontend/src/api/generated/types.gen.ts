@@ -772,6 +772,7 @@ export type CategoryKpiMetrics = {
     netQuantity?: number;
     costAmount?: number;
     grossProfit?: number;
+    averageGrossProfitPerUnit?: number;
     marginPercent?: number;
     dataQuality?: CategoryKpiDataQuality;
 };

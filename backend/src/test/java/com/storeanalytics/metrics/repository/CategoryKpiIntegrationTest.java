@@ -105,6 +105,8 @@ class CategoryKpiIntegrationTest {
         assertThat(iphone.metrics().netQuantity()).isEqualByComparingTo("1.500");
         assertThat(iphone.metrics().costAmount()).isEqualByComparingTo("150.00");
         assertThat(iphone.metrics().grossProfit()).isEqualByComparingTo("100.00");
+        assertThat(iphone.metrics().averageGrossProfitPerUnit())
+                .isEqualByComparingTo("66.67");
         assertThat(iphone.metrics().marginPercent()).isEqualByComparingTo("40.00");
         assertThat(iphone.metrics().dataQuality().includedItemCount()).isEqualTo(2);
 
@@ -149,6 +151,8 @@ class CategoryKpiIntegrationTest {
         assertThat(category(result, "CHARGER_CABLE").metrics().costAmount())
                 .isEqualByComparingTo("10.00");
         assertThat(category(result, "SETUP_SERVICE").metrics().costAmount()).isNull();
+        assertThat(category(result, "SETUP_SERVICE").metrics().averageGrossProfitPerUnit())
+                .isNull();
         assertThat(category(result, "SETUP_SERVICE").metrics().dataQuality().missingCostItemCount())
                 .isOne();
 

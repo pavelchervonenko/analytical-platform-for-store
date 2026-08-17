@@ -7,6 +7,7 @@ public record CategoryKpiMetrics(
         BigDecimal netQuantity,
         BigDecimal costAmount,
         BigDecimal grossProfit,
+        BigDecimal averageGrossProfitPerUnit,
         BigDecimal marginPercent,
         CategoryKpiDataQuality dataQuality
 ) {

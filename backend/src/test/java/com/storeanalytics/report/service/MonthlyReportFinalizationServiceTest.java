@@ -163,7 +163,7 @@ class MonthlyReportFinalizationServiceTest {
         StoreKpiResult storeKpi = mock(StoreKpiResult.class);
         when(storeKpi.formulaVersion()).thenReturn("store-kpi-v1");
         CategoryKpiResult categories = mock(CategoryKpiResult.class);
-        when(categories.formulaVersion()).thenReturn("category-kpi-v1");
+        when(categories.formulaVersion()).thenReturn("category-kpi-v2");
         AverageMetricSnapshot current = new AverageMetricSnapshot(
                 new BigDecimal("300.00"),
                 new BigDecimal("2.00"),

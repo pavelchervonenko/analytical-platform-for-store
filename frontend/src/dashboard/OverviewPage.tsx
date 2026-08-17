@@ -13,6 +13,7 @@ import {
 } from "../api/queries";
 import { DailyPlanTable } from "../plan-schedule/DailyPlanTable";
 import type { PlanDirection } from "../api/contracts";
+import { averageGrossProfitPerDeviceUnit } from "./categoryPresentation";
 import { qualityIssueMessage, qualityStatusLabel } from "../quality/presentation";
 import { formatDate, formatMonth } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
@@ -234,7 +235,7 @@ export function OverviewPage() {
           <summary><span>Категории продаж</span><small>{categories?.categories.length ?? 0}</small></summary>
           <div className="disclosure-panel__content table-scroll">
             <table>
-              <thead><tr><th>Категория</th><th>Выручка</th><th>Количество</th><th>Валовая прибыль</th><th>Маржа</th><th>Качество</th></tr></thead>
+              <thead><tr><th>Категория</th><th>Выручка</th><th>Количество</th><th>Валовая прибыль</th><th>Вал / ед. техники</th><th>Маржа</th><th>Качество</th></tr></thead>
               <tbody>
                 {categories?.categories.map((category) => (
                   <tr key={category.categoryCode} className={!category.categoryActive ? "row-muted" : ""}>
@@ -242,6 +243,7 @@ export function OverviewPage() {
                     <td>{formatMoney(category.metrics.netRevenue)}</td>
                     <td>{formatNumber(category.metrics.netQuantity)}</td>
                     <td>{formatMoney(category.metrics.grossProfit)}</td>
+                    <td>{formatMoney(averageGrossProfitPerDeviceUnit(category))}</td>
                     <td>{formatPercent(category.metrics.marginPercent)}</td>
                     <td>{category.metrics.dataQuality.completeCostData ? <span className="quality-ok"><CheckCircle2 size={14} />Полные</span> : <span className="quality-warning"><AlertCircle size={14} />Проверьте</span>}</td>
                   </tr>
