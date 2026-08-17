@@ -8,19 +8,12 @@
 -- normalized source facts and effective assignments are repaired in place so
 -- dynamic KPI and future snapshots use the customer-confirmed meaning.
 
-CREATE TEMPORARY TABLE monetary_classification_corrections (
-    external_product_id text PRIMARY KEY,
-    expected_category_code text NOT NULL,
-    target_category_code text NOT NULL,
-    target_condition_type text NOT NULL
-) ON COMMIT DROP;
-
-INSERT INTO monetary_classification_corrections (
+WITH monetary_classification_corrections (
     external_product_id,
     expected_category_code,
     target_category_code,
     target_condition_type
-) VALUES
+) AS (VALUES
     ('2579', 'ACCESSORY_IPAD_MAC', 'IPAD_MAC', 'NEW'),
     ('2591', 'ACCESSORY_IPAD_MAC', 'IPAD_MAC', 'NEW'),
     ('2972', 'ACCESSORY_IPAD_MAC', 'IPAD_MAC', 'NEW'),
@@ -34,9 +27,8 @@ INSERT INTO monetary_classification_corrections (
     ('4575', 'OTHER_ACCESSORY_PRODUCT', 'PODS_WATCH_OTHER_DEVICE', 'NEW'),
     ('4660', 'OTHER_ACCESSORY_PRODUCT', 'PODS_WATCH_OTHER_DEVICE', 'NEW'),
     ('4661', 'OTHER_ACCESSORY_PRODUCT', 'PODS_WATCH_OTHER_DEVICE', 'NEW'),
-    ('3527', 'IPAD_MAC', 'CHARGER_CABLE', 'NOT_APPLICABLE');
-
-WITH resolved_corrections AS (
+    ('3527', 'IPAD_MAC', 'CHARGER_CABLE', 'NOT_APPLICABLE')
+), resolved_corrections AS (
     SELECT DISTINCT
         product.id AS product_id,
         correction.expected_category_code,
@@ -60,7 +52,27 @@ WHERE assignment.product_id = correction.product_id
   AND expected_category.code = correction.expected_category_code
   AND target_category.code = correction.target_category_code;
 
-WITH resolved_corrections AS (
+WITH monetary_classification_corrections (
+    external_product_id,
+    expected_category_code,
+    target_category_code,
+    target_condition_type
+) AS (VALUES
+    ('2579', 'ACCESSORY_IPAD_MAC', 'IPAD_MAC', 'NEW'),
+    ('2591', 'ACCESSORY_IPAD_MAC', 'IPAD_MAC', 'NEW'),
+    ('2972', 'ACCESSORY_IPAD_MAC', 'IPAD_MAC', 'NEW'),
+    ('2973', 'ACCESSORY_IPAD_MAC', 'IPAD_MAC', 'NEW'),
+    ('3325', 'ACCESSORY_IPAD_MAC', 'IPAD_MAC', 'NEW'),
+    ('3784', 'ACCESSORY_IPAD_MAC', 'IPAD_MAC', 'NEW'),
+    ('3901', 'ACCESSORY_IPAD_MAC', 'IPAD_MAC', 'NEW'),
+    ('2716', 'OTHER_ACCESSORY_PRODUCT', 'PODS_WATCH_OTHER_DEVICE', 'NEW'),
+    ('4302', 'OTHER_ACCESSORY_PRODUCT', 'PODS_WATCH_OTHER_DEVICE', 'NEW'),
+    ('4305', 'OTHER_ACCESSORY_PRODUCT', 'PODS_WATCH_OTHER_DEVICE', 'NEW'),
+    ('4575', 'OTHER_ACCESSORY_PRODUCT', 'PODS_WATCH_OTHER_DEVICE', 'NEW'),
+    ('4660', 'OTHER_ACCESSORY_PRODUCT', 'PODS_WATCH_OTHER_DEVICE', 'NEW'),
+    ('4661', 'OTHER_ACCESSORY_PRODUCT', 'PODS_WATCH_OTHER_DEVICE', 'NEW'),
+    ('3527', 'IPAD_MAC', 'CHARGER_CABLE', 'NOT_APPLICABLE')
+), resolved_corrections AS (
     SELECT DISTINCT
         product.id AS product_id,
         correction.expected_category_code,
