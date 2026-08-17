@@ -796,7 +796,7 @@ body { font-size: 17px; line-height: 1.47; }
 .employee-attach-metrics {
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(92px, 1fr));
+  grid-template-columns: repeat(4, minmax(78px, 1fr));
   align-items: stretch;
   margin: 0;
   overflow: hidden;

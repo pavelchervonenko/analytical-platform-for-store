@@ -82,7 +82,7 @@ export const queryKeys = {
   periodQuality: (storeId: string, month: string, asOf: string) => ["stores", storeId, "period-quality", month, asOf] as const,
   employees: (storeId: string) => ["stores", storeId, "employees"] as const,
   employeeDirectory: (storeId: string, start: string, end: string) => ["stores", storeId, "employees", "directory", start, end] as const,
-  employeeCard: (storeId: string, employeeId: string, start: string, end: string) => ["stores", storeId, "employees", "card", employeeId, start, end] as const,
+  employeeCard: (storeId: string, employeeId: string, start: string, end: string, comparisonMode: EmployeeComparisonMode) => ["stores", storeId, "employees", "card", employeeId, start, end, comparisonMode] as const,
   employeeRating: (storeId: string, start: string, end: string) => ["stores", storeId, "employees", "rating", start, end] as const,
   employeeRatingSettings: (storeId: string) => ["stores", storeId, "employees", "settings"] as const,
   performancePlan: (storeId: string, month: string) => ["stores", storeId, "performance-plan", month] as const,
@@ -273,8 +273,17 @@ export function getEmployeeDirectory(storeId: string, start: string, end: string
   });
 }
 
-export function getEmployeeCard(storeId: string, employeeId: string, start: string, end: string): Promise<EmployeeCard> {
-  return apiClient.request(`${storePath(storeId)}/employees/${encodeURIComponent(employeeId)}?${periodQuery(start, end)}`, {
+export type EmployeeComparisonMode = "PREVIOUS_PERIOD" | "PREVIOUS_WEEK";
+
+export function getEmployeeCard(
+  storeId: string,
+  employeeId: string,
+  start: string,
+  end: string,
+  comparisonMode: EmployeeComparisonMode
+): Promise<EmployeeCard> {
+  const query = `${periodQuery(start, end)}&comparisonMode=${comparisonMode}`;
+  return apiClient.request(`${storePath(storeId)}/employees/${encodeURIComponent(employeeId)}?${query}`, {
     schema: employeeCardSchema
   });
 }

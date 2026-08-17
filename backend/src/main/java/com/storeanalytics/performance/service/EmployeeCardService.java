@@ -67,10 +67,28 @@ public class EmployeeCardService {
             UUID employeeId,
             StoreKpiPeriod period
     ) {
+        return card(
+                storeId, employeeId, period,
+                EmployeeComparisonMode.PREVIOUS_PERIOD
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public EmployeeCardView card(
+            UUID storeId,
+            UUID employeeId,
+            StoreKpiPeriod period,
+            EmployeeComparisonMode comparisonMode
+    ) {
         UUID validatedStoreId = requireNonNull(storeId, "storeId");
         UUID validatedEmployeeId = requireNonNull(employeeId, "employeeId");
         StoreKpiPeriod currentPeriod = requireNonNull(period, "period");
-        StoreKpiPeriod previousPeriod = previous(currentPeriod);
+        EmployeeComparisonMode validatedComparisonMode = requireNonNull(
+                comparisonMode, "comparisonMode"
+        );
+        StoreKpiPeriod previousPeriod = comparison(
+                currentPeriod, validatedComparisonMode
+        );
         EmployeeRatingResult currentResult = ratingService.get(
                 validatedStoreId, currentPeriod
         );
@@ -190,6 +208,16 @@ public class EmployeeCardService {
     private BigDecimal difference(BigDecimal current, BigDecimal previous) {
         return current == null || previous == null
                 ? null : current.subtract(previous).setScale(SCALE, RoundingMode.HALF_UP);
+    }
+
+    private StoreKpiPeriod comparison(
+            StoreKpiPeriod current,
+            EmployeeComparisonMode mode
+    ) {
+        return mode == EmployeeComparisonMode.PREVIOUS_WEEK
+                ? new StoreKpiPeriod(
+                        current.start().minusWeeks(1), current.end().minusWeeks(1)
+                ) : previous(current);
     }
 
     private StoreKpiPeriod previous(StoreKpiPeriod current) {

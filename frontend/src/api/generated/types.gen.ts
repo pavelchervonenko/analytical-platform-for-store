@@ -2985,6 +2985,7 @@ export type CardData = {
     query: {
         periodStart: string;
         periodEnd: string;
+        comparisonMode?: 'PREVIOUS_PERIOD' | 'PREVIOUS_WEEK';
     };
     url: '/api/stores/{storeId}/employees/{employeeId}';
 };

@@ -3,6 +3,7 @@ package com.storeanalytics.performance.web;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.performance.service.EmployeeCardService;
 import com.storeanalytics.performance.service.EmployeeCardView;
+import com.storeanalytics.performance.service.EmployeeComparisonMode;
 import com.storeanalytics.performance.service.EmployeeDirectoryView;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -46,12 +47,15 @@ public class EmployeeCardController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
             LocalDate periodStart,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-            LocalDate periodEnd
+            LocalDate periodEnd,
+            @RequestParam(defaultValue = "PREVIOUS_PERIOD")
+            EmployeeComparisonMode comparisonMode
     ) {
         return cardService.card(
                 storeId,
                 employeeId,
-                new StoreKpiPeriod(periodStart, periodEnd)
+                new StoreKpiPeriod(periodStart, periodEnd),
+                comparisonMode
         );
     }
 }

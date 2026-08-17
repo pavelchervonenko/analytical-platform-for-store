@@ -1,11 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, BarChart3, CalendarDays, CheckCircle2, CircleDollarSign, Clock3, Info, Link2, Target, Trophy, WalletCards } from "lucide-react";
 import { Link, useLocation, useParams } from "react-router";
-import { getEmployeeCard, queryKeys } from "../api/queries";
+import { getEmployeeCard, queryKeys, type EmployeeComparisonMode } from "../api/queries";
 import { formatDate } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
 import { QueryError } from "../shared/QueryState";
-import { useWorkspace } from "../stores/WorkspaceProvider";
+import { useWorkspace, type AnalyticsPeriodMode } from "../stores/WorkspaceProvider";
 import { attachRateLabels, employeeRatingReason } from "./rating-ui";
 
 function signedNumber(value: number | null, suffix = ""): string {
@@ -25,6 +25,47 @@ function payrollStatusLabel(status: string): string {
   return "Статус неизвестен";
 }
 
+interface EmployeeAttachComparisonProps {
+  currentLabel: string;
+  previousLabel: string;
+  currentRate: number | null;
+  previousRate: number | null;
+  storeRate: number | null;
+  change: number | null;
+}
+
+export function EmployeeAttachComparison({
+  currentLabel,
+  previousLabel,
+  currentRate,
+  previousRate,
+  storeRate,
+  change
+}: EmployeeAttachComparisonProps) {
+  return (
+    <dl className="employee-attach-metrics">
+      <div>
+        <dt>{currentLabel}</dt>
+        <dd>{formatPercent(currentRate)}</dd>
+      </div>
+      <div>
+        <dt>{previousLabel}</dt>
+        <dd>{formatPercent(previousRate)}</dd>
+      </div>
+      <div>
+        <dt>Изменение</dt>
+        <dd className={`text-${changeTone(change)}`}>
+          {signedNumber(change, " п.п.")}
+        </dd>
+      </div>
+      <div>
+        <dt>Магазин</dt>
+        <dd>{formatPercent(storeRate)}</dd>
+      </div>
+    </dl>
+  );
+}
+
 function CardSkeleton() {
   return <div className="employee-card-skeleton" aria-busy="true" aria-label="Загрузка карточки сотрудника"><span className="skeleton skeleton--banner" /><div className="employee-card-stat-grid">{Array.from({ length: 4 }, (_, index) => <span className="skeleton employee-summary-skeleton" key={index} />)}</div><div className="employee-card-layout"><span className="skeleton skeleton--panel" /><span className="skeleton skeleton--panel" /></div></div>;
 }
@@ -34,9 +75,10 @@ export function EmployeeCardPage() {
   const location = useLocation();
   const { selectedStore, periodStart, periodEnd, periodMode } = useWorkspace();
   const storeId = selectedStore.id;
+  const comparisonMode = comparisonModeForPeriod(periodMode);
   const cardQuery = useQuery({
-    queryKey: queryKeys.employeeCard(storeId, employeeId, periodStart, periodEnd),
-    queryFn: () => getEmployeeCard(storeId, employeeId, periodStart, periodEnd),
+    queryKey: queryKeys.employeeCard(storeId, employeeId, periodStart, periodEnd, comparisonMode),
+    queryFn: () => getEmployeeCard(storeId, employeeId, periodStart, periodEnd, comparisonMode),
     enabled: Boolean(employeeId)
   });
 
@@ -46,6 +88,11 @@ export function EmployeeCardPage() {
   const card = cardQuery.data;
   const employee = card.current;
   const previous = card.previous;
+  const currentComparisonLabel = periodMode === "WEEK" ? "Текущая неделя" : "Текущий период";
+  const previousComparisonLabel = periodMode === "WEEK" ? "Прошлая неделя" : "Прошлый период";
+  const comparisonDescription = periodMode === "WEEK"
+    ? "Неделя к неделе"
+    : "Сравнение с предыдущим равным периодом";
   const scoreRows = [
     { label: "Коммерческий вклад", description: "Выручка относительно средней выручки участников", score: employee.scores.contributionScore, points: employee.scores.contributionWeightedPoints, weight: card.formula.contributionWeight },
     { label: "Эффективность времени", description: "Выручка за фактически отработанный час", score: employee.scores.efficiencyScore, points: employee.scores.efficiencyWeightedPoints, weight: card.formula.efficiencyWeight },
@@ -58,7 +105,7 @@ export function EmployeeCardPage() {
       <Link className="back-link" to={{ pathname: "/employees", search: location.search }}><ArrowLeft size={16} />К списку сотрудников</Link>
       <header className="employee-card-header">
         <div className="employee-card-header__identity"><span>{employee.displayName.slice(0, 1).toUpperCase()}</span><div><h1>{employee.displayName}</h1><div className="employee-card-statuses"><span className={`status status--${employee.employeeActive && employee.assignmentActive ? "success" : "warning"}`}>{employee.employeeActive && employee.assignmentActive ? "Активен" : "Неактивен"}</span><span className={`status status--${employee.participatesInRanking ? "success" : "warning"}`}>{employee.participatesInRanking ? "Участвует в рейтинге" : "Вне рейтинга"}</span></div></div></div>
-        <div className="employee-card-header__period"><small>Текущий период</small><strong>{formatDate(card.periodStart)} — {formatDate(card.periodEnd)}</strong><span>Сравнение: {formatDate(card.previousPeriodStart)} — {formatDate(card.previousPeriodEnd)}</span></div>
+        <div className="employee-card-header__period"><small>{currentComparisonLabel}</small><strong>{formatDate(card.periodStart)} — {formatDate(card.periodEnd)}</strong><span>{previousComparisonLabel}: {formatDate(card.previousPeriodStart)} — {formatDate(card.previousPeriodEnd)}</span></div>
       </header>
 
       <section className="employee-card-stat-grid" aria-label="Основные показатели сотрудника">
@@ -81,8 +128,8 @@ export function EmployeeCardPage() {
           </section>
 
           <section className="panel employee-structure-panel">
-            <div className="panel__heading"><div><p className="eyebrow">Структура</p><h2>Продажи и доли</h2></div><span>Изменение указано в процентных пунктах</span></div>
-            <div className="employee-comparison-head"><span>Показатель</span><span>Текущий период</span><span>Прошлый период</span><span>Изменение</span></div>
+            <div className="panel__heading"><div><p className="eyebrow">Структура</p><h2>Продажи и доли</h2></div><span>{comparisonDescription}; изменение в процентных пунктах</span></div>
+            <div className="employee-comparison-head"><span>Показатель</span><span>{currentComparisonLabel}</span><span>{previousComparisonLabel}</span><span>Изменение</span></div>
             {[
               ["Аксессуары", employee.accessoryRevenue, employee.accessorySharePercent, previous?.accessoryRevenue, previous?.accessorySharePercent, card.dynamics.accessoryShareChange],
               ["Услуги", employee.serviceRevenue, employee.serviceSharePercent, previous?.serviceRevenue, previous?.serviceSharePercent, card.dynamics.serviceShareChange],
@@ -98,7 +145,7 @@ export function EmployeeCardPage() {
                 <p className="eyebrow">Attach-rate</p>
                 <h2>Показатели допродаж сотрудника</h2>
               </div>
-              <span>Сотрудник · магазин · изменение к прошлому периоду</span>
+              <span>{comparisonDescription} · значение магазина за текущий период</span>
             </div>
             {employee.attachRates.length === 0 ? (
               <div className="panel-empty">
@@ -123,22 +170,14 @@ export function EmployeeCardPage() {
                           {formatNumber(rate.denominatorQuantity ?? rate.denominatorReceiptCount)} единиц техники
                         </small>
                       </div>
-                      <dl className="employee-attach-metrics">
-                        <div>
-                          <dt>Сотрудник</dt>
-                          <dd>{formatPercent(rate.ratePercent)}</dd>
-                        </div>
-                        <div>
-                          <dt>Магазин</dt>
-                          <dd>{formatPercent(rate.storeRatePercent)}</dd>
-                        </div>
-                        <div>
-                          <dt>Динамика</dt>
-                          <dd className={`text-${changeTone(dynamics?.change ?? null)}`}>
-                            {signedNumber(dynamics?.change ?? null, " п.п.")}
-                          </dd>
-                        </div>
-                      </dl>
+                      <EmployeeAttachComparison
+                        currentLabel={currentComparisonLabel}
+                        previousLabel={previousComparisonLabel}
+                        currentRate={rate.ratePercent}
+                        previousRate={dynamics?.previousRate ?? null}
+                        storeRate={rate.storeRatePercent}
+                        change={dynamics?.change ?? null}
+                      />
                       <i className={`employee-attach-status status status--${rate.includedInScore ? "success" : "warning"}`}>
                         {rate.includedInScore
                           ? `В балле, ${formatNumber(rate.score)}`
@@ -178,4 +217,8 @@ export function EmployeeCardPage() {
       </div>
     </div>
   );
+}
+
+export function comparisonModeForPeriod(mode: AnalyticsPeriodMode): EmployeeComparisonMode {
+  return mode === "WEEK" ? "PREVIOUS_WEEK" : "PREVIOUS_PERIOD";
 }
