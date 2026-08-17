@@ -308,7 +308,7 @@ class StorePlanProgressServiceTest {
                 storeId,
                 period.start(),
                 period.end(),
-                "category-kpi-v2",
+                "category-kpi-v3",
                 List.of(),
                 List.of(categories)
         );

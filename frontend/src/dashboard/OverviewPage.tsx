@@ -3,7 +3,6 @@ import { AlertCircle, ArrowRight, CheckCircle2, Package, RefreshCw, ShieldCheck,
 import type { ReactNode } from "react";
 import {
   getAttachRates,
-  getAverageKpi,
   getCategoryKpi,
   getPeriodQuality,
   getPlanProgress,
@@ -12,17 +11,19 @@ import {
   queryKeys
 } from "../api/queries";
 import { DailyPlanTable } from "../plan-schedule/DailyPlanTable";
-import type { PlanDirection } from "../api/contracts";
+import type { CategoryKpi, PlanDirection } from "../api/contracts";
 import { averageGrossProfitPerDeviceUnit } from "./categoryPresentation";
 import { qualityIssueMessage, qualityStatusLabel } from "../quality/presentation";
 import { formatDate, formatMonth } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
-import { Delta, PanelSkeleton, QueryError } from "../shared/QueryState";
+import { PanelSkeleton, QueryError } from "../shared/QueryState";
 import { useWorkspace } from "../stores/WorkspaceProvider";
 
 const groupLabels: Record<string, { label: string; icon: ReactNode }> = {
   PHONES: { label: "Телефоны", icon: <Smartphone size={18} /> },
   DEVICES: { label: "Все устройства", icon: <Package size={18} /> },
+  ACCESSORY: { label: "Аксессуары", icon: <Package size={18} /> },
+  SERVICE: { label: "Услуги", icon: <ShieldCheck size={18} /> },
   ADDITIONAL_REVENUE: { label: "Дополнительная выручка", icon: <TrendingUp size={18} /> }
 };
 
@@ -98,6 +99,18 @@ function PlanSummary({ direction }: { direction: PlanDirection | null }) {
   );
 }
 
+export function SalesMixSummary({ groups }: { groups: CategoryKpi["groups"] | undefined }) {
+  const accessory = groups?.find((group) => group.groupCode === "ACCESSORY");
+  const service = groups?.find((group) => group.groupCode === "SERVICE");
+
+  return (
+    <>
+      <SummaryMetric label="Аксессуары" value={formatMoney(accessory?.metrics.netRevenue)} note={`${formatNumber(accessory?.metrics.netQuantity)} ед.`} />
+      <SummaryMetric label="Услуги" value={formatMoney(service?.metrics.netRevenue)} note={`${formatNumber(service?.metrics.netQuantity)} ед.`} />
+    </>
+  );
+}
+
 function OverviewSkeleton() {
   return (
     <div className="overview-skeleton" aria-label="Загружаем показатели" aria-busy="true">
@@ -120,12 +133,11 @@ export function OverviewPage() {
   });
   const kpiQuery = useQuery({ queryKey: queryKeys.storeKpi(storeId, periodStart, periodEnd), queryFn: () => getStoreKpi(storeId, periodStart, periodEnd) });
   const categoriesQuery = useQuery({ queryKey: queryKeys.categories(storeId, periodStart, periodEnd), queryFn: () => getCategoryKpi(storeId, periodStart, periodEnd) });
-  const averagesQuery = useQuery({ queryKey: queryKeys.averages(storeId, periodStart, periodEnd), queryFn: () => getAverageKpi(storeId, periodStart, periodEnd) });
   const planQuery = useQuery({ queryKey: queryKeys.planProgress(storeId, month, asOfDate), queryFn: () => getPlanProgress(storeId, month, asOfDate) });
   const qualityQuery = useQuery({ queryKey: queryKeys.periodQuality(storeId, month, asOfDate), queryFn: () => getPeriodQuality(storeId, month, asOfDate) });
   const attachQuery = useQuery({ queryKey: queryKeys.attachRates(storeId, periodStart, periodEnd), queryFn: () => getAttachRates(storeId, periodStart, periodEnd), staleTime: 2 * 60_000 });
 
-  const criticalQueries = [statusQuery, kpiQuery, categoriesQuery, averagesQuery, planQuery, qualityQuery];
+  const criticalQueries = [statusQuery, kpiQuery, categoriesQuery, planQuery, qualityQuery];
   if (criticalQueries.every((query) => query.isPending)) return <OverviewSkeleton />;
 
   const criticalError = criticalQueries.find((query) => query.isError);
@@ -136,11 +148,9 @@ export function OverviewPage() {
   const status = statusQuery.data;
   const kpi = kpiQuery.data;
   const categories = categoriesQuery.data;
-  const averages = averagesQuery.data;
   const plan = planQuery.data;
   const quality = qualityQuery.data;
   const revenueDirection = plan?.directions.find((direction) => direction.code === "REVENUE") ?? null;
-  const additionalGroup = categories?.groups.find((group) => group.groupCode === "ADDITIONAL_REVENUE");
   const freshnessTone = toneForStatus(status?.status ?? "WARNING");
 
   return (
@@ -181,12 +191,7 @@ export function OverviewPage() {
           <SummaryMetric label="Валовая прибыль" value={formatMoney(kpi?.grossProfit)} note={`Маржа ${formatPercent(kpi?.marginPercent)}`}>
             {!kpi?.dataQuality.completeCostData && <span className="quality-warning"><AlertCircle size={14} />Данные неполные</span>}
           </SummaryMetric>
-          <SummaryMetric label="Средний чек" value={formatMoney(averages?.averageReceipt.current.value)} note={`${formatNumber(averages?.averageReceipt.current.denominator)} чеков`}>
-            <Delta value={averages?.averageReceipt.changePercent} />
-          </SummaryMetric>
-          <SummaryMetric label="Допродажи" value={formatMoney(additionalGroup?.metrics.netRevenue)} note={`${formatMoney(averages?.additionalRevenuePerPhone.current.value)} на телефон`}>
-            <Delta value={averages?.additionalRevenuePerPhone.changePercent} />
-          </SummaryMetric>
+          <SalesMixSummary groups={categories?.groups} />
         </div>
       </section>
 

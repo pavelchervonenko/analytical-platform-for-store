@@ -96,7 +96,7 @@ class AnnualReportAggregationServiceTest {
                 null,
                 storeKpi,
                 new CategoryKpiResult(
-                        storeId, from, through, "category-kpi-v2", List.of(), List.of()
+                        storeId, from, through, "category-kpi-v3", List.of(), List.of()
                 ),
                 null,
                 attachRates,

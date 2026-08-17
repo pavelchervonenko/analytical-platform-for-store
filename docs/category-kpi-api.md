@@ -1,6 +1,6 @@
 # Category KPI API
 
-Status: implemented read-only contract, revalidated on 2026-07-23. The frontend renders this data
+Status: implemented read-only contract, revalidated on 2026-08-17. The frontend renders this data
 without category regrouping or financial recalculation.
 
 Category KPI reads normalized sale and return item snapshots from PostgreSQL. It never calls
@@ -15,14 +15,14 @@ GET /api/stores/{storeId}/kpi/categories?periodStart=2026-07-01&periodEnd=2026-0
 Both dates are required and inclusive `business_date` boundaries. The caller must be authenticated,
 must have completed a required password change and must have access to the requested store.
 
-The response uses formula version `category-kpi-v2`:
+The response uses formula version `category-kpi-v3`:
 
 ```json
 {
   "storeId": "00000000-0000-0000-0000-000000000000",
   "periodStart": "2026-07-01",
   "periodEnd": "2026-07-31",
-  "formulaVersion": "category-kpi-v2",
+  "formulaVersion": "category-kpi-v3",
   "groups": [
     {
       "groupCode": "PHONES",
@@ -85,15 +85,18 @@ The response uses formula version `category-kpi-v2`:
 
 ## Business groups
 
-The response always contains three groups in this order:
+The response always contains five groups in this order:
 
 1. `PHONES`: categories with `counts_as_phone = true`.
 2. `DEVICES`: categories with `counts_as_device = true`; phones are intentionally included.
-3. `ADDITIONAL_REVENUE`: categories with `counts_as_additional_revenue = true`.
+3. `ACCESSORY`: categories with kind `ACCESSORY`.
+4. `SERVICE`: categories with kind `SERVICE`, `WARRANTY` or `PROTECTION`.
+5. `ADDITIONAL_REVENUE`: categories with `counts_as_additional_revenue = true`.
 
-Groups overlap by design: `PHONES` is a subset of `DEVICES`. Group values must not be added together
-to obtain a store total. The category list itself is non-overlapping and reconciles with store KPI
-because each normalized item has exactly one category snapshot.
+Groups overlap by design: `PHONES` is a subset of `DEVICES`, while `ACCESSORY` and `SERVICE`
+normally contribute to `ADDITIONAL_REVENUE`. Group values must not be added together to obtain a
+store total. The category list itself is non-overlapping and reconciles with store KPI because each
+normalized item has exactly one category snapshot.
 
 ## Formulas and data quality
 

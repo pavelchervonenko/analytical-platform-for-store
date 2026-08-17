@@ -65,7 +65,7 @@ class EmployeeCategoryKpiControllerTest {
                 .andExpect(jsonPath("$.formulaVersion")
                         .value("employee-category-kpi-v1"))
                 .andExpect(jsonPath("$.categoryFormulaVersion")
-                        .value("category-kpi-v2"))
+                        .value("category-kpi-v3"))
                 .andExpect(jsonPath("$.employees[0].rankingEligible").value(true))
                 .andExpect(jsonPath("$.employees[0].groups[0].groupCode")
                         .value("SERVICE"))
@@ -135,7 +135,7 @@ class EmployeeCategoryKpiControllerTest {
                 LocalDate.of(2026, 7, 20),
                 LocalDate.of(2026, 7, 26),
                 "employee-category-kpi-v1",
-                "category-kpi-v2",
+                "category-kpi-v3",
                 List.of(employee)
         );
     }

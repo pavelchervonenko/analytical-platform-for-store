@@ -5,6 +5,7 @@ import static com.storeanalytics.common.validation.ModelValidation.requireNonNul
 import com.storeanalytics.metrics.exception.StoreNotFoundException;
 import com.storeanalytics.metrics.repository.CategoryKpiAggregate;
 import com.storeanalytics.metrics.repository.CategoryKpiRepository;
+import com.storeanalytics.product.model.AnalyticsCategoryKind;
 import com.storeanalytics.store.repository.StoreRepository;
 import java.util.List;
 import java.util.UUID;
@@ -15,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CategoryKpiService {
 
-    static final String FORMULA_VERSION = "category-kpi-v2";
+    static final String FORMULA_VERSION = "category-kpi-v3";
 
     private final StoreRepository storeRepository;
     private final CategoryKpiRepository categoryKpiRepository;
@@ -58,6 +59,18 @@ public class CategoryKpiService {
                         CategoryKpiAggregate::countsAsDevice
                 ),
                 group(
+                        "ACCESSORY",
+                        "Аксессуары",
+                        aggregates,
+                        row -> row.categoryKind() == AnalyticsCategoryKind.ACCESSORY
+                ),
+                group(
+                        "SERVICE",
+                        "Услуги",
+                        aggregates,
+                        this::isServiceCategory
+                ),
+                group(
                         "ADDITIONAL_REVENUE",
                         "Дополнительная выручка",
                         aggregates,
@@ -98,6 +111,13 @@ public class CategoryKpiService {
                 .filter(membership)
                 .toList();
         return new CategoryKpiGroup(code, name, metrics(members));
+    }
+
+    private boolean isServiceCategory(CategoryKpiAggregate row) {
+        return switch (row.categoryKind()) {
+            case SERVICE, WARRANTY, PROTECTION -> true;
+            default -> false;
+        };
     }
 
     private CategoryKpiMetrics metrics(List<CategoryKpiAggregate> aggregates) {

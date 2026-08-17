@@ -60,7 +60,7 @@ class EmployeeCategoryKpiServiceTest {
         EmployeeCategoryKpiResult result = service.calculate(storeId, period());
 
         assertThat(result.formulaVersion()).isEqualTo("employee-category-kpi-v1");
-        assertThat(result.categoryFormulaVersion()).isEqualTo("category-kpi-v2");
+        assertThat(result.categoryFormulaVersion()).isEqualTo("category-kpi-v3");
         EmployeeCategoryKpiEmployee employee = result.employees().getFirst();
         assertThat(employee.rankingEligible()).isTrue();
         assertThat(employee.netRevenue()).isEqualByComparingTo("150.00");

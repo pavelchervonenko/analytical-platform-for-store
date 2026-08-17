@@ -50,7 +50,7 @@ GET /api/stores/{storeId}/kpi/employees/categories?periodStart=YYYY-MM-DD&period
 ## Формулы
 
 `formulaVersion=employee-category-kpi-v1`,
-`categoryFormulaVersion=category-kpi-v2`.
+`categoryFormulaVersion=category-kpi-v3`.
 
 Для category/group:
 
@@ -76,7 +76,7 @@ interface EmployeeCategoryKpiResult {
   periodStart: string;
   periodEnd: string;
   formulaVersion: "employee-category-kpi-v1";
-  categoryFormulaVersion: "category-kpi-v2";
+  categoryFormulaVersion: "category-kpi-v3";
   employees: EmployeeCategoryKpiEmployee[];
 }
 

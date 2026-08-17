@@ -1302,7 +1302,7 @@ GET /api/stores/{storeId}/kpi/employees/categories?periodStart=YYYY-MM-DD&period
 
 - читает только нормализованные факты PostgreSQL и не обращается к LiveSklad;
 - использует те же inclusive business_date, category snapshots, EXCLUDE/UNMAPPED и return rules, что
-  category-kpi-v2;
+  category-kpi-v3;
 - относит возврат к сотруднику исходной продажи по действующим правилам KPI;
 - возвращает formulaVersion/categoryFormulaVersion;
 - содержит employees с category/group metrics: netRevenue, netQuantity, costAmount, grossProfit,
@@ -3136,7 +3136,7 @@ dashboard API, Telegram renderer/webhook и evaluation runner.
   отдельный unassigned scope;
 - каждый сотрудник получает все категории кроме EXCLUDE и пять пересекающихся групп PHONES,
   DEVICES, ACCESSORY, SERVICE и ADDITIONAL_REVENUE;
-- category math переиспользует общий calculator с category-kpi-v2, а не дублирует формулы;
+- category math переиспользует общий calculator с category-kpi-v3, а не дублирует формулы;
 - добавлен защищённый read-only endpoint
   `GET /api/stores/{storeId}/kpi/employees/categories`;
 - API внесён в сгенерированный OpenAPI contract как обратно совместимое расширение;

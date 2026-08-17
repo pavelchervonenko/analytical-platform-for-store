@@ -66,7 +66,7 @@ class CategoryKpiControllerTest {
                 .andExpect(jsonPath("$.storeId").value(storeId.toString()))
                 .andExpect(jsonPath("$.periodStart").value("2026-07-01"))
                 .andExpect(jsonPath("$.periodEnd").value("2026-07-31"))
-                .andExpect(jsonPath("$.formulaVersion").value("category-kpi-v2"))
+                .andExpect(jsonPath("$.formulaVersion").value("category-kpi-v3"))
                 .andExpect(jsonPath("$.groups[0].groupCode").value("PHONES"))
                 .andExpect(jsonPath("$.groups[0].metrics.netRevenue").value(250.00))
                 .andExpect(jsonPath("$.groups[0].metrics.averageGrossProfitPerUnit")
@@ -133,7 +133,7 @@ class CategoryKpiControllerTest {
                 storeId,
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 31),
-                "category-kpi-v2",
+                "category-kpi-v3",
                 List.of(new CategoryKpiGroup("PHONES", "Телефоны", metrics)),
                 List.of(new CategoryKpiEntry(
                         "IPHONE_NEW_ASIS",

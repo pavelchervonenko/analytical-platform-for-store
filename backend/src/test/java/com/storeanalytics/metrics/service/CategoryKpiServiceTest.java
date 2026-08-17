@@ -60,7 +60,16 @@ class CategoryKpiServiceTest {
 
         CategoryKpiResult result = service.calculate(storeId, period());
 
-        assertThat(result.formulaVersion()).isEqualTo("category-kpi-v2");
+        assertThat(result.formulaVersion()).isEqualTo("category-kpi-v3");
+        assertThat(result.groups())
+                .extracting(CategoryKpiGroup::groupCode)
+                .containsExactly(
+                        "PHONES",
+                        "DEVICES",
+                        "ACCESSORY",
+                        "SERVICE",
+                        "ADDITIONAL_REVENUE"
+                );
         assertThat(result.categories()).hasSize(3);
         assertThat(group(result, "PHONES").metrics().netRevenue())
                 .isEqualByComparingTo("100.00");
@@ -87,11 +96,13 @@ class CategoryKpiServiceTest {
                 .thenReturn(List.of(
                         aggregate(
                                 "CHARGER_CABLE",
+                                AnalyticsCategoryKind.ACCESSORY,
                                 new CategoryFlags(false, false, true),
                                 new AggregateValues("20.00", "1.000", "10.00", 1, 0)
                         ),
                         aggregate(
                                 "SETUP_SERVICE",
+                                AnalyticsCategoryKind.SERVICE,
                                 new CategoryFlags(false, false, true),
                                 new AggregateValues("30.00", "1.000", "0.00", 1, 1)
                         ),
@@ -113,6 +124,10 @@ class CategoryKpiServiceTest {
 
         CategoryKpiMetrics additional = group(result, "ADDITIONAL_REVENUE").metrics();
         assertThat(additional.netRevenue()).isEqualByComparingTo("50.00");
+        assertThat(group(result, "ACCESSORY").metrics().netRevenue())
+                .isEqualByComparingTo("20.00");
+        assertThat(group(result, "SERVICE").metrics().netRevenue())
+                .isEqualByComparingTo("30.00");
         assertThat(additional.costAmount()).isNull();
         assertThat(additional.dataQuality().missingCostItemCount()).isOne();
 
@@ -155,10 +170,19 @@ class CategoryKpiServiceTest {
             CategoryFlags flags,
             AggregateValues values
     ) {
+        return aggregate(code, AnalyticsCategoryKind.OTHER, flags, values);
+    }
+
+    private CategoryKpiAggregate aggregate(
+            String code,
+            AnalyticsCategoryKind kind,
+            CategoryFlags flags,
+            AggregateValues values
+    ) {
         return new CategoryKpiAggregate(
                 code,
                 code,
-                AnalyticsCategoryKind.OTHER,
+                kind,
                 DeviceFamily.NONE,
                 true,
                 flags.phone(),

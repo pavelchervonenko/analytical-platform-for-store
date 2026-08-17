@@ -314,7 +314,7 @@ class WeeklySnapshotDraftBuilderTest {
         return new WeeklyPeriodFacts(
                 store,
                 new CategoryKpiResult(
-                        STORE_ID, period.start(), period.end(), "category-kpi-v2",
+                        STORE_ID, period.start(), period.end(), "category-kpi-v3",
                         List.of(), List.of(category(netRevenue, netQuantity))
                 ),
                 new AttachRateResult(
