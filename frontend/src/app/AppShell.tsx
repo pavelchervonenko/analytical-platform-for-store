@@ -26,11 +26,22 @@ const navigationGroups = [
   {
     label: "Система",
     items: [
-      { to: "/quality", label: "Качество данных", icon: DatabaseZap, visibility: "all" },
+      { to: "/quality", label: "Качество данных", icon: DatabaseZap, visibility: "admin" },
       { to: "/admin", label: "Настройки", icon: Settings, visibility: "admin" }
     ]
   }
 ] as const;
+
+type NavigationRole = "ADMIN" | "MANAGER" | "UNKNOWN" | undefined;
+
+export function navigationGroupsFor(role: NavigationRole) {
+  return navigationGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => item.visibility !== "admin" || role === "ADMIN")
+    }))
+    .filter((group) => group.items.length > 0);
+}
 
 function roleLabel(role: "ADMIN" | "MANAGER" | "UNKNOWN" | undefined): string {
   if (role === "ADMIN") return "Администратор";
@@ -52,21 +63,16 @@ function ShellContent() {
         <div className="sidebar__brand"><span className="brand-mark">S</span><span><strong>Store</strong><small>Analytics</small></span></div>
         <button className="sidebar__close" type="button" onClick={() => setMobileMenuOpen(false)} aria-label="Закрыть меню"><X /></button>
         <nav>
-          {navigationGroups.map((group) => {
-            const items = group.items.filter((item) =>
-              item.visibility !== "admin" || user?.role === "ADMIN");
-            if (items.length === 0) return null;
-            return (
-              <div className="nav-group" key={group.label}>
-                <span className="nav-caption">{group.label}</span>
-                {items.map(({ to, label, icon: Icon }) => (
-                  <NavLink key={to} to={{ pathname: to, search: location.search }} onClick={() => setMobileMenuOpen(false)}>
-                    <Icon size={19} /><span>{label}</span>
-                  </NavLink>
-                ))}
-              </div>
-            );
-          })}
+          {navigationGroupsFor(user?.role).map((group) => (
+            <div className="nav-group" key={group.label}>
+              <span className="nav-caption">{group.label}</span>
+              {group.items.map(({ to, label, icon: Icon }) => (
+                <NavLink key={to} to={{ pathname: to, search: location.search }} onClick={() => setMobileMenuOpen(false)}>
+                  <Icon size={19} /><span>{label}</span>
+                </NavLink>
+              ))}
+            </div>
+          ))}
         </nav>
         <div className="sidebar__footer">
           <NavLink className="sidebar-user" to="/profile"><span>{user?.displayName.slice(0, 1).toUpperCase()}</span><div><strong>{user?.displayName}</strong><small>{roleLabel(user?.role)}</small></div></NavLink>

@@ -14,10 +14,10 @@ import {
 } from "../api/queries";
 import { averageGrossProfitPerDeviceUnit } from "./categoryPresentation";
 import { qualityIssueMessage, qualityStatusLabel } from "../quality/presentation";
-import { formatDate, formatMonth } from "../shared/date";
+import { formatDate } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
 import { PanelSkeleton, QueryError } from "../shared/QueryState";
-import { useWorkspace } from "../stores/WorkspaceProvider";
+import { useWorkspace, type AnalyticsPeriodMode } from "../stores/WorkspaceProvider";
 import { AttachRateMatrix, EmployeePerformanceSection, ManagementSummary } from "./OverviewManagementSections";
 
 const groupLabels: Record<string, { label: string; icon: ReactNode }> = {
@@ -57,6 +57,11 @@ function toneForStatus(status: string): string {
   return "warning";
 }
 
+export function formatOverviewPeriodLabel(mode: AnalyticsPeriodMode, label: string): string {
+  if (mode !== "MONTH" || label.length === 0) return label;
+  return `${label.charAt(0).toLocaleUpperCase("ru-RU")}${label.slice(1)}`;
+}
+
 function OverviewSkeleton() {
   return (
     <div className="overview-skeleton" aria-label="Загружаем показатели" aria-busy="true">
@@ -68,7 +73,7 @@ function OverviewSkeleton() {
 }
 
 export function OverviewPage() {
-  const { selectedStore, month, periodStart, periodEnd, asOfDate } = useWorkspace();
+  const { selectedStore, month, periodMode, periodStart, periodEnd, periodLabel, asOfDate } = useWorkspace();
   const storeId = selectedStore.id;
 
   const statusQuery = useQuery({
@@ -103,7 +108,7 @@ export function OverviewPage() {
   return (
     <div className="overview-page">
       <header className="page-heading">
-        <div><h1>Обзор</h1><p>{formatMonth(month)}</p></div>
+        <div><h1>Обзор</h1><p>{formatOverviewPeriodLabel(periodMode, periodLabel)}</p></div>
         <div className="page-heading__period"><small>Данные по</small><strong>{formatDate(asOfDate)}</strong></div>
       </header>
 

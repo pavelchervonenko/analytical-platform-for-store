@@ -10,6 +10,7 @@ import type {
   StoreKpi
 } from "../api/contracts";
 import { AttachRateMatrix, EmployeePerformanceSection, ManagementSummary } from "./OverviewManagementSections";
+import { formatOverviewPeriodLabel } from "./OverviewPage";
 
 const storeId = "30df06fb-71fe-4477-b6b9-bbc712b1ab25";
 const annaId = "30df06fb-71fe-4477-b6b9-bbc712b1ab26";
@@ -254,6 +255,12 @@ const attach: AttachRate = {
 };
 
 describe("management overview", () => {
+  it("uses the selected analytics period and capitalizes only a month label", () => {
+    expect(formatOverviewPeriodLabel("MONTH", "август 2026 г.")).toBe("Август 2026 г.");
+    expect(formatOverviewPeriodLabel("WEEK", "10 авг. 2026 г. — 16 авг. 2026 г.")).toBe("10 авг. 2026 г. — 16 авг. 2026 г.");
+    expect(formatOverviewPeriodLabel("CUSTOM", "01 июл. 2026 г. — 18 авг. 2026 г.")).toBe("01 июл. 2026 г. — 18 авг. 2026 г.");
+  });
+
   it("shows the customer-facing commercial metrics without average receipt", () => {
     render(<ManagementSummary kpi={storeKpi} categories={categories} plan={null} />);
 

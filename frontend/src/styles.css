@@ -1181,6 +1181,26 @@ body { font-size: 17px; line-height: 1.47; }
 .attach-map__legend i[data-level="2"] { background: #dfedfb; }
 .attach-map__legend i[data-level="4"] { background: #b3d8f5; }
 .attach-map__legend small { margin-left: auto; color: var(--text-faint); }
+@media (min-width: 1151px) {
+  .attach-map {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+  }
+  .attach-map th,
+  .attach-map__cell {
+    min-width: 0;
+    padding-inline: 8px;
+  }
+  .attach-map thead th:first-child,
+  .attach-map tbody th {
+    width: 156px;
+    min-width: 156px;
+    max-width: 156px;
+  }
+  .attach-map thead a { overflow-wrap: anywhere; }
+}
+
 
 @media (max-width: 1150px) {
   .overview-team-table-wrap { display: none; }
