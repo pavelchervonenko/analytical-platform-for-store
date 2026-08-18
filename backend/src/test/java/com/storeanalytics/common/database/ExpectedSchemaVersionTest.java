@@ -8,6 +8,6 @@ class ExpectedSchemaVersionTest {
 
     @Test
     void resolvesLatestVersionFromPackagedMigrations() {
-        assertThat(new ExpectedSchemaVersion().value()).isEqualTo("41");
+        assertThat(new ExpectedSchemaVersion().value()).isEqualTo("42");
     }
 }

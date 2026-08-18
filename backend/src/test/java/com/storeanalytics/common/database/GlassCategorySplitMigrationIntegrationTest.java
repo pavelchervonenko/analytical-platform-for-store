@@ -30,7 +30,7 @@ class GlassCategorySplitMigrationIntegrationTest {
 
         flyway(null).migrate();
 
-        assertThat(currentVersion()).isEqualTo("41");
+        assertThat(currentVersion()).isEqualTo("42");
         assertClassification("glass-iphone", "GLASS_IPHONE");
         assertClassification("camera-iphone", "GLASS_CAMERA_IPHONE");
         assertClassification("glass-samsung", "GLASS_SAMSUNG");

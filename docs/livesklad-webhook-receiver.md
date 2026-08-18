@@ -73,7 +73,7 @@ values of 32 to 256 characters.
 
 ## Storage
 
-Migration `V39.1__add_livesklad_webhook_inbox.sql` creates
+Migration `V42__add_livesklad_webhook_inbox.sql` creates
 `livesklad_webhook_receipts`. The unique key is
 `(webhook_kind, event_id)`, matching LiveSklad's stable `eventId` retry
 contract.
