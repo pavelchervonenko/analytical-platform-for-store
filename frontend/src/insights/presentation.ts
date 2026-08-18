@@ -95,6 +95,49 @@ export function uniqueNarratives<T>(
   });
 }
 
+type ComparableInsight = {
+  candidateRef?: string | null;
+  title: string;
+  summary: string;
+  evidenceRefs?: readonly string[];
+};
+
+function normalizedNarrative(value: string): string {
+  return value.trim().replace(/\s+/gu, " ").toLocaleLowerCase("ru-RU");
+}
+
+function sameEvidenceSet(
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined
+): boolean {
+  if (!left?.length || !right?.length || left.length !== right.length) return false;
+  const leftSet = new Set(left);
+  return right.every((reference) => leftSet.has(reference));
+}
+
+export function uniqueInsightSignals<T extends ComparableInsight>(
+  items: readonly (T | null | undefined)[]
+): T[] {
+  const result: T[] = [];
+  items.forEach((item) => {
+    if (!item) return;
+    const duplicate = result.some((existing) => {
+      const sameCandidate = Boolean(
+        item.candidateRef
+          && existing.candidateRef
+          && item.candidateRef === existing.candidateRef
+      );
+      const sameNarrative = normalizedNarrative(item.title + "\n" + item.summary)
+        === normalizedNarrative(existing.title + "\n" + existing.summary);
+      return sameCandidate
+        || sameNarrative
+        || sameEvidenceSet(item.evidenceRefs, existing.evidenceRefs);
+    });
+    if (!duplicate) result.push(item);
+  });
+  return result;
+}
+
 export function limitationSummary(value: unknown): string {
   if (typeof value === "object" && value !== null && "summary" in value) {
     const summary = Reflect.get(value, "summary");

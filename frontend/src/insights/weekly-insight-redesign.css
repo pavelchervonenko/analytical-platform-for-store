@@ -566,7 +566,12 @@
   font-weight: 700;
 }
 
+.insight-team-experience__summary {
+  max-width: 900px;
+}
+
 .insight-team-experience__list {
+  margin-top: 18px;
   border-top: 1px solid var(--insight-line);
 }
 
@@ -1008,6 +1013,310 @@
   .insight-evidence summary svg,
   .insight-employee__chevron {
     animation: none;
+    transition: none;
+  }
+}
+
+/* Semantic hierarchy: primary signal, supporting context, actions, details. */
+.insight-summary {
+  padding: 28px 34px 0;
+}
+
+.insight-summary__hero {
+  padding: 28px;
+  border: 1px solid #d7e6f4;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 100% 0, rgba(23, 111, 193, .08), transparent 38%),
+    linear-gradient(145deg, #f7fbff 0%, #eef6fd 100%);
+}
+
+.insight-summary__hero > h2 {
+  max-width: 1050px;
+  margin: 0;
+  font-size: clamp(28px, 2.55vw, 40px);
+  font-weight: 650;
+  line-height: 1.14;
+  letter-spacing: -.035em;
+  text-wrap: pretty;
+}
+
+.insight-key-evidence {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  max-width: 880px;
+  margin-top: 24px;
+}
+
+.insight-key-evidence article {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid rgba(23, 111, 193, .14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .84);
+}
+
+.insight-key-evidence span {
+  color: var(--insight-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.insight-key-evidence strong {
+  font-size: 19px;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+}
+
+.insight-key-evidence small {
+  color: var(--insight-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.insight-summary__context-disclosure {
+  margin-top: 14px;
+  border: 1px solid var(--insight-line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.insight-summary__context-disclosure > summary {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  cursor: pointer;
+  color: var(--insight-muted);
+  font-size: 12px;
+  font-weight: 700;
+  list-style: none;
+}
+
+.insight-summary__context-disclosure > summary::-webkit-details-marker,
+.insight-themes__summary::-webkit-details-marker {
+  display: none;
+}
+
+.insight-summary__context-disclosure > summary svg,
+.insight-themes__summary svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  transition: transform .16s ease;
+}
+
+.insight-summary__context-disclosure[open] > summary svg,
+.insight-themes[open] > .insight-themes__summary svg {
+  transform: rotate(180deg);
+}
+
+.insight-summary__context {
+  margin-top: 0;
+  border-top: 1px solid var(--insight-line);
+  border-bottom: 0;
+}
+
+.insight-summary__signals {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+  border-top: 0;
+}
+
+.insight-signal {
+  grid-template-columns: 4px minmax(0, 1fr);
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--insight-line);
+  border-radius: 14px;
+  background: #fafbfa;
+}
+
+.insight-signal + .insight-signal {
+  padding-left: 20px;
+  border-left: 1px solid var(--insight-line);
+}
+
+.insight-signal--positive {
+  border-color: #d8e9df;
+  background: #f6fbf8;
+}
+
+.insight-signal--warning {
+  border-color: #eddfc7;
+  background: #fffbf3;
+}
+
+.insight-signal__item + .insight-signal__item {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--insight-line);
+}
+
+.insight-actions {
+  background: #f6f9fc;
+}
+
+.insight-actions ol {
+  display: grid;
+  gap: 10px;
+}
+
+.insight-actions li {
+  min-height: 0;
+  padding: 17px 18px 17px 56px;
+  border: 1px solid #dfe7ed;
+  border-left: 3px solid var(--insight-primary);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.insight-actions li::before {
+  top: 19px;
+  left: 14px;
+}
+
+.insight-actions h3 {
+  margin-top: 0;
+}
+
+.insight-themes {
+  padding: 0;
+  border-top: 1px solid var(--insight-line);
+}
+
+.insight-themes__summary {
+  min-height: 82px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 34px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.insight-themes__summary:hover {
+  background: #fafbfa;
+}
+
+.insight-themes__summary > span {
+  display: grid;
+  gap: 5px;
+}
+
+.insight-themes__summary strong {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -.02em;
+}
+
+.insight-themes__summary small {
+  color: var(--insight-muted);
+  font-size: 12px;
+}
+
+.insight-themes__body {
+  padding: 0 34px 30px;
+}
+
+.insight-item-group > article > strong {
+  margin-top: 0;
+}
+
+.insight-item {
+  position: relative;
+  padding-left: 12px !important;
+}
+
+.insight-item::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: #a9b0ac;
+}
+
+.insight-item--observation::before,
+.insight-item--opportunity::before {
+  background: var(--insight-success);
+}
+
+.insight-item--risk::before,
+.insight-item--hypothesis::before {
+  background: var(--insight-warning);
+}
+
+.insight-section-heading > small {
+  min-width: auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 1000px) {
+  .insight-summary__signals {
+    grid-template-columns: 1fr;
+  }
+
+  .insight-signal + .insight-signal {
+    padding-left: 20px;
+    border-left: 1px solid var(--insight-line);
+    border-top: 1px solid var(--insight-line);
+  }
+}
+
+@media (max-width: 720px) {
+  .insight-summary {
+    padding: 20px 18px 0;
+  }
+
+  .insight-summary__hero {
+    padding: 22px 18px;
+    border-radius: 14px;
+  }
+
+  .insight-summary__hero > h2 {
+    font-size: 27px;
+  }
+
+  .insight-key-evidence {
+    grid-template-columns: 1fr;
+    margin-top: 20px;
+  }
+
+  .insight-themes {
+    padding: 0;
+  }
+
+  .insight-themes__summary {
+    min-height: 74px;
+    padding: 18px;
+  }
+
+  .insight-themes__body {
+    padding: 0 18px 24px;
+  }
+
+  .insight-actions li {
+    padding-left: 48px;
+  }
+
+  .insight-actions li::before {
+    left: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .insight-summary__context-disclosure > summary svg,
+  .insight-themes__summary svg {
     transition: none;
   }
 }

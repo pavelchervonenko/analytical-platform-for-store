@@ -127,19 +127,23 @@ describe("weekly insight evidence rendering", () => {
 
     expect(screen.getAllByText("Выручка")).toHaveLength(2);
     expect(screen.getAllByText("1 200 000 ₽")).toHaveLength(2);
+    expect(screen.getByText("+20%")).toBeInTheDocument();
     expect(screen.getAllByText(
       "Было 1 000 000 ₽, изменение +200 000 ₽ (+20%)"
-    )).toHaveLength(2);
+    )).toHaveLength(1);
     expect(screen.getByText("Сотрудники в сравнении")).toBeInTheDocument();
     expect(screen.getByText("Качество классификации")).toBeInTheDocument();
     expect(screen.getByText("Значение недоступно")).toBeInTheDocument();
-    expect(screen.getByText("Гипотеза")).toBeInTheDocument();
+    expect(screen.getByText("Итоги недели")).toBeInTheDocument();
+    expect(screen.getByText("Что требует внимания")).toBeInTheDocument();
     expect(screen.getByText(
       "Возможная причина — её нужно проверить по дополнительным данным."
     )).toBeInTheDocument();
-    expect(screen.getByText("Показать основание гипотезы")).toBeInTheDocument();
-    expect(screen.getAllByText("Показать подтверждающие данные").length).toBeGreaterThan(0);
-    expect(screen.getByText("Данные с ограничениями")).toBeInTheDocument();
+    expect(screen.getByText("Основание гипотезы")).toBeInTheDocument();
+    expect(screen.getAllByText("Данные").length).toBeGreaterThan(0);
+    expect(screen.getByText("Ограниченные данные")).toBeInTheDocument();
+    expect(screen.queryByText("Гипотеза")).not.toBeInTheDocument();
+    expect(screen.queryByText("Подробности")).not.toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("·");
   });
 });

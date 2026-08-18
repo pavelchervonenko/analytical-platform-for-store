@@ -9,6 +9,7 @@ import {
   insightKindTone,
   limitationSummary,
   readableInsightText,
+  uniqueInsightSignals,
   uniqueNarratives
 } from "./presentation";
 
@@ -37,6 +38,37 @@ describe("weekly insight presentation", () => {
       (item) => item
     );
     expect(result).toEqual([" Рост продаж ", "Фокус на сервисе"]);
+  });
+
+  it("merges repeated attention signals by candidate or evidence", () => {
+    const result = uniqueInsightSignals([{
+      candidateRef: "C001",
+      title: "Низкое прикрепление защиты",
+      summary: "Показатель равен нулю.",
+      evidenceRefs: ["EV001"]
+    }, {
+      candidateRef: "C001",
+      title: "Риск потери выручки",
+      summary: "Защита не прикрепляется.",
+      evidenceRefs: ["EV001"]
+    }, {
+      candidateRef: "C002",
+      title: "План по сервисам",
+      summary: "Показатель требует контроля.",
+      evidenceRefs: ["EV002"]
+    }]);
+
+    expect(result).toEqual([{
+      candidateRef: "C001",
+      title: "Низкое прикрепление защиты",
+      summary: "Показатель равен нулю.",
+      evidenceRefs: ["EV001"]
+    }, {
+      candidateRef: "C002",
+      title: "План по сервисам",
+      summary: "Показатель требует контроля.",
+      evidenceRefs: ["EV002"]
+    }]);
   });
 
   it("uses a human fallback for an unknown limitation shape", () => {
