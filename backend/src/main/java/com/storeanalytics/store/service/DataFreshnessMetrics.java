@@ -33,7 +33,7 @@ public class DataFreshnessMetrics implements MeterBinder {
     private final Clock clock;
     private final AtomicReference<DataFreshnessSnapshot> snapshot =
             new AtomicReference<>(new DataFreshnessSnapshot(
-                    null, null, 0, 0
+                    null, null, null, 0, 0, 0
             ));
 
     public DataFreshnessMetrics(
@@ -48,6 +48,7 @@ public class DataFreshnessMetrics implements MeterBinder {
     public void bindTo(MeterRegistry registry) {
         ageGauge(registry, "sales", DataFreshnessSnapshot::oldestSalesThrough);
         ageGauge(registry, "returns", DataFreshnessSnapshot::oldestReturnsThrough);
+        ageGauge(registry, "orders", DataFreshnessSnapshot::oldestOrdersThrough);
         missingGauge(
                 registry, "sales",
                 value -> value.storesWithoutSales()
@@ -55,6 +56,10 @@ public class DataFreshnessMetrics implements MeterBinder {
         missingGauge(
                 registry, "returns",
                 value -> value.storesWithoutReturns()
+        );
+        missingGauge(
+                registry, "orders",
+                value -> value.storesWithoutOrders()
         );
     }
 

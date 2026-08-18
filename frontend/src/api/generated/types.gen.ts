@@ -124,7 +124,7 @@ export type SyncJobView = {
     requestedById?: string;
     jobType?: 'BACKFILL' | 'INCREMENTAL';
     status?: 'PENDING' | 'RUNNING' | 'WAITING_RETRY' | 'SUCCESS' | 'FAILED' | 'CANCELLED';
-    phase?: 'STORES' | 'EMPLOYEES' | 'SALES' | 'RETURNS';
+    phase?: 'STORES' | 'EMPLOYEES' | 'SALES' | 'ORDERS' | 'RETURNS';
     periodStart?: string;
     periodEnd?: string;
     cursorStart?: string;
@@ -1342,7 +1342,6 @@ export type JsonNode = {
     container?: boolean;
     number?: boolean;
     missingNode?: boolean;
-    floatingPointNumber?: boolean;
     valueNode?: boolean;
     nodeType?: 'ARRAY' | 'BINARY' | 'BOOLEAN' | 'MISSING' | 'NULL' | 'NUMBER' | 'OBJECT' | 'POJO' | 'STRING';
     object?: boolean;
@@ -1360,6 +1359,7 @@ export type JsonNode = {
     textual?: boolean;
     boolean?: boolean;
     binary?: boolean;
+    floatingPointNumber?: boolean;
     embeddedValue?: boolean;
 };
 

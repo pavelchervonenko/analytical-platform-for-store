@@ -967,6 +967,7 @@ public class ReturnSyncPersistence {
                         syncRun.getConnection().getId(),
                         store.getId(),
                         SalesDocumentKind.RETURN,
+                        "saleReturn",
                         period.start(),
                         period.end()
                 )) {

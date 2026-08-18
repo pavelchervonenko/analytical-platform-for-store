@@ -34,7 +34,7 @@ class MigrationLeastPrivilegeIntegrationTest {
             upgrade.migrate();
 
             assertThat(upgrade.info().current().getVersion().getVersion())
-                    .isEqualTo("39");
+                    .isEqualTo("40");
             assertThat(hasTemporaryPrivilege(postgres)).isFalse();
         }
     }

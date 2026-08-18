@@ -17,7 +17,8 @@ const phaseLabel: Record<string, string> = {
   STORES: "магазины",
   EMPLOYEES: "сотрудники",
   SALES: "продажи",
-  RETURNS: "возвраты"
+  RETURNS: "возвраты",
+  ORDERS: "выданные заказы"
 };
 const statusLabel: Record<SyncJob["status"], string> = {
   PENDING: "ожидает запуска",
@@ -60,7 +61,7 @@ export function InitialStoreSetup() {
 
   const run = () => {
     if (window.confirm(
-      "Запустить единую синхронизацию магазинов, сотрудников, продаж и возвратов за последние 7 дней?"
+      "Запустить единую синхронизацию магазинов, сотрудников, продаж, возвратов и выданных заказов за последние 7 дней?"
     )) {
       mutation.mutate();
     }

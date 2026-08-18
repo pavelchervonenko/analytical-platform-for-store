@@ -66,7 +66,7 @@ public class DataRetentionRepository {
                     AND (newer.finished_at, newer.id) > (run.finished_at, run.id)
               )
               AND (
-                  run.sync_scope NOT IN ('SALES', 'RETURNS')
+                  run.sync_scope NOT IN ('SALES', 'RETURNS', 'ORDERS')
                   OR run.status NOT IN ('SUCCESS', 'PARTIAL_SUCCESS')
                   OR EXISTS (
                       SELECT 1

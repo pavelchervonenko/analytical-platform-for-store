@@ -13,6 +13,7 @@ public class SyncJobExecutionService {
     private final EmployeeSyncService employeeSyncService;
     private final SalesSyncService salesSyncService;
     private final ReturnSyncService returnSyncService;
+    private final OrderSyncService orderSyncService;
     private final AppUserRepository userRepository;
 
     public SyncJobExecutionService(
@@ -20,12 +21,14 @@ public class SyncJobExecutionService {
             EmployeeSyncService employeeSyncService,
             SalesSyncService salesSyncService,
             ReturnSyncService returnSyncService,
+            OrderSyncService orderSyncService,
             AppUserRepository userRepository
     ) {
         this.storeSyncService = storeSyncService;
         this.employeeSyncService = employeeSyncService;
         this.salesSyncService = salesSyncService;
         this.returnSyncService = returnSyncService;
+        this.orderSyncService = orderSyncService;
         this.userRepository = userRepository;
     }
 
@@ -51,6 +54,10 @@ public class SyncJobExecutionService {
             ).syncRunId();
             case RETURNS -> returnSyncService.synchronize(
                     new ReturnSyncPeriod(claim.windowStart(), claim.windowEnd()),
+                    context
+            ).syncRunId();
+            case ORDERS -> orderSyncService.synchronize(
+                    new OrderSyncPeriod(claim.windowStart(), claim.windowEnd()),
                     context
             ).syncRunId();
             default -> throw new IllegalStateException("Unsupported synchronization job phase");

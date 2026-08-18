@@ -77,6 +77,37 @@ class DailyStorePulsePlannerTest {
         verify(projection, never()).build(storeId, LocalDate.parse("2026-08-02"));
     }
 
+    @Test
+    void skipsStoreWhenIssuedOrdersCoverageIsIncomplete() {
+        UUID storeId = UUID.randomUUID();
+        Instant now = Instant.parse("2026-08-03T05:10:00Z");
+        DailyStorePulseEventStore store = mock(DailyStorePulseEventStore.class);
+        DailyStorePulseProjection projection = mock(DailyStorePulseProjection.class);
+        DailyStorePulseMetrics metrics = mock(DailyStorePulseMetrics.class);
+        when(store.activeStores()).thenReturn(List.of(
+                new DailyStorePulseEventStore.StoreTarget(
+                        storeId,
+                        "Магазин",
+                        "Europe/Moscow",
+                        Instant.parse("2026-08-03T00:00:00Z"),
+                        Instant.parse("2026-08-03T00:00:00Z"),
+                        Instant.parse("2026-08-01T21:00:00Z")
+                )
+        ));
+
+        DailyStorePulsePlanningResult result = planner(
+                store, projection, metrics, now
+        ).plan();
+
+        assertThat(result).isEqualTo(
+                new DailyStorePulsePlanningResult(0, 0, 0)
+        );
+        verify(projection, never()).build(
+                storeId,
+                LocalDate.parse("2026-08-02")
+        );
+    }
+
     private DailyStorePulsePlanner planner(
             DailyStorePulseEventStore store,
             DailyStorePulseProjection projection,

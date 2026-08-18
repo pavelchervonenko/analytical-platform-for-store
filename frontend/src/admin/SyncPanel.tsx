@@ -23,7 +23,8 @@ const syncPhases = [
   ["STORES", "Магазины"],
   ["EMPLOYEES", "Сотрудники"],
   ["SALES", "Продажи"],
-  ["RETURNS", "Возвраты"]
+  ["RETURNS", "Возвраты"],
+  ["ORDERS", "Выданные заказы"]
 ] as const;
 
 function phaseLabel(phase: SyncJob["phase"]): string {

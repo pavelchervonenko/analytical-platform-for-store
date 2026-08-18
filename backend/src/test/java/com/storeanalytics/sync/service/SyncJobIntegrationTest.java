@@ -178,7 +178,8 @@ class SyncJobIntegrationTest {
                 SyncJobPhase.STORES,
                 SyncJobPhase.EMPLOYEES,
                 SyncJobPhase.SALES,
-                SyncJobPhase.RETURNS
+                SyncJobPhase.RETURNS,
+                SyncJobPhase.ORDERS
         );
         List<SyncJobPhase> observed = new ArrayList<>();
         for (int step = 0; step < 20

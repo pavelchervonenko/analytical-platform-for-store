@@ -950,7 +950,7 @@ Backfill payload:
 ```
 
 Это единственная публичная операция запуска синхронизации. Backend последовательно выполняет
-`STORES → EMPLOYEES → SALES → RETURNS`, сам ограничивает окна и повторы. Frontend показывает
+`STORES → EMPLOYEES → SALES → RETURNS → ORDERS`, сам ограничивает окна и повторы. Frontend показывает
 текущую phase, но не публикует отдельные кнопки этапов, upstream tokens, raw payload или
 подробности исключений.
 

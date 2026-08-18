@@ -1,7 +1,50 @@
 # Revenue reconciliation audit — 2026-08-18
 
-Status: source/API arithmetic confirmed; one configurable CRM-report difference remains to be
-reconciled from the exported report rows before production calculations are changed.
+Status: issued-order-position synchronization is implemented and verified locally. Production is
+unchanged until the release is deployed and a historical backfill completes. One upstream
+sale-return discovery gap remains explicit and must not be hidden by a manual adjustment.
+
+## Row-level export resolution
+
+The customer export `Отчет по товарам и работам-38.xlsx` for 2026-08-01 through 2026-08-09 made the
+remaining source difference reproducible:
+
+```text
+22,250,512.50 application/API sales minus API-discoverable returns
++   24,500.00 issued order works A000605 and A000642
+-   15,030.00 report return F000381 absent from the cash-return API feed
+=22,259,982.50 exported detailed report
+```
+
+The application already matched the public sales and cash-return REST endpoints exactly. The
+24,500 RUB was not a formula defect: the application did not ingest the issued-order-position
+source that LiveSklad's detailed goods-and-works report combines with store sales.
+
+## Implemented correction
+
+Flyway V40 and synchronization phase `ORDERS` now normalize issued order positions into the shared
+sales fact projection. This automatically feeds store and employee KPI, categories, plans, payroll,
+reports, and AI snapshots without a second calculation path. The implementation is idempotent,
+captures later edits and cancellation, respects the position business date and responsible employee,
+and prevents the SALES/RETURNS phases from deleting order facts.
+
+The reconciliation fixtures cover the two confirmed rows:
+
+- A000605: 18,500 RUB, 2026-08-05, responsible employee from the position;
+- A000642: 6,000 RUB, 2026-08-06, responsible employee from the position.
+
+## Remaining upstream return limitation
+
+F000381 for 15,030 RUB is present in the XLSX detailed report but is not returned by the configured
+cash-register transaction endpoints, including the observed deleted transaction shapes. LiveSklad's
+documented REST API exposes `/documents/{id}`, but no collection endpoint that can enumerate all
+sale-return documents. Without an ID, polling cannot discover this row safely.
+
+Do not add a hard-coded compensating fact. The production-safe resolution is to obtain from
+LiveSklad either a supported return-list endpoint or a return webhook that includes the document ID,
+then feed that ID through the existing return-detail normalization. Until then, this upstream
+coverage limitation remains explicit and detailed-report equality cannot be guaranteed for rows the
+API does not publish.
 
 ## Scope
 
@@ -88,7 +131,7 @@ order positions use the date the position was actually added to the order:
 
 https://help.livesklad.com/ru/articles/292-%D0%BF%D0%BE%D0%B4%D1%80%D0%BE%D0%B1%D0%BD%D1%8B%D0%B9-%D0%BE%D1%82%D1%87%D1%91%D1%82-%D0%BF%D0%BE-%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D0%BC-%D0%B8-%D1%82%D0%BE%D0%B2%D0%B0%D1%80%D0%B0%D0%BC
 
-## Remaining `МАГАЗИН` difference
+## Pre-export `МАГАЗИН` checkpoint
 
 Adding all target-period order positions to the application's current value gives:
 
@@ -106,28 +149,21 @@ does not expose the selected configuration of the fully customizable CRM report.
 Changing application arithmetic to force that number would be speculative and could break other
 periods.
 
-## Required evidence for row-level reconciliation
+## Evidence used for row-level reconciliation
 
-Export the exact `Подробный отчёт по работам и товарам` used to obtain 43,302,474 RUB:
+The supplied operation-level export for 2026-08-01 through 2026-08-09 retained document/date,
+employee, item/work name, quantity, actual amount, and return rows. It was sufficient to identify
+A000605, A000642, and F000381 without using any customer contact data.
 
-1. Period 2026-08-01 through 2026-08-16 inclusive.
-2. Store `МАГАЗИН`.
-3. Operation-list format, without grouping rows together if the UI permits it.
-4. The same employee, document, order-status, directory, and other filters used for the quoted CRM
-   number.
-5. A screenshot of the complete report filter panel or the saved report configuration.
+## Production completion sequence
 
-The export should retain document/date, employee, item/work name, quantity, actual amount, and
-return columns. Customer contact data is not needed.
-
-## Implementation sequence after receiving the export
-
-1. Reconcile every exported row to a sale, sale return, order position, or documented exclusion.
-2. Record the exact canonical inclusion, date, employee-attribution, and return rules.
-3. Add order synchronization with retained raw versions and correction overlap.
-4. Normalize order positions by their own business date and responsible employee.
-5. Extend the shared KPI fact projection so store KPI, employee KPI, categories, plans, payroll,
-   reports, and AI snapshots all use the same facts.
-6. Add invariant tests: source totals, store/employee roll-up equality, return subtraction, order
-   position dates, idempotency, retroactive correction, and historical backfill.
-7. Reconcile June, July, and August before preparing a production release.
+1. Deploy backend and frontend together because the public contract advances from v9 to v10.
+2. Run one historical backfill from 2026-01-01 through the latest completed business day; no manual
+   recurring imports are required after that.
+3. Confirm every child window completes SALES, RETURNS, and ORDERS and that store freshness is
+   `CURRENT` only after all three sources cover the day.
+4. Re-run row-level reconciliation for June, July, and August, including separate totals for `sale`,
+   `saleReturn`, and `orderPosition`.
+5. Verify that A000605 and A000642 add exactly 24,500 RUB for 2026-08-01 through 2026-08-09.
+6. Keep F000381 as an explicit upstream API gap until LiveSklad supplies a supported discovery path;
+   do not force equality with a manual monetary correction.

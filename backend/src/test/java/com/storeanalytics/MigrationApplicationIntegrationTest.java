@@ -34,7 +34,7 @@ class MigrationApplicationIntegrationTest {
             postgres.start();
 
             runMigration(postgres);
-            assertThat(currentVersion(postgres)).isEqualTo("39");
+            assertThat(currentVersion(postgres)).isEqualTo("40");
 
             resetSchema(postgres);
             Flyway.configure()
@@ -51,7 +51,7 @@ class MigrationApplicationIntegrationTest {
             addVersion29Report(postgres);
 
             runMigration(postgres);
-            assertThat(currentVersion(postgres)).isEqualTo("39");
+            assertThat(currentVersion(postgres)).isEqualTo("40");
             assertReportPayloadMigrated(postgres);
             assertFinalizedReportRemainsImmutable(postgres);
 
@@ -70,7 +70,7 @@ class MigrationApplicationIntegrationTest {
             addPreviousVersionRawWrite(postgres, LEGACY_RAW_ID, "legacy-before-v18");
 
             runMigration(postgres);
-            assertThat(currentVersion(postgres)).isEqualTo("39");
+            assertThat(currentVersion(postgres)).isEqualTo("40");
             assertThat(payloadPolicyVersion(postgres, LEGACY_RAW_ID)).isZero();
 
             addPreviousVersionRawWrite(postgres, ROLLBACK_RAW_ID, "rollback-after-v18");

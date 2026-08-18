@@ -1,0 +1,21 @@
+package com.storeanalytics.sync.service;
+
+import com.storeanalytics.integration.livesklad.dto.LiveSkladOrderDetailPayload;
+import com.storeanalytics.integration.livesklad.dto.LiveSkladOrderSummaryPayload;
+import java.util.Objects;
+
+record LiveSkladOrderSource(
+        LiveSkladOrderSummaryPayload summary,
+        LiveSkladOrderDetailPayload detail
+) {
+
+    LiveSkladOrderSource {
+        Objects.requireNonNull(summary, "summary must not be null");
+        if (detail != null
+                && !summary.externalId().equals(detail.externalId())) {
+            throw new IllegalArgumentException(
+                    "order summary and detail IDs must match"
+            );
+        }
+    }
+}

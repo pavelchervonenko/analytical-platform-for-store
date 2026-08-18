@@ -91,6 +91,37 @@ class StoreDataStatusServiceTest {
     }
 
     @Test
+    void usesOrdersCoverageWhenItIsTheOldestRevenueSource() {
+        UUID storeId = UUID.randomUUID();
+        Instant completeCoverage = exclusiveStartOf(LocalDate.of(2026, 7, 23));
+        Instant orderCoverage = exclusiveStartOf(LocalDate.of(2026, 7, 20));
+        when(repository.findByStoreId(storeId)).thenReturn(Optional.of(
+                new StoreDataStatusSnapshot(
+                        storeId,
+                        STORE_ZONE.getId(),
+                        completeCoverage,
+                        NOW.minusSeconds(300),
+                        completeCoverage,
+                        NOW.minusSeconds(200),
+                        orderCoverage,
+                        NOW.minusSeconds(100),
+                        null, null, null, null, null, null,
+                        null, null, null, null, 0
+                )
+        ));
+
+        StoreDataStatusView result = service.get(storeId);
+
+        assertThat(result.status()).isEqualTo(StoreDataFreshnessStatus.STALE);
+        assertThat(result.dataThroughDate()).isEqualTo(
+                LocalDate.of(2026, 7, 19)
+        );
+        assertThat(result.lagDays()).isEqualTo(2);
+        assertThat(result.lastCompletedSyncAt())
+                .isEqualTo(NOW.minusSeconds(100));
+    }
+
+    @Test
     void activeSynchronizationHasPriorityOverPreviousFailure() {
         UUID storeId = UUID.randomUUID();
         UUID syncId = UUID.randomUUID();
@@ -119,6 +150,8 @@ class StoreDataStatusServiceTest {
                 NOW.minusSeconds(600),
                 exclusiveStartOf(LocalDate.of(2026, 7, 22)),
                 NOW.minusSeconds(500),
+                exclusiveStartOf(LocalDate.of(2026, 7, 22)),
+                NOW.minusSeconds(400),
                 null, null, null, null, null, null,
                 "FAILED", failedAt, "Sales synchronization failed: TimeoutException", failedAt, 1
         )));
@@ -145,6 +178,8 @@ class StoreDataStatusServiceTest {
                 STORE_ZONE.getId(),
                 salesThrough,
                 salesCompletedAt,
+                returnsThrough,
+                returnsCompletedAt,
                 returnsThrough,
                 returnsCompletedAt,
                 activeSyncId,

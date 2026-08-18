@@ -22,8 +22,10 @@ class DataFreshnessMetricsTest {
         when(repository.load()).thenReturn(new DataFreshnessSnapshot(
                 NOW.minusSeconds(3600),
                 NOW.minusSeconds(7200),
+                NOW.minusSeconds(10800),
                 1,
-                2
+                2,
+                3
         ));
         DataFreshnessMetrics metrics = new DataFreshnessMetrics(
                 repository,
@@ -42,9 +44,17 @@ class DataFreshnessMetricsTest {
                 .tag("source", "returns")
                 .gauge()
                 .value()).isEqualTo(7200);
+        assertThat(registry.get(DataFreshnessMetrics.AGE_METRIC)
+                .tag("source", "orders")
+                .gauge()
+                .value()).isEqualTo(10800);
         assertThat(registry.get(DataFreshnessMetrics.MISSING_METRIC)
                 .tag("source", "sales")
                 .gauge()
                 .value()).isEqualTo(1);
+        assertThat(registry.get(DataFreshnessMetrics.MISSING_METRIC)
+                .tag("source", "orders")
+                .gauge()
+                .value()).isEqualTo(3);
     }
 }

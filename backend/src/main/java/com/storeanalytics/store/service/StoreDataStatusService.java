@@ -35,7 +35,8 @@ public class StoreDataStatusService {
         LocalDate expectedThroughDate = LocalDate.now(clock.withZone(zone)).minusDays(1);
         LocalDate salesThrough = completedDate(snapshot.salesThroughExclusive(), zone);
         LocalDate returnsThrough = completedDate(snapshot.returnsThroughExclusive(), zone);
-        LocalDate dataThrough = minimum(salesThrough, returnsThrough);
+        LocalDate ordersThrough = completedDate(snapshot.ordersThroughExclusive(), zone);
+        LocalDate dataThrough = minimum(salesThrough, returnsThrough, ordersThrough);
         Integer lagDays = lagDays(dataThrough, expectedThroughDate);
         StoreSyncActivityView synchronization = synchronization(snapshot);
 
@@ -47,7 +48,11 @@ public class StoreDataStatusService {
                 salesThrough,
                 returnsThrough,
                 lagDays,
-                latest(snapshot.salesCompletedAt(), snapshot.returnsCompletedAt()),
+                latest(
+                        snapshot.salesCompletedAt(),
+                        snapshot.returnsCompletedAt(),
+                        snapshot.ordersCompletedAt()
+                ),
                 synchronization,
                 snapshot.openQualityIssueCount(),
                 snapshot.lastError(),
@@ -62,10 +67,18 @@ public class StoreDataStatusService {
                 : exclusiveEnd.minusNanos(1).atZone(zone).toLocalDate();
     }
 
-    private LocalDate minimum(LocalDate first, LocalDate second) {
-        if (first == null || second == null) {
+    private LocalDate minimum(
+            LocalDate first,
+            LocalDate second,
+            LocalDate third
+    ) {
+        if (first == null || second == null || third == null) {
             return null;
         }
+        return minimum(minimum(first, second), third);
+    }
+
+    private LocalDate minimum(LocalDate first, LocalDate second) {
         return first.isBefore(second) ? first : second;
     }
 
@@ -77,6 +90,10 @@ public class StoreDataStatusService {
                 dataThrough,
                 expectedThrough
         )));
+    }
+
+    private Instant latest(Instant first, Instant second, Instant third) {
+        return latest(latest(first, second), third);
     }
 
     private Instant latest(Instant first, Instant second) {

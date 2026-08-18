@@ -35,7 +35,8 @@ public class DailyStorePulseEventStore {
                 """
                 SELECT store.id, store.name, store.timezone,
                        sales.period_end AS sales_through_exclusive,
-                       returns.period_end AS returns_through_exclusive
+                       returns.period_end AS returns_through_exclusive,
+                       orders.period_end AS orders_through_exclusive
                 FROM stores store
                 LEFT JOIN LATERAL (
                     SELECT run.period_end
@@ -61,6 +62,18 @@ public class DailyStorePulseEventStore {
                     ORDER BY run.period_end DESC, run.finished_at DESC
                     LIMIT 1
                 ) returns ON true
+                LEFT JOIN LATERAL (
+                    SELECT run.period_end
+                    FROM sync_runs run
+                    WHERE (run.store_id = store.id
+                           OR (run.store_id IS NULL
+                               AND run.connection_id = store.connection_id))
+                      AND run.sync_scope = 'ORDERS'
+                      AND run.status IN ('SUCCESS', 'PARTIAL_SUCCESS')
+                      AND run.period_end IS NOT NULL
+                    ORDER BY run.period_end DESC, run.finished_at DESC
+                    LIMIT 1
+                ) orders ON true
                 WHERE store.is_active = true
                 ORDER BY store.id
                 """,
@@ -116,7 +129,8 @@ public class DailyStorePulseEventStore {
                 resultSet.getString("name"),
                 resultSet.getString("timezone"),
                 instant(resultSet, "sales_through_exclusive"),
-                instant(resultSet, "returns_through_exclusive")
+                instant(resultSet, "returns_through_exclusive"),
+                instant(resultSet, "orders_through_exclusive")
         );
     }
 
@@ -130,7 +144,22 @@ public class DailyStorePulseEventStore {
             String storeName,
             String timezone,
             Instant salesThroughExclusive,
-            Instant returnsThroughExclusive
+            Instant returnsThroughExclusive,
+            Instant ordersThroughExclusive
     ) {
+
+        public StoreTarget(
+                UUID storeId,
+                String storeName,
+                String timezone,
+                Instant salesThroughExclusive,
+                Instant returnsThroughExclusive
+        ) {
+            this(
+                    storeId, storeName, timezone,
+                    salesThroughExclusive, returnsThroughExclusive,
+                    returnsThroughExclusive
+            );
+        }
     }
 }

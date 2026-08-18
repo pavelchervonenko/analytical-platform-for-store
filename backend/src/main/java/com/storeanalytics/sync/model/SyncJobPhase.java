@@ -4,5 +4,6 @@ public enum SyncJobPhase {
     STORES,
     EMPLOYEES,
     SALES,
+    ORDERS,
     RETURNS
 }

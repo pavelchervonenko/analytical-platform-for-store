@@ -728,6 +728,7 @@ public class SalesSyncPersistence {
                         syncRun.getConnection().getId(),
                         store.getId(),
                         SalesDocumentKind.SALE,
+                        "sale",
                         period.start(),
                         period.end()
                 )) {

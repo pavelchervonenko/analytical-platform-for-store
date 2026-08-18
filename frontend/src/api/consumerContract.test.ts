@@ -46,7 +46,7 @@ describe("frontend consumer contract", () => {
       apiContractVersion: openApi.info.version,
       time: "2026-07-26T12:00:00Z"
     });
-    expect(status.apiContractVersion).toBe("9");
+    expect(status.apiContractVersion).toBe("10");
     expect(openApi.components.schemas.SystemStatusView?.properties?.apiContractVersion).toBeDefined();
   });
 

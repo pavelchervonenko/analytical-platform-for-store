@@ -16,7 +16,8 @@ Each job runs these phases in order:
 2. `EMPLOYEES` refreshes employees and store assignments.
 3. `SALES` synchronizes one bounded time window.
 4. `RETURNS` synchronizes the same window after its sales.
-5. The cursor advances and phases 3–4 repeat until the exclusive period end.
+5. `ORDERS` synchronizes issued order positions changed in the same window.
+6. The cursor advances and phases 3–5 repeat until the exclusive period end.
 
 The default data window is one day. If a window exceeds the existing 70-detail safety ceiling, the
 worker halves it down to a minimum of 15 minutes before declaring it impossible. A failed process
@@ -93,7 +94,7 @@ opportunities while keeping completed-day data available during the morning.
 
 Every created job re-reads the last three completed calendar days. The job persists progress after
 each six-hour child window, so a later provider failure does not discard earlier windows. A
-LiveSklad rate limit in a sales or returns phase halves the current child window down to the
+LiveSklad rate limit in a sales, returns, or orders phase halves the current child window down to the
 15-minute floor and schedules the retry no earlier than the provider `Retry-After` boundary.
 Permanent payload or configuration failures still require operator intervention. The rolling
 overlap captures late corrections without duplicating normalized facts.
@@ -102,10 +103,12 @@ overlap captures late corrections without duplicating normalized facts.
 
 The client observes LiveSklad `remainRequest` and `expireDate`. It preserves five requests as a
 reserve and postpones the current phase until the reported window resets. An HTTP `429` is treated
-as retryable. For sales and returns, the persisted child window is reduced before retry and the
+as retryable. For sales, returns, and orders, the persisted child window is reduced before retry and
+the
 delay is the greater of local backoff and the source `Retry-After`, capped by the configured
 absolute maximum. Tokens, credentials, full payloads, customer data, and upstream response bodies
-are never written to job errors or logs.
+are never written to job errors or logs. Order detail synchronization uses the same 70-record safety
+ceiling and window reduction policy.
 
 ## Initial backfill
 

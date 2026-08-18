@@ -20,6 +20,7 @@ final class WeeklyEmployeeSalesSampleReader {
             WHERE document.store_id = :storeId
               AND document.business_date BETWEEN :periodStart AND :periodEnd
               AND document.document_kind = 'SALE'
+              AND document.source_document_type = 'sale'
               AND NOT document.is_deleted
               AND NOT item.is_deleted
               AND category.code <> 'EXCLUDE'

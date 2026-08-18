@@ -193,6 +193,32 @@ public class SyncRun {
         ), now);
     }
 
+    public static SyncRun startOrderSync(
+            IntegrationConnection connection,
+            SyncPeriod period,
+            Instant now
+    ) {
+        return startOrderSync(
+                connection, period, SyncTriggerType.MANUAL, null, null, now
+        );
+    }
+
+    public static SyncRun startOrderSync(
+            IntegrationConnection connection,
+            SyncPeriod period,
+            SyncTriggerType triggerType,
+            UUID syncJobId,
+            AppUser requestedBy,
+            Instant now
+    ) {
+        requireNonNull(connection, "connection");
+        requireNonNull(period, "period");
+        return start(new SyncRunRequest(
+                connection.getSourceSystem(), connection, null, triggerType,
+                SyncScope.ORDERS, period, syncJobId, requestedBy
+        ), now);
+    }
+
     public static SyncRun start(SyncRunRequest request, Instant now) {
         requireNonNull(request, "request");
         SyncPeriod period = request.period();

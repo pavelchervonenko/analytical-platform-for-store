@@ -180,8 +180,8 @@ aggregate logs/audit metadata and are not dynamic metric labels. See `data-reten
 | --- | --- | --- |
 | `storeanalytics.sync.jobs` | `status=failed|retrying|expired_lease` | Current persisted failed/retrying jobs and running jobs whose lease has expired. |
 | `storeanalytics.report.backfill.jobs` | `status=failed|retrying|expired_lease` | Current persisted report-backfill failures, retries and expired worker leases. |
-| `storeanalytics.data.freshness.age` | `source=sales|returns` | Worst age in seconds of the latest successful data-through boundary among active stores. `NaN` means no successful data exists. |
-| `storeanalytics.data.freshness.missing` | `source=sales|returns` | Active stores with no successful synchronization for the source. |
+| `storeanalytics.data.freshness.age` | `source=sales|returns|orders` | Worst age in seconds of the latest successful data-through boundary among active stores. `NaN` means no successful data exists. |
+| `storeanalytics.data.freshness.missing` | `source=sales|returns|orders` | Active stores with no successful synchronization for the source. |
 | `storeanalytics.quality.issues` | `status=open` | Persisted open data-quality issues. |
 | `storeanalytics.payroll.runs` | `state=incomplete|stale|unknown` | Latest actionable payroll revisions. Paid historical revisions are excluded. |
 | `storeanalytics.notification.delivery.state` | `channel=TELEGRAM`, bounded `status` | Current ready backlog, active/expired leases, terminal failures and blocked subscriptions. |
@@ -191,7 +191,7 @@ Payroll freshness is evaluated against the same source fingerprints used by appr
 that could not be classified safely.
 
 Retention preserves both the latest terminal synchronization identity and the greatest
-SUCCESS/PARTIAL_SUCCESS SALES/RETURNS data-through boundary for every source scope. Consequently,
+SUCCESS/PARTIAL_SUCCESS SALES/RETURNS/ORDERS data-through boundary for every source scope. Consequently,
 removing old technical runs cannot make the freshness gauges regress to an older boundary or
 become missing solely because a newer terminal run failed.
 

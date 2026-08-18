@@ -9,6 +9,7 @@ import com.storeanalytics.integration.livesklad.exception.LiveSkladPayloadReject
 import com.storeanalytics.integration.livesklad.exception.LiveSkladRateLimitException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladTransportException;
 import com.storeanalytics.sync.config.SyncWorkerSchedulingConfiguration;
+import com.storeanalytics.sync.exception.OrderSyncCapacityException;
 import com.storeanalytics.sync.exception.ReturnSyncCapacityException;
 import com.storeanalytics.sync.exception.SalesSyncCapacityException;
 import com.storeanalytics.sync.model.SyncJobPhase;
@@ -62,7 +63,8 @@ public class SyncJobWorker {
         try {
             executionService.execute(claim);
             coordinator.completeStep(claim.jobId(), workerId);
-        } catch (SalesSyncCapacityException | ReturnSyncCapacityException exception) {
+        } catch (SalesSyncCapacityException | ReturnSyncCapacityException
+                | OrderSyncCapacityException exception) {
             handleCapacity(claim);
         } catch (RuntimeException exception) {
             handleFailure(claim, exception);
@@ -147,7 +149,8 @@ public class SyncJobWorker {
             Throwable exception
     ) {
         return (claim.phase() == SyncJobPhase.SALES
-                || claim.phase() == SyncJobPhase.RETURNS)
+                || claim.phase() == SyncJobPhase.RETURNS
+                || claim.phase() == SyncJobPhase.ORDERS)
                 && contains(exception, LiveSkladRateLimitException.class);
     }
 

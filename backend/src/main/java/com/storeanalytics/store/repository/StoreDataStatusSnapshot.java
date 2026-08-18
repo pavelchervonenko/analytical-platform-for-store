@@ -10,6 +10,8 @@ public record StoreDataStatusSnapshot(
         Instant salesCompletedAt,
         Instant returnsThroughExclusive,
         Instant returnsCompletedAt,
+        Instant ordersThroughExclusive,
+        Instant ordersCompletedAt,
         UUID activeSyncId,
         String activeSyncType,
         String activeSyncStatus,

@@ -13,7 +13,8 @@ const statusLabels: Readonly<Record<string, string>> = {
   SUCCESS: "Завершена", FAILED: "Не завершена", CANCELLED: "Отменена", UNKNOWN: "Статус уточняется"
 };
 const phaseLabels: Readonly<Record<string, string>> = {
-  STORES: "Магазины", EMPLOYEES: "Сотрудники", SALES: "Продажи", RETURNS: "Возвраты"
+  STORES: "Магазины", EMPLOYEES: "Сотрудники", SALES: "Продажи", RETURNS: "Возвраты",
+  ORDERS: "Выданные заказы"
 };
 
 export function SyncJobDetails({ jobId }: { jobId: string }) {

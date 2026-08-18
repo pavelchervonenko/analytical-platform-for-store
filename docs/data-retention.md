@@ -25,7 +25,7 @@ rolls back the complete run; later schedules continue draining the backlog.
 | --- | --- | --- |
 | Normalized `raw_record_versions` | 180 days | Delete only a superseded version; always keep the latest version of an external entity. |
 | Failed or skipped raw versions | 365 days | Same latest-version rule; raw sale/return evidence linked to an open quality issue is retained. |
-| Successful terminal `sync_runs` | 90 days | Keep the latest terminal run and the maximum successful/partial SALES/RETURNS data-through boundary for each identity. |
+| Successful terminal `sync_runs` | 90 days | Keep the latest terminal run and the maximum successful/partial SALES/RETURNS/ORDERS data-through boundary for each identity. |
 | Partial, failed or cancelled `sync_runs` | 365 days | Keep the same terminal/data-through invariants; child errors are removed only with an eligible run. |
 | Successful terminal `sync_jobs` | 90 days | Keep the latest terminal job for each connection/job type. |
 | Failed or cancelled `sync_jobs` | 180 days | Keep the latest terminal job for each connection/job type. Active jobs are never candidates. |

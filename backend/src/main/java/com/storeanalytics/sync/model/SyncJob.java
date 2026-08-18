@@ -165,7 +165,8 @@ public class SyncJob extends AbstractMutableEntity {
             case STORES -> phase = SyncJobPhase.EMPLOYEES;
             case EMPLOYEES -> phase = SyncJobPhase.SALES;
             case SALES -> phase = SyncJobPhase.RETURNS;
-            case RETURNS -> advanceWindow(now);
+            case RETURNS -> phase = SyncJobPhase.ORDERS;
+            case ORDERS -> advanceWindow(now);
             default -> throw new IllegalStateException("Unsupported sync job phase");
         }
         if (!status.isTerminal()) {

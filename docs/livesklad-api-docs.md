@@ -1,8 +1,8 @@
 # LiveSklad API
 
-Status on 2026-07-27: sanitized upstream discovery reference. It is not a frontend contract and
-must not be exposed in the browser. Discovery is complete for the implemented store/employee/
-sales/return sync; remaining gaps below are historical observations or deferred scope.
+Status on 2026-08-18: sanitized upstream discovery and implemented synchronization reference.
+It is not a frontend contract and must not be exposed in the browser. Discovery is complete for the implemented store/employee/
+sales/return/issued-order-position sync; remaining gaps below are explicit upstream limitations.
 
 This is the source of truth for the LiveSklad contract discovered for this project. It contains only
 read-only API behavior and sanitized structures. Never add credentials, tokens, or customer data.
@@ -279,8 +279,8 @@ Database implications:
 - Preserve the LiveSklad status group key separately from the status ID.
 - Do not hard-code the five observed group keys as a Java enum; source configuration can change.
 - Keep status role permissions in raw JSON unless application authorization explicitly needs them.
-- Employee attribution from orders is incomplete and must not drive KPI or salary without a customer
-  rule and detail-level validation.
+- The customer-confirmed reporting rule attributes an order position to its own `customer` relation;
+  creator, manager, close manager, and master remain audit-only workflow roles.
 - Counteragent names, phones, device serial numbers, and problem descriptions should remain outside
   normalized MVP analytics unless a defined use case requires them.
 - Full synchronization must paginate and use bounded date windows because one page covers only 50 of
@@ -332,6 +332,27 @@ Database and sync implications:
 - Store custom-field definitions as source metadata and values as raw JSON initially; normalize only
   fields selected for reporting.
 - Order positions may reuse the product dimension built from sale-position `nomenclatureId` values.
+
+Implementation update on 2026-08-18:
+
+- `GET /company/orders?lastAction=[fromUnixMs,toUnixMs]&page=N&pageSize=50` was revalidated against
+  the production account. Adding the apparently plausible `sort=dateCreate ASC` parameter returns
+  HTTP 400, so production synchronization deliberately does not send it.
+- `GET /orders/{id}` supplies the authoritative latest status, visibility, close date, shop,
+  position date, position employee, quantity, sold/list price, and cost.
+- Only visible orders whose list and detail status is `Выдан` and whose detail has `dateClose` are
+  normalized. A later status, visibility, or position change updates or soft-deletes the facts
+  idempotently.
+- Every issued position is stored as one synthetic sale fact with source type `orderPosition`,
+  business date from position `date`, employee from position `customer`, and external ID
+  `order:{orderId}:position:{positionId}`.
+- Positions use the same effective product classification as ordinary sale items. A previously unseen
+  `isWork=true` product receives the existing automatic service fallback.
+- Incremental and backfill jobs run `ORDERS` after `RETURNS`, limit a window to 70 order details,
+  halve oversized or rate-limited windows, retain sanitized raw evidence, and include orders in
+  freshness, retention protection, and daily-pulse readiness.
+- SALES and RETURNS reconciliation is source-type scoped, so those phases cannot soft-delete
+  synthetic order-position facts.
 
 ```bash
 bash scripts/livesklad-discovery/09-order-details.sh
@@ -505,10 +526,12 @@ Statuses: `TODO`, `IN_PROGRESS`, `CONFIRMED`, `NO_ACCESS`, `NOT_NEEDED`.
 - `cash.elements` structure is confirmed, but the business meaning of multiple elements and
   `isBankTransfer` still needs validation.
 - Zero purchase price is observed, but its business meaning is not confirmed.
-- Retroactive edits are unverified; order `lastAction` is a candidate incremental cursor but still
-  requires an overlap strategy and correction test.
-- Order employee attribution is role-specific and sparse; creator is always present, while manager,
-  close manager, master, and position employee have different semantics.
+- Historical and retroactive order changes are read by `lastAction` with the configured overlap;
+  a first production deployment still requires a one-time full backfill.
+- The documented REST API has no collection endpoint for sale-return documents. A return can be
+  dereferenced through `/documents/{id}` only after its ID is learned from cash transactions or
+  another source. A return present only in a detailed report cannot currently be discovered by
+  polling alone; this requires a supported LiveSklad endpoint or a webhook carrying the document ID.
 - Nested schemas for order `createManager`, position `customer`, and order `cash.elements` have
   not yet been profiled, but they are not blockers for the current MVP.
 - Transaction corrections need a rolling overlap because `dateChange` is present on only 2 of 1688

@@ -6,6 +6,7 @@ public enum SyncScope {
     EMPLOYEES,
     PRODUCTS,
     SALES,
+    ORDERS,
     RETURNS,
     PERIOD
 }

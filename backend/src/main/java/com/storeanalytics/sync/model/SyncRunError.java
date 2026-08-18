@@ -95,6 +95,18 @@ public class SyncRunError {
         ), now);
     }
 
+    public static SyncRunError orderSyncFailure(
+            SyncRun syncRun,
+            String summary,
+            boolean retryable,
+            Instant now
+    ) {
+        return failure(syncRun, new SyncErrorDetails(
+                "ORDER_SYNC", "ORDER_POSITION", null,
+                "ORDER_SYNC_FAILED", summary, retryable
+        ), now);
+    }
+
     public static SyncRunError workerLeaseExpired(
             SyncRun syncRun,
             String summary,

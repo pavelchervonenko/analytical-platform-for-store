@@ -41,6 +41,17 @@ public class StoreDataStatusRepository {
                 ORDER BY run.period_end DESC, run.finished_at DESC
                 LIMIT 1
             ),
+            order_sync AS (
+                SELECT run.period_end, run.finished_at
+                FROM sync_runs run
+                JOIN target_store store ON run.store_id = store.id
+                    OR (run.store_id IS NULL AND store.connection_id = run.connection_id)
+                WHERE run.sync_scope = 'ORDERS'
+                  AND run.status IN ('SUCCESS', 'PARTIAL_SUCCESS')
+                  AND run.period_end IS NOT NULL
+                ORDER BY run.period_end DESC, run.finished_at DESC
+                LIMIT 1
+            ),
             active_sync AS (
                 SELECT activity.*
                 FROM (
@@ -71,7 +82,7 @@ public class StoreDataStatusRepository {
                         OR (run.store_id IS NULL AND store.connection_id = run.connection_id)
                     WHERE run.status = 'RUNNING'
                       AND run.sync_job_id IS NULL
-                      AND run.sync_scope IN ('STORES', 'EMPLOYEES', 'SALES', 'RETURNS')
+                      AND run.sync_scope IN ('STORES', 'EMPLOYEES', 'SALES', 'RETURNS', 'ORDERS')
                 ) activity
                 ORDER BY activity.activity_order_at DESC
                 LIMIT 1
@@ -91,7 +102,7 @@ public class StoreDataStatusRepository {
                     JOIN target_store store ON run.store_id = store.id
                         OR (run.store_id IS NULL AND store.connection_id = run.connection_id)
                     WHERE run.sync_job_id IS NULL
-                      AND run.sync_scope IN ('STORES', 'EMPLOYEES', 'SALES', 'RETURNS')
+                      AND run.sync_scope IN ('STORES', 'EMPLOYEES', 'SALES', 'RETURNS', 'ORDERS')
                       AND run.status IN ('SUCCESS', 'PARTIAL_SUCCESS', 'FAILED', 'CANCELLED')
                 ) activity
                 ORDER BY activity.finished_at DESC
@@ -112,7 +123,7 @@ public class StoreDataStatusRepository {
                     JOIN target_store store ON run.store_id = store.id
                         OR (run.store_id IS NULL AND store.connection_id = run.connection_id)
                     WHERE run.status = 'FAILED'
-                      AND run.sync_scope IN ('STORES', 'EMPLOYEES', 'SALES', 'RETURNS')
+                      AND run.sync_scope IN ('STORES', 'EMPLOYEES', 'SALES', 'RETURNS', 'ORDERS')
                 ) failure
                 ORDER BY failure.failed_at DESC
                 LIMIT 1
@@ -124,6 +135,8 @@ public class StoreDataStatusRepository {
                 sales.finished_at AS sales_completed_at,
                 returns.period_end AS returns_through_exclusive,
                 returns.finished_at AS returns_completed_at,
+                orders.period_end AS orders_through_exclusive,
+                orders.finished_at AS orders_completed_at,
                 active.id AS active_sync_id,
                 active.activity_type AS active_sync_type,
                 active.status AS active_sync_status,
@@ -143,6 +156,7 @@ public class StoreDataStatusRepository {
             FROM target_store store
             LEFT JOIN sales_sync sales ON true
             LEFT JOIN return_sync returns ON true
+            LEFT JOIN order_sync orders ON true
             LEFT JOIN active_sync active ON true
             LEFT JOIN latest_terminal terminal ON true
             LEFT JOIN last_failure failure ON true
@@ -172,6 +186,8 @@ public class StoreDataStatusRepository {
                 instant(resultSet, "sales_completed_at"),
                 instant(resultSet, "returns_through_exclusive"),
                 instant(resultSet, "returns_completed_at"),
+                instant(resultSet, "orders_through_exclusive"),
+                instant(resultSet, "orders_completed_at"),
                 resultSet.getObject("active_sync_id", UUID.class),
                 resultSet.getString("active_sync_type"),
                 resultSet.getString("active_sync_status"),

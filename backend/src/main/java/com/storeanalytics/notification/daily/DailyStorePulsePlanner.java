@@ -43,7 +43,8 @@ public class DailyStorePulsePlanner {
             LocalDate businessDate = localNow.toLocalDate().minusDays(1);
             if (!withinWindow(localNow.toLocalTime())
                     || !covers(target.salesThroughExclusive(), businessDate, zone)
-                    || !covers(target.returnsThroughExclusive(), businessDate, zone)) {
+                    || !covers(target.returnsThroughExclusive(), businessDate, zone)
+                    || !covers(target.ordersThroughExclusive(), businessDate, zone)) {
                 continue;
             }
             eligible++;

@@ -21,7 +21,11 @@ public class DataFreshnessRepository {
                     MAX(run.period_end) FILTER (
                         WHERE run.sync_scope = 'RETURNS'
                           AND run.status IN ('SUCCESS', 'PARTIAL_SUCCESS')
-                    ) AS returns_through
+                    ) AS returns_through,
+                    MAX(run.period_end) FILTER (
+                        WHERE run.sync_scope = 'ORDERS'
+                          AND run.status IN ('SUCCESS', 'PARTIAL_SUCCESS')
+                    ) AS orders_through
                 FROM stores store
                 LEFT JOIN sync_runs run
                   ON run.store_id = store.id
@@ -33,12 +37,16 @@ public class DataFreshnessRepository {
             SELECT
                 MIN(sales_through) AS oldest_sales_through,
                 MIN(returns_through) AS oldest_returns_through,
+                MIN(orders_through) AS oldest_orders_through,
                 COUNT(*) FILTER (
                     WHERE sales_through IS NULL
                 ) AS stores_without_sales,
                 COUNT(*) FILTER (
                     WHERE returns_through IS NULL
-                ) AS stores_without_returns
+                ) AS stores_without_returns,
+                COUNT(*) FILTER (
+                    WHERE orders_through IS NULL
+                ) AS stores_without_orders
             FROM store_freshness
             """;
 
@@ -57,8 +65,10 @@ public class DataFreshnessRepository {
         return new DataFreshnessSnapshot(
                 instant(resultSet, "oldest_sales_through"),
                 instant(resultSet, "oldest_returns_through"),
+                instant(resultSet, "oldest_orders_through"),
                 resultSet.getLong("stores_without_sales"),
-                resultSet.getLong("stores_without_returns")
+                resultSet.getLong("stores_without_returns"),
+                resultSet.getLong("stores_without_orders")
         );
     }
 
