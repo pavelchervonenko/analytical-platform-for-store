@@ -8,6 +8,7 @@ import {
   insightKindLabel,
   insightKindTone,
   limitationSummary,
+  readableInsightText,
   uniqueNarratives
 } from "./presentation";
 
@@ -50,5 +51,10 @@ describe("weekly insight presentation", () => {
       .toContain("подтверждённых смен");
     expect(employeeAnalysisHelp("LIMITED"))
       .toContain("пониженную уверенность");
+  });
+
+  it("uses natural punctuation instead of a middle-dot separator", () => {
+    expect(readableInsightText("Выручка · изменение +20%"))
+      .toBe("Выручка, изменение +20%");
   });
 });

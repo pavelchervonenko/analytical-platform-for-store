@@ -259,7 +259,7 @@ export function OverviewPage() {
         </details>
 
         <details className="disclosure-panel" open>
-          <summary><span>Attach-rate · показатели допродаж</span><small>{attachQuery.data?.rates.length ?? 0}</small></summary>
+          <summary><span>Attach-rate: показатели допродаж</span><small>{attachQuery.data?.rates.length ?? 0}</small></summary>
           <div className="disclosure-panel__content">
             <div className="attach-intro">
               <strong>Количество допов на 100 единиц релевантной техники</strong>

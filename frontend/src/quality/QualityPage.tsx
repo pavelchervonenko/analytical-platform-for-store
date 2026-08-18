@@ -460,7 +460,7 @@ export function QualityPage() {
             <h2>Проблемы в исходных данных</h2>
           </div>
           <span>
-            Типов: {storeIssueGroups.length} · событий: {store.issues.length}
+            Типов: {storeIssueGroups.length}, событий: {store.issues.length}
           </span>
         </div>
         {storeIssueGroups.length === 0 ? (
@@ -479,10 +479,10 @@ export function QualityPage() {
                   <strong>{qualityIssueMessage(group.code)}</strong>
                   <small>
                     {qualitySourceLabel(group.source)}
-                    {" · "}
+                    {", "}
                     {formatNumber(group.eventCount)}{" "}
                     {eventCountLabel(group.eventCount)}
-                    {" · последнее: "}
+                    {", последнее: "}
                     {group.latestDetectedAt
                       ? new Date(group.latestDetectedAt).toLocaleString("ru-RU")
                       : "время не определено"}

@@ -145,7 +145,7 @@ export function EmployeeCardPage() {
                 <p className="eyebrow">Attach-rate</p>
                 <h2>Показатели допродаж сотрудника</h2>
               </div>
-              <span>{comparisonDescription} · значение магазина за текущий период</span>
+              <span>{comparisonDescription}, значение магазина за текущий период</span>
             </div>
             {employee.attachRates.length === 0 ? (
               <div className="panel-empty">

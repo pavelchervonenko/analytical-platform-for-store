@@ -44,6 +44,7 @@ function ShellContent() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const analyticsPeriodEnabled = location.pathname === "/overview" || location.pathname.startsWith("/employees");
+  const periodSelectorVisible = location.pathname !== "/insights";
   return (
     <div className="app-layout">
       <a className="skip-link" href="#main-content">К основному содержимому</a>
@@ -83,7 +84,9 @@ function ShellContent() {
             <ChevronDown size={16} aria-hidden="true" />
           </label>
 
-          <PeriodSelector analyticsEnabled={analyticsPeriodEnabled} />
+          {periodSelectorVisible && (
+            <PeriodSelector analyticsEnabled={analyticsPeriodEnabled} />
+          )}
 
           <NavLink className="topbar__profile" to="/profile" title="Профиль и безопасность"><span>{user?.displayName.slice(0, 1).toUpperCase()}</span><div><strong>{user?.displayName}</strong><small>{user?.email}</small></div></NavLink>
         </header>

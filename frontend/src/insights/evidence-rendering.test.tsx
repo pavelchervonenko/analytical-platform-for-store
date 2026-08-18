@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { WeeklyInsightPanel } from "./WeeklyInsightPanel";
+import { WeeklyInsightView } from "./WeeklyInsightView";
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: () => ({
@@ -123,12 +123,12 @@ vi.mock("@tanstack/react-query", () => ({
 
 describe("weekly insight evidence rendering", () => {
   it("shows backend-formatted evidence next to cited conclusions", () => {
-    render(<WeeklyInsightPanel storeId="store-1" />);
+    render(<WeeklyInsightView storeId="store-1" />);
 
     expect(screen.getAllByText("Выручка")).toHaveLength(2);
     expect(screen.getAllByText("1 200 000 ₽")).toHaveLength(2);
     expect(screen.getAllByText(
-      "Было 1 000 000 ₽ · изменение +200 000 ₽ (+20%)"
+      "Было 1 000 000 ₽, изменение +200 000 ₽ (+20%)"
     )).toHaveLength(2);
     expect(screen.getByText("Сотрудники в сравнении")).toBeInTheDocument();
     expect(screen.getByText("Качество классификации")).toBeInTheDocument();
@@ -137,8 +137,9 @@ describe("weekly insight evidence rendering", () => {
     expect(screen.getByText(
       "Возможная причина — её нужно проверить по дополнительным данным."
     )).toBeInTheDocument();
-    expect(screen.getByText("Основание гипотезы")).toBeInTheDocument();
-    expect(screen.getAllByText("Подтверждено данными").length).toBeGreaterThan(0);
+    expect(screen.getByText("Показать основание гипотезы")).toBeInTheDocument();
+    expect(screen.getAllByText("Показать подтверждающие данные").length).toBeGreaterThan(0);
     expect(screen.getByText("Данные с ограничениями")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("·");
   });
 });

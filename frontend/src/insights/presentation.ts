@@ -102,3 +102,7 @@ export function limitationSummary(value: unknown): string {
   }
   return "Части данных пока недостаточно для уверенного вывода.";
 }
+
+export function readableInsightText(value: string): string {
+  return value.replace(/\s*·\s*/gu, ", ");
+}
