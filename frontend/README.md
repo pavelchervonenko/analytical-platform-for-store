@@ -76,6 +76,40 @@ use one worker so desktop/tablet/mobile projects do not race on the same server-
 Set `E2E_BASE_URL` to test an already deployed same-origin environment; otherwise Playwright starts
 the local production preview on `127.0.0.1:4174`, which proxies `/api` to `DEV_API_TARGET`.
 
+### Local visual review
+
+The visual review command is deliberately separate from production E2E and accepts only loopback
+hosts. By default it creates a fresh production build and starts its local Vite preview on
+`127.0.0.1:4174`; API requests continue to use the local backend on `127.0.0.1:8080`. The
+dedicated preview prevents an older development server from being reused by mistake.
+
+```bash
+cp .env.visual.example .env.visual.local
+# Fill VISUAL_EMAIL and VISUAL_PASSWORD with local account credentials.
+npm run visual:local
+```
+
+The default route is `/insights`. Capture any set of affected application routes with a
+comma-separated value:
+
+```bash
+VISUAL_ROUTES='/overview,/insights,/employees' npm run visual:local
+```
+
+Use an already running local frontend when needed:
+
+```bash
+VISUAL_BASE_URL=http://localhost:5173 npm run visual:local
+```
+
+The command captures full-page desktop, tablet and mobile images in `visual-artifacts/`, verifies
+page-level overflow, query errors, browser runtime errors and HTTP `5xx` responses. The directory
+is ignored by Git because images can contain business data. Inspect the images after every material
+UI change. For an interactive local browser run, use `npm run visual:local:headed`.
+
+The local-only guard rejects production, staging and every other non-loopback `VISUAL_BASE_URL`
+or `DEV_API_TARGET`.
+
 The deeper MANAGER lifecycle creates and later disables a test account. Run it only against a local
 or staging database prepared for mutations:
 

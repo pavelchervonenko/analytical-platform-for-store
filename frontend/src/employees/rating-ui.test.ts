@@ -70,9 +70,10 @@ describe("employee rating UI selection", () => {
     expect(result.map((item) => item.current.rank)).toEqual([2, null]);
   });
 
-  it("filters by participation and case-insensitive name", () => {
+  it("hides non-participants from every employee list", () => {
     const entries = [entry("Анна", null, 0, { participatesInRanking: false }), entry("Борис", 1, 300)];
-    expect(selectEmployeeEntries(entries, "АН", "not-participating", "rank")).toHaveLength(1);
+    expect(selectEmployeeEntries(entries, "", "all", "rank").map((item) => item.current.displayName)).toEqual(["Борис"]);
+    expect(selectEmployeeEntries(entries, "АН", "all", "rank")).toHaveLength(0);
   });
 
   it("explains why an employee has no rank", () => {

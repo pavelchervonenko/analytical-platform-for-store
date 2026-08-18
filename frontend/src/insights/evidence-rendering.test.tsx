@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { WeeklyInsightView } from "./WeeklyInsightView";
 
@@ -53,7 +53,28 @@ vi.mock("@tanstack/react-query", () => ({
           mostImproved: [],
           learningOpportunities: []
         },
-        employees: [],
+        employees: Array.from({ length: 5 }, (_, index) => ({
+          employeeId: `00000000-0000-4000-8000-00000000000${index + 1}`,
+          displayName: `Сотрудник ${index + 1}`,
+          analysisStatus: "INSUFFICIENT",
+          insight: {
+            analysisStatus: "INSUFFICIENT",
+            headline: {
+              text: `Персональный разбор сотрудника ${index + 1}`,
+              evidenceRefs: []
+            },
+            workloadContext: null,
+            performanceSummary: null,
+            dynamicsSummary: null,
+            categoryPerformance: null,
+            additionalSalesPerformance: null,
+            strength: null,
+            attentionArea: null,
+            primaryRisk: null,
+            recommendedActions: [],
+            dataLimitations: []
+          }
+        })),
         dataLimitations: [{
           code: "CLASSIFICATION_LIMITED",
           scope: "STORE",
@@ -145,5 +166,32 @@ describe("weekly insight evidence rendering", () => {
     expect(screen.queryByText("Гипотеза")).not.toBeInTheDocument();
     expect(screen.queryByText("Подробности")).not.toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("·");
+  });
+
+  it("keeps the mobile employee preview short and groups the remaining employees", () => {
+    render(<WeeklyInsightView storeId="store-1" />);
+
+    const primaryList = document.querySelector(
+      ".insight-employees > .insight-employees__list"
+    );
+
+    expect(primaryList?.querySelectorAll(".insight-employee")).toHaveLength(5);
+    expect(primaryList?.querySelectorAll(
+      ".insight-employees__item--mobile-hidden"
+    )).toHaveLength(2);
+    const moreButton = screen.getByText("Ещё 2 сотрудника")
+      .closest("button") as HTMLButtonElement;
+    expect(moreButton).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(moreButton);
+    expect(primaryList?.querySelectorAll(
+      ".insight-employees__item--mobile-hidden"
+    )).toHaveLength(0);
+    const collapseButton = screen.getByText("Скрыть остальных")
+      .closest("button");
+    expect(collapseButton).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(
+      "Персональный разбор: дополнительные данные нужны для 5 из 5 сотрудников."
+    )).toBeInTheDocument();
+    expect(screen.getByText("5 сотрудников")).toBeInTheDocument();
   });
 });

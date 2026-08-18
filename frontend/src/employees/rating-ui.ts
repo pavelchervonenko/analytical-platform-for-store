@@ -1,6 +1,6 @@
 import type { EmployeeDirectoryEntry, EmployeeRatingEntry } from "../api/contracts";
 
-export type EmployeeFilter = "all" | "ranked" | "not-participating" | "attention";
+export type EmployeeFilter = "all" | "ranked" | "attention";
 export type EmployeeSort = "rank" | "score" | "revenue" | "improvement";
 
 export const attachRateLabels: Record<string, string> = {
@@ -59,10 +59,10 @@ export function selectEmployeeEntries(
 ): EmployeeDirectoryEntry[] {
   const normalizedSearch = search.trim().toLocaleLowerCase("ru-RU");
   const filtered = entries.filter(({ current }) => {
+    if (!current.participatesInRanking) return false;
     if (normalizedSearch && !current.displayName.toLocaleLowerCase("ru-RU").includes(normalizedSearch)) return false;
     if (filter === "ranked") return current.ranked;
-    if (filter === "not-participating") return !current.participatesInRanking;
-    if (filter === "attention") return current.participatesInRanking && !current.ranked;
+    if (filter === "attention") return !current.ranked;
     return true;
   });
 

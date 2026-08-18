@@ -11,6 +11,7 @@ out/
 *.rej
 .env.*
 !.env.example
+!.env.visual.example
 
 logs/
 *.log
@@ -20,6 +21,7 @@ dist/
 coverage/
 playwright-report/
 test-results/
+visual-artifacts/
 __pycache__/
 *.py[cod]
 

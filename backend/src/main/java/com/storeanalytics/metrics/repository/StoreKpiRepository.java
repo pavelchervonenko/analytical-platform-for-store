@@ -42,6 +42,10 @@ public class StoreKpiRepository {
                     FROM data_quality_issues dqi
                     WHERE dqi.store_id = :storeId
                       AND dqi.status = 'OPEN'
+                      AND dqi.issue_code NOT IN (
+                          'ZERO_UNEXPECTED_COST',
+                          'RETURN_ZERO_UNEXPECTED_COST'
+                      )
                 ) AS store_open_quality_issue_count
             FROM included_items
             """;

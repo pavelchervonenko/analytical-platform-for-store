@@ -3,14 +3,12 @@ import { AlertTriangle, ArrowRight, Filter, History, LockKeyhole, Search, Trophy
 import { useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import { isApiClientError } from "../api/client";
-import type { EmployeeRatingEntry, EmployeeRatingSetting } from "../api/contracts";
+import type { EmployeeRatingEntry } from "../api/contracts";
 import {
   finalizeEmployeeRating,
   getEmployeeDirectory,
   getEmployeeRating,
-  getEmployeeRatingSettings,
-  queryKeys,
-  updateEmployeeRatingSetting
+  queryKeys
 } from "../api/queries";
 import { currentDateInTimeZone, formatDate } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
@@ -60,28 +58,6 @@ export function EmployeesPage() {
     queryKey: queryKeys.employeeRating(storeId, periodStart, periodEnd),
     queryFn: () => getEmployeeRating(storeId, periodStart, periodEnd)
   });
-  const settingsQuery = useQuery({
-    queryKey: queryKeys.employeeRatingSettings(storeId),
-    queryFn: () => getEmployeeRatingSettings(storeId),
-    staleTime: 2 * 60_000
-  });
-
-  const settingMutation = useMutation({
-    mutationFn: ({ employeeId, participatesInRanking, version }: { employeeId: string; participatesInRanking: boolean; version: number }) =>
-      updateEmployeeRatingSetting(storeId, employeeId, participatesInRanking, version),
-    onSuccess: async (updated) => {
-      queryClient.setQueryData<EmployeeRatingSetting[]>(queryKeys.employeeRatingSettings(storeId), (current) =>
-        current?.map((setting) => setting.employeeId === updated.employeeId ? updated : setting) ?? [updated]
-      );
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.employees(storeId) }),
-        queryClient.invalidateQueries({ queryKey: ["stores", storeId, "period-quality"] })
-      ]);
-    },
-    onError: (error) => {
-      if (isApiClientError(error) && error.status === 409) void settingsQuery.refetch();
-    }
-  });
 
   const finalizeMutation = useMutation({
     mutationFn: () => finalizeEmployeeRating(storeId, periodStart, periodEnd),
@@ -96,50 +72,20 @@ export function EmployeesPage() {
   });
 
   const entries = useMemo(() => selectEmployeeEntries(directoryQuery.data?.employees ?? [], search, filter, sort), [directoryQuery.data, filter, search, sort]);
-  const settings = useMemo(() => new Map((settingsQuery.data ?? []).map((setting) => [setting.employeeId, setting])), [settingsQuery.data]);
 
   if (directoryQuery.isPending || ratingQuery.isPending) return <EmployeesSkeleton />;
   if (directoryQuery.isError || ratingQuery.isError) {
     const failed = directoryQuery.isError ? directoryQuery : ratingQuery;
-    return <QueryError error={failed.error} onRetry={() => void Promise.all([directoryQuery.refetch(), ratingQuery.refetch(), settingsQuery.refetch()])} />;
+    return <QueryError error={failed.error} onRetry={() => void Promise.all([directoryQuery.refetch(), ratingQuery.refetch()])} />;
   }
 
   const rating = ratingQuery.data;
-  const allEntries = directoryQuery.data.employees;
-  const participants = allEntries.filter(({ current }) => current.participatesInRanking).length;
-  const ranked = allEntries.filter(({ current }) => current.ranked).length;
-  const needAttention = allEntries.filter(({ current }) => current.participatesInRanking && !current.ranked).length;
+  const participants = directoryQuery.data.employees.filter(({ current }) => current.participatesInRanking);
+  const ranked = participants.filter(({ current }) => current.ranked).length;
+  const needAttention = participants.filter(({ current }) => !current.ranked).length;
   const isFinalized = rating.history.status === "FINALIZED";
   const isLive = rating.history.status === "LIVE";
   const canFinalize = isLive && periodEnd < currentDateInTimeZone(selectedStore.timezone);
-
-  function toggleParticipation(setting: EmployeeRatingSetting | undefined) {
-    if (!setting) return;
-    settingMutation.mutate({
-      employeeId: setting.employeeId,
-      participatesInRanking: !setting.participatesInRanking,
-      version: setting.version
-    });
-  }
-
-  function ParticipationButton({ employee }: { employee: EmployeeRatingEntry }) {
-    const setting = settings.get(employee.employeeId);
-    const busy = settingMutation.isPending && settingMutation.variables?.employeeId === employee.employeeId;
-    const disabled = !setting || !setting.employeeActive || !setting.assignmentActive || busy;
-    const active = setting?.participatesInRanking ?? employee.participatesInRanking;
-    return (
-      <button
-        className={`participation-toggle ${active ? "participation-toggle--active" : ""}`}
-        type="button"
-        aria-pressed={active}
-        disabled={disabled}
-        onClick={() => toggleParticipation(setting)}
-        title={isFinalized ? "Изменение применяется к живым и будущим периодам; этот снимок останется неизменным" : "Изменить участие в рейтинге"}
-      >
-        <span aria-hidden="true"><i /></span>{busy ? "Сохраняем…" : active ? "Участвует" : "Не участвует"}
-      </button>
-    );
-  }
 
   return (
     <div className="employees-page">
@@ -153,13 +99,12 @@ export function EmployeesPage() {
 
       {isFinalized && <section className="rating-snapshot-banner"><LockKeyhole size={18} /><div><strong>Результат периода сохранен</strong><p>Зафиксировал {rating.history.finalizedByName ?? "пользователь"}{rating.history.finalizedAt ? `, ${new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short", timeZone: selectedStore.timezone }).format(new Date(rating.history.finalizedAt))}` : ""}. Новые продажи, смены и настройки не изменят этот результат.</p></div></section>}
 
-      {(settingMutation.isError || finalizeMutation.isError) && (
-        <div className="form-alert" role="alert">{isApiClientError(settingMutation.error ?? finalizeMutation.error) ? (settingMutation.error ?? finalizeMutation.error as Error).message : "Не удалось сохранить изменение. Обновите данные и повторите действие."}</div>
+      {finalizeMutation.isError && (
+        <div className="form-alert" role="alert">{isApiClientError(finalizeMutation.error) ? finalizeMutation.error.message : "Не удалось зафиксировать рейтинг. Обновите данные и повторите действие."}</div>
       )}
-      {settingsQuery.isError && <div className="rating-settings-warning" role="status"><AlertTriangle size={17} /><span>Настройки участия временно недоступны. Просмотр рейтинга продолжает работать.</span><button type="button" onClick={() => void settingsQuery.refetch()}>Повторить</button></div>}
 
       <section className="employee-summary-grid" aria-label="Сводка рейтинга">
-        <SummaryCard icon={<Users size={21} />} label="Сотрудники" value={String(allEntries.length)} note={`${participants} включены в рейтинг`} featured />
+        <SummaryCard icon={<Users size={21} />} label="Сотрудники" value={String(participants.length)} note="Показываются участники рейтинга" featured />
         <SummaryCard icon={<Trophy size={21} />} label="Получили место" value={String(ranked)} note={needAttention ? `${needAttention} требуют внимания` : "У всех достаточно данных"} />
         <SummaryCard icon={<UserCheck size={21} />} label="Покрытие плана" value={formatPercent(rating.plan.coveragePercent)} note={rating.plan.complete ? `Выполнение выручки: ${formatPercent(rating.plan.revenueAchievementPercent)}` : "План задан не на весь период"} />
       </section>
@@ -168,7 +113,7 @@ export function EmployeesPage() {
         <div className="employees-toolbar">
           <div><p className="eyebrow">Команда</p><h2>Результаты сотрудников</h2></div>
           <label className="employee-search"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Найти сотрудника" aria-label="Найти сотрудника" /></label>
-          <label className="employee-select"><Filter size={15} /><select value={filter} onChange={(event) => setFilter(event.target.value as EmployeeFilter)} aria-label="Фильтр сотрудников"><option value="all">Все сотрудники</option><option value="ranked">С местом</option><option value="not-participating">Не участвуют</option><option value="attention">Требуют внимания</option></select></label>
+          <label className="employee-select"><Filter size={15} /><select value={filter} onChange={(event) => setFilter(event.target.value as EmployeeFilter)} aria-label="Фильтр сотрудников"><option value="all">Все участники</option><option value="ranked">С местом</option><option value="attention">Требуют внимания</option></select></label>
           <label className="employee-select"><select value={sort} onChange={(event) => setSort(event.target.value as EmployeeSort)} aria-label="Сортировка сотрудников"><option value="rank">По месту</option><option value="score">По общему баллу</option><option value="revenue">По выручке</option><option value="improvement">По росту места</option></select></label>
         </div>
 
@@ -176,7 +121,7 @@ export function EmployeesPage() {
           <>
             <div className="employee-table-wrap">
               <table className="employee-rating-table">
-                <thead><tr><th>Сотрудник</th><th>Место</th><th>Общий балл</th><th>4 направления</th><th>Выручка</th><th>Смены и время</th><th>Участие</th><th aria-label="Открыть карточку" /></tr></thead>
+                <thead><tr><th>Сотрудник</th><th>Место</th><th>Общий балл</th><th>4 направления</th><th>Выручка</th><th>Смены и время</th><th aria-label="Открыть карточку" /></tr></thead>
                 <tbody>{entries.map(({ current, dynamics }) => (
                   <tr key={current.employeeId}>
                     <td><div className="employee-person"><span>{current.displayName.slice(0, 1).toUpperCase()}</span><div><Link to={{ pathname: `/employees/${current.employeeId}`, search: location.search }}>{current.displayName}</Link><small>{employeeRatingReason(current, rating.formula.minimumCoveragePercent)}</small></div></div></td>
@@ -185,7 +130,6 @@ export function EmployeesPage() {
                     <td><ScoreProfile employee={current} /></td>
                     <td><div className="employee-money-cell"><strong>{formatMoney(current.netRevenue)}</strong><small>{formatPercent(current.storeRevenueSharePercent)} выручки магазина</small></div></td>
                     <td><div className="employee-time-cell"><strong>{current.shiftCount} смен, {formatNumber(current.workedHours)} ч</strong><small>{formatCompactMoney(current.revenuePerHour)} / час</small></div></td>
-                    <td><ParticipationButton employee={current} /></td>
                     <td><Link className="employee-open" to={{ pathname: `/employees/${current.employeeId}`, search: location.search }} aria-label={`Открыть карточку: ${current.displayName}`}><ArrowRight size={17} /></Link></td>
                   </tr>
                 ))}</tbody>
@@ -197,7 +141,7 @@ export function EmployeesPage() {
                 <div className="employee-mobile-card__head"><div className="employee-person"><span>{current.displayName.slice(0, 1).toUpperCase()}</span><div><Link to={{ pathname: `/employees/${current.employeeId}`, search: location.search }}>{current.displayName}</Link><small>{employeeRatingReason(current, rating.formula.minimumCoveragePercent)}</small></div></div><div className="employee-rank-cell"><strong>{current.rank ?? "—"}</strong>{rankDynamics(dynamics.rankImprovement)}</div></div>
                 <div className="employee-mobile-card__metrics"><span><small>Общий балл</small><strong>{formatNumber(current.scores.overallScore)}</strong></span><span><small>Выручка</small><strong>{formatCompactMoney(current.netRevenue)}</strong></span><span><small>Смены</small><strong>{current.shiftCount}, {formatNumber(current.workedHours)} ч</strong></span></div>
                 <ScoreProfile employee={current} />
-                <div className="employee-mobile-card__actions"><ParticipationButton employee={current} /><Link to={{ pathname: `/employees/${current.employeeId}`, search: location.search }}>Подробнее <ArrowRight size={15} /></Link></div>
+                <div className="employee-mobile-card__actions"><Link to={{ pathname: `/employees/${current.employeeId}`, search: location.search }}>Подробнее <ArrowRight size={15} /></Link></div>
               </article>
             ))}</div>
           </>

@@ -21,12 +21,18 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class DataQualityService {
+
+    private static final Set<String> INTERNAL_ONLY_ISSUE_CODES = Set.of(
+            "ZERO_UNEXPECTED_COST",
+            "RETURN_ZERO_UNEXPECTED_COST"
+    );
 
     private static final Comparator<DataQualityIssueView> ISSUE_ORDER = Comparator
             .comparingInt((DataQualityIssueView issue) -> severityPriority(issue.severity()))
@@ -150,7 +156,10 @@ public class DataQualityService {
     ) {
         List<DataQualityIssueView> result = new ArrayList<>();
         synchronizationIssue(dataStatus).ifPresent(result::add);
-        persisted.stream().map(this::issueView).forEach(result::add);
+        persisted.stream()
+                .filter(this::isCustomerVisible)
+                .map(this::issueView)
+                .forEach(result::add);
         result.sort(ISSUE_ORDER);
         return List.copyOf(result);
     }
@@ -209,6 +218,10 @@ public class DataQualityService {
                 detectedAt,
                 action
         );
+    }
+
+    private boolean isCustomerVisible(DataQualityIssue issue) {
+        return !INTERNAL_ONLY_ISSUE_CODES.contains(issue.getIssueCode());
     }
 
     private DataQualityIssueView issueView(DataQualityIssue issue) {

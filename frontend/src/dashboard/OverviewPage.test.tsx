@@ -281,6 +281,7 @@ describe("management overview", () => {
     expect(screen.getByText("100 000 ₽")).toBeInTheDocument();
     expect(screen.getByText("Лидер по допам")).toBeInTheDocument();
     expect(screen.getByText("Зона внимания")).toBeInTheDocument();
+    expect(screen.getByLabelText("Краткие показатели по продавцам")).toHaveTextContent("Анна");
   });
 
   it("renders a 14-row attach-rate map with store and employee calculations", () => {
@@ -290,6 +291,9 @@ describe("management overview", () => {
       </MemoryRouter>
     );
 
+    const map = screen.getByText("Карта допродаж").closest("details");
+    expect(map).not.toBeNull();
+    expect(map).not.toHaveAttribute("open");
     expect(screen.getByText("14 показателей", { exact: false })).toBeInTheDocument();
     const casesRow = screen.getByText("Чехлы Apple / iPhone").closest("tr");
     expect(casesRow).not.toBeNull();

@@ -12,7 +12,6 @@ import {
   getStoreStatus,
   queryKeys
 } from "../api/queries";
-import { DailyPlanTable } from "../plan-schedule/DailyPlanTable";
 import { averageGrossProfitPerDeviceUnit } from "./categoryPresentation";
 import { qualityIssueMessage, qualityStatusLabel } from "../quality/presentation";
 import { formatDate, formatMonth } from "../shared/date";
@@ -104,7 +103,7 @@ export function OverviewPage() {
   return (
     <div className="overview-page">
       <header className="page-heading">
-        <div><h1>Обзор</h1><p>{formatMonth(month)}, {formatDate(periodStart)} — {formatDate(periodEnd)}</p></div>
+        <div><h1>Обзор</h1><p>{formatMonth(month)}</p></div>
         <div className="page-heading__period"><small>Данные по</small><strong>{formatDate(asOfDate)}</strong></div>
       </header>
 
@@ -117,10 +116,11 @@ export function OverviewPage() {
           </div>
           {status.openQualityIssueCount > 0 && <span className="freshness-banner__issues"><AlertCircle size={16} />{status.openQualityIssueCount}</span>}
           {status.synchronization.active && <span className="freshness-banner__sync"><RefreshCw size={15} />Обновление</span>}
+          {status.status !== "CURRENT" && quality && !quality.readyForDecisions && <a className="freshness-banner__action" href="#quality-details">Проверить <ArrowRight size={15} /></a>}
         </section>
       )}
 
-      {quality && !quality.readyForDecisions && (
+      {quality && !quality.readyForDecisions && status?.status === "CURRENT" && (
         <section className="decision-banner" aria-label="Готовность данных для решений">
           <TriangleAlert size={20} />
           <div><strong>Данные требуют проверки</strong><p>{quality.issues.filter((issue) => issue.severity === "ERROR").length} важных замечаний</p></div>
@@ -167,8 +167,6 @@ export function OverviewPage() {
           )}
         </section>
       </div>
-
-      {plan && <DailyPlanTable targets={plan.dailyTargets} />}
 
       {employeeRatingQuery.isPending || employeeKpiQuery.isPending || (!employeeRatingQuery.isError && !employeeRatingQuery.data) || (!employeeKpiQuery.isError && !employeeKpiQuery.data) ? (
         <section className="panel overview-team-panel"><PanelSkeleton rows={5} /></section>

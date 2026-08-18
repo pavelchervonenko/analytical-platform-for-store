@@ -152,6 +152,10 @@ public class StoreDataStatusRepository {
                     FROM data_quality_issues issue
                     WHERE issue.store_id = store.id
                       AND issue.status = 'OPEN'
+                      AND issue.issue_code NOT IN (
+                          'ZERO_UNEXPECTED_COST',
+                          'RETURN_ZERO_UNEXPECTED_COST'
+                      )
                 ) AS open_quality_issue_count
             FROM target_store store
             LEFT JOIN sales_sync sales ON true

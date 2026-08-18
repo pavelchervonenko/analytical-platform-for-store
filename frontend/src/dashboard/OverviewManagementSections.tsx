@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowRight, TrendingUp, Users } from "lucide-react";
+import { AlertCircle, ArrowRight, ChevronDown, TrendingUp, Users } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import type {
   AttachRate,
@@ -84,7 +84,7 @@ function CommercialMetric({
     <article className="overview-summary__metric overview-summary__metric--commercial">
       <span>{label}</span>
       <strong>{formatPercent(actualShare)}</strong>
-      <small>{formatMoney(actualAmount)} · {formatNumber(quantity)} ед.</small>
+      <small>{formatMoney(actualAmount)}, {formatNumber(quantity)} ед.</small>
       <span className={`delta delta--${deltaTone(gapPoints)}`}>{signedPoints(gapPoints)}</span>
       <div className="overview-summary__metric-plan">
         <span>{direction ? `План ${formatPercent(direction.targetSharePercent)}` : "План не задан"}</span>
@@ -266,7 +266,7 @@ export function EmployeePerformanceSection({
             <TeamSummaryCard
               label="Лидер по допам"
               value={leader?.employee.displayName ?? "—"}
-              note={leader ? `${formatPercent(leader.employee.additionalSharePercent)} · ${formatCompactMoney(leader.employee.additionalRevenue)}` : "Недостаточно данных"}
+              note={leader ? `${formatPercent(leader.employee.additionalSharePercent)}, ${formatCompactMoney(leader.employee.additionalRevenue)}` : "Недостаточно данных"}
             />
             <TeamSummaryCard
               label="Зона внимания"
@@ -295,7 +295,7 @@ export function EmployeePerformanceSection({
                   <tr key={employee.employeeId}>
                     <td>
                       <Link to={{ pathname: `/employees/${employee.employeeId}`, search: location.search }}>{employee.displayName}</Link>
-                      <small>{employee.shiftCount} смен · {formatNumber(employee.workedHours)} ч</small>
+                      <small>{employee.shiftCount} смен, {formatNumber(employee.workedHours)} ч</small>
                     </td>
                     <td>{formatMoney(employee.netRevenue)}</td>
                     <td className={!completeCostData ? "overview-team-table__warning" : ""}>{formatMoney(grossProfit)}</td>
@@ -309,6 +309,33 @@ export function EmployeePerformanceSection({
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="overview-team-compact" aria-label="Краткие показатели по продавцам">
+            {rows.map(({ employee, grossProfit, completeCostData }) => (
+              <Link
+                key={employee.employeeId}
+                className="overview-team-compact__row"
+                to={{ pathname: `/employees/${employee.employeeId}`, search: location.search }}
+              >
+                <span className="overview-team-compact__identity">
+                  <strong>{employee.displayName}</strong>
+                  <small>{employee.shiftCount} смен, {formatNumber(employee.workedHours)} ч</small>
+                </span>
+                <span className="overview-team-compact__metric">
+                  <small>Выручка</small>
+                  <strong>{formatCompactMoney(employee.netRevenue)}</strong>
+                </span>
+                <span className={`overview-team-compact__metric ${!completeCostData ? "overview-team-table__warning" : ""}`}>
+                  <small>Валовая прибыль</small>
+                  <strong>{formatCompactMoney(grossProfit)}</strong>
+                </span>
+                <span className="overview-team-compact__metric overview-team-compact__metric--accent">
+                  <small>Допы</small>
+                  <strong>{formatPercent(employee.additionalSharePercent)}</strong>
+                </span>
+                <ArrowRight size={16} aria-hidden="true" />
+              </Link>
+            ))}
           </div>
           <p className="overview-team-footnote">Показаны активные сотрудники, включённые в рейтинг. Проценты рассчитаны от полной чистой выручки каждого продавца.</p>
         </>
@@ -381,59 +408,62 @@ export function AttachRateMatrix({
     + attach.dataQuality.unknownDeviceConditionItemCount;
 
   return (
-    <section className="panel attach-map-panel" aria-labelledby="attach-map-title">
-      <div className="panel__heading overview-section-heading">
+    <details className="panel attach-map-panel" aria-labelledby="attach-map-title">
+      <summary className="panel__heading overview-section-heading attach-map__summary">
         <div>
           <p className="eyebrow">Допродажи</p>
-          <h2 id="attach-map-title">Общая карта attach-rate</h2>
-          <p>Чистое количество допов на 100 единиц релевантной техники. В ячейках показаны процент и расчёт «допы / техника».</p>
+          <h2 id="attach-map-title">Карта допродаж</h2>
+          <p>Сравнение attach-rate магазина и продавцов по каждому показателю.</p>
         </div>
-        <span>{employees.length} продавцов · {attachMetricOrder.length} показателей</span>
+        <span className="attach-map__summary-meta"><span>{employees.length} продавцов, {attachMetricOrder.length} показателей</span><ChevronDown size={18} /></span>
+      </summary>
+      <div className="attach-map__content">
+        {qualityIssueCount > 0 && (
+          <div className="attach-map__quality" role="status"><AlertCircle size={16} />В расчёте есть {qualityIssueCount} позиций, требующих проверки классификации.</div>
+        )}
+        <p className="attach-map__scroll-hint">Прокрутите таблицу по горизонтали, чтобы увидеть всех продавцов.</p>
+        <div className="table-scroll attach-map-wrap">
+          <table className="attach-map">
+            <thead>
+              <tr>
+                <th>Показатель</th>
+                <th className="attach-map__store-heading"><TrendingUp size={14} />{storeName}</th>
+                {employees.map((employee) => (
+                  <th key={employee.employeeId}>
+                    <Link to={{ pathname: `/employees/${employee.employeeId}`, search: location.search }}>{employee.displayName}</Link>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {attachMetricOrder.map((metricCode) => {
+                const metricLabel = attachRateLabels[metricCode] ?? metricCode;
+                return (
+                  <tr key={metricCode}>
+                    <th scope="row">{metricLabel}</th>
+                    <AttachCell value={storeAttachCell(attach, metricCode)} owner={storeName} metric={metricLabel} />
+                    {employees.map((employee) => (
+                      <AttachCell
+                        key={employee.employeeId}
+                        value={employeeAttachCell(employee, metricCode)}
+                        owner={employee.displayName}
+                        metric={metricLabel}
+                      />
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <footer className="attach-map__legend">
+          <span><i data-level="0" />Нет базы или продаж</span>
+          <span><i data-level="1" />Ниже</span>
+          <span><i data-level="2" />Среднее</span>
+          <span><i data-level="4" />Выше</span>
+          <small>Насыщенность помогает сравнивать значения и не означает выполнение отдельного плана.</small>
+        </footer>
       </div>
-      {qualityIssueCount > 0 && (
-        <div className="attach-map__quality" role="status"><AlertCircle size={16} />В расчёте есть {qualityIssueCount} позиций, требующих проверки классификации.</div>
-      )}
-      <div className="table-scroll attach-map-wrap">
-        <table className="attach-map">
-          <thead>
-            <tr>
-              <th>Показатель</th>
-              <th className="attach-map__store-heading"><TrendingUp size={14} />{storeName}</th>
-              {employees.map((employee) => (
-                <th key={employee.employeeId}>
-                  <Link to={{ pathname: `/employees/${employee.employeeId}`, search: location.search }}>{employee.displayName}</Link>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {attachMetricOrder.map((metricCode) => {
-              const metricLabel = attachRateLabels[metricCode] ?? metricCode;
-              return (
-                <tr key={metricCode}>
-                  <th scope="row">{metricLabel}</th>
-                  <AttachCell value={storeAttachCell(attach, metricCode)} owner={storeName} metric={metricLabel} />
-                  {employees.map((employee) => (
-                    <AttachCell
-                      key={employee.employeeId}
-                      value={employeeAttachCell(employee, metricCode)}
-                      owner={employee.displayName}
-                      metric={metricLabel}
-                    />
-                  ))}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <footer className="attach-map__legend">
-        <span><i data-level="0" />Нет базы или продаж</span>
-        <span><i data-level="1" />Ниже</span>
-        <span><i data-level="2" />Среднее</span>
-        <span><i data-level="4" />Выше</span>
-        <small>Насыщенность помогает сравнивать значения и не означает выполнение отдельного плана.</small>
-      </footer>
-    </section>
+    </details>
   );
 }

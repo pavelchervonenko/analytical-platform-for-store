@@ -271,6 +271,15 @@ class StoreKpiIntegrationTest {
                 """
                 INSERT INTO data_quality_issues (
                     store_id, entity_type, entity_id, issue_code, severity, status, message
+                ) VALUES (?, 'SALE_ITEM', 'zero-cost-item', 'ZERO_UNEXPECTED_COST',
+                          'WARNING', 'OPEN', 'Internal issue')
+                """,
+                graph.storeId()
+        );
+        jdbcTemplate.update(
+                """
+                INSERT INTO data_quality_issues (
+                    store_id, entity_type, entity_id, issue_code, severity, status, message
                 ) VALUES (?, 'SALE_ITEM', 'other-item', 'MISSING_COST', 'WARNING', 'OPEN', 'Other issue')
                 """,
                 graph.otherStoreId()

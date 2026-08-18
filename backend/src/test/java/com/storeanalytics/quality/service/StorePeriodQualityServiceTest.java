@@ -68,6 +68,21 @@ class StorePeriodQualityServiceTest {
     }
 
     @Test
+    void keepsUnexpectedZeroCostInternalWithoutCustomerWarning() {
+        Fixture fixture = fixture();
+        when(fixture.kpiQuality().unexpectedZeroCostItemCount()).thenReturn(4L);
+
+        StorePeriodQualityView result = fixture.service().inspect(STORE_ID, MONTH, AS_OF);
+
+        assertThat(result.status()).isEqualTo(DataQualityHealthStatus.OK);
+        assertThat(result.readyForDecisions()).isTrue();
+        assertThat(result.sourceData().unexpectedZeroCostItemCount()).isEqualTo(4L);
+        assertThat(result.issues())
+                .extracting(PeriodQualityIssueView::code)
+                .doesNotContain("SOURCE_COST_DATA_ZERO_UNEXPECTED");
+    }
+
+    @Test
     void evaluatesCurrentMonthOnlyThroughTheLastCompletedDay() {
         Fixture fixture = fixture();
         when(fixture.dataStatus().expectedThroughDate()).thenReturn(AS_OF);

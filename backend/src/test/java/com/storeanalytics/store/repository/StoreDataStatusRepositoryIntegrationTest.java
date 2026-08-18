@@ -86,6 +86,7 @@ class StoreDataStatusRepositoryIntegrationTest {
         UUID jobId = addWaitingJob(connectionId);
 
         addQualityIssue(storeId, "target-open", "OPEN");
+        addHiddenZeroCostIssue(storeId);
         addQualityIssue(storeId, "target-resolved", "RESOLVED");
         addQualityIssue(otherStoreId, "other-open", "OPEN");
 
@@ -207,6 +208,20 @@ class StoreDataStatusRepositoryIntegrationTest {
                 connectionId
         );
         return jobId;
+    }
+
+    private void addHiddenZeroCostIssue(UUID storeId) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO data_quality_issues (
+                    id, store_id, entity_type, entity_id, issue_code, severity,
+                    status, message
+                ) VALUES (?, ?, 'SALE_ITEM', 'zero-cost-item',
+                          'ZERO_UNEXPECTED_COST', 'WARNING', 'OPEN', 'Internal issue')
+                """,
+                UUID.randomUUID(),
+                storeId
+        );
     }
 
     private void addQualityIssue(UUID storeId, String entityId, String status) {

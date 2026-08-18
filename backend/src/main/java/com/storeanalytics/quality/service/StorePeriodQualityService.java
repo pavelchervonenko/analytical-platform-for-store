@@ -224,16 +224,6 @@ public class StorePeriodQualityService {
             ));
         }
         long unexpectedZeroCosts = storeKpi.dataQuality().unexpectedZeroCostItemCount();
-        if (unexpectedZeroCosts > 0) {
-            issues.add(issue(
-                    PeriodQualityAreaCode.SOURCE_DATA,
-                    "SOURCE_COST_DATA_ZERO_UNEXPECTED",
-                    DataQualitySeverity.WARNING,
-                    "Some product positions have an unexpected zero cost",
-                    unexpectedZeroCosts,
-                    PeriodQualityAction.PROVIDE_COST_DATA
-            ));
-        }
         long openIssues = storeKpi.dataQuality().periodOpenConsistencyIssueCount();
         if (openIssues > 0) {
             issues.add(issue(

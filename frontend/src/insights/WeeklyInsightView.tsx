@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -52,6 +52,21 @@ type InsightItem = {
 
 type InsightAction =
   ReadyWeeklyInsight["content"]["store"]["recommendedActions"][number];
+
+const MOBILE_EMPLOYEE_PREVIEW_COUNT = 3;
+
+function formatEmployeeCount(count: number): string {
+  const lastTwoDigits = count % 100;
+  const lastDigit = count % 10;
+  const noun = lastTwoDigits >= 11 && lastTwoDigits <= 14
+    ? "сотрудников"
+    : lastDigit === 1
+      ? "сотрудник"
+      : lastDigit >= 2 && lastDigit <= 4
+        ? "сотрудника"
+        : "сотрудников";
+  return `${count} ${noun}`;
+}
 
 function refetchInterval(insight: WeeklyInsight | undefined): number | false {
   if (!insight) return false;
@@ -748,6 +763,12 @@ function ExecutiveSummary({
 
 function ReadyInsight({ insight }: { insight: ReadyWeeklyInsight }) {
   const store = insight.content.store;
+  const employees = insight.content.employees;
+  const [showAllEmployees, setShowAllEmployees] = useState(false);
+  const remainingEmployees = employees.slice(MOBILE_EMPLOYEE_PREVIEW_COUNT);
+  const limitedEmployeeCount = employees.filter((employee) => (
+    (employee.analysisStatus || employee.insight.analysisStatus) !== "SUFFICIENT"
+  )).length;
   const evidenceByCode: EvidenceIndex = new Map(
     insight.content.evidence.map((item) => [item.evidenceCode, item])
   );
@@ -773,24 +794,56 @@ function ReadyInsight({ insight }: { insight: ReadyWeeklyInsight }) {
         evidenceByCode={evidenceByCode}
       />
 
-      {insight.content.employees.length > 0 && (
+      {employees.length > 0 && (
         <section className="insight-employees" aria-label="Разбор по сотрудникам">
           <SectionHeading
             title="Сотрудники"
-            count={insight.content.employees.length + " сотрудников"}
+            count={formatEmployeeCount(employees.length)}
           />
           <p className="insight-employees__intro">
             Откройте сотрудника, чтобы посмотреть показатели, выводы и персональные действия.
           </p>
+          {limitedEmployeeCount > 0 && (
+            <p className="insight-employees__mobile-status">
+              Персональный разбор: дополнительные данные нужны для {limitedEmployeeCount} из {employees.length} сотрудников.
+            </p>
+          )}
           <div className="insight-employees__list">
-            {insight.content.employees.map((employee) => (
-              <EmployeeInsight
+            {employees.map((employee, index) => (
+              <div
                 key={employee.employeeId}
-                employee={employee}
-                evidenceByCode={evidenceByCode}
-              />
+                className={
+                  "insight-employees__item"
+                  + (index >= MOBILE_EMPLOYEE_PREVIEW_COUNT && !showAllEmployees
+                    ? " insight-employees__item--mobile-hidden"
+                    : "")
+                }
+              >
+                <EmployeeInsight
+                  employee={employee}
+                  evidenceByCode={evidenceByCode}
+                />
+              </div>
             ))}
           </div>
+          {remainingEmployees.length > 0 && (
+            <button
+              className={
+                "insight-employees__more"
+                + (showAllEmployees ? " insight-employees__more--open" : "")
+              }
+              type="button"
+              aria-expanded={showAllEmployees}
+              onClick={() => setShowAllEmployees((current) => !current)}
+            >
+              <span>
+                {showAllEmployees
+                  ? "Скрыть остальных"
+                  : `Ещё ${formatEmployeeCount(remainingEmployees.length)}`}
+              </span>
+              <ChevronDown aria-hidden="true" />
+            </button>
+          )}
         </section>
       )}
 
