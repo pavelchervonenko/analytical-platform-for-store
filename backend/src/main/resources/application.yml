@@ -295,6 +295,13 @@ app:
       max-raw-payload-size: ${LIVESKLAD_MAX_RAW_PAYLOAD_SIZE:4MB}
       max-collection-records: ${LIVESKLAD_MAX_COLLECTION_RECORDS:1000}
       max-positions-per-document: ${LIVESKLAD_MAX_POSITIONS_PER_DOCUMENT:1000}
+    webhook:
+      enabled: ${LIVESKLAD_WEBHOOK_ENABLED:false}
+      sale-return-secret: ${LIVESKLAD_SALE_RETURN_WEBHOOK_SECRET:}
+      sale-return-previous-secret: ${LIVESKLAD_SALE_RETURN_WEBHOOK_PREVIOUS_SECRET:}
+      order-return-secret: ${LIVESKLAD_ORDER_RETURN_WEBHOOK_SECRET:}
+      order-return-previous-secret: ${LIVESKLAD_ORDER_RETURN_WEBHOOK_PREVIOUS_SECRET:}
+      max-body-bytes: ${LIVESKLAD_WEBHOOK_MAX_BODY_BYTES:262144}
   observability:
     prometheus:
       token: ${PROMETHEUS_SCRAPE_TOKEN:}

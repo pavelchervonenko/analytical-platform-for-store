@@ -105,6 +105,8 @@ services:
       REPORT_BACKFILL_WORKER_ENABLED: "false"
       RETENTION_SCHEDULING_ENABLED: "false"
       TELEGRAM_WEBHOOK_ENABLED: ${TELEGRAM_WEBHOOK_ENABLED:-false}
+      LIVESKLAD_WEBHOOK_ENABLED: ${LIVESKLAD_WEBHOOK_ENABLED:-false}
+      LIVESKLAD_WEBHOOK_MAX_BODY_BYTES: ${LIVESKLAD_WEBHOOK_MAX_BODY_BYTES:-262144}
     secrets:
       - source: postgres_runtime_password
         target: spring.datasource.password
@@ -116,6 +118,10 @@ services:
         target: app.security.bootstrap-admin.password
       - source: telegram_webhook_secret
         target: app.notification.telegram.webhook-secret
+      - source: livesklad_sale_return_webhook_secret
+        target: app.livesklad.webhook.sale-return-secret
+      - source: livesklad_order_return_webhook_secret
+        target: app.livesklad.webhook.order-return-secret
     volumes:
       - type: bind
         source: ${POSTGRES_CA_FILE}
@@ -294,6 +300,10 @@ secrets:
     file: ${TELEGRAM_BOT_TOKEN_FILE}
   telegram_webhook_secret:
     file: ${TELEGRAM_WEBHOOK_SECRET_FILE}
+  livesklad_sale_return_webhook_secret:
+    file: ${LIVESKLAD_SALE_RETURN_WEBHOOK_SECRET_FILE}
+  livesklad_order_return_webhook_secret:
+    file: ${LIVESKLAD_ORDER_RETURN_WEBHOOK_SECRET_FILE}
   security_telemetry_pseudonym_key:
     file: ${SECURITY_TELEMETRY_PSEUDONYM_KEY_FILE}
   prometheus_scrape_token:
