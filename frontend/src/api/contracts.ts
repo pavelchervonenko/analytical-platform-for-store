@@ -201,6 +201,42 @@ export const storeKpiSchema = z.object({
 
 export type StoreKpi = z.infer<typeof storeKpiSchema>;
 
+const employeeKpiDataQualitySchema = z.object({
+  completeCostData: z.boolean(),
+  includedItemCount: z.number().int().nonnegative(),
+  unmappedItemCount: z.number().int().nonnegative(),
+  missingCostItemCount: z.number().int().nonnegative(),
+  unexpectedZeroCostItemCount: z.number().int().nonnegative()
+});
+
+const employeeKpiEntrySchema = z.object({
+  employeeId: z.string().uuid().nullable(),
+  displayName: z.string(),
+  employeeActive: z.boolean(),
+  assignedToStore: z.boolean(),
+  assignmentActive: z.boolean(),
+  participatesInRanking: z.boolean(),
+  rankingEligible: z.boolean(),
+  unassigned: z.boolean(),
+  netRevenue: z.number(),
+  netQuantity: z.number(),
+  costAmount: z.number().nullable(),
+  grossProfit: z.number().nullable(),
+  marginPercent: z.number().nullable(),
+  dataQuality: employeeKpiDataQualitySchema
+});
+
+export const employeeKpiSchema = z.object({
+  storeId: z.string().uuid(),
+  periodStart: z.string(),
+  periodEnd: z.string(),
+  formulaVersion: z.string(),
+  employees: z.array(employeeKpiEntrySchema)
+});
+
+export type EmployeeKpiEntry = z.infer<typeof employeeKpiEntrySchema>;
+export type EmployeeKpi = z.infer<typeof employeeKpiSchema>;
+
 const categoryDataQualitySchema = z.object({
   completeCostData: z.boolean(),
   includedItemCount: z.number().int().nonnegative(),

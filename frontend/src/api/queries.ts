@@ -6,6 +6,7 @@ import {
   currentUserSchema,
   employeeCardSchema,
   employeeDirectorySchema,
+  employeeKpiSchema,
   employeeRatingResultSchema,
   employeeRatingSettingSchema,
   employeeRatingSettingsSchema,
@@ -36,6 +37,7 @@ import {
   type CurrentUser,
   type EmployeeCard,
   type EmployeeDirectory,
+  type EmployeeKpi,
   type EmployeeRatingResult,
   type EmployeeRatingSetting,
   type EmployeeShift,
@@ -75,6 +77,7 @@ export const queryKeys = {
   storeStatus: (storeId: string) => ["stores", storeId, "data-status"] as const,
   weeklyInsight: (storeId: string) => ["stores", storeId, "insights", "weekly", "current"] as const,
   storeKpi: (storeId: string, start: string, end: string) => ["stores", storeId, "kpi", start, end] as const,
+  employeeKpi: (storeId: string, start: string, end: string) => ["stores", storeId, "kpi", "employees", start, end] as const,
   categories: (storeId: string, start: string, end: string) => ["stores", storeId, "categories", start, end] as const,
   averages: (storeId: string, start: string, end: string) => ["stores", storeId, "averages", start, end] as const,
   attachRates: (storeId: string, start: string, end: string) => ["stores", storeId, "attach-rates", start, end] as const,
@@ -232,6 +235,10 @@ export function getWeeklyInsight(storeId: string): Promise<WeeklyInsight> {
 
 export function getStoreKpi(storeId: string, start: string, end: string): Promise<StoreKpi> {
   return apiClient.request(`${storePath(storeId)}/kpi?${periodQuery(start, end)}`, { schema: storeKpiSchema });
+}
+
+export function getEmployeeKpi(storeId: string, start: string, end: string): Promise<EmployeeKpi> {
+  return apiClient.request(`${storePath(storeId)}/kpi/employees?${periodQuery(start, end)}`, { schema: employeeKpiSchema });
 }
 
 export function getCategoryKpi(storeId: string, start: string, end: string): Promise<CategoryKpi> {

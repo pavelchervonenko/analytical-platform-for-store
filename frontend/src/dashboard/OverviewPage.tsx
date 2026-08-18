@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import {
   getAttachRates,
   getCategoryKpi,
+  getEmployeeKpi,
+  getEmployeeRating,
   getPeriodQuality,
   getPlanProgress,
   getStoreKpi,
@@ -11,13 +13,13 @@ import {
   queryKeys
 } from "../api/queries";
 import { DailyPlanTable } from "../plan-schedule/DailyPlanTable";
-import type { CategoryKpi, PlanDirection } from "../api/contracts";
 import { averageGrossProfitPerDeviceUnit } from "./categoryPresentation";
 import { qualityIssueMessage, qualityStatusLabel } from "../quality/presentation";
 import { formatDate, formatMonth } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
 import { PanelSkeleton, QueryError } from "../shared/QueryState";
 import { useWorkspace } from "../stores/WorkspaceProvider";
+import { AttachRateMatrix, EmployeePerformanceSection, ManagementSummary } from "./OverviewManagementSections";
 
 const groupLabels: Record<string, { label: string; icon: ReactNode }> = {
   PHONES: { label: "Телефоны", icon: <Smartphone size={18} /> },
@@ -50,65 +52,10 @@ const freshnessLabels: Record<string, string> = {
   NOT_SYNCED: "Данные не загружены"
 };
 
-const attachLabels: Record<string, string> = {
-  ACCESSORY_IPAD: "Аксессуары к iPad",
-  ACCESSORY_PODS_WATCH: "Аксессуары к Pods / Watch",
-  CASE_APPLE_IPHONE: "Чехлы Apple / iPhone",
-  CASE_SAMSUNG: "Чехлы Samsung",
-  CHARGER_CABLE: "Зарядные устройства и кабели",
-  FILM_PHONE: "Защитные пленки",
-  GLASS_IPHONE: "Защитное стекло iPhone",
-  GLASS_CAMERA_IPHONE: "Защита камеры iPhone",
-  GLASS_SAMSUNG: "Защитное стекло Samsung",
-  GLASS_CAMERA_SAMSUNG: "Защита камеры Samsung",
-  PREMIUM_PROTECTION: "Протекция",
-  SETUP_SERVICE: "Настройки и услуги",
-  WARRANTY_GENERIC_NEW: "Гарантии — новые устройства",
-  WARRANTY_GENERIC_USED: "Гарантии — устройства Б/У"
-};
-
 function toneForStatus(status: string): string {
   if (["CURRENT", "OK", "ACHIEVED", "ON_TRACK"].includes(status)) return "success";
   if (["ERROR", "MISSED", "NOT_SYNCED"].includes(status)) return "danger";
   return "warning";
-}
-
-function SummaryMetric({ label, value, note, children }: { label: string; value: string; note?: string; children?: ReactNode }) {
-  return (
-    <article className="overview-summary__metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {note && <small>{note}</small>}
-      {children}
-    </article>
-  );
-}
-
-function PlanSummary({ direction }: { direction: PlanDirection | null }) {
-  if (!direction) return <SummaryMetric label="План" value="Не задан" note="Нужна цель на месяц" />;
-
-  const completion = direction.criterionCompletionPercent;
-  return (
-    <SummaryMetric
-      label="План"
-      value={formatPercent(completion)}
-      note={`${formatCompactMoney(direction.actualAmount)} из ${formatCompactMoney(direction.targetAmount)}`}
-    >
-      <span className={`status status--${toneForStatus(direction.status)}`}>{directionStatusLabels[direction.status] ?? "Неизвестный статус"}</span>
-    </SummaryMetric>
-  );
-}
-
-export function SalesMixSummary({ groups }: { groups: CategoryKpi["groups"] | undefined }) {
-  const accessory = groups?.find((group) => group.groupCode === "ACCESSORY");
-  const service = groups?.find((group) => group.groupCode === "SERVICE");
-
-  return (
-    <>
-      <SummaryMetric label="Аксессуары" value={formatMoney(accessory?.metrics.netRevenue)} note={`${formatNumber(accessory?.metrics.netQuantity)} ед.`} />
-      <SummaryMetric label="Услуги" value={formatMoney(service?.metrics.netRevenue)} note={`${formatNumber(service?.metrics.netQuantity)} ед.`} />
-    </>
-  );
 }
 
 function OverviewSkeleton() {
@@ -137,6 +84,8 @@ export function OverviewPage() {
   const qualityQuery = useQuery({ queryKey: queryKeys.periodQuality(storeId, month, asOfDate), queryFn: () => getPeriodQuality(storeId, month, asOfDate) });
   const attachQuery = useQuery({ queryKey: queryKeys.attachRates(storeId, periodStart, periodEnd), queryFn: () => getAttachRates(storeId, periodStart, periodEnd), staleTime: 2 * 60_000 });
 
+  const employeeRatingQuery = useQuery({ queryKey: queryKeys.employeeRating(storeId, periodStart, periodEnd), queryFn: () => getEmployeeRating(storeId, periodStart, periodEnd), staleTime: 2 * 60_000 });
+  const employeeKpiQuery = useQuery({ queryKey: queryKeys.employeeKpi(storeId, periodStart, periodEnd), queryFn: () => getEmployeeKpi(storeId, periodStart, periodEnd), staleTime: 2 * 60_000 });
   const criticalQueries = [statusQuery, kpiQuery, categoriesQuery, planQuery, qualityQuery];
   if (criticalQueries.every((query) => query.isPending)) return <OverviewSkeleton />;
 
@@ -150,7 +99,6 @@ export function OverviewPage() {
   const categories = categoriesQuery.data;
   const plan = planQuery.data;
   const quality = qualityQuery.data;
-  const revenueDirection = plan?.directions.find((direction) => direction.code === "REVENUE") ?? null;
   const freshnessTone = toneForStatus(status?.status ?? "WARNING");
 
   return (
@@ -180,20 +128,7 @@ export function OverviewPage() {
         </section>
       )}
 
-      <section className="overview-summary" aria-label="Главные показатели">
-        <article className="overview-summary__primary">
-          <span>Чистая выручка</span>
-          <strong>{formatMoney(kpi?.netRevenue)}</strong>
-          <div><span>{formatNumber(kpi?.netQuantity)} ед.</span><span>Себестоимость {formatMoney(kpi?.costAmount)}</span></div>
-        </article>
-        <div className="overview-summary__metrics">
-          <PlanSummary direction={revenueDirection} />
-          <SummaryMetric label="Валовая прибыль" value={formatMoney(kpi?.grossProfit)} note={`Маржа ${formatPercent(kpi?.marginPercent)}`}>
-            {!kpi?.dataQuality.completeCostData && <span className="quality-warning"><AlertCircle size={14} />Данные неполные</span>}
-          </SummaryMetric>
-          <SalesMixSummary groups={categories?.groups} />
-        </div>
-      </section>
+      <ManagementSummary kpi={kpi} categories={categories} plan={plan} />
 
       <div className="overview-grid">
         <section className="panel groups-panel">
@@ -235,6 +170,34 @@ export function OverviewPage() {
 
       {plan && <DailyPlanTable targets={plan.dailyTargets} />}
 
+      {employeeRatingQuery.isPending || employeeKpiQuery.isPending || (!employeeRatingQuery.isError && !employeeRatingQuery.data) || (!employeeKpiQuery.isError && !employeeKpiQuery.data) ? (
+        <section className="panel overview-team-panel"><PanelSkeleton rows={5} /></section>
+      ) : employeeRatingQuery.isError || employeeKpiQuery.isError ? (
+        <QueryError
+          error={employeeRatingQuery.error ?? employeeKpiQuery.error}
+          onRetry={() => void Promise.all([employeeRatingQuery.refetch(), employeeKpiQuery.refetch()])}
+          compact
+        />
+      ) : (
+        <EmployeePerformanceSection rating={employeeRatingQuery.data} employeeKpi={employeeKpiQuery.data} />
+      )}
+
+      {attachQuery.isPending || employeeRatingQuery.isPending || (!attachQuery.isError && !attachQuery.data) || (!employeeRatingQuery.isError && !employeeRatingQuery.data) ? (
+        <section className="panel attach-map-panel"><PanelSkeleton rows={8} /></section>
+      ) : attachQuery.isError || employeeRatingQuery.isError ? (
+        <QueryError
+          error={attachQuery.error ?? employeeRatingQuery.error}
+          onRetry={() => void Promise.all([attachQuery.refetch(), employeeRatingQuery.refetch()])}
+          compact
+        />
+      ) : (
+        <AttachRateMatrix
+          attach={attachQuery.data}
+          rating={employeeRatingQuery.data}
+          storeName={selectedStore.name}
+        />
+      )}
+
       <section className="overview-details" aria-label="Подробные показатели">
         <details className="disclosure-panel">
           <summary><span>Категории продаж</span><small>{categories?.categories.length ?? 0}</small></summary>
@@ -255,30 +218,6 @@ export function OverviewPage() {
                 ))}
               </tbody>
             </table>
-          </div>
-        </details>
-
-        <details className="disclosure-panel" open>
-          <summary><span>Attach-rate: показатели допродаж</span><small>{attachQuery.data?.rates.length ?? 0}</small></summary>
-          <div className="disclosure-panel__content">
-            <div className="attach-intro">
-              <strong>Количество допов на 100 единиц релевантной техники</strong>
-              <span>
-                Каждая проданная единица учитывается отдельно; возвраты уменьшают результат.
-              </span>
-            </div>
-            {attachQuery.isPending && <PanelSkeleton rows={5} />}
-            {attachQuery.isError && <QueryError error={attachQuery.error} onRetry={() => void attachQuery.refetch()} compact />}
-            {attachQuery.data && (
-              <div className="attach-list">
-                {attachQuery.data.rates.map((rate) => (
-                  <article key={rate.metricCode}>
-                    <div><strong>{attachLabels[rate.metricCode] ?? "Другой показатель"}</strong><small>{formatNumber(rate.numeratorQuantity ?? rate.numeratorReceiptCount)} на {formatNumber(rate.denominatorQuantity ?? rate.denominatorReceiptCount)} единиц техники</small></div>
-                    <span>{formatPercent(rate.ratePerHundred)}</span>
-                  </article>
-                ))}
-              </div>
-            )}
           </div>
         </details>
 
