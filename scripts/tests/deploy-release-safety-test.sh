@@ -70,11 +70,21 @@ release_validate_env_file "${release_env}" \
   || fail_test 'valid release fixture was rejected'
 release_schema_allows_migration_source "${release_env}" 39 \
   || fail_test 'declared migration source was rejected'
+release_schema_allows_migration_source "${release_env}" 39.1 \
+  || fail_test 'production Flyway 39.1 migration source was rejected'
 if release_schema_allows_migration_source "${release_env}" 38; then
   fail_test 'unsupported migration source was accepted'
 fi
+if release_schema_allows_migration_source "${release_env}" 38.99; then
+  fail_test 'unsupported dotted migration source was accepted'
+fi
+if release_schema_allows_migration_source "${release_env}" 42.1; then
+  fail_test 'migration source newer than target was accepted'
+fi
 release_schema_allows_runtime "${release_env}" 42 \
   || fail_test 'declared runtime schema was rejected'
+release_schema_allows_runtime "${release_env}" 42.0 \
+  || fail_test 'equivalent dotted runtime schema was rejected'
 if release_schema_allows_runtime "${release_env}" 43; then
   fail_test 'incompatible runtime schema was accepted'
 fi

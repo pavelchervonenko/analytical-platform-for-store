@@ -54,11 +54,48 @@ release_env_value_or_default() {
   esac
 }
 
-release_require_positive_version() {
+release_require_version() {
   local name="$1"
   local value="$2"
-  [[ "${value}" =~ ^[1-9][0-9]*$ ]] \
-    || release_safety_fail "${name} must be a positive integer schema version"
+  [[ "${value}" =~ ^[1-9][0-9]*(\.[0-9]+)*$ ]] \
+    || release_safety_fail "${name} must be a positive Flyway schema version"
+}
+
+release_compare_versions() {
+  local left="$1"
+  local right="$2"
+  local index maximum left_segment right_segment
+  local -a left_segments right_segments
+
+  release_require_version left_version "${left}" || return 1
+  release_require_version right_version "${right}" || return 1
+  IFS='.' read -r -a left_segments <<<"${left}"
+  IFS='.' read -r -a right_segments <<<"${right}"
+  maximum="${#left_segments[@]}"
+  if (( ${#right_segments[@]} > maximum )); then
+    maximum="${#right_segments[@]}"
+  fi
+
+  for ((index = 0; index < maximum; index++)); do
+    left_segment="${left_segments[index]:-0}"
+    right_segment="${right_segments[index]:-0}"
+    if (( 10#${left_segment} < 10#${right_segment} )); then
+      printf '%s\n' '-1'
+      return 0
+    fi
+    if (( 10#${left_segment} > 10#${right_segment} )); then
+      printf '%s\n' '1'
+      return 0
+    fi
+  done
+  printf '%s\n' '0'
+}
+
+release_version_lte() {
+  local comparison
+
+  comparison="$(release_compare_versions "$1" "$2")" || return 1
+  (( comparison <= 0 ))
 }
 
 release_validate_schema_metadata() {
@@ -73,13 +110,14 @@ release_validate_schema_metadata() {
   runtime_max="$(release_env_value "${env_file}" RUNTIME_SCHEMA_MAX_VERSION)" \
     || return 1
 
-  release_require_positive_version SCHEMA_VERSION "${schema_version}" || return 1
-  release_require_positive_version MIGRATION_SOURCE_MIN_VERSION "${migration_min}" || return 1
-  release_require_positive_version RUNTIME_SCHEMA_MIN_VERSION "${runtime_min}" || return 1
-  release_require_positive_version RUNTIME_SCHEMA_MAX_VERSION "${runtime_max}" || return 1
-  (( migration_min <= schema_version )) \
+  release_require_version SCHEMA_VERSION "${schema_version}" || return 1
+  release_require_version MIGRATION_SOURCE_MIN_VERSION "${migration_min}" || return 1
+  release_require_version RUNTIME_SCHEMA_MIN_VERSION "${runtime_min}" || return 1
+  release_require_version RUNTIME_SCHEMA_MAX_VERSION "${runtime_max}" || return 1
+  release_version_lte "${migration_min}" "${schema_version}" \
     || { release_safety_fail 'MIGRATION_SOURCE_MIN_VERSION exceeds SCHEMA_VERSION'; return 1; }
-  (( runtime_min <= schema_version && schema_version <= runtime_max )) \
+  release_version_lte "${runtime_min}" "${schema_version}" \
+    && release_version_lte "${schema_version}" "${runtime_max}" \
     || release_safety_fail 'SCHEMA_VERSION is outside the runtime compatibility range'
 }
 
@@ -88,10 +126,11 @@ release_schema_allows_migration_source() {
   local actual_version="$2"
   local minimum target
 
-  release_require_positive_version actual_version "${actual_version}" || return 1
+  release_require_version actual_version "${actual_version}" || return 1
   minimum="$(release_env_value "${env_file}" MIGRATION_SOURCE_MIN_VERSION)" || return 1
   target="$(release_env_value "${env_file}" SCHEMA_VERSION)" || return 1
-  (( minimum <= actual_version && actual_version <= target ))
+  release_version_lte "${minimum}" "${actual_version}" \
+    && release_version_lte "${actual_version}" "${target}"
 }
 
 release_schema_allows_runtime() {
@@ -99,10 +138,11 @@ release_schema_allows_runtime() {
   local actual_version="$2"
   local minimum maximum
 
-  release_require_positive_version actual_version "${actual_version}" || return 1
+  release_require_version actual_version "${actual_version}" || return 1
   minimum="$(release_env_value "${env_file}" RUNTIME_SCHEMA_MIN_VERSION)" || return 1
   maximum="$(release_env_value "${env_file}" RUNTIME_SCHEMA_MAX_VERSION)" || return 1
-  (( minimum <= actual_version && actual_version <= maximum ))
+  release_version_lte "${minimum}" "${actual_version}" \
+    && release_version_lte "${actual_version}" "${maximum}"
 }
 
 release_validate_secret_file() {
