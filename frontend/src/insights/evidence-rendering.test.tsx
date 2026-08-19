@@ -60,10 +60,13 @@ vi.mock("@tanstack/react-query", () => ({
           insight: {
             analysisStatus: "INSUFFICIENT",
             headline: {
-              text: `Персональный разбор сотрудника ${index + 1}`,
-              evidenceRefs: []
+              text: "Сотрудник обслужил определённое количество клиентов.",
+              evidenceRefs: ["EV004"]
             },
-            workloadContext: null,
+            workloadContext: {
+              text: "Нагрузка сотрудников описана одинаково.",
+              evidenceRefs: ["EV004"]
+            },
             performanceSummary: null,
             dynamicsSummary: null,
             categoryPerformance: null,
@@ -130,6 +133,21 @@ vi.mock("@tanstack/react-query", () => ({
           displayName: null,
           categoryLabel: null,
           available: false
+        }, {
+          evidenceCode: "EV004",
+          label: "Завершённые продажи",
+          formattedValue: "7",
+          previousFormattedValue: "5",
+          absoluteDeltaFormatted: "+2",
+          relativeDeltaFormatted: "+40%",
+          comparisonText: "Было 5, изменение +2 (+40%)",
+          unit: "COUNT",
+          sufficiency: "LIMITED",
+          scope: "EMPLOYEE",
+          employeeId: "00000000-0000-4000-8000-000000000001",
+          displayName: "Сотрудник 1",
+          categoryLabel: null,
+          available: true
         }]
       },
       fallback: null
@@ -162,10 +180,29 @@ describe("weekly insight evidence rendering", () => {
     )).toBeInTheDocument();
     expect(screen.getByText("Основание гипотезы")).toBeInTheDocument();
     expect(screen.getAllByText("Данные").length).toBeGreaterThan(0);
-    expect(screen.getByText("Ограниченные данные")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("Данные — ограничены").length
+    ).toBeGreaterThan(0);
     expect(screen.queryByText("Гипотеза")).not.toBeInTheDocument();
     expect(screen.queryByText("Подробности")).not.toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("·");
+  });
+
+  it("replaces repeated employee filler and combines its evidence", () => {
+    render(<WeeklyInsightView storeId="store-1" />);
+
+    expect(screen.queryByText(
+      "Сотрудник обслужил определённое количество клиентов."
+    )).not.toBeInTheDocument();
+    expect(screen.queryByText(
+      "Нагрузка сотрудников описана одинаково."
+    )).not.toBeInTheDocument();
+    expect(
+      screen.getAllByText("Показатели разбора — ограничены")
+    ).toHaveLength(5);
+    expect(document.querySelectorAll(
+      ".insight-employee__body > .insight-evidence"
+    )).toHaveLength(5);
   });
 
   it("keeps the mobile employee preview short and groups the remaining employees", () => {

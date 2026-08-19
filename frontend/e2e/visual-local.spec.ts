@@ -131,6 +131,12 @@ test.describe("local frontend visual review", () => {
       await page.goto(route, { waitUntil: "domcontentloaded" });
       await waitForStablePage(page);
 
+      if (new URL(route, "http://local.test").pathname === "/insights") {
+        const firstEmployee = page.locator(".insight-employee").first();
+        await firstEmployee.locator(":scope > summary").click();
+        await expect(firstEmployee).toHaveAttribute("open", "");
+      }
+
       const screenshotDirectory = resolve(
         process.cwd(),
         "visual-artifacts",

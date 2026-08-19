@@ -770,6 +770,27 @@
   margin-top: 18px;
 }
 
+.insight-employee__narratives > section {
+  padding-left: 14px;
+  border-left: 2px solid var(--insight-line);
+}
+
+.insight-employee__narratives h3 {
+  margin: 0;
+  color: var(--insight-faint);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.insight-employee__narratives p {
+  margin: 5px 0 0;
+  color: var(--insight-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .insight-employee__signals {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
