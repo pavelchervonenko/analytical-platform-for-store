@@ -71,6 +71,18 @@ Environment:
 Secret files must be root-owned, mode `0600`, and contain URL-safe random
 values of 32 to 256 characters.
 
+Provision both files before any release that references the V42 Compose model:
+
+```bash
+sudo /opt/store-analytics/deploy/bin/provision-release-secrets.sh
+sudo /opt/store-analytics/deploy/bin/preflight-release.sh \
+  /etc/store-analytics/release.env
+```
+
+Provisioning is idempotent and preserves existing non-empty regular files. Preflight validates both
+endpoint-specific values and resolves the complete Compose model before Flyway runs, even while
+`LIVESKLAD_WEBHOOK_ENABLED=false`.
+
 ## Storage
 
 Migration `V42__add_livesklad_webhook_inbox.sql` creates

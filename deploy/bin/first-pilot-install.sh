@@ -88,6 +88,7 @@ generate_secret "${SECRETS_DIR}/telegram-webhook-secret"
 generate_secret "${SECRETS_DIR}/security-telemetry-pseudonym-key"
 generate_secret "${SECRETS_DIR}/prometheus-scrape-token"
 generate_secret "${SECRETS_DIR}/backup-encryption-passphrase"
+"${SOURCE_DIR}/bin/provision-release-secrets.sh"
 
 touch "${SECRETS_DIR}/telegram-tech-alert-chat-id"
 chmod 0600 "${SECRETS_DIR}"/*

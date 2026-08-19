@@ -301,9 +301,9 @@ secrets:
   telegram_webhook_secret:
     file: ${TELEGRAM_WEBHOOK_SECRET_FILE}
   livesklad_sale_return_webhook_secret:
-    file: ${LIVESKLAD_SALE_RETURN_WEBHOOK_SECRET_FILE}
+    file: ${LIVESKLAD_SALE_RETURN_WEBHOOK_SECRET_FILE:-/etc/store-analytics/secrets/livesklad-sale-return-webhook-secret}
   livesklad_order_return_webhook_secret:
-    file: ${LIVESKLAD_ORDER_RETURN_WEBHOOK_SECRET_FILE}
+    file: ${LIVESKLAD_ORDER_RETURN_WEBHOOK_SECRET_FILE:-/etc/store-analytics/secrets/livesklad-order-return-webhook-secret}
   security_telemetry_pseudonym_key:
     file: ${SECURITY_TELEMETRY_PSEUDONYM_KEY_FILE}
   prometheus_scrape_token:

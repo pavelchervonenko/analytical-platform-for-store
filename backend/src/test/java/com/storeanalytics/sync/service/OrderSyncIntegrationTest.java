@@ -1,6 +1,7 @@
 package com.storeanalytics.sync.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.storeanalytics.integration.livesklad.client.LiveSkladClient;
 import com.storeanalytics.integration.livesklad.client.LiveSkladOrderClient;
@@ -15,8 +16,10 @@ import com.storeanalytics.integration.livesklad.dto.LiveSkladReturnDetailPayload
 import com.storeanalytics.integration.livesklad.dto.LiveSkladSaleDetailPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladSaleSummaryPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladStorePayload;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladOrderChangedException;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.metrics.service.StoreKpiService;
+import com.storeanalytics.sync.exception.OrderSyncException;
 import com.storeanalytics.sync.model.SyncStatus;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -214,6 +217,29 @@ class OrderSyncIntegrationTest {
         )).isEqualTo(Instant.parse("2026-08-06T16:00:00Z"));
     }
 
+    @Test
+    void retriesWhenOrderChangesBetweenListAndDetailRequests() {
+        orderClient.set(order(
+                "A000701", "Выдан", true,
+                Instant.parse("2026-08-07T11:01:00Z"),
+                Instant.parse("2026-08-07T12:00:00Z"), "7000.00"
+        ));
+        orderClient.changeNumberBeforeDetail();
+
+        assertThatThrownBy(() -> orderSyncService.synchronize(period()))
+                .isInstanceOf(OrderSyncException.class)
+                .hasCauseInstanceOf(LiveSkladOrderChangedException.class);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM sales_documents", Integer.class
+        )).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT is_retryable FROM sync_run_errors
+                WHERE stage = 'ORDER_SYNC' ORDER BY created_at DESC LIMIT 1
+                """, Boolean.class
+        )).isTrue();
+    }
+
     private OrderFixture order(
             String number,
             String status,
@@ -358,6 +384,7 @@ class OrderSyncIntegrationTest {
 
         private final ObjectMapper objectMapper;
         private OrderFixture fixture;
+        private boolean changeNumberBeforeDetail;
 
         FakeLiveSkladOrderClient(ObjectMapper objectMapper) {
             this.objectMapper = objectMapper;
@@ -367,8 +394,13 @@ class OrderSyncIntegrationTest {
             this.fixture = fixture;
         }
 
+        void changeNumberBeforeDetail() {
+            changeNumberBeforeDetail = true;
+        }
+
         void clear() {
             fixture = null;
+            changeNumberBeforeDetail = false;
         }
 
         @Override
@@ -414,7 +446,9 @@ class OrderSyncIntegrationTest {
                     );
             return new LiveSkladOrderDetailPayload(
                     orderExternalId,
-                    fixture.number(),
+                    changeNumberBeforeDetail
+                            ? fixture.number() + "-changed"
+                            : fixture.number(),
                     fixture.occurredAt().minusSeconds(86400),
                     fixture.updatedAt(),
                     fixture.occurredAt(),

@@ -24,7 +24,7 @@ class EmployeeRatingRosterMigrationIntegrationTest {
 
     @Test
     void keepsOnlyCustomerApprovedPilotEmployeesInRanking() throws SQLException {
-        flyway("40").migrate();
+        flyway("39.1").migrate();
         addRosterFixture();
 
         flyway(null).migrate();
@@ -32,8 +32,12 @@ class EmployeeRatingRosterMigrationIntegrationTest {
         assertThat(currentVersion()).isEqualTo("42");
         assertThat(rankingParticipation()).containsExactlyInAnyOrderEntriesOf(Map.of(
                 "\u041c\u043e\u0431\u0438\u0421\u0444\u0435\u0440\u0430/\u0410\u0440\u0442\u0443\u0440", true,
-                "\u041c\u043e\u0431\u0438\u0421\u0444\u0435\u0440\u0430/\u041f\u043e\u0441\u0442\u043e\u0440\u043e\u043d\u043d\u0438\u0439", false,
-                "\u041c\u0410\u0413\u0410\u0417\u0418\u041d/\u0412\u043e\u043b\u044c\u0444\u0431\u0435\u0440\u0433 \u0410\u043d\u0434\u0440\u0435\u0439", true,
+                "\u041c\u043e\u0431\u0438\u0421\u0444\u0435\u0440\u0430/"
+                        + "\u041f\u043e\u0441\u0442\u043e\u0440\u043e\u043d\u043d\u0438\u0439",
+                false,
+                "\u041c\u0410\u0413\u0410\u0417\u0418\u041d/"
+                        + "\u0412\u043e\u043b\u044c\u0444\u0431\u0435\u0440\u0433 \u0410\u043d\u0434\u0440\u0435\u0439",
+                true,
                 "\u041c\u0410\u0413\u0410\u0417\u0418\u041d/\u0414\u0440\u0443\u0433\u043e\u0439", false,
                 "Other store/Outside pilot", true
         ));
@@ -70,9 +74,11 @@ class EmployeeRatingRosterMigrationIntegrationTest {
                         ('00000000-0000-4000-8000-000000000421',
                          'roster-employee-artur', '\u0410\u0440\u0442\u0443\u0440'),
                         ('00000000-0000-4000-8000-000000000422',
-                         'roster-employee-outsider', '\u041f\u043e\u0441\u0442\u043e\u0440\u043e\u043d\u043d\u0438\u0439'),
+                         'roster-employee-outsider',
+                         '\u041f\u043e\u0441\u0442\u043e\u0440\u043e\u043d\u043d\u0438\u0439'),
                         ('00000000-0000-4000-8000-000000000423',
-                         'roster-employee-wolf', '\u0412\u043e\u043b\u044c\u0444\u0431\u0435\u0440\u0433 \u0410\u043d\u0434\u0440\u0435\u0439'),
+                         'roster-employee-wolf',
+                         '\u0412\u043e\u043b\u044c\u0444\u0431\u0435\u0440\u0433 \u0410\u043d\u0434\u0440\u0435\u0439'),
                         ('00000000-0000-4000-8000-000000000424',
                          'roster-employee-other', '\u0414\u0440\u0443\u0433\u043e\u0439'),
                         ('00000000-0000-4000-8000-000000000425',

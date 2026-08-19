@@ -313,6 +313,84 @@ class ReturnSyncIntegrationTest {
         assertThat(failure.get("is_retryable")).isEqualTo(true);
     }
 
+    @Test
+    void skipsCashReturnReferencingSaleDetailAsQualityIssue() {
+        bootstrapReferences();
+        SaleFixture sale = new SaleFixture(
+                "sale-reference",
+                "sale-position-reference",
+                "product-reference",
+                Instant.parse("2026-07-01T10:00:00Z"),
+                "50.00",
+                "20.00"
+        );
+        seedSale(sale);
+        ReturnFixture source = new ReturnFixture(
+                "sale-reference",
+                sale,
+                Instant.parse("2026-07-01T12:00:00Z"),
+                Instant.parse("2026-07-01T12:02:00Z"),
+                "saleReturn"
+        );
+        LiveSkladReturnPositionPayload position =
+                new LiveSkladReturnPositionPayload(
+                        "sale-position-reference",
+                        null,
+                        "product-reference",
+                        "CODE",
+                        "SKU",
+                        "Fixture Product",
+                        false,
+                        BigDecimal.ONE.setScale(3),
+                        money("50.00"),
+                        money("50.00"),
+                        money("20.00")
+                );
+        LiveSkladReturnDetailPayload detail =
+                new LiveSkladReturnDetailPayload(
+                        source.externalId(),
+                        "S-RETURN-REFERENCE",
+                        source.occurredAt(),
+                        source.sourceUpdatedAt(),
+                        "sale",
+                        "store-1",
+                        "return-processor",
+                        null,
+                        money("50.00"),
+                        BigDecimal.ZERO.setScale(2),
+                        BigDecimal.ZERO.setScale(2),
+                        List.of(position),
+                        returnRaw(source.externalId(), source)
+                );
+        fakeClient.setReturns(
+                List.of(cashItem()),
+                Map.of("store-1", List.of(cashRegister())),
+                List.of(cashTransaction(source)),
+                Map.of(source.externalId(), detail)
+        );
+
+        ReturnSyncResult result = returnSyncService.synchronize(period());
+
+        assertThat(result.status()).isEqualTo(SyncStatus.PARTIAL_SUCCESS);
+        assertThat(result.unresolvedDocuments()).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT document_kind FROM sales_documents
+                WHERE external_id = 'sale-reference'
+                """,
+                String.class
+        )).isEqualTo("SALE");
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT count(*) FROM data_quality_issues
+                WHERE issue_code = 'RETURN_ORIGINAL_DOCUMENT_MISSING'
+                  AND status = 'OPEN'
+                """,
+                Integer.class
+        )).isEqualTo(1);
+    }
+
+
     private void bootstrapReferences() {
         storeSyncService.synchronize();
         employeeSyncService.synchronize();

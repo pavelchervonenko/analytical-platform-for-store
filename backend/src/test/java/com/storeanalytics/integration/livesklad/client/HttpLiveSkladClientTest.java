@@ -82,6 +82,10 @@ class HttpLiveSkladClientTest {
                 "/documents/return-http-fixture",
                 this::handleReturnDetail
         );
+        server.createContext(
+                "/documents/sale-reference-http-fixture",
+                this::handleSaleReferenceDetail
+        );
         server.start();
     }
 
@@ -266,6 +270,30 @@ class HttpLiveSkladClientTest {
         );
         assertThat(authRequests).hasValue(1);
     }
+    @Test
+    void mapsCashReturnThatReferencesAnUnlinkedSaleForQualityHandling() {
+        LiveSkladProperties properties = new LiveSkladProperties(
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                "test-login",
+                "test-password",
+                Duration.ofSeconds(2),
+                Duration.ofSeconds(2)
+        );
+        LiveSkladClient client = new HttpLiveSkladClient(
+                RestClient.builder(), properties, objectMapper
+        );
+
+        LiveSkladReturnDetailPayload detail = client.fetchReturnDetail(
+                "sale-reference-http-fixture"
+        );
+
+        assertThat(detail.sourceType()).isEqualTo("sale");
+        assertThat(detail.originalSaleExternalId()).isNull();
+        assertThat(detail.positions()).singleElement().satisfies(position ->
+                assertThat(position.originalSalePositionExternalId()).isNull()
+        );
+    }
+
 
     private void handleAuthentication(HttpExchange exchange) throws IOException {
         authRequests.incrementAndGet();
@@ -524,6 +552,38 @@ class HttpLiveSkladClientTest {
                 }
                 """);
     }
+    private void handleSaleReferenceDetail(HttpExchange exchange)
+            throws IOException {
+        returnDetailRequests.incrementAndGet();
+        sendJson(exchange, 200, """
+                {
+                  "data": {
+                    "id": "sale-reference-http-fixture",
+                    "number": "S-RETURN-REFERENCE",
+                    "date": "2026-07-01T12:00:00Z",
+                    "dateChange": "2026-07-01T12:02:00Z",
+                    "type": "sale",
+                    "shop": {"id": "store-http-fixture"},
+                    "cash": {"money": 90.00, "bank": 0, "invoice": 0},
+                    "positions": [
+                      {
+                        "positionId": "sale-position-reference",
+                        "nomenclatureId": "product-http-fixture",
+                        "code": 5,
+                        "article": "SKU-HTTP",
+                        "name": "HTTP Product",
+                        "isWork": false,
+                        "count": 1,
+                        "price": 100.00,
+                        "soldPrice": 90.00,
+                        "purchasePriceSumm": 60.00
+                      }
+                    ]
+                  }
+                }
+                """);
+    }
+
 
     private void handleEmployees(HttpExchange exchange) throws IOException {
         employeeRequests.incrementAndGet();

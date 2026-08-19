@@ -45,6 +45,8 @@ public class SyncJobService {
             SyncJobStatus.WAITING_RETRY
     );
     private static final Set<String> RECOVERABLE_SCHEDULED_FAILURES = Set.of(
+            "LIVESKLAD_ORDER_CHANGED",
+            "LIVESKLAD_RETURN_CHANGED",
             "LIVESKLAD_RATE_LIMIT",
             "LIVESKLAD_TRANSPORT",
             "LIVESKLAD_HTTP_500",

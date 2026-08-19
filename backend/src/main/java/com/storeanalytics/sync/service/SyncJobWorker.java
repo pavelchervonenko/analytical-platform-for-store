@@ -5,6 +5,8 @@ import com.storeanalytics.common.config.ConditionalOnApplicationRole;
 import com.storeanalytics.common.config.SyncProperties;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladHttpException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladOrderChangedException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladReturnChangedException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladPayloadRejectedException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladRateLimitException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladTransportException;
@@ -200,7 +202,9 @@ public class SyncJobWorker {
             return false;
         }
         if (contains(exception, LiveSkladRateLimitException.class)
-                || contains(exception, LiveSkladTransportException.class)) {
+                || contains(exception, LiveSkladTransportException.class)
+                || contains(exception, LiveSkladOrderChangedException.class)
+                || contains(exception, LiveSkladReturnChangedException.class)) {
             return true;
         }
         LiveSkladHttpException httpFailure = find(
@@ -233,6 +237,12 @@ public class SyncJobWorker {
         }
         if (contains(exception, LiveSkladTransportException.class)) {
             return "LIVESKLAD_TRANSPORT";
+        }
+        if (contains(exception, LiveSkladOrderChangedException.class)) {
+            return "LIVESKLAD_ORDER_CHANGED";
+        }
+        if (contains(exception, LiveSkladReturnChangedException.class)) {
+            return "LIVESKLAD_RETURN_CHANGED";
         }
         if (contains(exception, LiveSkladException.class)) {
             return "LIVESKLAD_PERMANENT";

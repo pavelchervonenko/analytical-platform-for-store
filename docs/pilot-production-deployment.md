@@ -49,7 +49,8 @@ Spring properties и читаются через `configtree:/run/secrets/`.
 3. В release env записываются полные references `repository@sha256:digest`, а не mutable tags.
 4. Перед изменением приложения создаётся и проверяется logical backup.
 5. `deploy.sh` скачивает images и запускает `MIGRATION` отдельно от runtime.
-6. После успешной миграции поднимаются API/worker; Caddy запускается только после API readiness.
+6. После успешной миграции сначала поднимается и проходит healthcheck API; только затем запускается
+   worker, чтобы фоновые задания не начали работу на непроверенном runtime.
 7. Внешний smoke test проверяет HTTPS, liveness, readiness, HSTS и недоступность actuator.
 8. Release env сохраняется как `current.env`; предыдущее значение — как `previous.env`.
 
@@ -57,6 +58,47 @@ Spring properties и читаются через `configtree:/run/secrets/`.
 Удаление/переименование столбца не совмещается с релизом, который перестаёт его использовать.
 Поэтому container rollback безопасен только в пределах явно сохранённой совместимости схемы;
 `rollback.sh` намеренно не выполняет Flyway undo.
+
+Перед каждой миграцией оператор выполняет тот же обязательный preflight, который встроен в
+`deploy.sh`:
+
+```bash
+sudo /opt/store-analytics/deploy/bin/provision-release-secrets.sh
+sudo /opt/store-analytics/deploy/bin/preflight-release.sh \
+  /etc/store-analytics/release.env
+sudo /opt/store-analytics/deploy/bin/deploy.sh \
+  /etc/store-analytics/release.env
+```
+
+Preflight проверяет права release env, наличие и формат всех secret files, включая два отдельных
+LiveSklad webhook secrets, CA-файл, schema compatibility metadata и полный `docker compose config`.
+Любая ошибка останавливает релиз до Flyway. Release env обязан содержать:
+
+- `SCHEMA_VERSION` — версию Flyway, упакованную в backend image;
+- `MIGRATION_SOURCE_MIN_VERSION` — минимальную схему, с которой разрешён forward migration;
+- `RUNTIME_SCHEMA_MIN_VERSION` и `RUNTIME_SCHEMA_MAX_VERSION` — диапазон схем, на котором image
+  разрешено запускать.
+
+После Flyway `deploy.sh` сохраняет фактическую версию в
+`/var/lib/store-analytics/release-state/database-schema-version`. `rollback.sh` запускает старый
+image только если сохранённая версия входит в его runtime-диапазон; отсутствие metadata считается
+несовместимостью, а не разрешением на рискованный rollback.
+Непосредственно перед Flyway файл получает marker `MIGRATION_IN_PROGRESS`. Если миграция оборвалась,
+и rollback, и автоматический forward-fix остаются заблокированы до проверки реальной версии в
+`flyway_schema_history`; старое сохранённое число повторно не используется.
+
+Для перехода production с V39.1 на V42 текущий V39.1 image не объявлен совместимым с V42. Поэтому
+после успешной миграции V42 container rollback к нему запрещён. Если новый runtime не проходит
+readiness или smoke, исправление выпускается только вперёд из проверенного candidate env:
+
+```bash
+sudo /opt/store-analytics/deploy/bin/forward-fix.sh \
+  /etc/store-analytics/forward-fix.env
+```
+
+V39.1 остаётся в image с исходным checksum, а V42 идемпотентно завершает обе допустимые линии
+`database-schema-version` вручную не редактируется. При повреждении данных применяется restore из
+проверенного pre-deployment backup, а не container rollback.
 
 Изменения выполняются в согласованное окно 22:00–06:00 `Europe/Kaliningrad`. Для обычного
 релиза ожидается кратковременный restart на single-VM topology. Перед релизом фиксируются release
@@ -100,6 +142,7 @@ monthly 12 месяцев. При лимите bucket 100 GB нужен alert н
 
 - runtime, migration и backup PostgreSQL passwords;
 - LiveSklad login/password;
+- отдельные LiveSklad sale-return и order-return webhook secrets;
 - Yandex API key;
 - Telegram bot token и webhook secret;
 - security telemetry pseudonym key и Prometheus scrape token;

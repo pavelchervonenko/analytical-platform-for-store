@@ -4,6 +4,7 @@ import com.storeanalytics.employee.model.Employee;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladOrderDetailPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladOrderPositionPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladOrderSummaryPayload;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladOrderChangedException;
 import com.storeanalytics.product.model.AnalyticsCategory;
 import com.storeanalytics.product.model.Product;
 import com.storeanalytics.product.model.ProductCategoryAssignment;
@@ -783,9 +784,7 @@ public class OrderSyncPersistence {
                 || !summary.statusExternalId().equals(detail.statusExternalId())
                 || detail.sourceUpdatedAt() == null
                 || detail.sourceUpdatedAt().isBefore(detail.createdAt())) {
-            throw new IllegalArgumentException(
-                    "LiveSklad order list and detail are inconsistent"
-            );
+            throw new LiveSkladOrderChangedException();
         }
         if (summary.rawPayload() == null || detail.rawPayload() == null) {
             throw new IllegalArgumentException(

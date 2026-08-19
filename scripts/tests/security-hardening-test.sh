@@ -94,7 +94,8 @@ bash -n \
     "${PROJECT_ROOT}/scripts/telegram-staging-acceptance.sh" \
     "${PROJECT_ROOT}/scripts/yandexgpt-staging-acceptance.sh" \
     "${PROJECT_ROOT}/scripts/lib/shell-security.sh" \
-    "${PROJECT_ROOT}"/scripts/livesklad-discovery/*.sh
+    "${PROJECT_ROOT}"/scripts/livesklad-discovery/*.sh \
+    "${PROJECT_ROOT}"/deploy/bin/*.sh
 
 shadow_script="${PROJECT_ROOT}/scripts/llm-eval/shadow.sh"
 for required_fragment in \
@@ -352,5 +353,7 @@ grep -F '\u001b' "${job_output}" >/dev/null \
 if grep -F $'\033' "${job_output}" >/dev/null; then
     fail_test 'demo job progress emitted a raw terminal escape byte'
 fi
+
+bash "${PROJECT_ROOT}/scripts/tests/deploy-release-safety-test.sh"
 
 printf 'Operator script security tests passed.\n'

@@ -287,6 +287,24 @@ public class ReturnSyncPersistence {
                 source,
                 context.now()
         );
+        if (!source.deleted()
+                && "sale".equalsIgnoreCase(source.detail().sourceType())) {
+            synchronizeIssue(
+                    true,
+                    store,
+                    originalDocumentIssue(
+                            context.syncRun(), source.externalId()
+                    ),
+                    context.now(),
+                    context.result()
+            );
+            if (!rawVersion.isNormalized()) {
+                rawVersion.markSkipped();
+            }
+            context.result().documentsSkipped++;
+            context.result().unresolvedDocuments++;
+            return;
+        }
         Optional<SalesDocument> existing = factRepositories.documents()
                 .findByConnectionIdAndExternalId(
                         context.syncRun().getConnection().getId(),
@@ -306,11 +324,12 @@ public class ReturnSyncPersistence {
         }
 
         LiveSkladReturnDetailPayload detail = source.detail();
-        Optional<SalesDocument> original = factRepositories.documents()
-                .findByConnectionIdAndExternalId(
-                        context.syncRun().getConnection().getId(),
-                        detail.originalSaleExternalId()
-                )
+        Optional<SalesDocument> original = Optional.ofNullable(
+                detail.originalSaleExternalId()
+        ).filter(StringUtils::hasText).flatMap(externalId ->
+                factRepositories.documents().findByConnectionIdAndExternalId(
+                        context.syncRun().getConnection().getId(), externalId
+                ))
                 .filter(SalesDocument::isSale)
                 .filter(document -> sameStore(document.getStore(), store));
         if (original.isEmpty()) {
@@ -523,11 +542,12 @@ public class ReturnSyncPersistence {
                         "return contains duplicate position IDs"
                 );
             }
-            Optional<SalesDocumentItem> originalItem = factRepositories.items()
-                    .findBySalesDocumentIdAndExternalId(
-                            originalSale.getId(),
-                            source.originalSalePositionExternalId()
-                    )
+            Optional<SalesDocumentItem> originalItem = Optional.ofNullable(
+                    source.originalSalePositionExternalId()
+            ).filter(StringUtils::hasText).flatMap(externalId ->
+                    factRepositories.items().findBySalesDocumentIdAndExternalId(
+                            originalSale.getId(), externalId
+                    ))
                     .filter(item -> !item.isDeleted());
             Product product;
             SalesItemClassification classification;
@@ -1002,9 +1022,9 @@ public class ReturnSyncPersistence {
         }
         LiveSkladReturnDetailPayload detail = source.detail();
         if (!source.externalId().equals(detail.externalId())
-                || !"saleReturn".equalsIgnoreCase(detail.sourceType())
+                || !("saleReturn".equalsIgnoreCase(detail.sourceType())
+                || "sale".equalsIgnoreCase(detail.sourceType()))
                 || !store.getExternalId().equals(detail.storeExternalId())
-                || !StringUtils.hasText(detail.originalSaleExternalId())
                 || detail.rawPayload() == null
                 || detail.positions() == null
                 || detail.occurredAt().isBefore(period.start())

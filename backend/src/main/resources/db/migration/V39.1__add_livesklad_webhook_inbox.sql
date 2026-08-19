@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS livesklad_webhook_receipts (
+CREATE TABLE livesklad_webhook_receipts (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     webhook_kind text NOT NULL CHECK (
         webhook_kind IN ('SALE_RETURN', 'ORDER_RETURN')
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS livesklad_webhook_receipts (
     CHECK ((processing_status = 'PROCESSED') = (processed_at IS NOT NULL))
 );
 
-CREATE INDEX IF NOT EXISTS ix_livesklad_webhook_receipts_processing
+CREATE INDEX ix_livesklad_webhook_receipts_processing
     ON livesklad_webhook_receipts (
         processing_status,
         available_at,
@@ -44,7 +44,7 @@ CREATE INDEX IF NOT EXISTS ix_livesklad_webhook_receipts_processing
     )
     WHERE processing_status IN ('RECEIVED', 'FAILED');
 
-CREATE INDEX IF NOT EXISTS ix_livesklad_webhook_receipts_received
+CREATE INDEX ix_livesklad_webhook_receipts_received
     ON livesklad_webhook_receipts (webhook_kind, first_received_at DESC);
 
 COMMENT ON TABLE livesklad_webhook_receipts IS

@@ -23,6 +23,7 @@ import com.storeanalytics.integration.livesklad.exception.LiveSkladException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladHttpException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladPayloadRejectedException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladPayloadRejectedException.Reason;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladReturnChangedException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladRateLimitException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladTransportException;
 import com.storeanalytics.integration.livesklad.observability.LiveSkladPayloadRejectionMetrics;
@@ -663,7 +664,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                 detail.type(),
                 detail.shop().id(),
                 relationId(detail.customer()),
-                detail.parentDocument().id(),
+                relationId(detail.parentDocument()),
                 amountOrZero(detail.cash().money()),
                 amountOrZero(detail.cash().bank()),
                 amountOrZero(detail.cash().invoice()),
@@ -1085,16 +1086,13 @@ public class HttpLiveSkladClient implements LiveSkladClient {
         if (!StringUtils.hasText(detail.id())
                 || !requestedReturnExternalId.equals(detail.id())
                 || detail.date() == null
-                || !"saleReturn".equals(detail.type())
+                || !("saleReturn".equals(detail.type())
+                || "sale".equals(detail.type()))
                 || detail.shop() == null
                 || !StringUtils.hasText(detail.shop().id())
-                || detail.parentDocument() == null
-                || !StringUtils.hasText(detail.parentDocument().id())
                 || detail.cash() == null
                 || detail.positions() == null) {
-            throw new LiveSkladException(
-                    "LiveSklad return detail is incomplete or inconsistent"
-            );
+            throw new LiveSkladReturnChangedException();
         }
         requireNonNegative(detail.cash().money(), "return cash money", false);
         requireNonNegative(detail.cash().bank(), "return cash bank", false);
@@ -1103,7 +1101,6 @@ public class HttpLiveSkladClient implements LiveSkladClient {
 
     private void validateReturnPosition(ReturnPositionDto position) {
         if (!StringUtils.hasText(position.positionId())
-                || !StringUtils.hasText(position.salePositionId())
                 || !StringUtils.hasText(position.nomenclatureId())
                 || !StringUtils.hasText(position.name())
                 || position.isWork() == null) {

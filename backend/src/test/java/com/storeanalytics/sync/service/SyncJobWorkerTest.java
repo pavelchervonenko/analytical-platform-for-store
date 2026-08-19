@@ -12,9 +12,13 @@ import static org.mockito.Mockito.when;
 
 import com.storeanalytics.common.config.SyncProperties;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladHttpException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladOrderChangedException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladPayloadRejectedException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladPayloadRejectedException.Reason;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladReturnChangedException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladRateLimitException;
+import com.storeanalytics.sync.exception.ReturnSyncException;
+import com.storeanalytics.sync.exception.OrderSyncException;
 import com.storeanalytics.sync.exception.SalesSyncCapacityException;
 import com.storeanalytics.sync.exception.SalesSyncException;
 import com.storeanalytics.sync.model.SyncJobPhase;
@@ -226,6 +230,53 @@ class SyncJobWorkerTest {
                 .isEqualTo("Synchronization phase SALES failed: "
                         + "LIVESKLAD_HTTP_503");
     }
+
+    @Test
+    void retriesWhenOrderChangesBetweenListAndDetailRequests() {
+        claim = new SyncJobClaim(
+                claim.jobId(), claim.requestedById(), claim.jobType(),
+                SyncJobPhase.ORDERS, claim.windowStart(), claim.windowEnd(),
+                claim.attemptCount()
+        );
+        when(coordinator.claimNext(anyString())).thenReturn(Optional.of(claim));
+        when(executionService.execute(claim)).thenThrow(new OrderSyncException(
+                UUID.randomUUID(), new LiveSkladOrderChangedException()
+        ));
+        ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);
+
+        worker.processNextStep();
+
+        verify(coordinator).retryOrFail(
+                eq(jobId), anyString(), summary.capture(), eq(true), any()
+        );
+        assertThat(summary.getValue()).isEqualTo(
+                "Synchronization phase ORDERS failed: LIVESKLAD_ORDER_CHANGED"
+        );
+    }
+
+    @Test
+    void retriesWhenReturnChangesBetweenCashAndDetailRequests() {
+        claim = new SyncJobClaim(
+                claim.jobId(), claim.requestedById(), claim.jobType(),
+                SyncJobPhase.RETURNS, claim.windowStart(), claim.windowEnd(),
+                claim.attemptCount()
+        );
+        when(coordinator.claimNext(anyString())).thenReturn(Optional.of(claim));
+        when(executionService.execute(claim)).thenThrow(new ReturnSyncException(
+                UUID.randomUUID(), new LiveSkladReturnChangedException()
+        ));
+        ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);
+
+        worker.processNextStep();
+
+        verify(coordinator).retryOrFail(
+                eq(jobId), anyString(), summary.capture(), eq(true), any()
+        );
+        assertThat(summary.getValue()).isEqualTo(
+                "Synchronization phase RETURNS failed: LIVESKLAD_RETURN_CHANGED"
+        );
+    }
+
     @Test
     void capsExcessiveSourceRetryWindowAtConfiguredAbsoluteMaximum() {
         when(coordinator.claimNext(anyString())).thenReturn(Optional.of(claim));

@@ -408,11 +408,11 @@ Production deployment is initially a controlled rolling restart with a short mai
 1. verify that CI, backup freshness and free disk space are healthy;
 2. record the current image digests and database schema version;
 3. create and verify a pre-deployment database backup/checkpoint;
-4. pull the accepted images;
-5. run Flyway once;
-6. start or replace `backend-api`;
-7. wait for readiness and run smoke tests;
-8. start or replace `backend-worker`;
+4. provision required secret files and run release/Compose preflight;
+5. pull the accepted images and verify their packaged schema version against the release manifest;
+6. run Flyway once and record the resulting schema version;
+7. start or replace `backend-api` and wait for readiness;
+8. start `backend-worker` only after API readiness;
 9. update the web container if required;
 10. run authenticated business smoke tests;
 11. record the deployment result and notify the developer;
@@ -427,6 +427,17 @@ before other roles start.
 Application rollback uses the previous image digest. Database migrations are forward-only. Schema
 changes must use expand/contract compatibility so the previous application image can run during the
 rollback window.
+
+Each release manifest declares its migration-source and runtime schema ranges. `rollback.sh` reads
+the database schema recorded immediately after Flyway and refuses to start an image whose runtime
+range does not contain that version. Missing compatibility metadata also fails closed. When
+rollback is refused, use a reviewed forward-fix image and `forward-fix.sh`; do not edit the recorded
+schema version or force-start an older container.
+
+In particular, the production V39.1 image has no verified V42 runtime compatibility. After the
+V39.1-to-V42 migration, recovery from an application startup defect is therefore a V42-compatible
+forward fix. Restore is reserved for data corruption or a migration that cannot be repaired
+forward.
 
 If a migration destroys or corrupts data, image rollback is insufficient. Recovery requires a new
 database/cluster restored from a verified backup. Destructive migrations require a separate change
