@@ -72,7 +72,7 @@ public class LiveSkladWebhookInboxMetrics implements MeterBinder {
     )
     public void refresh() {
         try {
-            Map<Key, Double> refreshed = zero();
+            Map<Key, Double> refreshed = new HashMap<>(zero());
             jdbcTemplate.query(
                     """
                     SELECT webhook_kind,
