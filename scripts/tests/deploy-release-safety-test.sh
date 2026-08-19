@@ -89,6 +89,32 @@ if release_schema_allows_runtime "${release_env}" 43; then
   fail_test 'incompatible runtime schema was accepted'
 fi
 
+printf '%s\n' 'PRODUCT_CLASSIFICATION_RECONCILIATION_ENABLED=true' \
+  >>"${release_env}"
+if release_validate_product_classification_reconciliation "${release_env}" \
+    >/dev/null 2>&1; then
+  fail_test 'reconciliation without an approved scope was accepted'
+fi
+printf '%s\n' \
+  'PRODUCT_CLASSIFICATION_RECONCILIATION_PRODUCT_IDS=product-a,product-b' \
+  'PRODUCT_CLASSIFICATION_RECONCILIATION_EXPECTED_ITEMS=3' \
+  >>"${release_env}"
+release_validate_product_classification_reconciliation "${release_env}" \
+  || fail_test 'valid reconciliation scope was rejected'
+sed -i '$d' "${release_env}"
+sed -i '$d' "${release_env}"
+sed -i '$d' "${release_env}"
+printf '%s\n' \
+  'PRODUCT_CLASSIFICATION_RECONCILIATION_ENABLED=false' \
+  'PRODUCT_CLASSIFICATION_RECONCILIATION_PRODUCT_IDS=stale-product' \
+  >>"${release_env}"
+if release_validate_product_classification_reconciliation "${release_env}" \
+    >/dev/null 2>&1; then
+  fail_test 'disabled reconciliation with a stale scope was accepted'
+fi
+sed -i '$d' "${release_env}"
+sed -i '$d' "${release_env}"
+
 printf '%s' 'short' \
   >"${temporary_directory}/livesklad-order-return-webhook-secret"
 if release_validate_secret_files "${release_env}" >/dev/null 2>&1; then

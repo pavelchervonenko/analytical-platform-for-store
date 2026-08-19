@@ -86,4 +86,13 @@ quantity or monetary facts; only category/condition snapshots and their matching
 issues change. Direct SQL reclassification remains an unapproved operational path. The one-time V32
 migration remains a reviewed repair of the erroneous initial CARE mapping, not a general interface.
 
+Every release that changes `ProductAutoClassificationRuleEngine.RULE_VERSION` must include a dry-run
+against the current active `UNMAPPED` facts. Any newly resolvable facts must be covered by the exact
+external-product-ID allowlist and expected item count in the one-time reconciliation settings. The
+release preflight rejects an enabled reconciliation without both values and also rejects stale scope
+values when reconciliation is disabled. After the worker reports the accepted counts, verify that the
+corresponding `UNMAPPED_PRODUCT` issues are resolved, then disable reconciliation and clear both scope
+values. New sales, orders and unlinked returns are classified by the current rules during persistence;
+the reviewed reconciliation is only for snapshots created before a rule or approved assignment existed.
+
 The endpoint is authenticated and CSRF-protected by the common Spring Security configuration.

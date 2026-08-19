@@ -16,7 +16,11 @@ class ProductAutoClassificationRuleEngineTest {
             new ProductAutoClassificationRuleEngine();
 
     @ParameterizedTest
-    @MethodSource({"productionDryRunCases", "customerMethodologyCases"})
+    @MethodSource({
+        "productionDryRunCases",
+        "legacyUnmappedRegressionCases",
+        "customerMethodologyCases"
+    })
     void classifiesApprovedProductionDryRun(
             String name,
             String expectedCategory,
@@ -197,6 +201,26 @@ class ProductAutoClassificationRuleEngineTest {
                         "Подзарядка устройства",
                         "SETUP_SERVICE",
                         ProductConditionType.NOT_APPLICABLE
+                )
+        );
+    }
+
+    private static Stream<Arguments> legacyUnmappedRegressionCases() {
+        return Stream.of(
+                arguments(
+                        "iPhone 17 Pro 256GB Cosmic Orange E-SIM (A) 100% \u0411/\u0423 (H65VWKNYW2)",
+                        "IPHONE_USED",
+                        ProductConditionType.USED
+                ),
+                arguments(
+                        "iPhone 17 Pro Max 256GB Silver (A) 100% \u0411/\u0423 (G7R3707P9T)",
+                        "IPHONE_USED",
+                        ProductConditionType.USED
+                ),
+                arguments(
+                        "iPhone 14 Pro Max 256Gb Deep Purple (B) 100% (RXC16KYWQH) \u0411/\u0423",
+                        "IPHONE_USED",
+                        ProductConditionType.USED
                 )
         );
     }

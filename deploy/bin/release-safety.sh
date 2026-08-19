@@ -219,6 +219,41 @@ release_validate_ca_file() {
     || release_safety_fail 'POSTGRES_CA_FILE is not a readable regular file'
 }
 
+release_validate_product_classification_reconciliation() {
+  local env_file="$1"
+  local enabled product_ids expected_items
+
+  enabled="$(release_env_value_or_default \
+    "${env_file}" PRODUCT_CLASSIFICATION_RECONCILIATION_ENABLED false)" \
+    || return 1
+  product_ids="$(release_env_value_or_default \
+    "${env_file}" PRODUCT_CLASSIFICATION_RECONCILIATION_PRODUCT_IDS '')" \
+    || return 1
+  expected_items="$(release_env_value_or_default \
+    "${env_file}" PRODUCT_CLASSIFICATION_RECONCILIATION_EXPECTED_ITEMS 0)" \
+    || return 1
+
+  case "${enabled}" in
+  false)
+    [[ -z "${product_ids}" && "${expected_items}" == '0' ]] \
+      || release_safety_fail \
+        'disabled product classification reconciliation must have an empty scope and zero expected items'
+    ;;
+  true)
+    [[ "${product_ids}" =~ ^[A-Za-z0-9._:-]+(,[A-Za-z0-9._:-]+)*$ ]] \
+      || { release_safety_fail \
+        'enabled product classification reconciliation requires a comma-separated product ID allowlist'; return 1; }
+    [[ "${expected_items}" =~ ^[1-9][0-9]*$ ]] \
+      || release_safety_fail \
+        'enabled product classification reconciliation requires a positive expected item count'
+    ;;
+  *)
+    release_safety_fail \
+      'PRODUCT_CLASSIFICATION_RECONCILIATION_ENABLED must be true or false'
+    ;;
+  esac
+}
+
 release_validate_env_file() {
   local env_file="$1"
   local mode
@@ -229,6 +264,8 @@ release_validate_env_file() {
   [[ "${mode}" == '600' || "${mode}" == '400' ]] \
     || { release_safety_fail "release env must have mode 0600 or 0400"; return 1; }
   release_validate_schema_metadata "${env_file}" || return 1
+  release_validate_product_classification_reconciliation "${env_file}" \
+    || return 1
   release_validate_secret_files "${env_file}" || return 1
   release_validate_ca_file "${env_file}"
 }
