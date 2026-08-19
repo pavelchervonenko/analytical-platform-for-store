@@ -33,7 +33,8 @@ class AuditRetentionPolicyTest {
                 AuditAction.MONTHLY_REPORT_FINALIZED,
                 AuditAction.ANNUAL_REPORT_FINALIZED,
                 AuditAction.REPORT_BACKFILL_REQUESTED,
-                AuditAction.REPORT_BACKFILL_CANCELLATION_REQUESTED
+                AuditAction.REPORT_BACKFILL_CANCELLATION_REQUESTED,
+                AuditAction.RETURN_RECOVERY_REQUESTED
         );
         Set<AuditAction> security = EnumSet.of(
                 AuditAction.USER_CREATED,

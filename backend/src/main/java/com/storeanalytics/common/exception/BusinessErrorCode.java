@@ -106,6 +106,10 @@ public enum BusinessErrorCode {
             "REPORT_BACKFILL_JOB_NOT_FOUND", BusinessErrorType.NOT_FOUND,
             "Report backfill job was not found"
     ),
+    RETURN_RECOVERY_NOT_FOUND(
+            "RETURN_RECOVERY_NOT_FOUND", BusinessErrorType.NOT_FOUND,
+            "LiveSklad return recovery was not found"
+    ),
     SYNC_JOB_NOT_FOUND(
             "SYNC_JOB_NOT_FOUND", BusinessErrorType.NOT_FOUND,
             "Synchronization job was not found"

@@ -7,9 +7,15 @@ This release adds two authenticated ingress endpoints:
 - `POST /api/integrations/livesklad/webhooks/sale-returns`
 - `POST /api/integrations/livesklad/webhooks/order-returns`
 
-The receiver durably stores and deduplicates notifications. It does not yet
-fetch the full sale/order or update analytical facts. That processing is a
-separate release after real payloads have been captured and verified.
+The receiver durably stores and deduplicates both notification kinds. When the
+sale-return worker is enabled, it reads `data.id`, fetches the complete return
+document, and idempotently updates the shared sales facts. A return remains a
+revenue correction even when LiveSklad reports no refund transaction; payment
+movement is stored separately and a mismatch remains visible as a data-quality
+issue.
+
+Order-return events are intentionally retained without processing until their
+document contract and order reconciliation path are implemented.
 
 ## Public URLs
 
@@ -65,13 +71,14 @@ Environment:
 
 - `LIVESKLAD_WEBHOOK_ENABLED=true`
 - `LIVESKLAD_WEBHOOK_MAX_BODY_BYTES=262144`
+- `LIVESKLAD_WEBHOOK_WORKER_ENABLED=true` on `backend-worker`
 - `LIVESKLAD_SALE_RETURN_WEBHOOK_SECRET_FILE`
 - `LIVESKLAD_ORDER_RETURN_WEBHOOK_SECRET_FILE`
 
 Secret files must be root-owned, mode `0600`, and contain URL-safe random
 values of 32 to 256 characters.
 
-Provision both files before any release that references the V42 Compose model:
+Provision both files before any release that references the V42+ Compose model:
 
 ```bash
 sudo /opt/store-analytics/deploy/bin/provision-release-secrets.sh
@@ -83,6 +90,13 @@ Provisioning is idempotent and preserves existing non-empty regular files. Prefl
 endpoint-specific values and resolves the complete Compose model before Flyway runs, even while
 `LIVESKLAD_WEBHOOK_ENABLED=false`.
 
+V43 and V44 are additive but advance the release schema contract. The previous
+V42 release manifest does not declare V44 runtime compatibility, so container
+rollback after migration remains blocked by design. Keep the worker disabled
+during migration/readiness validation and use the checked
+`deploy/bin/forward-fix.sh` path if the new runtime does not become healthy.
+Do not bypass the schema guard to start the V42 image on V44.
+
 ## Storage
 
 Migration `V42__add_livesklad_webhook_inbox.sql` creates
@@ -90,5 +104,88 @@ Migration `V42__add_livesklad_webhook_inbox.sql` creates
 `(webhook_kind, event_id)`, matching LiveSklad's stable `eventId` retry
 contract.
 
+Migration `V43__make_livesklad_webhook_inbox_processable.sql` adds processing
+failure metadata and permits a return fact to exist before its original sale.
+Migration `V44__add_validated_return_recovery.sql` adds an audited,
+idempotent queue for validated historical sale-return recovery.
+
+
 The payload column is internal and must not be exposed through the application
-API. Access should be limited to operational diagnostics and the future
+API. Access must be limited to operational diagnostics and processing.
+
+## Processing guarantees
+
+- Only `SALE_RETURN` receipts are claimed by the current worker.
+- A receipt is processed at most once concurrently through a database lease.
+- Expired leases are recovered automatically.
+- HTTP 404/409, rate limits, transport failures, changed return details, 5xx
+  responses, and transient database errors are retried with bounded backoff.
+- Invalid/missing `data.id`, payload mismatch, non-retryable responses, and
+  exhausted retries remain in `FAILED` with `terminal_failure=true` and a
+  stable `error_code`.
+- `action.id` is never treated as the document ID.
+- Targeted processing never runs period-wide deletion detection, so one
+  webhook cannot delete neighboring return facts.
+- The return document is serialized with a per-document transaction lock so a
+  webhook and a period backfill cannot create competing facts.
+
+## Historical recovery
+
+Receipts accumulated while the worker was disabled remain `RECEIVED`. After
+deploying V44 and enabling the worker, they are claimed in receive order. For
+2026-08-01 through 2026-08-18:
+
+1. let the current period backfill finish;
+2. deploy with the worker initially disabled and verify migration/readiness;
+3. inspect the first real payload and confirm `data.id` is the return
+   document identifier;
+4. enable the worker and restart only `backend-worker`;
+5. wait until sale-return receipts are `PROCESSED` or have a reviewed
+   terminal reason;
+6. run a normal backfill for the same period to restore links to original
+   sales where possible;
+7. reconcile sale positions minus return positions plus issued order
+   positions against the detailed CRM report. Reconcile refund/cash movement
+   separately; it must not replace revenue arithmetic.
+
+## Validated manual recovery
+
+Migration `V44__add_validated_return_recovery.sql` adds an audited, idempotent
+recovery queue for historical sale returns that were absent from the public
+period feed. An authenticated administrator submits:
+
+`POST /api/admin/integrations/livesklad/returns/recoveries`
+
+with an `Idempotency-Key` header and this body:
+
+```json
+{
+  "externalId": "6a6daeadaa17fa79fe127335",
+  "expectedDocumentNumber": "F000381",
+  "expectedNetAmount": 15030.00,
+  "expectedPositionCount": 2,
+  "reason": "Restore verified 2026-08-01 through 2026-08-18 report discrepancy"
+}
+```
+
+The API only queues the request. The worker fetches the complete document from
+LiveSklad and verifies the external ID, document number, net amount, and
+position count before any return facts are synchronized. A mismatch becomes
+the terminal code `RETURN_RECOVERY_EXPECTATION_MISMATCH`; it is never applied
+automatically. Repeating the same request and key returns the existing queue
+item. Status is available from
+`GET /api/admin/integrations/livesklad/returns/recoveries/{recoveryId}`.
+
+Verified MAGAZIN recovery inputs for the August reconciliation:
+
+| Document | LiveSklad ID | Expected net amount | Positions |
+|---|---|---:|---:|
+| F000381 | `6a6daeadaa17fa79fe127335` | 15,030.00 | 2 |
+| F000403 | `6a7c922f327dd4bfa9dfe2c5` | 55,390.00 | 3 |
+| F000408 | `6a7f7699327dd40cb811fe35` | 182,000.00 | 10 |
+| F000411 | `6a8311de08da7262edb76a83` | 156,000.00 | 8 |
+
+Queue the four items separately with distinct idempotency keys. Do not mark the
+reconciliation complete until all four are `PROCESSED` and the application
+difference decreases by exactly 408,420.00 in revenue and 150,137.00 in gross
+profit.

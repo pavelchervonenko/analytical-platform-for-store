@@ -29,7 +29,7 @@ class EmployeeRatingRosterMigrationIntegrationTest {
 
         flyway(null).migrate();
 
-        assertThat(currentVersion()).isEqualTo("42");
+        assertThat(currentVersion()).isEqualTo("44");
         assertThat(rankingParticipation()).containsExactlyInAnyOrderEntriesOf(Map.of(
                 "\u041c\u043e\u0431\u0438\u0421\u0444\u0435\u0440\u0430/\u0410\u0440\u0442\u0443\u0440", true,
                 "\u041c\u043e\u0431\u0438\u0421\u0444\u0435\u0440\u0430/"

@@ -270,6 +270,10 @@ public class SalesDocument extends AbstractMutableEntity {
         return sourceUpdatedAt;
     }
 
+    public String getSourceStatus() {
+        return sourceStatus;
+    }
+
     public boolean isDeleted() {
         return deleted;
     }

@@ -1,6 +1,7 @@
 package com.storeanalytics;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.storeanalytics.audit.model.AuditLog;
@@ -268,8 +269,8 @@ class ModelConstructionTest {
                 LocalDate.of(2026, 2, 2),
                 null
         );
-        assertThatThrownBy(() -> returnDetails.validateOriginalDocument(null))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatCode(() -> returnDetails.validateOriginalDocument(null))
+                .doesNotThrowAnyException();
     }
     @Test
     void employeeLifecycleValidatesSourceAndRejectsStaleUpdates() {

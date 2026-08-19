@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
+import com.storeanalytics.common.exception.InvalidRequestException;
 import com.storeanalytics.integration.livesklad.client.LiveSkladClient;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladCashItemPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladCashRegisterPayload;
@@ -17,6 +18,7 @@ import com.storeanalytics.integration.livesklad.dto.LiveSkladSalePositionPayload
 import com.storeanalytics.integration.livesklad.dto.LiveSkladSaleSummaryPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladStorePayload;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladReturnChangedException;
 import com.storeanalytics.sync.exception.ReturnSyncException;
 import com.storeanalytics.quality.model.DataQualityStatus;
 import com.storeanalytics.sync.model.NormalizationStatus;
@@ -196,7 +198,7 @@ class ReturnSyncIntegrationTest {
     }
 
     @Test
-    void retriesSkippedRawVersionAfterOriginalSaleArrives() {
+    void preservesOrphanReturnAndLinksItAfterOriginalSaleArrives() {
         bootstrapReferences();
         SaleFixture lateSale = new SaleFixture(
                 "sale-late",
@@ -220,13 +222,24 @@ class ReturnSyncIntegrationTest {
 
         assertThat(unresolved.status()).isEqualTo(SyncStatus.PARTIAL_SUCCESS);
         assertThat(unresolved.unresolvedDocuments()).isEqualTo(1);
+        assertThat(unresolved.recordsCreated()).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
                 """
                 SELECT normalization_status FROM raw_record_versions
                 WHERE entity_type = 'RETURN_DOCUMENT'
                 """,
                 String.class
-        )).isEqualTo(NormalizationStatus.SKIPPED.name());
+        )).isEqualTo(NormalizationStatus.NORMALIZED.name());
+        Map<String, Object> orphan = jdbcTemplate.queryForMap(
+                """
+                SELECT original_document_id, net_amount, is_deleted
+                FROM sales_documents
+                WHERE external_id = 'return-late'
+                """
+        );
+        assertThat(orphan.get("original_document_id")).isNull();
+        assertThat(orphan.get("net_amount")).isEqualTo(money("50.00"));
+        assertThat(orphan.get("is_deleted")).isEqualTo(false);
         assertThat(jdbcTemplate.queryForObject(
                 """
                 SELECT status FROM data_quality_issues
@@ -240,8 +253,8 @@ class ReturnSyncIntegrationTest {
                 returnSyncService.synchronize(period());
 
         assertThat(recovered.status()).isEqualTo(SyncStatus.SUCCESS);
-        assertThat(recovered.recordsCreated()).isEqualTo(1);
-        assertThat(recovered.qualityIssuesResolved()).isEqualTo(1);
+        assertThat(recovered.recordsUpdated()).isEqualTo(1);
+        assertThat(recovered.qualityIssuesResolved()).isGreaterThanOrEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
                 """
                 SELECT normalization_status FROM raw_record_versions
@@ -256,6 +269,240 @@ class ReturnSyncIntegrationTest {
                 """,
                 String.class
         )).isEqualTo(DataQualityStatus.RESOLVED.name());
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT returned.original_document_id = original.id
+                FROM sales_documents returned
+                JOIN sales_documents original
+                  ON original.external_id = 'sale-late'
+                WHERE returned.external_id = 'return-late'
+                """,
+                Boolean.class
+        )).isTrue();
+    }
+
+    @Test
+    void targetedWebhookReturnDoesNotDeleteNeighboringReturns() {
+        bootstrapReferences();
+        SaleFixture sale = new SaleFixture(
+                "sale-webhook",
+                "sale-position-webhook",
+                "product-webhook",
+                Instant.parse("2026-07-01T10:00:00Z"),
+                "75.00",
+                "30.00"
+        );
+        seedSale(sale);
+        ReturnFixture first = new ReturnFixture(
+                "return-existing",
+                sale,
+                Instant.parse("2026-07-01T12:00:00Z"),
+                Instant.parse("2026-07-01T12:02:00Z"),
+                "saleReturn"
+        );
+        configureReturn(first);
+        returnSyncService.synchronize(period());
+
+        ReturnFixture webhook = new ReturnFixture(
+                "return-webhook",
+                sale,
+                Instant.parse("2026-07-01T13:00:00Z"),
+                Instant.parse("2026-07-01T13:02:00Z"),
+                "saleReturn"
+        );
+        LiveSkladReturnDetailPayload source = returnDetail(webhook);
+        LiveSkladReturnDetailPayload withoutMoneyMovement =
+                new LiveSkladReturnDetailPayload(
+                        source.externalId(),
+                        source.documentNumber(),
+                        source.occurredAt(),
+                        source.sourceUpdatedAt(),
+                        source.sourceType(),
+                        source.storeExternalId(),
+                        source.processingEmployeeExternalId(),
+                        source.originalSaleExternalId(),
+                        money("0.00"),
+                        money("0.00"),
+                        money("0.00"),
+                        source.positions(),
+                        source.rawPayload()
+                );
+        fakeClient.setReturns(
+                List.of(),
+                Map.of(),
+                List.of(),
+                Map.of(webhook.externalId(), withoutMoneyMovement)
+        );
+
+        ReturnSyncResult result =
+                returnSyncService.synchronizeWebhookReturn(webhook.externalId());
+
+        configureReturn(first);
+        ReturnSyncResult afterBackfill =
+                returnSyncService.synchronize(period());
+
+        assertThat(result.status()).isEqualTo(SyncStatus.SUCCESS);
+        assertThat(result.recordsCreated()).isEqualTo(1);
+        assertThat(afterBackfill.documentsDeleted()).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT count(*)
+                FROM sales_documents
+                WHERE external_id IN ('return-existing', 'return-webhook')
+                  AND document_kind = 'RETURN'
+                  AND is_deleted = false
+                """,
+                Integer.class
+        )).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT count(*) FROM cash_registers
+                WHERE is_active = true
+                """,
+                Integer.class
+        )).isEqualTo(1);
+        Map<String, Object> financialFact = jdbcTemplate.queryForMap(
+                """
+                SELECT document.net_amount,
+                       document.source_status,
+                       (
+                           SELECT count(*) FROM sales_payments payment
+                           WHERE payment.sales_document_id = document.id
+                             AND payment.is_deleted = false
+                       ) AS payment_count
+                FROM sales_documents document
+                WHERE document.external_id = 'return-webhook'
+                """
+        );
+        assertThat(financialFact.get("net_amount")).isEqualTo(money("75.00"));
+        assertThat(financialFact.get("source_status")).isEqualTo("WEBHOOK");
+        assertThat(financialFact.get("payment_count")).isEqualTo(0L);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT count(*) FROM data_quality_issues
+                WHERE issue_code = 'RETURN_PAYMENT_MISMATCH'
+                  AND status = 'OPEN'
+                """,
+                Integer.class
+        )).isEqualTo(1);
+    }
+
+    @Test
+    void validatedRecoveryRejectsMismatchAndIsIdempotent() {
+        bootstrapReferences();
+        SaleFixture sale = new SaleFixture(
+                "sale-recovery",
+                "sale-position-recovery",
+                "product-recovery",
+                Instant.parse("2026-07-01T10:00:00Z"),
+                "75.00",
+                "30.00"
+        );
+        seedSale(sale);
+        ReturnFixture recovery = new ReturnFixture(
+                "return-recovery",
+                sale,
+                Instant.parse("2026-07-01T13:00:00Z"),
+                Instant.parse("2026-07-01T13:02:00Z"),
+                "saleReturn"
+        );
+        LiveSkladReturnDetailPayload detail = returnDetail(recovery);
+        fakeClient.setReturns(
+                List.of(),
+                Map.of(),
+                List.of(),
+                Map.of(recovery.externalId(), detail)
+        );
+
+        assertThatThrownBy(() -> returnSyncService.recoverReturn(
+                recovery.externalId(),
+                "R-WRONG",
+                money("75.00"),
+                1
+        )).isInstanceOf(InvalidRequestException.class);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT count(*) FROM sales_documents
+                WHERE document_kind = 'RETURN'
+                """,
+                Integer.class
+        )).isZero();
+
+        ReturnSyncResult first = returnSyncService.recoverReturn(
+                recovery.externalId(),
+                "R-1",
+                money("75.00"),
+                1
+        );
+        ReturnSyncResult replay = returnSyncService.recoverReturn(
+                recovery.externalId(),
+                "R-1",
+                money("75.00"),
+                1
+        );
+
+        assertThat(first.status()).isEqualTo(SyncStatus.SUCCESS);
+        assertThat(replay.status()).isEqualTo(SyncStatus.SUCCESS);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT count(*) FROM sales_documents
+                WHERE external_id = 'return-recovery'
+                  AND document_kind = 'RETURN'
+                  AND is_deleted = false
+                """,
+                Integer.class
+        )).isEqualTo(1);
+    }
+
+    @Test
+    void targetedWebhookReturnRetriesWhenDetailTemporarilyResolvesToSale() {
+        bootstrapReferences();
+        SaleFixture sale = new SaleFixture(
+                "sale-race",
+                "sale-position-race",
+                "product-race",
+                Instant.parse("2026-07-01T10:00:00Z"),
+                "75.00",
+                "30.00"
+        );
+        ReturnFixture webhook = new ReturnFixture(
+                "return-race",
+                sale,
+                Instant.parse("2026-07-01T13:00:00Z"),
+                Instant.parse("2026-07-01T13:02:00Z"),
+                "saleReturn"
+        );
+        LiveSkladReturnDetailPayload source = returnDetail(webhook);
+        LiveSkladReturnDetailPayload saleDetail =
+                new LiveSkladReturnDetailPayload(
+                        source.externalId(),
+                        source.documentNumber(),
+                        source.occurredAt(),
+                        source.sourceUpdatedAt(),
+                        "sale",
+                        source.storeExternalId(),
+                        source.processingEmployeeExternalId(),
+                        null,
+                        source.cashAmount(),
+                        source.cardAmount(),
+                        source.bankTransferAmount(),
+                        source.positions(),
+                        source.rawPayload()
+                );
+        fakeClient.setReturns(
+                List.of(),
+                Map.of(),
+                List.of(),
+                Map.of(source.externalId(), saleDetail)
+        );
+
+        assertThatThrownBy(() -> returnSyncService.synchronizeWebhookReturn(
+                source.externalId()
+        )).isInstanceOf(LiveSkladReturnChangedException.class);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM sales_documents",
+                Integer.class
+        )).isZero();
     }
 
     @Test

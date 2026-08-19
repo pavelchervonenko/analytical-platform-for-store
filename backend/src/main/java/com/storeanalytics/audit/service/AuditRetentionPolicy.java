@@ -41,7 +41,8 @@ public class AuditRetentionPolicy {
                     MONTHLY_REPORT_FINALIZED,
                     ANNUAL_REPORT_FINALIZED,
                     REPORT_BACKFILL_REQUESTED,
-                    REPORT_BACKFILL_CANCELLATION_REQUESTED ->
+                    REPORT_BACKFILL_CANCELLATION_REQUESTED,
+                    RETURN_RECOVERY_REQUESTED ->
                     AuditRetentionClass.FINANCIAL;
             case USER_CREATED,
                     USER_CHANGED,

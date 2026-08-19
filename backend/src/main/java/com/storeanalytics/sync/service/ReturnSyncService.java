@@ -8,6 +8,7 @@ import com.storeanalytics.integration.livesklad.dto.LiveSkladCashRegisterPayload
 import com.storeanalytics.integration.livesklad.dto.LiveSkladCashTransactionPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladReturnDetailPayload;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladReturnChangedException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladHttpException;
 import com.storeanalytics.store.model.Store;
 import com.storeanalytics.store.repository.StoreRepository;
@@ -19,8 +20,10 @@ import com.storeanalytics.sync.model.SyncRun;
 import com.storeanalytics.sync.model.SyncRunError;
 import com.storeanalytics.sync.model.SyncScope;
 import com.storeanalytics.sync.model.SyncStatus;
+import com.storeanalytics.sync.model.SyncTriggerType;
 import com.storeanalytics.sync.repository.SyncRunErrorRepository;
 import com.storeanalytics.sync.repository.SyncRunRepository;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -84,6 +87,118 @@ public class ReturnSyncService {
                 context.triggerType(),
                 () -> synchronizeInternal(period, context)
         );
+    }
+
+    public ReturnSyncResult synchronizeWebhookReturn(String returnExternalId) {
+        if (!StringUtils.hasText(returnExternalId)) {
+            throw new IllegalArgumentException("returnExternalId is required");
+        }
+        String externalId = returnExternalId.trim();
+        return syncMetrics.record(
+                SyncScope.RETURNS,
+                SyncTriggerType.REPROCESS,
+                () -> synchronizeWebhookReturnInternal(externalId)
+        );
+    }
+
+    public ReturnSyncResult recoverReturn(
+            String externalId,
+            String documentNumber,
+            BigDecimal netAmount,
+            int positionCount
+    ) {
+        ReturnRecoveryExpectation expectation = new ReturnRecoveryExpectation(
+                externalId, documentNumber, netAmount, positionCount
+        );
+        return syncMetrics.record(
+                SyncScope.RETURNS,
+                SyncTriggerType.REPROCESS,
+                () -> synchronizeTargetedReturnInternal(
+                        expectation.externalId(), expectation
+                )
+        );
+    }
+
+    private ReturnSyncResult synchronizeWebhookReturnInternal(
+            String returnExternalId
+    ) {
+        return synchronizeTargetedReturnInternal(returnExternalId, null);
+    }
+
+    private ReturnSyncResult synchronizeTargetedReturnInternal(
+            String returnExternalId,
+            ReturnRecoveryExpectation expectation
+    ) {
+        IntegrationConnection connection = activeLiveSkladConnection();
+        LiveSkladReturnDetailPayload detail =
+                liveSkladClient.fetchReturnDetail(returnExternalId);
+        if (detail == null || !returnExternalId.equals(detail.externalId())) {
+            throw new IllegalStateException(
+                    "LiveSklad webhook return detail is missing or inconsistent"
+            );
+        }
+        if (!"saleReturn".equalsIgnoreCase(detail.sourceType())) {
+            throw new LiveSkladReturnChangedException();
+        }
+        if (expectation != null) {
+            expectation.verify(detail);
+        }
+        Store store = storeRepository.findByConnectionIdAndExternalId(
+                connection.getId(),
+                detail.storeExternalId()
+        ).filter(Store::isActive).orElseThrow(() -> new IllegalStateException(
+                "Active LiveSklad store for webhook return is not synchronized"
+        ));
+        ReturnSyncPeriod period = new ReturnSyncPeriod(
+                detail.occurredAt(),
+                detail.occurredAt().plusNanos(1)
+        );
+        SyncRun syncRun = syncRunRepository.save(SyncRun.startReturnSync(
+                connection,
+                new SyncPeriod(period.start(), period.end()),
+                SyncTriggerType.REPROCESS,
+                null,
+                null,
+                clock.instant()
+        ));
+        try {
+            ReturnSyncBatchResult batch = persistence.synchronizeTargeted(
+                    syncRun.getId(),
+                    store,
+                    new LiveSkladReturnSource(List.of(), detail)
+            );
+            if (batch.unresolvedDocuments() > 0) {
+                syncRun.completePartial(
+                        1,
+                        batch.documentsCreated(),
+                        batch.documentsUpdated(),
+                        batch.documentsSkipped(),
+                        batch.unresolvedDocuments(),
+                        clock.instant()
+                );
+            } else {
+                syncRun.complete(
+                        1,
+                        batch.documentsCreated(),
+                        batch.documentsUpdated(),
+                        batch.documentsSkipped(),
+                        clock.instant()
+                );
+            }
+            return ReturnSyncResult.from(
+                    syncRunRepository.save(syncRun),
+                    batch
+            );
+        } catch (RuntimeException exception) {
+            failSyncRun(
+                    syncRun,
+                    1,
+                    failureSummary(exception),
+                    exception instanceof LiveSkladException
+            );
+            logFailure(syncRun.getId(), exception);
+            throw new ReturnSyncException(syncRun.getId(), exception);
+        }
     }
 
     private ReturnSyncResult synchronizeInternal(

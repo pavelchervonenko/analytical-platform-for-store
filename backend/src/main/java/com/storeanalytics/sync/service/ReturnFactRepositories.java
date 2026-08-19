@@ -6,6 +6,7 @@ import com.storeanalytics.sales.repository.SalesDocumentRepository;
 import com.storeanalytics.sales.repository.SalesPaymentRepository;
 import com.storeanalytics.sync.repository.RawRecordVersionRepository;
 import com.storeanalytics.sync.repository.SyncRunRepository;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -15,6 +16,7 @@ record ReturnFactRepositories(
         SalesPaymentRepository payments,
         DataQualityIssueRepository qualityIssues,
         SyncRunRepository syncRuns,
-        RawRecordVersionRepository rawRecords
+        RawRecordVersionRepository rawRecords,
+        JdbcTemplate jdbcTemplate
 ) {
 }

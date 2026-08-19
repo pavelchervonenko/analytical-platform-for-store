@@ -14,33 +14,39 @@ record LiveSkladReturnSource(
     LiveSkladReturnSource {
         cashTransactions = List.copyOf(cashTransactions);
         if (cashTransactions.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "return source must contain at least one cash transaction"
+            Objects.requireNonNull(
+                    detail,
+                    "return source without cash transactions must contain detail"
             );
-        }
-        String documentId = cashTransactions.getFirst().documentExternalId();
-        if (cashTransactions.stream().anyMatch(transaction ->
-                !Objects.equals(documentId, transaction.documentExternalId()))) {
-            throw new IllegalArgumentException(
-                    "return cash transactions must reference one document"
-            );
-        }
-        boolean allDeleted = cashTransactions.stream()
-                .allMatch(LiveSkladCashTransactionPayload::deleted);
-        if (!allDeleted && detail == null) {
-            throw new LiveSkladReturnChangedException();
-        }
-        if (detail != null && !Objects.equals(documentId, detail.externalId())) {
-            throw new LiveSkladReturnChangedException();
+        } else {
+            String documentId =
+                    cashTransactions.getFirst().documentExternalId();
+            if (cashTransactions.stream().anyMatch(transaction -> !Objects.equals(
+                    documentId, transaction.documentExternalId()))) {
+                throw new IllegalArgumentException(
+                        "return cash transactions must reference one document"
+                );
+            }
+            boolean allDeleted = cashTransactions.stream()
+                    .allMatch(LiveSkladCashTransactionPayload::deleted);
+            if (!allDeleted && detail == null) {
+                throw new LiveSkladReturnChangedException();
+            }
+            if (detail != null
+                    && !Objects.equals(documentId, detail.externalId())) {
+                throw new LiveSkladReturnChangedException();
+            }
         }
     }
 
     String externalId() {
-        return cashTransactions.getFirst().documentExternalId();
+        return cashTransactions.isEmpty()
+                ? detail.externalId()
+                : cashTransactions.getFirst().documentExternalId();
     }
 
     boolean deleted() {
-        return cashTransactions.stream()
+        return !cashTransactions.isEmpty() && cashTransactions.stream()
                 .allMatch(LiveSkladCashTransactionPayload::deleted);
     }
 }

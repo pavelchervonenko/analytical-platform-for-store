@@ -19,6 +19,6 @@ class StoreAnalyticsApplicationTest {
         );
 
         assertThat(printed).isTrue();
-        assertThat(bytes.toString(StandardCharsets.UTF_8).trim()).isEqualTo("42");
+        assertThat(bytes.toString(StandardCharsets.UTF_8).trim()).isEqualTo("44");
     }
 }

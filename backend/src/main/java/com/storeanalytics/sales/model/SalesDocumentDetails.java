@@ -27,8 +27,7 @@ public record SalesDocumentDetails(
     public void validateOriginalDocument(SalesDocument originalDocument) {
         require((documentKind == SalesDocumentKind.SALE && originalDocument == null)
                         || (documentKind == SalesDocumentKind.RETURN
-                        && originalDocument != null
-                        && originalDocument.isSale()),
-                "sale must not reference an original; return must reference an original sale");
+                        && (originalDocument == null || originalDocument.isSale())),
+                "sale must not reference an original; return may reference only an original sale");
     }
 }

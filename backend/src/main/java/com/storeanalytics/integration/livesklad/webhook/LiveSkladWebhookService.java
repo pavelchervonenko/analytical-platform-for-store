@@ -118,7 +118,7 @@ class LiveSkladWebhookService {
         return node.asText();
     }
 
-    private String sha256(String value) {
+    static String sha256(String value) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(
                     value.getBytes(StandardCharsets.UTF_8)

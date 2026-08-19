@@ -3,6 +3,7 @@ package com.storeanalytics.sync.service;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
+import com.storeanalytics.employee.model.Employee;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladCashItemPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladCashRegisterPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladCashTransactionPayload;
@@ -63,6 +64,8 @@ public class ReturnSyncPersistence {
     private static final String RETURN_ENTITY_TYPE = "RETURN_DOCUMENT";
     private static final String UNMAPPED_CATEGORY_CODE = "UNMAPPED";
     private static final String UNMAPPED_CLASSIFICATION_VERSION = "unmapped-v1";
+    private static final String DISCOVERY_CASH = "CASH_TRANSACTION";
+    private static final String DISCOVERY_WEBHOOK = "WEBHOOK";
 
     private final ReturnReferenceRepositories referenceRepositories;
     private final ReturnFactRepositories factRepositories;
@@ -114,6 +117,7 @@ public class ReturnSyncPersistence {
                 unmappedCategory,
                 new HashMap<>(),
                 result,
+                false,
                 now
         );
 
@@ -143,6 +147,50 @@ public class ReturnSyncPersistence {
                     result
             );
         }
+        return result.toResult();
+    }
+
+    @Transactional
+    ReturnSyncBatchResult synchronizeTargeted(
+            UUID syncRunId,
+            Store requestedStore,
+            LiveSkladReturnSource source
+    ) {
+        SyncRun syncRun = factRepositories.syncRuns().findById(syncRunId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "syncRun does not exist"
+                ));
+        Store store = referenceRepositories.stores()
+                .findById(requestedStore.getId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "store does not exist"
+                ));
+        validateStore(syncRun, store);
+        if (source.deleted() || source.detail() == null) {
+            throw new IllegalArgumentException(
+                    "targeted return synchronization requires active detail"
+            );
+        }
+        AnalyticsCategory unmappedCategory = referenceRepositories.categories()
+                .findByCode(UNMAPPED_CATEGORY_CODE)
+                .orElseThrow(() -> new IllegalStateException(
+                        "UNMAPPED analytics category is not configured"
+                ));
+        Instant now = clock.instant();
+        Accumulator result = new Accumulator();
+        Context context = new Context(
+                syncRun,
+                new ReturnSyncPeriod(
+                        source.detail().occurredAt(),
+                        source.detail().occurredAt().plusNanos(1)
+                ),
+                unmappedCategory,
+                new HashMap<>(),
+                result,
+                true,
+                now
+        );
+        synchronizeReturn(context, store, source);
         return result.toResult();
     }
 
@@ -280,6 +328,7 @@ public class ReturnSyncPersistence {
             Store store,
             LiveSkladReturnSource source
     ) {
+        lockReturn(context.syncRun(), source.externalId());
         validateSource(store, context.period(), source);
         RawRecordVersion rawVersion = rawVersion(
                 context.syncRun(),
@@ -332,45 +381,41 @@ public class ReturnSyncPersistence {
                 ))
                 .filter(SalesDocument::isSale)
                 .filter(document -> sameStore(document.getStore(), store));
-        if (original.isEmpty()) {
-            synchronizeIssue(
-                    true,
-                    store,
-                    originalDocumentIssue(context.syncRun(), source.externalId()),
-                    context.now(),
-                    context.result()
-            );
-            if (!rawVersion.isNormalized()) {
-                rawVersion.markSkipped();
-            }
-            context.result().documentsSkipped++;
-            context.result().unresolvedDocuments++;
-            return;
-        }
+        boolean originalMissing = original.isEmpty();
         synchronizeIssue(
-                false,
+                originalMissing,
                 store,
                 originalDocumentIssue(context.syncRun(), source.externalId()),
                 context.now(),
                 context.result()
         );
+        if (originalMissing) {
+            context.result().unresolvedDocuments++;
+        }
 
         ReturnAmounts returnAmounts = returnAmounts(detail);
         Instant sourceUpdatedAt = sourceUpdatedAt(source);
+        Employee employee = original.map(SalesDocument::getEmployee)
+                .orElseGet(() -> processingEmployee(context, detail).orElse(null));
+        String discovery = context.targeted()
+                && existing.map(SalesDocument::getSourceStatus)
+                        .filter(DISCOVERY_CASH::equals)
+                        .isEmpty()
+                ? DISCOVERY_WEBHOOK : DISCOVERY_CASH;
         SalesDocumentIdentity identity = new SalesDocumentIdentity(
                 context.syncRun().getConnection(),
                 SourceSystem.LIVESKLAD,
                 detail.externalId(),
                 store,
-                original.get().getEmployee(),
-                original.get(),
+                employee,
+                original.orElse(null),
                 context.syncRun()
         );
         SalesDocumentDetails details = new SalesDocumentDetails(
                 detail.documentNumber(),
                 SalesDocumentKind.RETURN,
                 detail.sourceType(),
-                null,
+                discovery,
                 detail.occurredAt(),
                 detail.occurredAt().atZone(businessZone).toLocalDate(),
                 sourceUpdatedAt
@@ -409,7 +454,7 @@ public class ReturnSyncPersistence {
                     context,
                     store,
                     document,
-                    original.get(),
+                    original,
                     detail
             );
             changed |= synchronizePayments(
@@ -526,7 +571,7 @@ public class ReturnSyncPersistence {
             Context context,
             Store store,
             SalesDocument returnDocument,
-            SalesDocument originalSale,
+            Optional<SalesDocument> originalSale,
             LiveSkladReturnDetailPayload detail
     ) {
         Map<String, SalesDocumentItem> existingItems = new LinkedHashMap<>();
@@ -544,10 +589,11 @@ public class ReturnSyncPersistence {
             }
             Optional<SalesDocumentItem> originalItem = Optional.ofNullable(
                     source.originalSalePositionExternalId()
-            ).filter(StringUtils::hasText).flatMap(externalId ->
-                    factRepositories.items().findBySalesDocumentIdAndExternalId(
-                            originalSale.getId(), externalId
-                    ))
+            ).filter(StringUtils::hasText).flatMap(externalId -> originalSale
+                    .flatMap(sale -> factRepositories.items()
+                            .findBySalesDocumentIdAndExternalId(
+                                    sale.getId(), externalId
+                            )))
                     .filter(item -> !item.isDeleted());
             Product product;
             SalesItemClassification classification;
@@ -647,6 +693,19 @@ public class ReturnSyncPersistence {
             }
         }
         return changed;
+    }
+
+    private Optional<Employee> processingEmployee(
+            Context context,
+            LiveSkladReturnDetailPayload detail
+    ) {
+        return Optional.ofNullable(detail.processingEmployeeExternalId())
+                .filter(StringUtils::hasText)
+                .flatMap(externalId -> referenceRepositories.employees()
+                        .findByConnectionIdAndExternalId(
+                                context.syncRun().getConnection().getId(),
+                                externalId
+                        ));
     }
 
     private Product resolveProduct(
@@ -992,6 +1051,7 @@ public class ReturnSyncPersistence {
                         period.end()
                 )) {
             if (!seenDocumentIds.contains(document.getExternalId())
+                    && !DISCOVERY_WEBHOOK.equals(document.getSourceStatus())
                     && document.markDeleted(syncRun)) {
                 result.documentsUpdated++;
                 result.documentsDeleted++;
@@ -1091,6 +1151,16 @@ public class ReturnSyncPersistence {
         return syncRun.getConnection().getId() + ":" + externalId;
     }
 
+    private void lockReturn(SyncRun syncRun, String externalId) {
+        factRepositories.jdbcTemplate().query(
+                """
+                SELECT pg_advisory_xact_lock(hashtextextended(?::text, 0))
+                """,
+                resultSet -> null,
+                scopedId(syncRun, externalId)
+        );
+    }
+
     private QualityIssueSpec originalDocumentIssue(
             SyncRun syncRun,
             String externalId
@@ -1126,6 +1196,7 @@ public class ReturnSyncPersistence {
             AnalyticsCategory unmappedCategory,
             Map<String, Product> productCache,
             Accumulator result,
+            boolean targeted,
             Instant now
     ) {
     }

@@ -322,8 +322,8 @@ export type EmployeeAttachRatingEntry = {
     storeRatePercent?: number;
     includedInScore?: boolean;
     score?: number;
-    numeratorQuantity?: number;
     denominatorQuantity?: number;
+    numeratorQuantity?: number;
 };
 
 export type EmployeeRatingEntry = {
@@ -590,6 +590,28 @@ export type ManualLlmJobView = {
     updatedAt?: string;
 };
 
+export type RecoverLiveSkladReturnRequest = {
+    externalId: string;
+    expectedDocumentNumber: string;
+    expectedNetAmount: number;
+    expectedPositionCount?: number;
+    reason: string;
+};
+
+export type LiveSkladReturnRecoveryView = {
+    id?: string;
+    externalId?: string;
+    expectedDocumentNumber?: string;
+    expectedNetAmount?: number;
+    expectedPositionCount?: number;
+    status?: string;
+    attemptCount?: number;
+    terminalFailure?: boolean;
+    errorCode?: string;
+    requestedAt?: string;
+    processedAt?: string;
+};
+
 export type SystemStatusView = {
     application?: string;
     version?: string;
@@ -658,8 +680,8 @@ export type AnnualAttachRateTotals = {
     numeratorReceiptCount?: number;
     denominatorReceiptCount?: number;
     ratePerHundred?: number;
-    numeratorQuantity?: number;
     denominatorQuantity?: number;
+    numeratorQuantity?: number;
 };
 
 export type AnnualCategoryTotals = {
@@ -723,8 +745,8 @@ export type AttachRateEntry = {
     numeratorReceiptCount?: number;
     denominatorReceiptCount?: number;
     ratePerHundred?: number;
-    numeratorQuantity?: number;
     denominatorQuantity?: number;
+    numeratorQuantity?: number;
 };
 
 export type AttachRateResult = {
@@ -1342,6 +1364,7 @@ export type JsonNode = {
     container?: boolean;
     number?: boolean;
     missingNode?: boolean;
+    floatingPointNumber?: boolean;
     valueNode?: boolean;
     nodeType?: 'ARRAY' | 'BINARY' | 'BOOLEAN' | 'MISSING' | 'NULL' | 'NUMBER' | 'OBJECT' | 'POJO' | 'STRING';
     object?: boolean;
@@ -1359,7 +1382,6 @@ export type JsonNode = {
     textual?: boolean;
     boolean?: boolean;
     binary?: boolean;
-    floatingPointNumber?: boolean;
     embeddedValue?: boolean;
 };
 
@@ -2443,6 +2465,25 @@ export type Cancel1Responses = {
 
 export type Cancel1Response = Cancel1Responses[keyof Cancel1Responses];
 
+export type RequestData = {
+    body: RecoverLiveSkladReturnRequest;
+    headers: {
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/admin/integrations/livesklad/returns/recoveries';
+};
+
+export type RequestResponses = {
+    /**
+     * Accepted
+     */
+    202: LiveSkladReturnRecoveryView;
+};
+
+export type RequestResponse = RequestResponses[keyof RequestResponses];
+
 export type StatusData = {
     body?: never;
     path?: never;
@@ -3228,6 +3269,24 @@ export type Get12Responses = {
 };
 
 export type Get12Response = Get12Responses[keyof Get12Responses];
+
+export type Get13Data = {
+    body?: never;
+    path: {
+        recoveryId: string;
+    };
+    query?: never;
+    url: '/api/admin/integrations/livesklad/returns/recoveries/{recoveryId}';
+};
+
+export type Get13Responses = {
+    /**
+     * OK
+     */
+    200: LiveSkladReturnRecoveryView;
+};
+
+export type Get13Response = Get13Responses[keyof Get13Responses];
 
 export type RevokeSessionData = {
     body?: never;
