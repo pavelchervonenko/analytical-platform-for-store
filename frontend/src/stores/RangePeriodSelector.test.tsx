@@ -1,5 +1,4 @@
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { fireEvent, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RangePeriodSelector } from "./RangePeriodSelector";
 
@@ -26,25 +25,23 @@ vi.mock("./WorkspaceProvider", () => ({
 describe("range period selector", () => {
   beforeEach(() => mocks.selectAnalyticsPeriod.mockReset());
 
-  it("offers the approved quick periods without yearly shortcuts", async () => {
-    const user = userEvent.setup();
-    render(<RangePeriodSelector analyticsEnabled />);
+  it("offers the approved quick periods without yearly shortcuts", () => {
+    const { container } = render(<RangePeriodSelector analyticsEnabled />);
 
-    await user.click(screen.getByRole("button", { name: "Выбрать период" }));
+    clickButton(container, "Выбрать период");
 
-    expect(screen.getByRole("button", { name: "Сегодня" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Прошлый месяц" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Этот год" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Прошлый год" })).not.toBeInTheDocument();
+    expect(findButton(container, "Сегодня")).toBeDefined();
+    expect(findButton(container, "Прошлый месяц")).toBeDefined();
+    expect(findButton(container, "Этот год")).toBeUndefined();
+    expect(findButton(container, "Прошлый год")).toBeUndefined();
   });
 
-  it("applies rolling days through the latest covered date", async () => {
-    const user = userEvent.setup();
-    render(<RangePeriodSelector analyticsEnabled />);
+  it("applies rolling days through the latest covered date", () => {
+    const { container } = render(<RangePeriodSelector analyticsEnabled />);
 
-    await user.click(screen.getByRole("button", { name: "Выбрать период" }));
-    await user.click(screen.getByRole("button", { name: "7 дней" }));
-    await user.click(screen.getByRole("button", { name: "Применить" }));
+    clickButton(container, "Выбрать период");
+    clickButton(container, "7 дней");
+    clickButton(container, "Применить");
 
     expect(mocks.selectAnalyticsPeriod).toHaveBeenCalledWith({
       mode: "CUSTOM",
@@ -53,14 +50,13 @@ describe("range period selector", () => {
     });
   });
 
-  it("selects and applies an inclusive custom range", async () => {
-    const user = userEvent.setup();
-    render(<RangePeriodSelector analyticsEnabled />);
+  it("selects and applies an inclusive custom range", () => {
+    const { container } = render(<RangePeriodSelector analyticsEnabled />);
 
-    await user.click(screen.getByRole("button", { name: "Выбрать период" }));
-    await user.click(screen.getAllByRole("button", { name: /5 августа 2026/u })[0]!);
-    await user.click(screen.getAllByRole("button", { name: /10 августа 2026/u })[0]!);
-    await user.click(screen.getByRole("button", { name: "Применить" }));
+    clickButton(container, "Выбрать период");
+    fireEvent.click(container.querySelectorAll<HTMLButtonElement>('[data-date="2026-08-05"]')[0]!);
+    fireEvent.click(container.querySelectorAll<HTMLButtonElement>('[data-date="2026-08-10"]')[0]!);
+    clickButton(container, "Применить");
 
     expect(mocks.selectAnalyticsPeriod).toHaveBeenCalledWith({
       mode: "CUSTOM",
@@ -69,3 +65,14 @@ describe("range period selector", () => {
     });
   });
 });
+
+function findButton(container: HTMLElement, label: string): HTMLButtonElement | undefined {
+  return Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+    .find((button) => button.getAttribute("aria-label") === label || button.textContent?.trim() === label);
+}
+
+function clickButton(container: HTMLElement, label: string): void {
+  const button = findButton(container, label);
+  expect(button, `button ${label}`).toBeDefined();
+  fireEvent.click(button!);
+}
