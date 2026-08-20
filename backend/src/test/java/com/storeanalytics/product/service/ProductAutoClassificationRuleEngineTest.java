@@ -17,6 +17,7 @@ class ProductAutoClassificationRuleEngineTest {
 
     @ParameterizedTest
     @MethodSource({
+        "yandexStationCases",
         "productionDryRunCases",
         "legacyUnmappedRegressionCases",
         "customerMethodologyCases"
@@ -55,13 +56,8 @@ class ProductAutoClassificationRuleEngineTest {
                 .isEqualTo("SETUP_SERVICE");
     }
 
-    private static Stream<Arguments> productionDryRunCases() {
+    private static Stream<Arguments> yandexStationCases() {
         return Stream.of(
-                arguments(
-                        "Apple Watch S11 42mm Rose Gold SB M/L New",
-                        "PODS_WATCH_OTHER_DEVICE",
-                        ProductConditionType.NEW
-                ),
                 arguments(
                         "Яндекс Станция Макс бежевый",
                         "PODS_WATCH_OTHER_DEVICE",
@@ -71,6 +67,16 @@ class ProductAutoClassificationRuleEngineTest {
                         "Yandex Station Max б/у",
                         "PODS_WATCH_OTHER_DEVICE",
                         ProductConditionType.USED
+                )
+        );
+    }
+
+    private static Stream<Arguments> productionDryRunCases() {
+        return Stream.of(
+                arguments(
+                        "Apple Watch S11 42mm Rose Gold SB M/L New",
+                        "PODS_WATCH_OTHER_DEVICE",
+                        ProductConditionType.NEW
                 ),
                 arguments(
                         "IPad Air 11 M2 chip 128GB Space Gray (A) 97% Б/У",
