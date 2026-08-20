@@ -63,6 +63,16 @@ class ProductAutoClassificationRuleEngineTest {
                         ProductConditionType.NEW
                 ),
                 arguments(
+                        "Яндекс Станция Макс бежевый",
+                        "PODS_WATCH_OTHER_DEVICE",
+                        ProductConditionType.NEW
+                ),
+                arguments(
+                        "Yandex Station Max б/у",
+                        "PODS_WATCH_OTHER_DEVICE",
+                        ProductConditionType.USED
+                ),
+                arguments(
                         "IPad Air 11 M2 chip 128GB Space Gray (A) 97% Б/У",
                         "IPAD_MAC",
                         ProductConditionType.USED

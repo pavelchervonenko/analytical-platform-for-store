@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class ProductAutoClassificationRuleEngine {
 
-    public static final String RULE_VERSION = "livesklad-product-rules-v4";
+    public static final String RULE_VERSION = "livesklad-product-rules-v5";
 
     public Optional<ProductAutoClassificationDecision> classify(Product product) {
         return classify(product.getName(), product.getSourceKind());
@@ -229,6 +229,13 @@ public class ProductAutoClassificationRuleEngine {
 
     private Optional<ProductAutoClassificationDecision> classifyDevice(String name) {
         ProductConditionType condition = condition(name);
+        if (containsAny(name, "яндекс станци", "yandex station")) {
+            return decision(
+                    "PODS_WATCH_OTHER_DEVICE",
+                    condition,
+                    "yandex-station"
+            );
+        }
         if (isIpadMacPeripheralDevice(name)) {
             return decision("IPAD_MAC", condition, "ipad-mac-peripheral-device");
         }

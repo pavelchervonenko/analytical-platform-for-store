@@ -1,0 +1,117 @@
+.range-period { position: relative; min-width: 230px; }
+.range-period__trigger { width: 100%; height: 54px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border: 1px solid var(--border); border-radius: 17px; color: var(--text); background: var(--surface); box-shadow: var(--shadow-sm); cursor: pointer; text-align: left; }
+.range-period__trigger > svg:first-child { flex: 0 0 auto; color: var(--primary); }
+.range-period__trigger > span { min-width: 0; display: grid; margin-right: auto; }
+.range-period__trigger small { color: var(--text-faint); font-size: 12px; }
+.range-period__trigger strong { overflow: hidden; margin-top: 3px; font-size: 14px; white-space: nowrap; text-overflow: ellipsis; text-transform: capitalize; }
+.range-period__trigger > svg:last-child { flex: 0 0 auto; transition: transform .18s ease; }
+.range-period.is-open .range-period__trigger { border-color: rgba(40,91,73,.35); box-shadow: 0 0 0 4px rgba(40,91,73,.08); }
+.range-period.is-open .range-period__trigger > svg:last-child { transform: rotate(180deg); }
+
+.range-period__backdrop { display: none; }
+.range-period__popover { position: absolute; z-index: 80; top: calc(100% + 10px); left: 0; width: min(820px, calc(100vw - 48px)); display: grid; grid-template-columns: 175px minmax(0, 1fr); overflow: hidden; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); box-shadow: 0 26px 70px rgba(20,31,26,.22); animation: range-period-enter .16s ease-out; transform-origin: top left; }
+.range-period__popover.is-month-only { grid-template-columns: 1fr; width: min(650px, calc(100vw - 48px)); }
+.range-period__mobile-heading { display: none; }
+.range-period__presets { display: grid; align-content: start; gap: 3px; padding: 14px 10px; border-right: 1px solid var(--border); background: color-mix(in srgb, var(--surface-muted) 48%, var(--surface)); }
+.range-period__presets button { min-height: 38px; padding: 0 12px; border: 0; border-radius: 10px; color: var(--text-muted); background: transparent; cursor: pointer; font: inherit; font-size: 14px; font-weight: 650; text-align: left; transition: color .14s ease, background .14s ease, transform .14s ease; }
+.range-period__presets button:hover:not(:disabled) { color: var(--text); background: var(--surface); transform: translateX(2px); }
+.range-period__presets button.is-active { color: var(--primary); background: var(--surface); box-shadow: var(--shadow-sm); }
+.range-period__presets button:disabled { opacity: .38; cursor: not-allowed; }
+.range-period__calendar-area { min-width: 0; padding: 16px 18px 14px; }
+.range-period__months { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+
+.range-calendar { min-width: 0; }
+.range-calendar > header { height: 36px; display: grid; grid-template-columns: 34px 1fr 34px; align-items: center; margin-bottom: 7px; }
+.range-calendar > header strong { font-size: 15px; text-align: center; text-transform: capitalize; }
+.range-calendar > header button { width: 32px; height: 32px; display: inline-grid; place-items: center; padding: 0; border: 0; border-radius: 9px; color: var(--text-muted); background: transparent; cursor: pointer; transition: color .14s ease, background .14s ease; }
+.range-calendar > header button:hover:not(:disabled) { color: var(--primary); background: var(--primary-soft); }
+.range-calendar > header button:disabled { opacity: .25; cursor: not-allowed; }
+.range-calendar > header svg { width: 18px; height: 18px; }
+@media (min-width: 721px) {
+  .range-calendar:first-child .range-calendar__next,
+  .range-calendar--second .range-calendar__previous { visibility: hidden; pointer-events: none; }
+}
+.range-calendar__weekdays, .range-calendar__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.range-calendar__weekdays { margin-bottom: 4px; color: var(--text-faint); font-size: 11px; font-weight: 800; text-align: center; text-transform: uppercase; }
+.range-calendar__weekdays span { padding: 7px 0; }
+.range-calendar__grid { gap: 2px 0; }
+.range-calendar__grid button { position: relative; height: 36px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 0; color: var(--text); background: transparent; cursor: pointer; font: inherit; font-size: 13px; transition: color .12s ease, background .12s ease, transform .12s ease; }
+.range-calendar__grid button > span { position: relative; z-index: 1; width: 31px; height: 31px; display: grid; place-items: center; border: 1px solid transparent; border-radius: 10px; }
+.range-calendar__grid button:hover:not(:disabled) > span { background: var(--primary-soft); transform: translateY(-1px); }
+.range-calendar__grid button.is-outside { color: color-mix(in srgb, var(--text-faint) 58%, transparent); }
+.range-calendar__grid button:disabled { color: color-mix(in srgb, var(--text-faint) 38%, transparent); cursor: not-allowed; }
+.range-calendar__grid button.is-in-range { background: color-mix(in srgb, var(--primary-soft) 78%, transparent); }
+.range-calendar__grid button.is-range-start { border-radius: 11px 0 0 11px; }
+.range-calendar__grid button.is-range-end { border-radius: 0 11px 11px 0; }
+.range-calendar__grid button.is-range-start.is-range-end { border-radius: 11px; }
+.range-calendar__grid button.is-range-start > span,
+.range-calendar__grid button.is-range-end > span { color: white; background: var(--primary); box-shadow: 0 6px 16px rgba(40,91,73,.22); }
+.range-calendar__grid button.is-preview-end > span { box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 28%, transparent); }
+.range-calendar__grid button.is-today:not(.is-range-start):not(.is-range-end) > span { border-color: color-mix(in srgb, var(--primary) 65%, transparent); color: var(--primary); font-weight: 800; }
+.range-calendar__grid button.is-after-coverage:not(:disabled)::after { content: ""; position: absolute; right: 5px; bottom: 4px; width: 4px; height: 4px; border-radius: 50%; background: var(--warning); }
+.range-calendar__grid button:focus-visible { z-index: 2; outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 10px; }
+
+.range-period__footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--border); }
+.range-period__summary { min-width: 0; display: grid; gap: 4px; }
+.range-period__summary strong { overflow: hidden; font-size: 13px; white-space: nowrap; text-overflow: ellipsis; }
+.range-period__summary small { color: var(--text-faint); font-size: 11px; }
+.range-period__summary .range-period__coverage-warning { color: var(--warning); }
+.range-period__actions { display: flex; flex: 0 0 auto; gap: 8px; }
+.range-period__actions .button { min-height: 38px; padding-inline: 15px; }
+
+@keyframes range-period-enter {
+  from { opacity: 0; transform: translateY(-5px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 900px) and (min-width: 721px) {
+  .range-period__popover,
+  .range-period__popover.is-month-only { position: fixed; top: 70px; right: 12px; left: 12px; width: auto; transform-origin: top center; }
+  .range-period__presets { padding-inline: 8px; }
+  .range-period__calendar-area { padding-inline: 12px; }
+  .range-period__months { gap: 10px; }
+}
+
+@media (max-width: 720px) {
+  .topbar .store-selector { max-width: calc(100% - 104px); }
+  .range-period { min-width: 48px; width: 48px; flex: 0 0 48px; }
+  .range-period__trigger { height: 48px; justify-content: center; padding: 0; color: var(--primary); background: var(--primary-soft); }
+  .range-period__trigger > span,
+  .range-period__trigger > svg:last-child { display: none; }
+  .range-period__backdrop { position: fixed; z-index: 78; inset: 0; display: block; border: 0; background: rgba(18,25,22,.42); backdrop-filter: blur(2px); }
+  .range-period__popover,
+  .range-period__popover.is-month-only { position: fixed; z-index: 80; top: auto; right: 0; bottom: 0; left: 0; width: auto; max-height: calc(100dvh - 32px); display: block; overflow-y: auto; border-width: 1px 0 0; border-radius: 24px 24px 0 0; animation-name: range-period-mobile-enter; transform-origin: bottom; }
+  .range-period__mobile-heading { position: sticky; z-index: 3; top: 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 18px 12px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(12px); }
+  .range-period__mobile-heading > div { min-width: 0; display: grid; gap: 3px; }
+  .range-period__mobile-heading small { color: var(--text-faint); font-size: 11px; }
+  .range-period__mobile-heading strong { overflow: hidden; font-size: 14px; white-space: nowrap; text-overflow: ellipsis; }
+  .range-period__mobile-heading button { width: 36px; height: 36px; display: grid; place-items: center; flex: 0 0 auto; padding: 0; border: 0; border-radius: 11px; color: var(--text-muted); background: var(--surface-muted); }
+  .range-period__mobile-heading svg { width: 18px; }
+  .range-period__presets { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; padding: 12px 16px 2px; border: 0; background: var(--surface); }
+  .range-period__presets button { min-height: 38px; padding-inline: 11px; border: 1px solid var(--border); background: var(--surface); font-size: 13px; }
+  .range-period__presets button:hover:not(:disabled) { transform: none; }
+  .range-period__presets button.is-active { border-color: color-mix(in srgb, var(--primary) 32%, var(--border)); background: var(--primary-soft); box-shadow: none; }
+  .range-period__calendar-area { padding: 11px 16px calc(92px + env(safe-area-inset-bottom)); }
+  .range-period__months { display: block; }
+  .range-calendar--second { display: none; }
+  .range-calendar > header { margin-bottom: 4px; }
+  .range-calendar__grid button { height: min(12vw, 46px); min-height: 39px; }
+  .range-calendar__grid button > span { width: 35px; height: 35px; }
+  .range-period__footer { position: fixed; z-index: 82; right: 0; bottom: 0; left: 0; margin: 0; padding: 12px 16px max(14px, env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--surface) 95%, transparent); backdrop-filter: blur(12px); }
+  .range-period__summary strong { font-size: 12px; }
+  .range-period__summary small { font-size: 10px; }
+  .range-period__actions .button--ghost { display: none; }
+  .range-period__actions .button { min-width: 112px; }
+}
+
+@keyframes range-period-mobile-enter {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .range-period__popover { animation: none; }
+  .range-period__trigger > svg:last-child,
+  .range-period__presets button,
+  .range-calendar__grid button { transition: none; }
+}

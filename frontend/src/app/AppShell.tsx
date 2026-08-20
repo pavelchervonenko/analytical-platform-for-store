@@ -3,7 +3,7 @@ import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { InitialStoreSetup } from "../admin/InitialStoreSetup";
 import { useAuth } from "../auth/AuthProvider";
-import { PeriodSelector } from "../stores/PeriodSelector";
+import { RangePeriodSelector } from "../stores/RangePeriodSelector";
 import { WorkspaceProvider, useWorkspace } from "../stores/WorkspaceProvider";
 
 const navigationGroups = [
@@ -91,7 +91,7 @@ function ShellContent() {
           </label>
 
           {periodSelectorVisible && (
-            <PeriodSelector analyticsEnabled={analyticsPeriodEnabled} />
+            <RangePeriodSelector analyticsEnabled={analyticsPeriodEnabled} />
           )}
 
           <NavLink className="topbar__profile" to="/profile" title="Профиль и безопасность"><span>{user?.displayName.slice(0, 1).toUpperCase()}</span><div><strong>{user?.displayName}</strong><small>{user?.email}</small></div></NavLink>

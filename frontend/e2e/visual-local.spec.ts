@@ -131,10 +131,21 @@ test.describe("local frontend visual review", () => {
       await page.goto(route, { waitUntil: "domcontentloaded" });
       await waitForStablePage(page);
 
+      let capturePeriodDialog = false;
       if (new URL(route, "http://local.test").pathname === "/insights") {
         const firstEmployee = page.locator(".insight-employee").first();
         await firstEmployee.locator(":scope > summary").click();
         await expect(firstEmployee).toHaveAttribute("open", "");
+      }
+
+      const periodSelector = page.getByRole("button", { name: "Выбрать период" });
+      if (await periodSelector.count() > 0) {
+        await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+        await periodSelector.click();
+        capturePeriodDialog = true;
+        await expect(
+          page.getByRole("dialog", { name: "Выбор периода" })
+        ).toBeVisible();
       }
 
       const screenshotDirectory = resolve(
@@ -142,6 +153,13 @@ test.describe("local frontend visual review", () => {
         "visual-artifacts",
         testInfo.project.name
       );
+      await mkdir(screenshotDirectory, { recursive: true });
+      if (capturePeriodDialog) {
+        await page.locator(".range-period__popover").screenshot({
+          path: resolve(screenshotDirectory, screenshotName(route) + "-period-selector.png"),
+          animations: "disabled"
+        });
+      }
       await captureVisualArtifacts(page, screenshotDirectory, screenshotName(route));
 
       await expect(page.locator(".query-error")).toHaveCount(0);

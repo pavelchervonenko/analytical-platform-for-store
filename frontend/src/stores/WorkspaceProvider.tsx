@@ -2,10 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import type { StoreSummary } from "../api/contracts";
-import { getStores, queryKeys } from "../api/queries";
+import { getStores, getStoreStatus, queryKeys } from "../api/queries";
 import {
-  clampCompletedAsOfDate,
+  completedDataThroughDate,
   currentDateInTimeZone,
+  effectiveMonthRange,
   formatDateShort,
   formatMonth,
   inclusiveDayCount,
@@ -32,6 +33,8 @@ interface WorkspaceContextValue {
   periodEnd: string;
   periodLabel: string;
   asOfDate: string;
+  dataThroughDate: string | null;
+  completedThroughDate: string;
   currentMonth: string;
   today: string;
   selectStore: (storeId: string) => void;
@@ -55,7 +58,10 @@ function validCustomRange(start: string | null, end: string | null, today: strin
 }
 
 function periodLabel(mode: AnalyticsPeriodMode, start: string, end: string, month: string): string {
-  if (mode === "MONTH") return formatMonth(month);
+  if (mode === "MONTH") {
+    const label = formatMonth(month);
+    return end < monthRange(month).end ? `${label} · по ${formatDateShort(end)}` : label;
+  }
   if (mode === "WEEK") return `${formatDateShort(start)} — ${formatDateShort(end)}`;
   return `${formatDateShort(start)} — ${formatDateShort(end)}`;
 }
@@ -73,6 +79,14 @@ export function WorkspaceProvider({
   const stores = storesQuery.data ?? [];
   const requestedStoreId = searchParams.get("store");
   const selectedStore = stores.find((store) => store.id === requestedStoreId) ?? stores[0];
+  const statusQuery = useQuery({
+    queryKey: selectedStore
+      ? queryKeys.storeStatus(selectedStore.id)
+      : ["stores", "unselected", "status"],
+    queryFn: () => getStoreStatus(selectedStore!.id),
+    enabled: Boolean(selectedStore),
+    staleTime: 60_000
+  });
   const today = selectedStore ? currentDateInTimeZone(selectedStore.timezone) : "";
   const currentMonth = today ? monthFromDate(today) : "";
   const requestedMonth = searchParams.get("month");
@@ -84,7 +98,13 @@ export function WorkspaceProvider({
   const requestedStart = searchParams.get("periodStart");
   const requestedEnd = searchParams.get("periodEnd");
   let periodMode: AnalyticsPeriodMode = "MONTH";
-  let { start: periodStart, end: periodEnd } = month ? monthRange(month) : { start: "", end: "" };
+  const dataThroughDate = statusQuery.data?.dataThroughDate ?? null;
+  const completedThroughDate = today
+    ? completedDataThroughDate(today, dataThroughDate)
+    : "";
+  let { start: periodStart, end: periodEnd } = month && today
+    ? effectiveMonthRange(month, today, dataThroughDate)
+    : { start: "", end: "" };
 
   if (today && requestedMode === "WEEK" && isIsoDate(requestedStart)) {
     const range = weekRange(requestedStart);
@@ -119,7 +139,9 @@ export function WorkspaceProvider({
     periodStart,
     periodEnd,
     periodLabel: periodLabel(periodMode, periodStart, periodEnd, month),
-    asOfDate: clampCompletedAsOfDate(today, monthRange(month).start, monthRange(month).end),
+    asOfDate: effectiveMonthRange(month, today, dataThroughDate).end,
+    dataThroughDate,
+    completedThroughDate,
     currentMonth,
     today,
     selectStore: (storeId) => setSearchParams((current) => updateSearchParams(current, { store: storeId })),

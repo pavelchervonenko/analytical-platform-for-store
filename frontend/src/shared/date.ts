@@ -65,6 +65,26 @@ export function clampCompletedAsOfDate(today: string, start: string, end: string
   return clampAsOfDate(shiftDate(today, -1), start, end);
 }
 
+export function completedDataThroughDate(today: string, dataThroughDate?: string | null): string {
+  const lastCompletedDay = shiftDate(today, -1);
+  if (!isIsoDate(dataThroughDate ?? null)) return lastCompletedDay;
+  return dataThroughDate! < lastCompletedDay ? dataThroughDate! : lastCompletedDay;
+}
+
+export function effectiveMonthRange(
+  month: string,
+  today: string,
+  dataThroughDate?: string | null
+): { start: string; end: string } {
+  const range = monthRange(month);
+  if (month !== monthFromDate(today)) return range;
+  const completedThrough = completedDataThroughDate(today, dataThroughDate);
+  return {
+    start: range.start,
+    end: completedThrough < range.start ? range.start : completedThrough
+  };
+}
+
 export function shiftMonth(month: string, offset: number): string {
   const match = ISO_MONTH.exec(month);
   if (!match) throw new Error("Invalid ISO month");
