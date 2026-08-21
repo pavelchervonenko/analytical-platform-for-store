@@ -25,6 +25,8 @@ class LiveSkladWebhookInboxMetricsTest {
         when(resultSet.getDouble("retrying")).thenReturn(2.0);
         when(resultSet.getDouble("terminal_failed")).thenReturn(1.0);
         when(resultSet.getDouble("expired_lease")).thenReturn(3.0);
+        when(resultSet.getDouble("payload_mismatch")).thenReturn(4.0);
+        when(resultSet.getDouble("stale")).thenReturn(5.0);
 
         LiveSkladWebhookInboxMetrics metrics =
                 new LiveSkladWebhookInboxMetrics(
@@ -47,6 +49,10 @@ class LiveSkladWebhookInboxMetricsTest {
                 .isEqualTo(1.0);
         assertThat(gauge(registry, "SALE_RETURN", "expired_lease"))
                 .isEqualTo(3.0);
+        assertThat(gauge(registry, "SALE_RETURN", "payload_mismatch"))
+                .isEqualTo(4.0);
+        assertThat(gauge(registry, "SALE_RETURN", "stale"))
+                .isEqualTo(5.0);
         assertThat(gauge(registry, "ORDER_RETURN", "received"))
                 .isZero();
     }

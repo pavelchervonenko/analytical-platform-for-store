@@ -6,6 +6,7 @@ import com.storeanalytics.integration.livesklad.client.LiveSkladOrderClient;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladOrderDetailPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladOrderSummaryPayload;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladException;
+import com.storeanalytics.integration.livesklad.exception.LiveSkladOrderChangedException;
 import com.storeanalytics.store.model.Store;
 import com.storeanalytics.store.repository.StoreRepository;
 import com.storeanalytics.sync.exception.OrderSyncCapacityException;
@@ -16,6 +17,7 @@ import com.storeanalytics.sync.model.SyncRun;
 import com.storeanalytics.sync.model.SyncRunError;
 import com.storeanalytics.sync.model.SyncScope;
 import com.storeanalytics.sync.model.SyncStatus;
+import com.storeanalytics.sync.model.SyncTriggerType;
 import com.storeanalytics.sync.repository.SyncRunErrorRepository;
 import com.storeanalytics.sync.repository.SyncRunRepository;
 import java.time.Clock;
@@ -30,6 +32,7 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 @Service
 public class OrderSyncService {
@@ -78,6 +81,76 @@ public class OrderSyncService {
                 context.triggerType(),
                 () -> synchronizeInternal(period, context)
         );
+    }
+
+    public OrderSyncResult synchronizeWebhookOrder(String orderExternalId) {
+        if (!StringUtils.hasText(orderExternalId)) {
+            throw new IllegalArgumentException("orderExternalId is required");
+        }
+        String externalId = orderExternalId.trim();
+        return syncMetrics.record(
+                SyncScope.ORDERS,
+                SyncTriggerType.REPROCESS,
+                () -> synchronizeWebhookOrderInternal(externalId)
+        );
+    }
+
+    private OrderSyncResult synchronizeWebhookOrderInternal(
+            String orderExternalId
+    ) {
+        IntegrationConnection connection = activeLiveSkladConnection();
+        LiveSkladOrderDetailPayload detail = liveSkladClient
+                .fetchOrderDetail(orderExternalId);
+        if (detail == null
+                || !orderExternalId.equals(detail.externalId())
+                || detail.sourceUpdatedAt() == null) {
+            throw new LiveSkladOrderChangedException();
+        }
+        Store store = storeRepository.findByConnectionIdAndExternalId(
+                connection.getId(),
+                detail.storeExternalId()
+        ).filter(Store::isActive).orElseThrow(() -> new IllegalStateException(
+                "Active LiveSklad store for webhook order is not synchronized"
+        ));
+        Instant periodStart = detail.sourceUpdatedAt();
+        SyncRun syncRun = syncRunRepository.save(SyncRun.startOrderSync(
+                connection,
+                new SyncPeriod(periodStart, periodStart.plusNanos(1)),
+                SyncTriggerType.REPROCESS,
+                null,
+                null,
+                clock.instant()
+        ));
+        try {
+            OrderSyncBatchResult batch = persistence.synchronizeTargeted(
+                    syncRun.getId(),
+                    store,
+                    LiveSkladOrderSource.fromDetail(detail)
+            );
+            syncRun.complete(
+                    1,
+                    batch.documentsCreated(),
+                    batch.documentsUpdated(),
+                    batch.documentsSkipped(),
+                    clock.instant()
+            );
+            return OrderSyncResult.from(syncRunRepository.save(syncRun), batch);
+        } catch (RuntimeException exception) {
+            String summary = "Order webhook synchronization failed: "
+                    + exception.getClass().getSimpleName();
+            failSyncRun(
+                    syncRun,
+                    1,
+                    summary,
+                    exception instanceof LiveSkladException
+            );
+            LOGGER.warn(
+                    "Order webhook synchronization run {} failed with {}",
+                    syncRun.getId(),
+                    exception.getClass().getSimpleName()
+            );
+            throw new OrderSyncException(syncRun.getId(), exception);
+        }
     }
 
     private OrderSyncResult synchronizeInternal(

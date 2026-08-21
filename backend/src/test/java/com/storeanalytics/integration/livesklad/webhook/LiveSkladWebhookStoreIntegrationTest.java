@@ -50,7 +50,7 @@ class LiveSkladWebhookStoreIntegrationTest {
     }
 
     @Test
-    void claimsRetriesAndCompletesSaleReturnWithoutClaimingOrderReturn() {
+    void claimsEachWebhookKindOnlyThroughItsDedicatedWorker() {
         store.record(receipt(
                 LiveSkladWebhookKind.ORDER_RETURN,
                 "order-event",
@@ -116,6 +116,26 @@ class LiveSkladWebhookStoreIntegrationTest {
                 """,
                 String.class
         )).isEqualTo("RECEIVED");
+        LiveSkladWebhookClaim orderClaim = store.claimNextOrderReturn(
+                "order-worker", NOW.plusSeconds(32), Duration.ofMinutes(2), 8
+        ).orElseThrow();
+        assertThat(orderClaim.eventId()).isEqualTo("order-event");
+        store.recordSourceDocument(
+                orderClaim.id(), "order-worker", "order-1"
+        );
+        store.complete(
+                orderClaim.id(), "order-worker", NOW.plusSeconds(33)
+        );
+
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT processing_status
+                FROM livesklad_webhook_receipts
+                WHERE event_id = 'order-event'
+                """,
+                String.class
+        )).isEqualTo("PROCESSED");
+
     }
 
     @Test

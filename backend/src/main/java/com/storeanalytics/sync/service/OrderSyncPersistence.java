@@ -132,11 +132,28 @@ public class OrderSyncPersistence {
         return result.toResult();
     }
 
+    @Transactional
+    OrderSyncBatchResult synchronizeTargeted(
+            UUID syncRunId,
+            Store store,
+            LiveSkladOrderSource source
+    ) {
+        return synchronize(
+                syncRunId,
+                new OrderSyncPeriod(
+                        source.detail().sourceUpdatedAt(),
+                        source.detail().sourceUpdatedAt().plusNanos(1)
+                ),
+                List.of(new StoreOrderBatch(store, List.of(source)))
+        );
+    }
+
     private void synchronizeOrder(
             SyncContext context,
             Store store,
             LiveSkladOrderSource source
     ) {
+        lockOrder(context.syncRun(), source.summary().externalId());
         validateSource(store, source);
         LiveSkladOrderDetailPayload detail = source.detail();
         Set<String> seenDocumentIds = new HashSet<>();
@@ -166,6 +183,17 @@ public class OrderSyncPersistence {
                 detail.sourceUpdatedAt(),
                 seenDocumentIds
         );
+    }
+
+    private void lockOrder(SyncRun syncRun, String orderExternalId) {
+        String lockKey = syncRun.getConnection().getId()
+                + ":order:" + orderExternalId;
+        entityManager.createNativeQuery(
+                        "SELECT pg_advisory_xact_lock("
+                                + "hashtextextended(CAST(:lockKey AS text), 0))"
+                )
+                .setParameter("lockKey", lockKey)
+                .getSingleResult();
     }
 
     private void synchronizePosition(

@@ -115,6 +115,32 @@ fi
 sed -i '$d' "${release_env}"
 sed -i '$d' "${release_env}"
 
+printf '%s\n' \
+  'LIVESKLAD_ORDER_RETURN_WEBHOOK_WORKER_ENABLED=true' \
+  >>"${release_env}"
+if release_validate_livesklad_webhook_processing "${release_env}" \
+    >/dev/null 2>&1; then
+  fail_test 'order-return processing without its recovery path was accepted'
+fi
+printf '%s\n' \
+  'LIVESKLAD_WEBHOOK_ENABLED=true' \
+  'LIVESKLAD_WEBHOOK_WORKER_ENABLED=true' \
+  'SYNC_WORKER_ENABLED=true' \
+  'SYNC_SCHEDULE_ENABLED=true' \
+  'SYNC_INCREMENTAL_OVERLAP_DAYS=1' \
+  >>"${release_env}"
+if release_validate_livesklad_webhook_processing "${release_env}" \
+    >/dev/null 2>&1; then
+  fail_test 'order-return processing with insufficient overlap was accepted'
+fi
+sed -i '$d' "${release_env}"
+printf '%s\n' 'SYNC_INCREMENTAL_OVERLAP_DAYS=3' >>"${release_env}"
+release_validate_livesklad_webhook_processing "${release_env}" \
+  || fail_test 'order-return processing with daily recovery was rejected'
+for ignored in 1 2 3 4 5 6; do
+  sed -i '$d' "${release_env}"
+done
+
 printf '%s' 'short' \
   >"${temporary_directory}/livesklad-order-return-webhook-secret"
 if release_validate_secret_files "${release_env}" >/dev/null 2>&1; then

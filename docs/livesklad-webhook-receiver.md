@@ -7,15 +7,13 @@ This release adds two authenticated ingress endpoints:
 - `POST /api/integrations/livesklad/webhooks/sale-returns`
 - `POST /api/integrations/livesklad/webhooks/order-returns`
 
-The receiver durably stores and deduplicates both notification kinds. When the
-sale-return worker is enabled, it reads `data.id`, fetches the complete return
-document, and idempotently updates the shared sales facts. A return remains a
-revenue correction even when LiveSklad reports no refund transaction; payment
-movement is stored separately and a mismatch remains visible as a data-quality
-issue.
-
-Order-return events are intentionally retained without processing until their
-document contract and order reconciliation path are implemented.
+The receiver durably stores and deduplicates both notification kinds. The
+sale-return worker reads `data.id`, fetches the complete return document, and
+idempotently updates the shared sales facts. The independently controlled
+order-return worker reads `data.id`, reloads that exact order and its positions,
+and idempotently reconciles the order facts. A return remains a revenue
+correction even when LiveSklad reports no refund transaction; payment movement
+is stored separately and a mismatch remains visible as a data-quality issue.
 
 ## Public URLs
 
@@ -72,6 +70,9 @@ Environment:
 - `LIVESKLAD_WEBHOOK_ENABLED=true`
 - `LIVESKLAD_WEBHOOK_MAX_BODY_BYTES=262144`
 - `LIVESKLAD_WEBHOOK_WORKER_ENABLED=true` on `backend-worker`
+- `LIVESKLAD_ORDER_RETURN_WEBHOOK_WORKER_ENABLED=false` until the first real
+  order-return payload has been verified; then enable it only through the
+  canary procedure below
 - `LIVESKLAD_SALE_RETURN_WEBHOOK_SECRET_FILE`
 - `LIVESKLAD_ORDER_RETURN_WEBHOOK_SECRET_FILE`
 
@@ -115,7 +116,8 @@ API. Access must be limited to operational diagnostics and processing.
 
 ## Processing guarantees
 
-- Only `SALE_RETURN` receipts are claimed by the current worker.
+- `SALE_RETURN` and `ORDER_RETURN` have separate claim paths, so one worker
+  never consumes the other event kind.
 - A receipt is processed at most once concurrently through a database lease.
 - Expired leases are recovered automatically.
 - HTTP 404/409, rate limits, transport failures, changed return details, 5xx
@@ -128,6 +130,53 @@ API. Access must be limited to operational diagnostics and processing.
   webhook cannot delete neighboring return facts.
 - The return document is serialized with a per-document transaction lock so a
   webhook and a period backfill cannot create competing facts.
+- An order-return event fetches only `data.id`; it never runs company-wide list
+  loading or period deletion detection.
+- The targeted order and a concurrent period synchronization share a
+  per-order PostgreSQL advisory transaction lock. Repeated and concurrent
+  deliveries therefore create or update a fact once and skip the unchanged
+  duplicate.
+- A list/detail change race is retryable (`LIVESKLAD_ORDER_CHANGED`) rather
+  than a terminal synchronization failure.
+
+## Daily recovery and alerting
+
+Webhooks are the fast correction path, not the only source of truth. When
+order-return processing is enabled, release preflight also requires:
+
+- `SYNC_WORKER_ENABLED=true`;
+- `SYNC_SCHEDULE_ENABLED=true`;
+- `SYNC_INCREMENTAL_OVERLAP_DAYS` of at least `2` (production default: `3`).
+
+The scheduled overlap re-reads recent orders every day, so a notification that
+was delayed or missed is repaired by the normal idempotent synchronization.
+The `storeanalytics.livesklad.webhook.receipts` gauge exposes each event kind
+with states `received`, `retrying`, `terminal_failed`, `expired_lease`,
+`payload_mismatch`, and `stale`. `stale` means an unprocessed receipt is older
+than one hour. Any non-zero value for the last four states requires operator
+review; `received` may be temporarily non-zero while the worker drains the
+queue.
+
+## Order-return canary
+
+The order worker is disabled by default and adds no database migration. Deploy
+the code with schema V44 unchanged, then:
+
+1. keep `LIVESKLAD_ORDER_RETURN_WEBHOOK_WORKER_ENABLED=false`;
+2. capture the first real order-return receipt and verify that scalar `data.id`
+   is accepted by the LiveSklad order-detail API and identifies the changed
+   order; `action.id` must not be used;
+3. verify the scheduled synchronization and overlap settings listed above;
+4. enable the flag and restart only `backend-worker`;
+5. verify that the canary receipt becomes `PROCESSED`, its
+   `source_document_id` equals `data.id`, and the corresponding order facts
+   match a fresh order-detail response;
+6. watch all webhook receipt gauges through at least one scheduled overlap
+   cycle before considering the feature fully enabled.
+
+If the payload contract is different, leave the flag disabled. Receipts remain
+durable and can be processed after a forward fix; no event needs to be deleted
+or manually rewritten.
 
 ## Historical recovery
 

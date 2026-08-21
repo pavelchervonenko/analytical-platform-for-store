@@ -254,6 +254,54 @@ release_validate_product_classification_reconciliation() {
   esac
 }
 
+release_validate_livesklad_webhook_processing() {
+  local env_file="$1"
+  local order_worker receiver worker sync_worker schedule overlap
+
+  order_worker="$(release_env_value_or_default \
+    "${env_file}" LIVESKLAD_ORDER_RETURN_WEBHOOK_WORKER_ENABLED false)" \
+    || return 1
+  case "${order_worker}" in
+  false)
+    return 0
+    ;;
+  true)
+    ;;
+  *)
+    release_safety_fail \
+      'LIVESKLAD_ORDER_RETURN_WEBHOOK_WORKER_ENABLED must be true or false'
+    return 1
+    ;;
+  esac
+
+  receiver="$(release_env_value_or_default \
+    "${env_file}" LIVESKLAD_WEBHOOK_ENABLED false)" || return 1
+  worker="$(release_env_value_or_default \
+    "${env_file}" LIVESKLAD_WEBHOOK_WORKER_ENABLED false)" || return 1
+  sync_worker="$(release_env_value_or_default \
+    "${env_file}" SYNC_WORKER_ENABLED true)" || return 1
+  schedule="$(release_env_value_or_default \
+    "${env_file}" SYNC_SCHEDULE_ENABLED false)" || return 1
+  overlap="$(release_env_value_or_default \
+    "${env_file}" SYNC_INCREMENTAL_OVERLAP_DAYS 3)" || return 1
+
+  [[ "${receiver}" == 'true' ]] \
+    || { release_safety_fail \
+      'order-return processing requires LIVESKLAD_WEBHOOK_ENABLED=true'; return 1; }
+  [[ "${worker}" == 'true' ]] \
+    || { release_safety_fail \
+      'order-return processing requires LIVESKLAD_WEBHOOK_WORKER_ENABLED=true'; return 1; }
+  [[ "${sync_worker}" == 'true' ]] \
+    || { release_safety_fail \
+      'order-return processing requires SYNC_WORKER_ENABLED=true'; return 1; }
+  [[ "${schedule}" == 'true' ]] \
+    || { release_safety_fail \
+      'order-return processing requires SYNC_SCHEDULE_ENABLED=true as a recovery path'; return 1; }
+  [[ "${overlap}" =~ ^[0-9]+$ ]] && (( 10#${overlap} >= 2 )) \
+    || release_safety_fail \
+      'order-return processing requires SYNC_INCREMENTAL_OVERLAP_DAYS >= 2'
+}
+
 release_validate_env_file() {
   local env_file="$1"
   local mode
@@ -266,6 +314,7 @@ release_validate_env_file() {
   release_validate_schema_metadata "${env_file}" || return 1
   release_validate_product_classification_reconciliation "${env_file}" \
     || return 1
+  release_validate_livesklad_webhook_processing "${env_file}" || return 1
   release_validate_secret_files "${env_file}" || return 1
   release_validate_ca_file "${env_file}"
 }

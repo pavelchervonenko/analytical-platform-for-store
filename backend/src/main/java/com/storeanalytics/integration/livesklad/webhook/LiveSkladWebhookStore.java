@@ -34,8 +34,9 @@ class LiveSkladWebhookStore {
                     payload_sha256,
                     last_payload_sha256,
                     first_received_at,
-                    last_received_at
-                ) VALUES (?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?)
+                    last_received_at,
+                    available_at
+                ) VALUES (?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?)
                 ON CONFLICT (webhook_kind, event_id) DO UPDATE
                 SET delivery_count =
                         livesklad_webhook_receipts.delivery_count + 1,
@@ -57,6 +58,7 @@ class LiveSkladWebhookStore {
                 receipt.payload(),
                 receipt.payloadSha256(),
                 receipt.payloadSha256(),
+                Timestamp.from(receipt.receivedAt()),
                 Timestamp.from(receipt.receivedAt()),
                 Timestamp.from(receipt.receivedAt())
         );
@@ -90,10 +92,11 @@ class LiveSkladWebhookStore {
                     recovery_expected_net_amount,
                     recovery_expected_position_count,
                     recovery_reason,
-                    recovery_requested_at
+                    recovery_requested_at,
+                    available_at
                 ) VALUES (
                     ?, 'SALE_RETURN', ?, 'manualRecovery', ?::jsonb, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
                 RETURNING id,
                           source_document_id,
@@ -122,6 +125,7 @@ class LiveSkladWebhookStore {
                 request.netAmount(),
                 request.positionCount(),
                 request.reason(),
+                Timestamp.from(request.requestedAt()),
                 Timestamp.from(request.requestedAt())
         ).stream().findFirst().orElseThrow();
     }
@@ -213,6 +217,38 @@ class LiveSkladWebhookStore {
             Duration leaseDuration,
             int maxAttempts
     ) {
+        return claimNext(
+                LiveSkladWebhookKind.SALE_RETURN,
+                workerId,
+                now,
+                leaseDuration,
+                maxAttempts
+        );
+    }
+
+    @Transactional
+    Optional<LiveSkladWebhookClaim> claimNextOrderReturn(
+            String workerId,
+            Instant now,
+            Duration leaseDuration,
+            int maxAttempts
+    ) {
+        return claimNext(
+                LiveSkladWebhookKind.ORDER_RETURN,
+                workerId,
+                now,
+                leaseDuration,
+                maxAttempts
+        );
+    }
+
+    private Optional<LiveSkladWebhookClaim> claimNext(
+            LiveSkladWebhookKind kind,
+            String workerId,
+            Instant now,
+            Duration leaseDuration,
+            int maxAttempts
+    ) {
         jdbcTemplate.update(
                 """
                 UPDATE livesklad_webhook_receipts
@@ -228,12 +264,14 @@ class LiveSkladWebhookStore {
                         ELSE 'LEASE_EXPIRED'
                     END,
                     error_summary = 'Webhook processing lease expired'
-                WHERE processing_status = 'PROCESSING'
+                WHERE webhook_kind = ?
+                  AND processing_status = 'PROCESSING'
                   AND lease_until < ?
                 """,
                 Timestamp.from(now),
                 maxAttempts,
                 maxAttempts,
+                kind.name(),
                 Timestamp.from(now)
         );
         List<LiveSkladWebhookClaim> claims = jdbcTemplate.query(
@@ -241,7 +279,7 @@ class LiveSkladWebhookStore {
                 WITH candidate AS (
                     SELECT id
                     FROM livesklad_webhook_receipts
-                    WHERE webhook_kind = 'SALE_RETURN'
+                    WHERE webhook_kind = ?
                       AND available_at <= ?
                       AND processing_attempt_count < ?
                       AND (
@@ -293,6 +331,7 @@ class LiveSkladWebhookStore {
                                 Integer.class
                         )
                 ),
+                kind.name(),
                 Timestamp.from(now),
                 maxAttempts,
                 workerId,

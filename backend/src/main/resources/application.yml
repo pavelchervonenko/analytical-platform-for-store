@@ -304,6 +304,7 @@ app:
       max-body-bytes: ${LIVESKLAD_WEBHOOK_MAX_BODY_BYTES:262144}
       worker:
         enabled: ${LIVESKLAD_WEBHOOK_WORKER_ENABLED:false}
+        order-return-enabled: ${LIVESKLAD_ORDER_RETURN_WEBHOOK_WORKER_ENABLED:false}
         delay: ${LIVESKLAD_WEBHOOK_WORKER_DELAY:5s}
         lease-duration: ${LIVESKLAD_WEBHOOK_LEASE_DURATION:2m}
         retry-initial-delay: ${LIVESKLAD_WEBHOOK_RETRY_INITIAL_DELAY:30s}

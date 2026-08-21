@@ -179,6 +179,7 @@ aggregate logs/audit metadata and are not dynamic metric labels. See `data-reten
 | Metric | Tags | Meaning |
 | --- | --- | --- |
 | `storeanalytics.sync.jobs` | `status=failed|retrying|expired_lease` | Current persisted failed/retrying jobs and running jobs whose lease has expired. |
+| `storeanalytics.livesklad.webhook.receipts` | `kind=SALE_RETURN|ORDER_RETURN`, `state=received|retrying|terminal_failed|expired_lease|payload_mismatch|stale` | Current durable webhook inbox state; `stale` is an unprocessed receipt older than one hour. |
 | `storeanalytics.report.backfill.jobs` | `status=failed|retrying|expired_lease` | Current persisted report-backfill failures, retries and expired worker leases. |
 | `storeanalytics.data.freshness.age` | `source=sales|returns|orders` | Worst age in seconds of the latest successful data-through boundary among active stores. `NaN` means no successful data exists. |
 | `storeanalytics.data.freshness.missing` | `source=sales|returns|orders` | Active stores with no successful synchronization for the source. |

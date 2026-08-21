@@ -18,4 +18,23 @@ record LiveSkladOrderSource(
             );
         }
     }
+
+    static LiveSkladOrderSource fromDetail(
+            LiveSkladOrderDetailPayload detail
+    ) {
+        Objects.requireNonNull(detail, "detail must not be null");
+        return new LiveSkladOrderSource(
+                new LiveSkladOrderSummaryPayload(
+                        detail.externalId(),
+                        detail.documentNumber(),
+                        detail.createdAt(),
+                        detail.visible(),
+                        detail.statusExternalId(),
+                        detail.statusName(),
+                        detail.storeExternalId(),
+                        detail.rawPayload()
+                ),
+                detail
+        );
+    }
 }

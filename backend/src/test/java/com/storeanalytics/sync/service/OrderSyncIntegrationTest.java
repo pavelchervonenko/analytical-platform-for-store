@@ -25,6 +25,11 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -218,6 +223,88 @@ class OrderSyncIntegrationTest {
     }
 
     @Test
+    void webhookRefreshesOnlyTargetOrderIdempotently() {
+        orderClient.set(order(
+                "A000702",
+                "Выдан",
+                true,
+                Instant.parse("2026-08-07T11:01:00Z"),
+                Instant.parse("2026-08-07T12:00:00Z"),
+                "7000.00"
+        ));
+
+        OrderSyncResult created =
+                orderSyncService.synchronizeWebhookOrder("order-1");
+        OrderSyncResult unchanged =
+                orderSyncService.synchronizeWebhookOrder("order-1");
+
+        assertThat(created.recordsCreated()).isEqualTo(1);
+        assertThat(unchanged.recordsSkipped()).isEqualTo(1);
+        assertThat(orderClient.listRequestCount()).isZero();
+        assertThat(documentDeleted()).isFalse();
+
+        orderClient.set(order(
+                "A000702",
+                "Возвращен",
+                true,
+                Instant.parse("2026-08-07T11:01:00Z"),
+                Instant.parse("2026-08-07T13:00:00Z"),
+                "7000.00"
+        ));
+
+        OrderSyncResult removed =
+                orderSyncService.synchronizeWebhookOrder("order-1");
+
+        assertThat(removed.documentsDeleted()).isEqualTo(1);
+        assertThat(documentDeleted()).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT count(*) FROM sync_runs
+                WHERE sync_scope = 'ORDERS'
+                  AND trigger_type = 'REPROCESS'
+                  AND status = 'SUCCESS'
+                """,
+                Integer.class
+        )).isEqualTo(3);
+    }
+
+    @Test
+    void serializesConcurrentWebhookRefreshesForTheSameOrder() {
+        orderClient.set(order(
+                "A000703",
+                "Выдан",
+                true,
+                Instant.parse("2026-08-07T11:01:00Z"),
+                Instant.parse("2026-08-07T12:00:00Z"),
+                "7000.00"
+        ));
+        orderClient.awaitTwoTargetedDetails();
+
+        CompletableFuture<OrderSyncResult> first = CompletableFuture
+                .supplyAsync(() -> orderSyncService
+                        .synchronizeWebhookOrder("order-1"));
+        CompletableFuture<OrderSyncResult> second = CompletableFuture
+                .supplyAsync(() -> orderSyncService
+                        .synchronizeWebhookOrder("order-1"));
+        List<OrderSyncResult> results = List.of(first.join(), second.join());
+
+        assertThat(results)
+                .extracting(OrderSyncResult::recordsCreated)
+                .containsExactlyInAnyOrder(1, 0);
+        assertThat(results)
+                .extracting(OrderSyncResult::recordsSkipped)
+                .containsExactlyInAnyOrder(0, 1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM sales_documents WHERE is_deleted = false",
+                Integer.class
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM sales_document_items",
+                Integer.class
+        )).isEqualTo(1);
+    }
+
+    @Test
     void retriesWhenOrderChangesBetweenListAndDetailRequests() {
         orderClient.set(order(
                 "A000701", "Выдан", true,
@@ -385,6 +472,9 @@ class OrderSyncIntegrationTest {
         private final ObjectMapper objectMapper;
         private OrderFixture fixture;
         private boolean changeNumberBeforeDetail;
+        private int listRequestCount;
+
+        private volatile CyclicBarrier detailBarrier;
 
         FakeLiveSkladOrderClient(ObjectMapper objectMapper) {
             this.objectMapper = objectMapper;
@@ -398,9 +488,19 @@ class OrderSyncIntegrationTest {
             changeNumberBeforeDetail = true;
         }
 
+        void awaitTwoTargetedDetails() {
+            detailBarrier = new CyclicBarrier(2);
+        }
+
         void clear() {
             fixture = null;
             changeNumberBeforeDetail = false;
+            listRequestCount = 0;
+            detailBarrier = null;
+        }
+
+        int listRequestCount() {
+            return listRequestCount;
         }
 
         @Override
@@ -408,6 +508,7 @@ class OrderSyncIntegrationTest {
                 Instant changedPeriodStart,
                 Instant changedPeriodEnd
         ) {
+            listRequestCount++;
             if (fixture == null) {
                 return List.of();
             }
@@ -427,6 +528,22 @@ class OrderSyncIntegrationTest {
         public LiveSkladOrderDetailPayload fetchOrderDetail(
                 String orderExternalId
         ) {
+            CyclicBarrier barrier = detailBarrier;
+            if (barrier != null) {
+                try {
+                    barrier.await(5, TimeUnit.SECONDS);
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(
+                            "Interrupted while coordinating order detail race",
+                            exception
+                    );
+                } catch (BrokenBarrierException | TimeoutException exception) {
+                    throw new IllegalStateException(
+                            "Failed to coordinate order detail race", exception
+                    );
+                }
+            }
             LiveSkladOrderPositionPayload position =
                     new LiveSkladOrderPositionPayload(
                             "position-1",

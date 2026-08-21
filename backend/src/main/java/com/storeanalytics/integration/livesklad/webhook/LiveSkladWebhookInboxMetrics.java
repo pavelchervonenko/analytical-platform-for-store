@@ -7,6 +7,7 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -27,8 +28,10 @@ public class LiveSkladWebhookInboxMetrics implements MeterBinder {
             LiveSkladWebhookInboxMetrics.class
     );
     private static final String[] KINDS = {"SALE_RETURN", "ORDER_RETURN"};
+    private static final Duration STALE_RECEIPT_AGE = Duration.ofHours(1);
     private static final String[] STATES = {
-        "received", "retrying", "terminal_failed", "expired_lease"
+        "received", "retrying", "terminal_failed", "expired_lease",
+        "payload_mismatch", "stale"
     };
 
     private final JdbcTemplate jdbcTemplate;
@@ -90,7 +93,15 @@ public class LiveSkladWebhookInboxMetrics implements MeterBinder {
                            count(*) FILTER (
                                WHERE processing_status = 'PROCESSING'
                                  AND lease_until < ?
-                           ) AS expired_lease
+                           ) AS expired_lease,
+                           count(*) FILTER (
+                               WHERE payload_mismatch = true
+                           ) AS payload_mismatch,
+                           count(*) FILTER (
+                               WHERE processing_status IN ('RECEIVED', 'FAILED')
+                                 AND terminal_failure = false
+                                 AND first_received_at < ?
+                           ) AS stale
                     FROM livesklad_webhook_receipts
                     GROUP BY webhook_kind
                     """,
@@ -106,7 +117,10 @@ public class LiveSkladWebhookInboxMetrics implements MeterBinder {
                         }
                         return null;
                     },
-                    java.sql.Timestamp.from(clock.instant())
+                    java.sql.Timestamp.from(clock.instant()),
+                    java.sql.Timestamp.from(
+                            clock.instant().minus(STALE_RECEIPT_AGE)
+                    )
             );
             counts.set(Map.copyOf(refreshed));
         } catch (RuntimeException exception) {
