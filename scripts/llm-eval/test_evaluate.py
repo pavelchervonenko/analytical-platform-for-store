@@ -124,7 +124,7 @@ def valid_v3_output(payload: dict) -> dict:
     }
     return output
 
-def valid_v19_transport(payload: dict) -> dict:
+def valid_v21_transport(payload: dict) -> dict:
     canonical = valid_v3_output(payload)
     team = next(
         summary
@@ -195,14 +195,14 @@ class EvaluationDatasetTest(unittest.TestCase):
         )
         return failures
 
-    def test_candidate_configuration_is_primary_signal_v19(self):
+    def test_candidate_configuration_is_bounded_signal_v21(self):
         configurations = self.dataset["configurations"]
 
-        self.assertEqual(["v4", "v19"], [
+        self.assertEqual(["v4", "v21"], [
             value["id"] for value in configurations
         ])
         self.assertEqual(
-            "weekly-interpretation-v19",
+            "weekly-interpretation-v21",
             configurations[1]["promptVersion"],
         )
 
@@ -217,10 +217,10 @@ class EvaluationDatasetTest(unittest.TestCase):
             "promptVersion": "weekly-interpretation-v18",
         }))
 
-    def test_v19_primary_signal_satisfies_required_candidate(self):
+    def test_v21_primary_signal_satisfies_required_candidate(self):
         case_id = "accessory-gap"
         case = case_by_id(self.dataset, case_id)
-        output = valid_v19_transport(self.inputs[case_id])
+        output = valid_v21_transport(self.inputs[case_id])
 
         failures, metrics = EVALUATE.validate_response(
             self.v3_validator,
@@ -228,17 +228,17 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             self.inputs[case_id],
             output,
-            "v19",
+            "v21",
         )
 
         self.assertEqual([], failures)
         self.assertEqual(1, metrics["primarySignals"])
         self.assertEqual(1.0, metrics["requiredCandidateCoverage"])
 
-    def test_v19_rejects_primary_candidate_repeated_in_insights(self):
+    def test_v21_rejects_primary_candidate_repeated_in_insights(self):
         case_id = "accessory-gap"
         case = case_by_id(self.dataset, case_id)
-        output = valid_v19_transport(self.inputs[case_id])
+        output = valid_v21_transport(self.inputs[case_id])
         primary = output["primarySignal"]
         output["insights"] = [{
             "scope": "STORE",
@@ -258,7 +258,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             self.inputs[case_id],
             output,
-            "v19",
+            "v21",
         )
 
         self.assertTrue(any(
@@ -266,10 +266,10 @@ class EvaluationDatasetTest(unittest.TestCase):
             for failure in failures
         ))
 
-    def test_v19_accepts_null_primary_without_store_candidate(self):
+    def test_v21_accepts_null_primary_without_store_candidate(self):
         case_id = "stable-week"
         case = case_by_id(self.dataset, case_id)
-        output = valid_v19_transport(self.inputs[case_id])
+        output = valid_v21_transport(self.inputs[case_id])
 
         failures, metrics = EVALUATE.validate_response(
             self.v3_validator,
@@ -277,13 +277,13 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             self.inputs[case_id],
             output,
-            "v19",
+            "v21",
         )
 
         self.assertEqual([], failures)
         self.assertEqual(0, metrics["primarySignals"])
 
-    def test_v19_rejects_provider_owned_employee_headlines(self):
+    def test_v21_rejects_provider_owned_employee_headlines(self):
         case_id = "accessory-gap"
         case = case_by_id(self.dataset, case_id)
         payload = self.inputs[case_id]
@@ -319,7 +319,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             payload,
             transport,
-            "v19",
+            "v21",
         )
 
         self.assertTrue(any(
@@ -327,7 +327,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             for failure in failures
         ))
 
-    def test_v19_rejects_employee_candidate_not_sent_to_provider(self):
+    def test_v21_rejects_employee_candidate_not_sent_to_provider(self):
         payload = self.inputs["employee-improvement"]
         candidate = next(
             value
@@ -336,7 +336,7 @@ class EvaluationDatasetTest(unittest.TestCase):
         )
 
         failures = EVALUATE.privacy_reduced_provider_failures(
-            "employee-improvement/v19",
+            "employee-improvement/v21",
             {
                 "primarySignal": {
                     "candidateRef": candidate["candidateRef"],
@@ -356,7 +356,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             for failure in failures
         ))
 
-    def test_v19_backend_marker_builds_employee_and_team_content(self):
+    def test_v21_backend_marker_builds_employee_and_team_content(self):
         case_id = "team-most-improved"
         case = case_by_id(self.dataset, case_id)
         payload = self.inputs[case_id]
@@ -385,7 +385,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             payload,
             transport,
-            "v19",
+            "v21",
         )
 
         self.assertEqual([], failures)
@@ -401,7 +401,7 @@ class EvaluationDatasetTest(unittest.TestCase):
         )
         self.assertEqual(1, metrics["teamRelationships"])
 
-    def test_v19_backend_employee_headline_counts_exact_candidate(self):
+    def test_v21_backend_employee_headline_counts_exact_candidate(self):
         case_id = "employee-improvement"
         case = case_by_id(self.dataset, case_id)
         payload = self.inputs[case_id]
@@ -430,7 +430,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             payload,
             transport,
-            "v19",
+            "v21",
         )
 
         self.assertEqual([], failures)
@@ -585,7 +585,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             )[1],
         )
 
-    def test_v19_allows_identical_mandatory_employee_headlines(self):
+    def test_v21_allows_identical_mandatory_employee_headlines(self):
         case_id = "team-tie-no-leader"
         case = case_by_id(self.dataset, case_id)
         output = valid_v3_output(self.inputs[case_id])
@@ -601,7 +601,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             self.inputs[case_id],
             output,
-            "v19",
+            "v21",
         )
 
         self.assertFalse(any(
@@ -609,7 +609,7 @@ class EvaluationDatasetTest(unittest.TestCase):
         ))
         self.assertEqual(0, metrics["duplicateNarratives"])
 
-    def test_v19_structured_transport_builds_backend_relationships(self):
+    def test_v21_structured_transport_builds_backend_relationships(self):
         case_id = "team-most-improved"
         case = case_by_id(self.dataset, case_id)
         payload = self.inputs[case_id]
@@ -645,7 +645,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             payload,
             transport,
-            "v19",
+            "v21",
         )
 
         self.assertFalse(any(
@@ -862,7 +862,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             for failure in failures
         ))
 
-    def test_v19_action_count_cannot_exceed_candidate_count(self):
+    def test_v21_action_count_cannot_exceed_candidate_count(self):
         case_id = "accessory-gap"
         case = case_by_id(self.dataset, case_id)
         output = valid_output(self.inputs[case_id])
@@ -880,7 +880,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             self.inputs[case_id],
             output,
-            "v19",
+            "v21",
         )
 
         self.assertTrue(any(
@@ -1199,7 +1199,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             self.inputs[case_id],
             output,
-            "v19",
+            "v21",
         )
 
         self.assertTrue(any(
@@ -1210,7 +1210,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             1, metrics["nearDuplicatePrimaryTeamOverviews"]
         )
 
-    def test_v19_team_overview_rejects_non_team_evidence(self):
+    def test_v21_team_overview_rejects_non_team_evidence(self):
         case_id = "accessory-gap"
         case = case_by_id(self.dataset, case_id)
         output = valid_v3_output(self.inputs[case_id])
@@ -1230,7 +1230,7 @@ class EvaluationDatasetTest(unittest.TestCase):
             case,
             self.inputs[case_id],
             output,
-            "v19",
+            "v21",
         )
 
         self.assertTrue(any(

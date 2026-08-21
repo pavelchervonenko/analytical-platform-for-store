@@ -7,6 +7,9 @@
 структурную и семантическую валидацию. Production default и production database
 не изменялись.
 
+Обновление 2026-08-21: полный semantic gate v21/schema 3 пройден на 26 сценариях;
+актуальный статус зафиксирован в scripts/llm-eval/README.md.
+
 Этот документ заменяет
 [AI_INTERPRETATION_V19_RELEASE_HANDOFF_2026-08-17.md](AI_INTERPRETATION_V19_RELEASE_HANDOFF_2026-08-17.md)
 как текущая точка продолжения ИИ-работ. V19 и v20 остаются immutable-историей
@@ -141,25 +144,22 @@ Raw inputs, provider responses, receipts и request/evaluation hashes наход
 ignored-каталогах `build/llm-eval/` и в git не добавляются. API key и другие
 секреты в артефакты и документацию не записываются.
 
-## 6. Что не выполнено
+## 6. Что ещё не выполнено
 
-- v21 не развёрнут на production;
+- runtime-поддержка v21/schema 3 уже развёрнута, но production default не активирован;
 - application/production default остаётся v4/schema 2;
 - production env и Compose не менялись;
 - результаты не публиковались в production database;
-- consumer API/UI и Telegram fanout для v21 не переключались;
-- v21 пока проверен на двух exact-week случаях, а не на новой полной матрице из
-  26 сценариев.
+- consumer API/UI и Telegram fanout для v21 не переключались.
 
 ## 7. Следующий безопасный шаг
 
-1. Прогнать v21 на полной синтетической матрице 26 сценариев без повторной оплаты
-   уже сохранённых ответов там, где применимо.
-2. После успешного automatic/manual gate собрать отдельный release.
-3. Выполнить один production canary без Telegram fanout и проверить весь путь:
+1. Дождаться завершения текущего backfill и подготовить изолированный canary-запуск
+   на уже развёрнутом runtime.
+2. Выполнить один production canary без Telegram fanout и проверить весь путь:
    snapshot → bounded provider input → response → validation → publication →
    consumer API → отдельный раздел ИИ.
-4. Только после приёмки отдельно решить вопрос о смене production default.
+3. Только после приёмки отдельно решить вопрос о смене production default.
 
 Rollback пары prompt/schema атомарный: вернуть `weekly-interpretation-v4` вместе
 со schema `2`. Нельзя смешивать v21 со schema 2 или v4 со schema 3.

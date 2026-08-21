@@ -11,9 +11,9 @@
       "contentSchemaVersion": 2
     },
     {
-      "id": "v19",
+      "id": "v21",
       "label": "Store-only LLM и backend-owned сотрудники",
-      "promptVersion": "weekly-interpretation-v19",
+      "promptVersion": "weekly-interpretation-v21",
       "contentSchemaVersion": 3,
       "outputSchema": "docs/schemas/weekly-interpretation-content-v3.schema.json"
     }

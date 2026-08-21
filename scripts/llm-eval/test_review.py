@@ -266,7 +266,7 @@ class BlindedReviewTest(unittest.TestCase):
             },
             "backendEmployeeHeadlines": True,
         }
-        for configuration in ("v4", "v19"):
+        for configuration in ("v4", "v21"):
             (response_dir / f"{configuration}.json").write_text(
                 json.dumps(raw_response),
                 encoding="utf-8",
@@ -278,7 +278,7 @@ class BlindedReviewTest(unittest.TestCase):
         review_dataset["configurations"] = [
             configuration
             for configuration in dataset["configurations"]
-            if configuration["id"] in {"v4", "v19"}
+            if configuration["id"] in {"v4", "v21"}
         ]
         metrics = copy.deepcopy(
             automatic_report()["automaticMetrics"]["v4"]
@@ -292,7 +292,7 @@ class BlindedReviewTest(unittest.TestCase):
             "passed": True,
             "automaticMetrics": {
                 configuration: copy.deepcopy(metrics)
-                for configuration in ("v4", "v19")
+                for configuration in ("v4", "v21")
             },
         }
         packet, mapping, _ = REVIEW.build_review_artifacts(

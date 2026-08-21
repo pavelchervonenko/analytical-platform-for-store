@@ -1,24 +1,24 @@
 # Offline evaluation недельной ИИ-интерпретации
 
 Evaluation-контур сравнивает production baseline `weekly-interpretation-v4` / schema 2 и
-privacy-reduced candidate `weekly-interpretation-v19` / schema 3 на 26 обезличенных сценариях.
+bounded privacy-reduced candidate `weekly-interpretation-v21` / schema 3
+на 26 обезличенных сценариях.
 Dry-run не обращается к YandexGPT, production, публикации или Telegram. Платный режим доступен
 только через явную confirmation-фразу и два бюджетных лимита.
 
-Актуальный результат на 2026-08-17:
+Актуальный результат на 2026-08-21:
 
-- v15 отклонён полной матрицей: 18/26, 43 automatic violations;
-- v19: 26/26 automatic pass, 0 violations;
-- v19: 26/26 blinded manual pass, средняя оценка 4,8/5;
+- v21: 26/26 automatic pass, 0 violations;
+- v21: 26/26 blinded manual pass, средняя оценка 4,8/5;
 - решение: `CANDIDATE_ELIGIBLE_FOR_CANARY`;
 - production default по-прежнему v4/schema 2.
 
 Подробный handoff:
-[`AI_INTERPRETATION_V19_RELEASE_HANDOFF_2026-08-17.md`](../../docs/AI_INTERPRETATION_V19_RELEASE_HANDOFF_2026-08-17.md).
+[`AI_INTERPRETATION_V21_WEEKLY_CANARY_2026-08-17.md`](../../docs/AI_INTERPRETATION_V21_WEEKLY_CANARY_2026-08-17.md).
 
 ## Состав
 
-- `dataset-v2.json` — 26 сценариев, конфигурации v4/v19 и экспертные ожидания;
+- `dataset-v2.json` — 26 сценариев, конфигурации v4/v21 и экспертные ожидания;
 - `dataset-v2.schema.json` — схема dataset;
 - `evaluate.py` — сбор provider input, автоматический gate и canonical backend presentation;
 - `review.py` — completeness/integrity gate и слепая A/B-оценка;
@@ -30,9 +30,10 @@ Dataset фиксирует facts, sufficiency, materiality, candidates, limitati
 forbidden findings и critical errors. Смысл required/forbidden findings оценивается вручную;
 автоматический gate проверяет контрактные и доказательные инварианты.
 
-## Архитектура v19
+## Архитектура v21
 
-V4 получает legacy compact input. V19 использует отдельный privacy-reduced path:
+V4 получает legacy compact input. V21 наследует privacy-reduced path и ограничивает
+provider input максимум двумя разными по теме store candidates:
 
 - provider получает STORE facts/candidates и только агрегированный `TEAM.RATING_ELIGIBLE_COUNT`;
 - employee facts, employee refs, employee candidates и relationship candidates не отправляются;
@@ -43,7 +44,7 @@ V4 получает legacy compact input. V19 использует отдель�
 - evaluation и blinded review проверяют backend-canonical документ, показываемый пользователю;
 - SHA-256 raw response остаётся связан с packet/assignments и проверяется отдельно.
 
-Различие provider input hash между v4 и v19 ожидаемо и разрешено только для этого versioned
+Различие provider input hash между v4 и v21 ожидаемо и разрешено только для этого versioned
 privacy-reduced path. Внутри каждой конфигурации input, prompt, schema и generation parameters
 включены в immutable evaluation hash.
 
@@ -66,7 +67,7 @@ python3 scripts/llm-eval/evaluate.py   --export-inputs build/llm-eval/inputs
 Dry-run production request path:
 
 ```bash
-LLM_EVAL_RESPONSES_DIR=build/llm-eval/v4-v19-offline/responses LLM_EVAL_ARTIFACTS_DIR=build/llm-eval/v4-v19-offline/shadow   scripts/llm-eval/shadow.sh plan
+LLM_EVAL_RESPONSES_DIR=build/llm-eval/v4-v21-offline/responses LLM_EVAL_ARTIFACTS_DIR=build/llm-eval/v4-v21-offline/shadow   scripts/llm-eval/shadow.sh plan
 ```
 
 Plan создаёт request/evaluation hashes, token estimates и консервативный максимум стоимости.
@@ -105,10 +106,10 @@ python3 scripts/llm-eval/evaluate.py   --responses-dir build/llm-eval/<immutable
 Gate проверяет:
 
 - полноту всех 52 ответов;
-- schema v2 для v4 и schema v3/provider transport v19;
+- schema v2 для v4 и schema v3/provider transport v21;
 - exact candidates/evidence/scope/category;
 - backend-owned employees, team relationships и limitations;
-- absence person-level provider output для v19;
+- absence person-level provider output для v21;
 - sufficient/limited/insufficient semantics;
 - revenue/profit/margin dimension guards;
 - запрет чисел, identifiers, unsupported causes и directives;
@@ -139,7 +140,7 @@ Reviewer не открывает `assignments.json` до полного запо
 Финализация:
 
 ```bash
-python3 scripts/llm-eval/review.py finalize   --manifest scripts/llm-eval/dataset-v2.json   --responses-dir build/llm-eval/<immutable-run>/responses   --review-dir build/llm-eval/<immutable-run>/review   --baseline v4   --candidate v19   --report build/llm-eval/<immutable-run>/decision-report.json   --markdown build/llm-eval/<immutable-run>/decision-report.md
+python3 scripts/llm-eval/review.py finalize   --manifest scripts/llm-eval/dataset-v2.json   --responses-dir build/llm-eval/<immutable-run>/responses   --review-dir build/llm-eval/<immutable-run>/review   --baseline v4   --candidate v21   --report build/llm-eval/<immutable-run>/decision-report.json   --markdown build/llm-eval/<immutable-run>/decision-report.md
 ```
 
 Integrity gate отдельно проверяет raw response SHA и соответствие packet backend-canonical response.
@@ -150,20 +151,20 @@ baseline по ручным и автоматическим метрикам.
 `CANDIDATE_ELIGIBLE_FOR_CANARY` разрешает только отдельный canary одного периода. Он не включает
 смену default prompt, publication, Telegram fanout или production deployment.
 
-## Финальный сохранённый прогон v19
+## Финальный сохранённый прогон v21
 
 Локальные ignored-артефакты:
 
 ```text
-build/llm-eval/v4-v19-full-20260817/responses/
-build/llm-eval/v4-v19-full-20260817/automatic-report-final.json
-build/llm-eval/v4-v19-full-20260817/review-final/
-build/llm-eval/v4-v19-full-20260817/blinded-decision-final.json
-build/llm-eval/v4-v19-full-20260817/blinded-decision-final.md
+build/llm-eval/v4-v21-full-20260819/responses/
+build/llm-eval/v4-v21-full-20260819/automatic-report-final.json
+build/llm-eval/v4-v21-full-20260819/review-final/
+build/llm-eval/v4-v21-full-20260819/blinded-decision-final.json
+build/llm-eval/v4-v21-full-20260819/blinded-decision-final.md
 ```
 
-Итог: v19 26/26 automatic, 26/26 manual, 0 violations, 0 missing/forbidden/critical findings.
-V4 сохранил 131 automatic violation и 4/26 manual pass как контрольный baseline.
+Итог: v21 26/26 automatic, 26/26 manual, 0 violations, 0 missing/forbidden/critical findings.
+V4 сохранил 110 automatic violations и 11/26 manual pass как контрольный baseline.
 
 ## Добавление сценария
 
