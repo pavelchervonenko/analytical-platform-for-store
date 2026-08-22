@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CalendarCheck2, Check, Clock3, Eraser, Save, UserRoundCheck, UsersRound, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import { isApiClientError, type EtaggedResource } from "../api/client";
 import type { EmployeeRatingSetting, EmployeeShift, WorkScheduleDay, WorkShiftInput } from "../api/contracts";
 import { getEmployeeRatingSettings, getWorkSchedule, getWorkScheduleDay, queryKeys, replaceWorkScheduleDay } from "../api/queries";
@@ -32,6 +32,7 @@ function ShiftDayEditor({
   etag,
   settings,
   scheduleKey,
+  returnFocusRef,
   onClose,
   onSaved
 }: {
@@ -40,6 +41,7 @@ function ShiftDayEditor({
   etag: string;
   settings: EmployeeRatingSetting[];
   scheduleKey: readonly unknown[];
+  returnFocusRef: RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   onSaved: (date: string) => void;
 }) {
@@ -50,6 +52,17 @@ function ShiftDayEditor({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [clearConfirmation, setClearConfirmation] = useState(false);
 
+  const dialogRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const previousFocus = returnFocusRef.current ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    const frame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    return () => {
+      window.cancelAnimationFrame(frame);
+      previousFocus?.focus();
+    };
+  }, [returnFocusRef]);
   const roster = useMemo(() => {
     const employees = new Map<string, RosterEmployee>();
     for (const setting of settings) employees.set(setting.employeeId, { employeeId: setting.employeeId, displayName: setting.displayName, eligible: setting.employeeActive && setting.assignmentActive });
@@ -76,6 +89,25 @@ function ShiftDayEditor({
 
   const requestClose = () => {
     if (!dirty || window.confirm("Закрыть редактор и потерять несохраненные изменения?")) onClose();
+  };
+  const handleDialogKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      requestClose();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])') ?? [])];
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   };
   const toggle = (employee: RosterEmployee) => {
     setDraft((current) => {
@@ -111,12 +143,12 @@ function ShiftDayEditor({
 
   return (
     <div className="shift-editor-overlay">
-      <section className="shift-editor" role="dialog" aria-modal="true" aria-labelledby="shift-editor-title">
-        <header><div><p className="eyebrow">{formatMonth(month)}</p><h2 id="shift-editor-title">{dayLabel(workDate)}</h2><p>Сохранение полностью заменит состав этого дня.</p></div><button className="icon-button" type="button" onClick={requestClose} aria-label="Закрыть редактор"><X /></button></header>
+      <section className="shift-editor" role="dialog" aria-modal="true" aria-labelledby="shift-editor-title" ref={dialogRef} onKeyDown={handleDialogKeyDown}>
+        <header><div><p className="eyebrow">{formatMonth(month)}</p><h2 id="shift-editor-title">{dayLabel(workDate)}</h2><p>Сохранение полностью заменит состав этого дня.</p></div><button className="icon-button" type="button" onClick={requestClose} aria-label="Закрыть редактор" ref={closeButtonRef}><X /></button></header>
         <div className="shift-editor__summary"><span><UsersRound />{selectedCount} сотрудников</span><span><Clock3 />Полная смена — 11 часов</span></div>
         {roster.length === 0 ? <div className="panel-empty"><UsersRound /><strong>Нет доступных сотрудников</strong><p>Проверьте активные назначения сотрудников в магазине.</p></div> : <div className="shift-roster">{roster.map((employee) => {
           const selected = employee.employeeId in draft;
-          return <article className={`${selected ? "shift-roster-row--selected" : ""} ${!employee.eligible ? "shift-roster-row--unavailable" : ""}`} key={employee.employeeId}><button className="shift-check" type="button" aria-pressed={selected} disabled={!employee.eligible && !selected} onClick={() => toggle(employee)}><span>{selected && <Check />}</span><i>{employee.displayName.slice(0, 1).toUpperCase()}</i><strong>{employee.displayName}</strong></button><label><span>Часов</span><input type="text" inputMode="decimal" value={draft[employee.employeeId] ?? ""} disabled={!selected || !employee.eligible} onChange={(event) => { setDraft((current) => ({ ...current, [employee.employeeId]: event.target.value })); setErrors((current) => ({ ...current, [employee.employeeId]: "" })); }} aria-invalid={Boolean(errors[employee.employeeId])} /></label>{selected && employee.eligible && <button className="full-shift-button" type="button" onClick={() => setDraft((current) => ({ ...current, [employee.employeeId]: "11" }))}>Полная смена</button>}{!employee.eligible && <small>Недоступен для новых смен</small>}{errors[employee.employeeId] && <p role="alert">{errors[employee.employeeId]}</p>}</article>;
+          return <article className={`${selected ? "shift-roster-row--selected" : ""} ${!employee.eligible ? "shift-roster-row--unavailable" : ""}`} key={employee.employeeId}><button className="shift-check" type="button" aria-pressed={selected} disabled={!employee.eligible && !selected} onClick={() => toggle(employee)}><span>{selected && <Check />}</span><i>{employee.displayName.slice(0, 1).toUpperCase()}</i><strong>{employee.displayName}</strong></button><label><span>Часов</span><input type="text" inputMode="decimal" value={draft[employee.employeeId] ?? ""} disabled={!selected || !employee.eligible} onChange={(event) => { setDraft((current) => ({ ...current, [employee.employeeId]: event.target.value })); setErrors((current) => ({ ...current, [employee.employeeId]: "" })); }} aria-invalid={Boolean(errors[employee.employeeId])} /></label>{selected && employee.eligible && <button className="full-shift-button" type="button" onClick={() => setDraft((current) => ({ ...current, [employee.employeeId]: "11" }))} aria-label={`Установить полную смену для ${employee.displayName}`}>11 часов</button>}{!employee.eligible && <small>Недоступен для новых смен</small>}{errors[employee.employeeId] && <p role="alert">{errors[employee.employeeId]}</p>}</article>;
         })}</div>}
         {mutation.isError && <div className="form-alert" role="alert">{isApiClientError(mutation.error) && mutation.error.status === 412 ? "Этот день уже изменен другим пользователем. Закройте редактор и откройте день снова." : isApiClientError(mutation.error) ? mutation.error.message : "Не удалось сохранить смены. Обновите данные и повторите действие."}</div>}
         <footer><div>{dayShifts.length > 0 && <>{clearConfirmation && <span className="clear-confirmation">Очистить весь день?</span>}<button className="button button--ghost button--danger-ghost" type="button" disabled={mutation.isPending} onClick={clear}><Eraser size={15} />{clearConfirmation ? "Подтвердить" : "Очистить день"}</button>{clearConfirmation && <button className="button button--ghost" type="button" onClick={() => setClearConfirmation(false)}>Отмена</button>}</>}</div><button className="button button--primary" type="button" disabled={!dirty || mutation.isPending} onClick={save}><Save size={16} />{mutation.isPending ? "Сохраняем…" : "Сохранить день"}</button></footer>
@@ -139,6 +171,7 @@ export function SchedulePanel() {
   const [openingDate, setOpeningDate] = useState<string | null>(null);
   const [openingError, setOpeningError] = useState<string | null>(null);
   const [lastSavedDate, setLastSavedDate] = useState<string | null>(null);
+  const dayButtonRef = useRef<HTMLButtonElement | null>(null);
   const calendar = useMemo(() => buildMonthCalendar(month), [month]);
 
   if (scheduleQuery.isPending || settingsQuery.isPending) return <ScheduleSkeleton />;
@@ -155,7 +188,8 @@ export function SchedulePanel() {
   const activeEmployees = settingsQuery.data.filter((setting) => setting.employeeActive && setting.assignmentActive).length;
   const today = currentDateInTimeZone(selectedStore.timezone);
 
-  const openDay = async (date: string) => {
+  const openDay = async (date: string, dayButton: HTMLButtonElement) => {
+    dayButtonRef.current = dayButton;
     setOpeningDate(date);
     setOpeningError(null);
     try {
@@ -184,12 +218,13 @@ export function SchedulePanel() {
           if (!date) return <span className="schedule-day schedule-day--empty" key={`empty-${index}`} />;
           const dayShifts = shiftsByDate.get(date) ?? [];
           const hours = dayShifts.reduce((total, shift) => total + shift.workedHours, 0);
-          return <button className={`schedule-day ${date === today ? "schedule-day--today" : ""} ${dayShifts.length ? "schedule-day--filled" : ""}`} type="button" key={date} disabled={openingDate != null} onClick={() => void openDay(date)}><span><strong>{Number(date.slice(-2))}</strong>{date === today && <i>Сегодня</i>}</span>{dayShifts.length ? <><div className="schedule-day__avatars">{dayShifts.slice(0, 3).map((shift) => <i key={shift.id} title={shift.employeeName}>{shift.employeeName.slice(0, 1).toUpperCase()}</i>)}{dayShifts.length > 3 && <i>+{dayShifts.length - 3}</i>}</div><small>{dayShifts.length} чел., {formatNumber(hours)} ч</small></> : <small>{openingDate === date ? "Обновляем…" : "Нет смен"}</small>}</button>;
+          const dayDescription = dayShifts.length ? `${dayShifts.length} сотрудников, ${formatNumber(hours)} часов` : "нет смен";
+          return <button className={`schedule-day ${date === today ? "schedule-day--today" : ""} ${dayShifts.length ? "schedule-day--filled" : ""}`} type="button" key={date} disabled={openingDate != null} onClick={(event) => void openDay(date, event.currentTarget)} aria-label={`${formatDate(date)}, ${dayDescription}`}><span><strong>{Number(date.slice(-2))}</strong>{date === today && <i>Сегодня</i>}</span>{dayShifts.length ? <><div className="schedule-day__avatars">{dayShifts.slice(0, 3).map((shift) => <i key={shift.id} title={shift.employeeName}>{shift.employeeName.slice(0, 1).toUpperCase()}</i>)}{dayShifts.length > 3 && <i>+{dayShifts.length - 3}</i>}</div><small className="schedule-day__meta"><span><b>{dayShifts.length}</b> <i>сотр.</i></span><span>{formatNumber(hours)} ч</span></small></> : <small className="schedule-day__empty-label">{openingDate === date ? "Обновляем…" : "Нет смен"}</small>}</button>;
         })}</div>
         <footer className="schedule-calendar-note"><UserRoundCheck /><span>В рейтинг попадает сотрудник, который включен в участие и имеет хотя бы одну смену. Часы используются для показателя выручки за час.</span></footer>
       </section>
 
-      {selectedDay && <ShiftDayEditor key={`${selectedDay.value.workDate}:${selectedDay.etag}`} workDate={selectedDay.value.workDate} dayShifts={selectedDay.value.shifts} etag={selectedDay.etag} settings={settingsQuery.data} scheduleKey={scheduleKey} onClose={() => setSelectedDay(null)} onSaved={(date) => { setSelectedDay(null); setLastSavedDate(date); }} />}
+      {selectedDay && <ShiftDayEditor key={`${selectedDay.value.workDate}:${selectedDay.etag}`} workDate={selectedDay.value.workDate} dayShifts={selectedDay.value.shifts} etag={selectedDay.etag} settings={settingsQuery.data} scheduleKey={scheduleKey} returnFocusRef={dayButtonRef} onClose={() => setSelectedDay(null)} onSaved={(date) => { setSelectedDay(null); setLastSavedDate(date); }} />}
     </div>
   );
 }

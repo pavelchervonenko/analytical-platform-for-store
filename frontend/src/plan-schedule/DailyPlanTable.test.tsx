@@ -47,25 +47,34 @@ const future: PlanDailyTarget = {
 
 describe("DailyPlanTable", () => {
   it("shows completed facts and recalculated future percentages separately", () => {
-    render(<DailyPlanTable targets={[completed, future]} />);
+    render(<DailyPlanTable targets={[completed, future]} asOfDate="2026-08-15" />);
 
     expect(screen.getByRole("heading", { name: "Аксессуары и услуги" }))
       .toBeInTheDocument();
+    expect(screen.getAllByRole("columnheader", { name: "Ориентир дня" })).toHaveLength(2);
+    const explanation = screen.getByLabelText("Почему дневная цель пересчитывается");
+    expect(within(explanation).getByText("Почему цель меняется")).toBeInTheDocument();
+    expect(within(explanation).getByText(/может меняться ежедневно/u)).toBeInTheDocument();
+    expect(within(explanation).getByText(/15 августа 2026/u)).toBeInTheDocument();
+
     const completedRow = screen.getByRole("row", { name: /15 авг/u });
     expect(within(completedRow).getByText("завершён")).toBeInTheDocument();
     expect(within(completedRow).getAllByText("5%")).toHaveLength(2);
+    expect(within(completedRow).getAllByText("ориентир от факта выручки")).toHaveLength(2);
     expect(within(completedRow).getByText(/итог -1.*300.*₽/u))
       .toBeInTheDocument();
 
     const futureRow = screen.getByRole("row", { name: /16 авг/u });
+    expect(within(futureRow).getByText("будущий день")).toBeInTheDocument();
     expect(within(futureRow).getByText("прогноз")).toBeInTheDocument();
     expect(within(futureRow).getByText("7,5%")).toBeInTheDocument();
     expect(within(futureRow).getByText("5%")).toBeInTheDocument();
-    expect(within(futureRow).getAllByText("с учётом темпа")).toHaveLength(2);
+    expect(within(futureRow).getAllByText("цель с учётом прогноза")).toHaveLength(2);
+    expect(screen.getAllByText("Цель будущего дня")).toHaveLength(2);
   });
 
   it("does not render an empty schedule", () => {
-    const { container } = render(<DailyPlanTable targets={[]} />);
+    const { container } = render(<DailyPlanTable targets={[]} asOfDate="2026-08-15" />);
 
     expect(container).toBeEmptyDOMElement();
   });

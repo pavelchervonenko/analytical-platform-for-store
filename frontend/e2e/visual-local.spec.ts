@@ -159,8 +159,57 @@ test.describe("local frontend visual review", () => {
           path: resolve(screenshotDirectory, screenshotName(route) + "-period-selector.png"),
           animations: "disabled"
         });
+        await page.keyboard.press("Escape");
+        await expect(
+          page.getByRole("dialog", { name: "Выбор периода" })
+        ).toHaveCount(0);
       }
       await captureVisualArtifacts(page, screenshotDirectory, screenshotName(route));
+      if (new URL(route, "http://local.test").pathname === "/plan") {
+        const settings = page.locator(".plan-settings-disclosure");
+        if (await settings.count() > 0) {
+          await settings.locator(":scope > summary").click();
+          await expect(settings).toHaveAttribute("open", "");
+          await settings.screenshot({
+            path: resolve(screenshotDirectory, screenshotName(route) + "-settings-open.png"),
+            animations: "disabled"
+          });
+
+          await settings.getByRole("button", { name: "Изменить цели" }).click();
+          const editor = page.locator(".plan-settings-panel");
+          await expect(editor).toBeVisible();
+          await editor.screenshot({
+            path: resolve(screenshotDirectory, screenshotName(route) + "-settings-editor.png"),
+            animations: "disabled"
+          });
+
+          await editor.getByRole("button", { name: "Отмена" }).click();
+          await expect(page.locator(".plan-settings-disclosure")).toBeVisible();
+        }
+
+        await page.getByRole("button", { name: "Смены" }).click();
+        await expect(page.locator(".schedule-panel-view")).toBeVisible();
+        await page.waitForLoadState("networkidle");
+        await page.screenshot({
+          path: resolve(screenshotDirectory, screenshotName(route) + "-schedule.png"),
+          fullPage: true,
+          animations: "disabled"
+        });
+
+        const dayButton = page.locator("button.schedule-day:not([disabled])").first();
+        await dayButton.click();
+        const shiftEditor = page.getByRole("dialog");
+        await expect(shiftEditor).toBeVisible();
+        await expect(shiftEditor.getByRole("button", { name: "Закрыть редактор" })).toBeFocused();
+        await shiftEditor.screenshot({
+          path: resolve(screenshotDirectory, screenshotName(route) + "-shift-editor.png"),
+          animations: "disabled"
+        });
+        await page.keyboard.press("Escape");
+        await expect(shiftEditor).toHaveCount(0);
+        await expect(dayButton).toBeFocused();
+      }
+
 
       await expect(page.locator(".query-error")).toHaveCount(0);
       await expectNoHorizontalOverflow(page);
