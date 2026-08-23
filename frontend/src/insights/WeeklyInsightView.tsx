@@ -18,6 +18,7 @@ import type {
 import { formatDate } from "../shared/date";
 import { PanelSkeleton, QueryError } from "../shared/QueryState";
 import {
+  actionHorizonLabel,
   analysisStatusLabel,
   analysisStatusTone,
   employeeAnalysisHelp,
@@ -171,6 +172,20 @@ function employeeSummaryFallback(status: string): string {
   return "Показатели сотрудника за завершённую неделю";
 }
 
+function hasNonZeroValue(value: string): boolean {
+  return /[1-9]/u.test(value);
+}
+
+function keyEvidenceComparison(item: WeeklyInsightEvidence): string | null {
+  if (!item.previousFormattedValue) return null;
+  if (!hasNonZeroValue(item.previousFormattedValue)) {
+    return `Предыдущий период: ${readableInsightText(item.previousFormattedValue)}`;
+  }
+  const delta = item.relativeDeltaFormatted ?? item.absoluteDeltaFormatted;
+  if (delta) return `Изменение ${readableInsightText(delta)}`;
+  return item.comparisonText ?? null;
+}
+
 function employeeOverviewEvidenceRefs(
   employee: WeeklyInsightEmployee
 ): string[] {
@@ -185,7 +200,7 @@ function employeeOverviewEvidenceRefs(
 function EvidenceDisclosure({
   evidenceRefs,
   evidenceByCode,
-  caption = "Данные"
+  caption = "Почему такой вывод"
 }: {
   evidenceRefs?: string[];
   evidenceByCode: EvidenceIndex;
@@ -256,16 +271,9 @@ function KeyEvidence({
         <article key={item.evidenceCode}>
           <span>{readableInsightText(item.label)}</span>
           <strong>{readableInsightText(item.formattedValue ?? "")}</strong>
-          {(item.relativeDeltaFormatted
-            || item.absoluteDeltaFormatted
-            || item.comparisonText) && (
+          {keyEvidenceComparison(item) && (
             <small>
-              {readableInsightText(
-                item.relativeDeltaFormatted
-                  ?? item.absoluteDeltaFormatted
-                  ?? item.comparisonText
-                  ?? ""
-              )}
+              {readableInsightText(keyEvidenceComparison(item) ?? "")}
             </small>
           )}
         </article>
@@ -315,6 +323,14 @@ function InsightSignal({
 }) {
   if (values.length === 0) return null;
 
+  const genericTitles = new Set([
+    "сильные стороны",
+    "что работает",
+    "зона внимания",
+    "что требует внимания",
+    "главный риск"
+  ]);
+
   return (
     <article className={"insight-signal insight-signal--" + tone}>
       <span className="insight-signal__label">{label}</span>
@@ -324,7 +340,9 @@ function InsightSignal({
             className="insight-signal__item"
             key={(value.candidateRef ?? value.kind) + ":" + value.title}
           >
-            <h3>{readableInsightText(value.title)}</h3>
+            {!genericTitles.has(normalizedNarrative(value.title)) && (
+              <h3>{readableInsightText(value.title)}</h3>
+            )}
             <p>{readableInsightText(value.summary)}</p>
             <HypothesisHelp kind={value.kind} />
             <EvidenceDisclosure
@@ -402,7 +420,7 @@ function SectionHeading({
 function ActionList({
   actions,
   evidenceByCode,
-  heading = "Что сделать на следующей неделе"
+  heading
 }: {
   actions: InsightAction[];
   evidenceByCode: EvidenceIndex;
@@ -414,10 +432,15 @@ function ActionList({
   );
   if (uniqueActions.length === 0) return null;
 
+  const horizons = Array.from(new Set(uniqueActions.map((action) => action.horizon)));
+  const resolvedHeading = heading ?? (horizons.length === 1
+    ? `Что сделать ${actionHorizonLabel(horizons[0] ?? "").toLocaleLowerCase("ru-RU")}`
+    : "Что сделать в ближайший период");
+
   return (
-    <section className="insight-actions" aria-label={heading}>
+    <section className="insight-actions" aria-label={resolvedHeading}>
       <SectionHeading
-        title={heading}
+        title={resolvedHeading}
         icon={<Lightbulb aria-hidden="true" />}
       />
       <ol>
@@ -428,7 +451,7 @@ function ActionList({
             <EvidenceDisclosure
               evidenceRefs={action.evidenceRefs}
               evidenceByCode={evidenceByCode}
-              caption="Основание"
+              caption="Почему это действие"
             />
           </li>
         ))}
@@ -450,8 +473,8 @@ function StoreThemeSections({
     <details className="insight-themes">
       <summary className="insight-themes__summary">
         <span>
-          <strong>Разбор магазина</strong>
-          <small>Категории продаж и дополнительные продажи</small>
+          <strong>Категории и допродажи</strong>
+          <small>Структура выручки, динамика и точки роста</small>
         </span>
         <ChevronDown aria-hidden="true" />
       </summary>
@@ -553,6 +576,16 @@ function TeamExperience({
     }))
   ];
 
+  const summaryEvidence = evidenceFor(insight.summary.evidenceRefs, evidenceByCode);
+  const summaryIsOnlyLimitation = entries.length === 0
+    && summaryEvidence.length > 0
+    && summaryEvidence.every((item) => (
+      !item.available
+      || item.sufficiency === "LIMITED"
+      || item.sufficiency === "INSUFFICIENT"
+    ));
+  if (summaryIsOnlyLimitation) return null;
+
   return (
     <section className="insight-team-experience" aria-label="Лидеры и обмен опытом">
       <SectionHeading title="Командные результаты" />
@@ -585,11 +618,13 @@ function TeamExperience({
 function EmployeeInsight({
   employee,
   evidenceByCode,
-  repeatedNarratives
+  repeatedNarratives,
+  showAnalysisStatus
 }: {
   employee: WeeklyInsightEmployee;
   evidenceByCode: EvidenceIndex;
   repeatedNarratives: ReadonlySet<string>;
+  showAnalysisStatus: boolean;
 }) {
   const insight = employee.insight;
   const status = employee.analysisStatus || insight.analysisStatus;
@@ -606,6 +641,14 @@ function EmployeeInsight({
     insight.primaryRisk,
     insight.attentionArea
   ]).slice(0, 2);
+  const limitationEvidenceRefs = Array.from(new Set([
+    ...overviewEvidenceRefs,
+    ...limitations.flatMap((item) => item.evidenceRefs)
+  ]));
+  const limitationText = limitations[0]
+    ? limitationSummary(limitations[0])
+    : employeeAnalysisHelp(status);
+  const insufficient = status === "INSUFFICIENT";
 
   return (
     <details className="insight-employee">
@@ -615,11 +658,13 @@ function EmployeeInsight({
         </span>
         <span className="insight-employee__summary">
           <strong>{readableInsightText(employee.displayName)}</strong>
-          <small>{headlineRepeated
+          <small>{status !== "SUFFICIENT"
             ? employeeSummaryFallback(status)
-            : readableInsightText(insight.headline.text)}</small>
+            : headlineRepeated
+              ? employeeSummaryFallback(status)
+              : readableInsightText(insight.headline.text)}</small>
         </span>
-        {status !== "SUFFICIENT" && (
+        {showAnalysisStatus && status !== "SUFFICIENT" && (
           <span className={"insight-employee__status insight-employee__status--" + tone}>
             {analysisStatusLabel(status)}
           </span>
@@ -631,19 +676,25 @@ function EmployeeInsight({
           <div className="insight-employee__notice">
             <AlertTriangle aria-hidden="true" />
             <div>
-              <strong>Ограничения персонального разбора</strong>
-              <p>{employeeAnalysisHelp(status)}</p>
+              <strong>Почему разбор ограничен</strong>
+              <p>{readableInsightText(limitationText)}</p>
+              <EvidenceDisclosure
+                evidenceRefs={limitationEvidenceRefs}
+                evidenceByCode={evidenceByCode}
+                caption="Проверить данные"
+              />
             </div>
           </div>
         )}
 
-        <EvidenceDisclosure
-          evidenceRefs={overviewEvidenceRefs}
-          evidenceByCode={evidenceByCode}
-          caption="Показатели разбора"
-        />
+        {!insufficient && (
+          <EvidenceDisclosure
+            evidenceRefs={overviewEvidenceRefs}
+            evidenceByCode={evidenceByCode}
+          />
+        )}
 
-        <div className="insight-employee__narratives">
+        {!insufficient && <div className="insight-employee__narratives">
           {insight.workloadContext
             && !repeatedNarratives.has(
               normalizedNarrative(insight.workloadContext.text)
@@ -671,9 +722,9 @@ function EmployeeInsight({
               <p>{readableInsightText(insight.dynamicsSummary.text)}</p>
             </section>
           )}
-        </div>
+        </div>}
 
-        <div className="insight-employee__signals">
+        {!insufficient && <div className="insight-employee__signals">
           <InsightSignal
             label="Что работает"
             values={insight.strength ? [insight.strength] : []}
@@ -686,9 +737,9 @@ function EmployeeInsight({
             tone="warning"
             evidenceByCode={evidenceByCode}
           />
-        </div>
+        </div>}
 
-        {(insight.categoryPerformance || insight.additionalSalesPerformance) && (
+        {!insufficient && (insight.categoryPerformance || insight.additionalSalesPerformance) && (
           <div className="insight-employee__details">
             {insight.categoryPerformance && (
               <section>
@@ -747,13 +798,14 @@ function EmployeeInsight({
           </div>
         )}
 
-        <ActionList
-          actions={insight.recommendedActions}
-          evidenceByCode={evidenceByCode}
-          heading="Что сделать"
-        />
+        {!insufficient && (
+          <ActionList
+            actions={insight.recommendedActions}
+            evidenceByCode={evidenceByCode}
+          />
+        )}
 
-        {limitations.length > 0 && (
+        {status === "SUFFICIENT" && limitations.length > 0 && (
           <section className="insight-employee-limitations">
             <h3>Ограничения данных</h3>
             {limitations.map((limitation) => (
@@ -762,7 +814,7 @@ function EmployeeInsight({
                 <EvidenceDisclosure
                   evidenceRefs={limitation.evidenceRefs}
                   evidenceByCode={evidenceByCode}
-                  caption="Основание ограничения"
+                  caption="Источник ограничения"
                 />
               </div>
             ))}
@@ -848,6 +900,8 @@ function ReadyInsight({ insight }: { insight: ReadyWeeklyInsight }) {
   const limitedEmployeeCount = employees.filter((employee) => (
     (employee.analysisStatus || employee.insight.analysisStatus) !== "SUFFICIENT"
   )).length;
+  const showEmployeeStatuses = limitedEmployeeCount > 0
+    && limitedEmployeeCount !== employees.length;
   const evidenceByCode: EvidenceIndex = new Map(
     insight.content.evidence.map((item) => [item.evidenceCode, item])
   );
@@ -883,8 +937,8 @@ function ReadyInsight({ insight }: { insight: ReadyWeeklyInsight }) {
             Откройте сотрудника, чтобы посмотреть показатели, выводы и персональные действия.
           </p>
           {limitedEmployeeCount > 0 && (
-            <p className="insight-employees__mobile-status">
-              Персональный разбор: дополнительные данные нужны для {limitedEmployeeCount} из {employees.length} сотрудников.
+            <p className="insight-employees__status-summary">
+              Для {limitedEmployeeCount} из {employees.length} сотрудников пока недостаточно данных для надёжного персонального разбора.
             </p>
           )}
           <div className="insight-employees__list">
@@ -902,6 +956,7 @@ function ReadyInsight({ insight }: { insight: ReadyWeeklyInsight }) {
                   employee={employee}
                   evidenceByCode={evidenceByCode}
                   repeatedNarratives={repeatedNarratives}
+                  showAnalysisStatus={showEmployeeStatuses}
                 />
               </div>
             ))}

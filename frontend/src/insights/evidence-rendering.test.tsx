@@ -166,7 +166,7 @@ describe("weekly insight evidence rendering", () => {
 
     expect(screen.getAllByText("Выручка")).toHaveLength(2);
     expect(screen.getAllByText("1 200 000 ₽")).toHaveLength(2);
-    expect(screen.getByText("+20%")).toBeInTheDocument();
+    expect(screen.getByText("Изменение +20%")).toBeInTheDocument();
     expect(screen.getAllByText(
       "Было 1 000 000 ₽, изменение +200 000 ₽ (+20%)"
     )).toHaveLength(1);
@@ -179,9 +179,11 @@ describe("weekly insight evidence rendering", () => {
       "Возможная причина — её нужно проверить по дополнительным данным."
     )).toBeInTheDocument();
     expect(screen.getByText("Основание гипотезы")).toBeInTheDocument();
-    expect(screen.getAllByText("Данные").length).toBeGreaterThan(0);
     expect(
-      screen.getAllByText("Данные — ограничены").length
+      screen.getAllByText("Почему такой вывод").length
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("Проверить данные — ограничены").length
     ).toBeGreaterThan(0);
     expect(screen.queryByText("Гипотеза")).not.toBeInTheDocument();
     expect(screen.queryByText("Подробности")).not.toBeInTheDocument();
@@ -198,11 +200,14 @@ describe("weekly insight evidence rendering", () => {
       "Нагрузка сотрудников описана одинаково."
     )).not.toBeInTheDocument();
     expect(
-      screen.getAllByText("Показатели разбора — ограничены")
+      screen.getAllByText("Проверить данные — ограничены")
     ).toHaveLength(5);
     expect(document.querySelectorAll(
-      ".insight-employee__body > .insight-evidence"
+      ".insight-employee__notice .insight-evidence"
     )).toHaveLength(5);
+    expect(document.querySelectorAll(
+      ".insight-employee__narratives"
+    )).toHaveLength(0);
   });
 
   it("keeps the mobile employee preview short and groups the remaining employees", () => {
@@ -227,8 +232,11 @@ describe("weekly insight evidence rendering", () => {
       .closest("button");
     expect(collapseButton).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText(
-      "Персональный разбор: дополнительные данные нужны для 5 из 5 сотрудников."
+      "Для 5 из 5 сотрудников пока недостаточно данных для надёжного персонального разбора."
     )).toBeInTheDocument();
     expect(screen.getByText("5 сотрудников")).toBeInTheDocument();
+    expect(document.querySelectorAll(
+      ".insight-employee__status"
+    )).toHaveLength(0);
   });
 });
