@@ -10,7 +10,7 @@ import type {
   StoreKpi
 } from "../api/contracts";
 import { AttachRateMatrix, EmployeePerformanceSection, ManagementSummary } from "./OverviewManagementSections";
-import { formatOverviewPeriodLabel } from "./OverviewPage";
+import { formatOverviewPeriodLabel, SalesStructure } from "./OverviewPage";
 
 const storeId = "30df06fb-71fe-4477-b6b9-bbc712b1ab25";
 const annaId = "30df06fb-71fe-4477-b6b9-bbc712b1ab26";
@@ -78,9 +78,13 @@ function employee(
   netRevenue: number,
   accessoryRevenue: number,
   serviceRevenue: number,
-  participatesInRanking = true
+  participatesInRanking = true,
+  attachNumerator = 2,
+  attachDenominator = 5
 ): EmployeeRatingEntry {
   const additionalRevenue = accessoryRevenue + serviceRevenue;
+  const attachRate = attachNumerator * 100 / attachDenominator;
+  const attachScore = attachRate * 100 / 60;
   return {
     employeeId,
     displayName,
@@ -118,14 +122,14 @@ function employee(
       metricCode: "CASE_APPLE_IPHONE",
       numeratorCategoryCode: "CASE_APPLE_IPHONE",
       denominatorCode: "IPHONE_ALL",
-      numeratorReceiptCount: 2,
-      denominatorReceiptCount: 5,
-      numeratorQuantity: 2,
-      denominatorQuantity: 5,
-      ratePercent: 40,
-      storeRatePercent: 50,
+      numeratorReceiptCount: attachNumerator,
+      denominatorReceiptCount: attachDenominator,
+      numeratorQuantity: attachNumerator,
+      denominatorQuantity: attachDenominator,
+      ratePercent: attachRate,
+      storeRatePercent: 60,
       includedInScore: true,
-      score: 80
+      score: attachScore
     }]
   };
 }
@@ -158,8 +162,8 @@ const rating: EmployeeRatingResult = {
   },
   employees: [
     employee(annaId, "Анна", 60000, 9000, 6000),
-    employee(ilyaId, "Илья", 40000, 2000, 1000),
-    employee(hiddenId, "Скрытый сотрудник", 500000, 100000, 50000, false)
+    employee(ilyaId, "Илья", 40000, 2000, 1000, true, 3, 4),
+    employee(hiddenId, "Скрытый сотрудник", 500000, 100000, 50000, false, 1, 1)
   ],
   history: {
     status: "LIVE",
@@ -237,11 +241,11 @@ const attach: AttachRate = {
     metricCode: "CASE_APPLE_IPHONE",
     numeratorCategoryCode: "CASE_APPLE_IPHONE",
     denominatorCode: "IPHONE_ALL",
-    numeratorReceiptCount: 5,
+    numeratorReceiptCount: 6,
     denominatorReceiptCount: 10,
-    numeratorQuantity: 5,
+    numeratorQuantity: 6,
     denominatorQuantity: 10,
-    ratePerHundred: 50
+    ratePerHundred: 60
   }, {
     metricCode: "CHARGER_CABLE",
     numeratorCategoryCode: "CHARGER_CABLE",
@@ -273,6 +277,30 @@ describe("management overview", () => {
     expect(screen.queryByText("Средний чек")).not.toBeInTheDocument();
   });
 
+  it("renders overlapping sales groups as parent totals and nested composition", () => {
+    render(<SalesStructure groups={[
+      group("PHONES", 90000, 2),
+      group("DEVICES", 150000, 3),
+      group("ACCESSORY", 12000, 8),
+      group("SERVICE", 7500, 5),
+      group("ADDITIONAL_REVENUE", 19500, 13)
+    ]} />);
+
+    const devices = screen.getByLabelText("Техника и её состав");
+    expect(within(devices).getByText("Техника")).toBeInTheDocument();
+    expect(within(devices).getByText("Телефоны")).toBeInTheDocument();
+    expect(within(devices).getByText("Итого по категории")).toBeInTheDocument();
+    expect(within(devices).getByText("В том числе")).toBeInTheDocument();
+
+    const additional = screen.getByLabelText("Дополнительная выручка и её состав");
+    expect(within(additional).getByText("Дополнительная выручка")).toBeInTheDocument();
+    expect(within(additional).getByText("Подытог")).toBeInTheDocument();
+    expect(within(additional).getByText("Аксессуары")).toBeInTheDocument();
+    expect(within(additional).getByText("Услуги")).toBeInTheDocument();
+    expect(within(additional).getAllByText("В том числе")).toHaveLength(2);
+    expect(screen.getByText(/Вложенные строки уже входят в итог/u)).toBeInTheDocument();
+  });
+
   it("shows only active rating participants and joins their gross profit", () => {
     render(
       <MemoryRouter>
@@ -291,7 +319,7 @@ describe("management overview", () => {
     expect(screen.getByLabelText("Краткие показатели по продавцам")).toHaveTextContent("Анна");
   });
 
-  it("renders a 14-row attach-rate map with store and employee calculations", () => {
+  it("renders the all-store attach benchmark, residual scope and relative colors", () => {
     render(
       <MemoryRouter>
         <AttachRateMatrix attach={attach} rating={rating} storeName="Магазин" />
@@ -302,17 +330,37 @@ describe("management overview", () => {
     expect(map).not.toBeNull();
     expect(map).not.toHaveAttribute("open");
     expect(screen.getByText("14 показателей", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("Все продажи")).toBeInTheDocument();
+    expect(screen.getByText("Вне рейтинга")).toBeInTheDocument();
+    expect(screen.getByText("и без сотрудника")).toBeInTheDocument();
+
     const casesRow = screen.getByText("Чехлы Apple / iPhone").closest("tr");
     expect(casesRow).not.toBeNull();
-    expect(within(casesRow!).getByText("50%")).toBeInTheDocument();
-    expect(within(casesRow!).getByText("5 / 10")).toBeInTheDocument();
-    const annaCell = within(casesRow!).getByTitle("Анна: 2 / 5 = 40%");
-    expect(within(annaCell).getByText("40%")).toBeInTheDocument();
+    expect(within(casesRow!).getByText("60%")).toBeInTheDocument();
+    expect(within(casesRow!).getByText("6 / 10")).toBeInTheDocument();
+
+    const outsideCell = within(casesRow!).getByTitle(
+      /Вне рейтинга \/ без сотрудника: 1 \/ 1 = 100%; остаток/
+    );
+    expect(outsideCell).toHaveAttribute("data-tone", "context");
+
+    const annaCell = within(casesRow!).getByTitle(
+      /Анна: 2 \/ 5 = 40%; 66,7% от benchmark магазина/
+    );
+    expect(annaCell).toHaveAttribute("data-tone", "below");
     expect(within(annaCell).getByText("2 / 5")).toBeInTheDocument();
+
+    const ilyaCell = within(casesRow!).getByTitle(
+      /Илья: 3 \/ 4 = 75%; 125% от benchmark магазина/
+    );
+    expect(ilyaCell).toHaveAttribute("data-tone", "above");
 
     const chargerRow = screen.getByText("Зарядные устройства и кабели").closest("tr");
     expect(chargerRow).not.toBeNull();
     expect(within(chargerRow!).getAllByText("нет базы").length).toBeGreaterThan(0);
+    expect(screen.getByText("Ниже магазина")).toBeInTheDocument();
+    expect(screen.getByText("На уровне магазина")).toBeInTheDocument();
+    expect(screen.getByText("Выше магазина")).toBeInTheDocument();
     expect(screen.queryByText("Скрытый сотрудник")).not.toBeInTheDocument();
   });
 });

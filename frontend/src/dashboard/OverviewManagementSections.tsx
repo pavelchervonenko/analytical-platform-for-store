@@ -348,7 +348,11 @@ interface AttachCellValue {
   numerator: number;
   denominator: number;
   rate: number | null;
+  includedInScore?: boolean;
 }
+
+type AttachCellKind = "benchmark" | "employee" | "context";
+type AttachCellTone = "benchmark" | "context" | "empty" | "insufficient" | "below" | "at-level" | "above";
 
 function storeAttachCell(attach: AttachRate, metricCode: string): AttachCellValue | null {
   const rate = attach.rates.find((entry) => entry.metricCode === metricCode);
@@ -366,27 +370,90 @@ function employeeAttachCell(employee: EmployeeRatingEntry, metricCode: string): 
   return {
     numerator: rate.numeratorQuantity ?? rate.numeratorReceiptCount,
     denominator: rate.denominatorQuantity ?? rate.denominatorReceiptCount,
-    rate: rate.ratePercent
+    rate: rate.ratePercent,
+    includedInScore: rate.includedInScore
   };
 }
 
-function heatLevel(value: number | null): number {
-  if (value == null || value <= 0) return 0;
-  if (value < 25) return 1;
-  if (value < 50) return 2;
-  if (value < 75) return 3;
-  return 4;
+function outsideRatingAttachCell(
+  store: AttachCellValue | null,
+  employees: EmployeeRatingEntry[],
+  metricCode: string
+): AttachCellValue | null {
+  if (!store) return null;
+  const visible = employees
+    .map((employee) => employeeAttachCell(employee, metricCode))
+    .filter((value): value is AttachCellValue => value != null);
+  const numerator = store.numerator - visible.reduce((sum, value) => sum + value.numerator, 0);
+  const denominator = store.denominator - visible.reduce((sum, value) => sum + value.denominator, 0);
+  const normalizedNumerator = Math.abs(numerator) < 0.000001 ? 0 : numerator;
+  const normalizedDenominator = Math.abs(denominator) < 0.000001 ? 0 : denominator;
+  return {
+    numerator: normalizedNumerator,
+    denominator: normalizedDenominator,
+    rate: normalizedDenominator <= 0
+      ? null
+      : Math.max(normalizedNumerator, 0) * 100 / normalizedDenominator
+  };
 }
 
-function AttachCell({ value, owner, metric }: { value: AttachCellValue | null; owner: string; metric: string }) {
+function comparisonTone(
+  value: AttachCellValue | null,
+  benchmarkRate: number | null,
+  kind: AttachCellKind
+): AttachCellTone {
+  if (value == null || value.denominator <= 0 || value.rate == null) return "empty";
+  if (kind === "benchmark") return "benchmark";
+  if (kind === "context") return "context";
+  if (benchmarkRate == null || benchmarkRate <= 0 || value.includedInScore === false) {
+    return "insufficient";
+  }
+  const ratio = value.rate / benchmarkRate;
+  if (ratio < 0.9) return "below";
+  if (ratio <= 1.1) return "at-level";
+  return "above";
+}
+
+function AttachCell({
+  value,
+  owner,
+  metric,
+  benchmarkRate,
+  kind = "employee"
+}: {
+  value: AttachCellValue | null;
+  owner: string;
+  metric: string;
+  benchmarkRate: number | null;
+  kind?: AttachCellKind;
+}) {
   const noBase = value == null || value.denominator <= 0 || value.rate == null;
+  const tone = comparisonTone(value, benchmarkRate, kind);
+  const comparison = !noBase && kind === "employee" && benchmarkRate != null && benchmarkRate > 0
+    ? formatPercent(value!.rate! * 100 / benchmarkRate) + " от benchmark магазина"
+    : null;
+  const suffix = kind === "benchmark"
+    ? "; benchmark по всем документам магазина"
+    : kind === "context"
+      ? "; остаток между магазином и участниками рейтинга"
+      : tone === "insufficient"
+        ? benchmarkRate == null || benchmarkRate <= 0
+          ? "; benchmark магазина недоступен"
+          : "; недостаточная база для рейтинга"
+        : comparison == null ? "" : "; " + comparison;
   const title = noBase
-    ? `${owner}: нет релевантных продаж техники`
-    : `${owner}: ${formatNumber(value.numerator)} / ${formatNumber(value.denominator)} = ${formatPercent(value.rate)}`;
+    ? owner + ": нет релевантных продаж техники"
+    : owner + ": " + formatNumber(value!.numerator) + " / " + formatNumber(value!.denominator)
+      + " = " + formatPercent(value!.rate) + suffix;
+  const detail = noBase
+    ? "нет базы"
+    : tone === "insufficient"
+      ? benchmarkRate == null || benchmarkRate <= 0 ? "нет benchmark" : "мало базы"
+      : formatNumber(value!.numerator) + " / " + formatNumber(value!.denominator);
   return (
-    <td className="attach-map__cell" data-level={noBase ? 0 : heatLevel(value.rate)} title={title}>
-      <strong>{noBase ? "—" : formatPercent(value.rate)}</strong>
-      <small>{noBase ? "нет базы" : `${formatNumber(value.numerator)} / ${formatNumber(value.denominator)}`}</small>
+    <td className="attach-map__cell" data-tone={tone} title={title}>
+      <strong>{noBase ? "—" : formatPercent(value!.rate)}</strong>
+      <small>{detail}</small>
       <span className="sr-only">{metric}, {title}</span>
     </td>
   );
@@ -403,6 +470,15 @@ export function AttachRateMatrix({
 }) {
   const location = useLocation();
   const employees = visibleEmployees(rating);
+  const showOutsideRating = attachMetricOrder.some((metricCode) => {
+    const outside = outsideRatingAttachCell(
+      storeAttachCell(attach, metricCode),
+      employees,
+      metricCode
+    );
+    return outside != null
+      && (Math.abs(outside.numerator) > 0.000001 || Math.abs(outside.denominator) > 0.000001);
+  });
   const qualityIssueCount = attach.dataQuality.unmatchedNumeratorItemCount
     + attach.dataQuality.ambiguousWarrantyItemCount
     + attach.dataQuality.unknownDeviceConditionItemCount;
@@ -427,10 +503,23 @@ export function AttachRateMatrix({
             <thead>
               <tr>
                 <th>Показатель</th>
-                <th className="attach-map__store-heading"><TrendingUp size={14} />{storeName}</th>
+                <th
+                  className="attach-map__store-heading"
+                  title={"Benchmark " + storeName + " включает все документы магазина, в том числе продажи вне рейтинга и без сотрудника"}
+                >
+                  <TrendingUp size={14} /><span>{storeName}</span><small>Все продажи</small>
+                </th>
+                {showOutsideRating && (
+                  <th
+                    className="attach-map__outside-heading"
+                    title="Разница между итогом магазина и показанными участниками рейтинга"
+                  >
+                    <span>Вне рейтинга</span><small>и без сотрудника</small>
+                  </th>
+                )}
                 {employees.map((employee) => (
                   <th key={employee.employeeId}>
-                    <Link to={{ pathname: `/employees/${employee.employeeId}`, search: location.search }}>{employee.displayName}</Link>
+                    <Link to={{ pathname: "/employees/" + employee.employeeId, search: location.search }}>{employee.displayName}</Link>
                   </th>
                 ))}
               </tr>
@@ -438,16 +527,35 @@ export function AttachRateMatrix({
             <tbody>
               {attachMetricOrder.map((metricCode) => {
                 const metricLabel = attachRateLabels[metricCode] ?? metricCode;
+                const storeValue = storeAttachCell(attach, metricCode);
+                const outsideValue = outsideRatingAttachCell(storeValue, employees, metricCode);
+                const benchmarkRate = storeValue?.rate ?? null;
                 return (
                   <tr key={metricCode}>
                     <th scope="row">{metricLabel}</th>
-                    <AttachCell value={storeAttachCell(attach, metricCode)} owner={storeName} metric={metricLabel} />
+                    <AttachCell
+                      value={storeValue}
+                      owner={storeName}
+                      metric={metricLabel}
+                      benchmarkRate={benchmarkRate}
+                      kind="benchmark"
+                    />
+                    {showOutsideRating && (
+                      <AttachCell
+                        value={outsideValue}
+                        owner="Вне рейтинга / без сотрудника"
+                        metric={metricLabel}
+                        benchmarkRate={benchmarkRate}
+                        kind="context"
+                      />
+                    )}
                     {employees.map((employee) => (
                       <AttachCell
                         key={employee.employeeId}
                         value={employeeAttachCell(employee, metricCode)}
                         owner={employee.displayName}
                         metric={metricLabel}
+                        benchmarkRate={benchmarkRate}
                       />
                     ))}
                   </tr>
@@ -457,11 +565,11 @@ export function AttachRateMatrix({
           </table>
         </div>
         <footer className="attach-map__legend">
-          <span><i data-level="0" />Нет базы или продаж</span>
-          <span><i data-level="1" />Ниже</span>
-          <span><i data-level="2" />Среднее</span>
-          <span><i data-level="4" />Выше</span>
-          <small>Насыщенность помогает сравнивать значения и не означает выполнение отдельного плана.</small>
+          <span><i data-tone="empty" />Нет или мало базы</span>
+          <span><i data-tone="below" />Ниже магазина</span>
+          <span><i data-tone="at-level" />На уровне магазина</span>
+          <span><i data-tone="above" />Выше магазина</span>
+          <small>Магазин — benchmark по всем документам. Отклонение до 10% считается уровнем магазина.</small>
         </footer>
       </div>
     </details>

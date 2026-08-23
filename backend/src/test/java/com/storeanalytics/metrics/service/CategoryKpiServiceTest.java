@@ -89,6 +89,89 @@ class CategoryKpiServiceTest {
     }
 
     @Test
+    void preservesSalesStructureHierarchyAcrossEveryFinancialMetric() {
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.existsById(storeId)).thenReturn(true);
+        when(categoryKpiRepository.aggregate(storeId, PERIOD_START, PERIOD_END))
+                .thenReturn(List.of(
+                        aggregate(
+                                "IPHONE_NEW_ASIS",
+                                AnalyticsCategoryKind.DEVICE,
+                                new CategoryFlags(true, true, false),
+                                new AggregateValues("100.00", "1.000", "60.00", 1, 0)
+                        ),
+                        aggregate(
+                                "PODS_WATCH_OTHER_DEVICE",
+                                AnalyticsCategoryKind.DEVICE,
+                                new CategoryFlags(false, true, false),
+                                new AggregateValues("80.00", "1.000", "50.00", 1, 0)
+                        ),
+                        aggregate(
+                                "CHARGER_CABLE",
+                                AnalyticsCategoryKind.ACCESSORY,
+                                new CategoryFlags(false, false, true),
+                                new AggregateValues("20.00", "2.000", "10.00", 1, 0)
+                        ),
+                        aggregate(
+                                "SETUP_SERVICE",
+                                AnalyticsCategoryKind.SERVICE,
+                                new CategoryFlags(false, false, true),
+                                new AggregateValues("30.00", "1.000", "0.00", 1, 0)
+                        ),
+                        aggregate(
+                                "WARRANTY_GENERIC",
+                                AnalyticsCategoryKind.WARRANTY,
+                                new CategoryFlags(false, false, true),
+                                new AggregateValues("40.00", "1.000", "0.00", 1, 0)
+                        ),
+                        aggregate(
+                                "PREMIUM_PROTECTION",
+                                AnalyticsCategoryKind.PROTECTION,
+                                new CategoryFlags(false, false, true),
+                                new AggregateValues("10.00", "1.000", "0.00", 1, 0)
+                        ),
+                        aggregate(
+                                "UNMAPPED",
+                                AnalyticsCategoryKind.OTHER,
+                                new CategoryFlags(false, false, false),
+                                new AggregateValues("5.00", "1.000", "3.00", 1, 0)
+                        )
+                ));
+
+        CategoryKpiResult result = service.calculate(storeId, period());
+        CategoryKpiMetrics phones = group(result, "PHONES").metrics();
+        CategoryKpiMetrics devices = group(result, "DEVICES").metrics();
+        CategoryKpiMetrics accessory = group(result, "ACCESSORY").metrics();
+        CategoryKpiMetrics serviceMetrics = group(result, "SERVICE").metrics();
+        CategoryKpiMetrics additional = group(result, "ADDITIONAL_REVENUE").metrics();
+
+        assertThat(phones.netRevenue()).isEqualByComparingTo("100.00");
+        assertThat(devices.netRevenue()).isEqualByComparingTo("180.00");
+        assertThat(phones.netQuantity()).isEqualByComparingTo("1.000");
+        assertThat(devices.netQuantity()).isEqualByComparingTo("2.000");
+        assertThat(devices.costAmount()).isEqualByComparingTo("110.00");
+        assertThat(devices.grossProfit()).isEqualByComparingTo("70.00");
+        assertThat(devices.marginPercent()).isEqualByComparingTo("38.89");
+
+        assertThat(accessory.netRevenue()).isEqualByComparingTo("20.00");
+        assertThat(serviceMetrics.netRevenue()).isEqualByComparingTo("80.00");
+        assertThat(additional.netRevenue())
+                .isEqualByComparingTo(accessory.netRevenue().add(serviceMetrics.netRevenue()));
+        assertThat(additional.netQuantity())
+                .isEqualByComparingTo(accessory.netQuantity().add(serviceMetrics.netQuantity()));
+        assertThat(additional.costAmount())
+                .isEqualByComparingTo(accessory.costAmount().add(serviceMetrics.costAmount()));
+        assertThat(additional.grossProfit())
+                .isEqualByComparingTo(accessory.grossProfit().add(serviceMetrics.grossProfit()));
+        assertThat(additional.marginPercent()).isEqualByComparingTo("90.00");
+        assertThat(additional.dataQuality().includedItemCount())
+                .isEqualTo(accessory.dataQuality().includedItemCount()
+                        + serviceMetrics.dataQuality().includedItemCount());
+        assertThat(category(result, "UNMAPPED").metrics().netRevenue())
+                .isEqualByComparingTo("5.00");
+    }
+
+    @Test
     void makesOnlyAffectedCategoryAndGroupCostMetricsUnknown() {
         UUID storeId = UUID.randomUUID();
         when(storeRepository.existsById(storeId)).thenReturn(true);

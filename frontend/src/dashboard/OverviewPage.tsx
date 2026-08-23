@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ArrowRight, CheckCircle2, Package, RefreshCw, ShieldCheck, Smartphone, Target, TrendingUp, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
+import type { CategoryKpi } from "../api/contracts";
 import {
   getAttachRates,
   getCategoryKpi,
@@ -22,11 +23,61 @@ import { AttachRateMatrix, EmployeePerformanceSection, ManagementSummary } from 
 
 const groupLabels: Record<string, { label: string; icon: ReactNode }> = {
   PHONES: { label: "Телефоны", icon: <Smartphone size={18} /> },
-  DEVICES: { label: "Все устройства", icon: <Package size={18} /> },
+  DEVICES: { label: "Техника", icon: <Package size={18} /> },
   ACCESSORY: { label: "Аксессуары", icon: <Package size={18} /> },
   SERVICE: { label: "Услуги", icon: <ShieldCheck size={18} /> },
   ADDITIONAL_REVENUE: { label: "Дополнительная выручка", icon: <TrendingUp size={18} /> }
 };
+
+type SalesGroup = CategoryKpi["groups"][number];
+
+function SalesGroupRow({ group, relation }: { group: SalesGroup; relation: string }) {
+  const info = groupLabels[group.groupCode] ?? { label: group.groupName, icon: <Package size={18} /> };
+  return (
+    <article className={`group-row ${relation === "В том числе" ? "group-row--child" : "group-row--total"}`}>
+      <span className="group-row__icon">{info.icon}</span>
+      <div className="group-row__copy">
+        <span className="group-row__relation">{relation}</span>
+        <strong>{info.label}</strong>
+        <small>{formatNumber(group.metrics.netQuantity)} ед.</small>
+      </div>
+      <div className="group-row__values"><strong>{formatMoney(group.metrics.netRevenue)}</strong><small>маржа {formatPercent(group.metrics.marginPercent)}</small></div>
+    </article>
+  );
+}
+
+export function SalesStructure({ groups }: { groups: SalesGroup[] }) {
+  const byCode = new Map(groups.map((group) => [group.groupCode, group]));
+  const devices = byCode.get("DEVICES");
+  const phones = byCode.get("PHONES");
+  const additionalRevenue = byCode.get("ADDITIONAL_REVENUE");
+  const accessory = byCode.get("ACCESSORY");
+  const service = byCode.get("SERVICE");
+  const structuredCodes = new Set(["DEVICES", "PHONES", "ADDITIONAL_REVENUE", "ACCESSORY", "SERVICE"]);
+  const otherGroups = groups.filter((group) => !structuredCodes.has(group.groupCode));
+
+  return (
+    <>
+      <div className="group-list group-list--hierarchical">
+        {(devices || phones) && (
+          <section className="group-branch" aria-label="Техника и её состав">
+            {devices && <SalesGroupRow group={devices} relation="Итого по категории" />}
+            {phones && <SalesGroupRow group={phones} relation="В том числе" />}
+          </section>
+        )}
+        {(additionalRevenue || accessory || service) && (
+          <section className="group-branch" aria-label="Дополнительная выручка и её состав">
+            {additionalRevenue && <SalesGroupRow group={additionalRevenue} relation="Подытог" />}
+            {accessory && <SalesGroupRow group={accessory} relation="В том числе" />}
+            {service && <SalesGroupRow group={service} relation="В том числе" />}
+          </section>
+        )}
+        {otherGroups.map((group) => <SalesGroupRow group={group} relation="Отдельная категория" key={group.groupCode} />)}
+      </div>
+      <p className="group-list__hint">Вложенные строки уже входят в итог родительской категории — складывать их повторно не нужно.</p>
+    </>
+  );
+}
 
 const directionLabels: Record<string, string> = {
   REVENUE: "Выручка",
@@ -138,18 +189,7 @@ export function OverviewPage() {
       <div className="overview-grid">
         <section className="panel groups-panel">
           <div className="panel__heading"><h2>Структура продаж</h2></div>
-          <div className="group-list">
-            {categories?.groups.map((group) => {
-              const info = groupLabels[group.groupCode] ?? { label: group.groupName, icon: <Package size={18} /> };
-              return (
-                <article key={group.groupCode} className="group-row">
-                  <span className="group-row__icon">{info.icon}</span>
-                  <div><strong>{info.label}</strong><small>{formatNumber(group.metrics.netQuantity)} ед.</small></div>
-                  <div className="group-row__values"><strong>{formatMoney(group.metrics.netRevenue)}</strong><small>маржа {formatPercent(group.metrics.marginPercent)}</small></div>
-                </article>
-              );
-            })}
-          </div>
+          <SalesStructure groups={categories?.groups ?? []} />
         </section>
 
         <section className="panel plan-panel">

@@ -86,6 +86,7 @@ class CustomerMonetaryClassificationMigrationIntegrationTest {
         }
         assertCorrectedFinancialGroupsWithoutChangingSourceAmounts();
         assertAdditionalRevenueFlagMatchesMonetaryKinds();
+        assertPhoneFlagIsSubsetOfDeviceFlag();
         assertConfirmedAppleDevicesUseTierTwoPayrollDefault();
     }
 
@@ -406,6 +407,22 @@ class CustomerMonetaryClassificationMigrationIntegrationTest {
                                'ACCESSORY', 'SERVICE', 'WARRANTY', 'PROTECTION'
                            )
                        )
+                     """)) {
+            assertThat(result.next()).isTrue();
+            assertThat(result.getInt("mismatch_count")).isZero();
+        }
+    }
+
+    private void assertPhoneFlagIsSubsetOfDeviceFlag()
+            throws SQLException {
+        try (Connection connection = connection();
+             Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("""
+                     SELECT count(*) AS mismatch_count
+                     FROM analytics_categories
+                     WHERE is_active
+                       AND counts_as_phone
+                       AND NOT counts_as_device
                      """)) {
             assertThat(result.next()).isTrue();
             assertThat(result.getInt("mismatch_count")).isZero();

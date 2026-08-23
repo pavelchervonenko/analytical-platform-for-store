@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.storeanalytics.metrics.service.CategoryKpiEntry;
 import com.storeanalytics.metrics.service.CategoryKpiGroup;
+import com.storeanalytics.metrics.service.CategoryKpiMetrics;
 import com.storeanalytics.metrics.service.CategoryKpiResult;
 import com.storeanalytics.metrics.service.CategoryKpiService;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
@@ -71,6 +72,9 @@ class CategoryKpiIntegrationTest {
                 saleId, "charger", "CHARGER_CABLE", "1.000", "30.00", knownCost("10.00")
         ));
         addItem(graph, item(
+                saleId, "setup", "SETUP_SERVICE", "2.000", "40.00", knownCost("0.00")
+        ));
+        addItem(graph, item(
                 saleId, "unmapped", "UNMAPPED", "1.000", "20.00", knownCost("10.00")
         ));
         addItem(graph, item(
@@ -86,6 +90,10 @@ class CategoryKpiIntegrationTest {
         addItem(graph, item(
                 returnId, "iphone-return", "IPHONE_NEW_ASIS",
                 "0.500", "50.00", knownCost("30.00")
+        ));
+        addItem(graph, item(
+                returnId, "setup-return", "SETUP_SERVICE",
+                "0.500", "10.00", knownCost("0.00")
         ));
 
         addIgnoredFacts(graph);
@@ -125,8 +133,24 @@ class CategoryKpiIntegrationTest {
                 .isEqualByComparingTo("250.00");
         assertThat(group(result, "DEVICES").metrics().netRevenue())
                 .isEqualByComparingTo("250.00");
-        assertThat(group(result, "ADDITIONAL_REVENUE").metrics().netRevenue())
-                .isEqualByComparingTo("30.00");
+        CategoryKpiMetrics accessory = group(result, "ACCESSORY").metrics();
+        CategoryKpiMetrics service = group(result, "SERVICE").metrics();
+        CategoryKpiMetrics additional = group(result, "ADDITIONAL_REVENUE").metrics();
+        assertThat(accessory.netRevenue()).isEqualByComparingTo("30.00");
+        assertThat(service.netRevenue()).isEqualByComparingTo("30.00");
+        assertThat(service.netQuantity()).isEqualByComparingTo("1.500");
+        assertThat(additional.netRevenue())
+                .isEqualByComparingTo(accessory.netRevenue().add(service.netRevenue()));
+        assertThat(additional.netQuantity())
+                .isEqualByComparingTo(accessory.netQuantity().add(service.netQuantity()));
+        assertThat(additional.costAmount())
+                .isEqualByComparingTo(accessory.costAmount().add(service.costAmount()));
+        assertThat(additional.grossProfit())
+                .isEqualByComparingTo(accessory.grossProfit().add(service.grossProfit()));
+        assertThat(additional.marginPercent()).isEqualByComparingTo("83.33");
+        assertThat(additional.dataQuality().includedItemCount())
+                .isEqualTo(accessory.dataQuality().includedItemCount()
+                        + service.dataQuality().includedItemCount());
     }
 
     @Test

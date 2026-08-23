@@ -699,6 +699,16 @@ body { font-size: 17px; line-height: 1.47; }
 .group-row { min-height: 64px; padding: 10px 2px; border-top: 1px solid var(--border); border-radius: 0; background: transparent; }
 .group-row:first-child { border-top: 0; }
 .group-row__icon { color: var(--primary); background: var(--primary-soft); }
+.group-list--hierarchical { gap: 14px; }
+.group-branch { display: grid; overflow: hidden; border: 1px solid var(--border); border-radius: 17px; background: var(--surface); }
+.group-branch .group-row { padding-inline: 13px; }
+.group-branch .group-row--total { background: color-mix(in srgb, var(--primary-soft) 45%, var(--surface)); }
+.group-branch .group-row--child { position: relative; margin-left: 26px; padding-left: 10px; }
+.group-branch .group-row--child::before { position: absolute; top: -1px; bottom: 50%; left: -13px; width: 11px; border-bottom: 1px solid color-mix(in srgb, var(--primary) 32%, var(--border)); border-left: 1px solid color-mix(in srgb, var(--primary) 32%, var(--border)); border-bottom-left-radius: 8px; content: ""; }
+.group-row--child .group-row__icon { width: 34px; height: 34px; border-radius: 11px; }
+.group-row__copy { align-content: center; }
+.group-row__relation { color: var(--text-faint); font-size: 9px; font-weight: 800; letter-spacing: .08em; line-height: 1.2; text-transform: uppercase; }
+.group-list__hint { margin: 14px 2px 0; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 11px; line-height: 1.5; }
 .direction-row { padding: 14px 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; }
 .direction-row:first-child { border-top: 0; }
 .direction-row .progress { margin-top: 12px; }
@@ -1305,8 +1315,12 @@ body { font-size: 17px; line-height: 1.47; }
 @media (max-width: 480px) {
   .overview-summary__primary { min-height: 180px; padding: 26px 20px; }
   .overview-summary__primary > strong { font-size: 36px; }
-  .overview-page .group-row { grid-template-columns: 40px minmax(0, 1fr) auto; }
-  .overview-page .group-row__values { grid-column: auto; justify-items: end; text-align: right; }
+  .overview-page .group-row { grid-template-columns: 34px minmax(0, 1fr); }
+  .overview-page .group-row__icon { width: 34px; height: 34px; }
+  .overview-page .group-row__values { grid-column: 2; justify-items: start; text-align: left; }
+  .overview-page .group-branch .group-row { padding-inline: 11px; }
+  .overview-page .group-branch .group-row--child { margin-left: 16px; padding-left: 8px; }
+  .overview-page .group-row__values strong { font-size: 13px; }
   .overview-summary__primary > div { margin-top: 18px; }
   .overview-summary__metrics { grid-template-columns: 1fr 1fr; }
   .overview-summary__metric {
