@@ -1,6 +1,6 @@
 # Backend security hardening
 
-Status: implemented controls revalidated against configuration and routes on 2026-07-27. This is
+Status: implemented controls revalidated against configuration and routes on 2026-08-24. This is
 an engineering/operations document; frontend-visible reactions are in `FRONTEND_HANDOFF.md`.
 
 This document records the controls implemented after the July 2026 backend review.
@@ -21,8 +21,12 @@ This document records the controls implemented after the July 2026 backend revie
    Administrative, sync, import, Swagger and actuator-metrics routes require ADMIN.
 5. **SQL injection:** JDBC uses constant SQL with named parameters; JPA queries use parameters.
    No request-controlled sort expression or SQL fragment is accepted.
-6. **Fake webhooks:** the application exposes no webhook receiver. A future webhook must start
-   denied and add signature, timestamp and replay verification before being routed.
+6. **LiveSklad return webhooks:** two exact-secret endpoints are fail-closed behind
+   `LIVESKLAD_WEBHOOK_ENABLED`. Sale/order secrets are separate and support controlled previous
+   secret rotation; comparison is constant-time. Only POST/JSON with a bounded body is accepted.
+   URL verification echoes only the vendor challenge. Validated events enter a durable deduplicated
+   inbox with delivery count, payload-mismatch detection, lease/retry and terminal reason.
+   Sale-return processing is idempotent; order processing has an independent canary flag.
 7. **Session theft:** login rotates the session ID; production cookies are Secure/HttpOnly where
    applicable; CSRF double-submit is required; idle, absolute and concurrent-session limits apply;
    security-version changes invalidate prior sessions.
@@ -110,7 +114,7 @@ This document records the controls implemented after the July 2026 backend revie
 
 ## Production inputs
 
-docker-compose.prod.yml requires these non-secret values:
+`deploy/compose.production.yml` requires these non-secret values:
 
 - POSTGRES_DB, POSTGRES_USER;
 - LIVESKLAD_BASE_URL;
@@ -119,11 +123,16 @@ docker-compose.prod.yml requires these non-secret values:
 - TRUSTED_PROXY_CIDRS (comma-separated exact Caddy/private proxy CIDRs; empty means trust none).
 - BREAK_GLASS_USER_IDS (comma-separated UUIDs of customer-owned emergency accounts; no credentials).
 
-It also requires paths to three secret files:
+Production Compose requires root-owned paths for, among others:
 
-- POSTGRES_PASSWORD_FILE;
-- LIVESKLAD_LOGIN_FILE;
-- LIVESKLAD_PASSWORD_FILE.
+- `POSTGRES_RUNTIME_PASSWORD_FILE` and `POSTGRES_MIGRATOR_PASSWORD_FILE`;
+- `LIVESKLAD_LOGIN_FILE` and `LIVESKLAD_PASSWORD_FILE`;
+- `LIVESKLAD_SALE_RETURN_WEBHOOK_SECRET_FILE`;
+- `LIVESKLAD_ORDER_RETURN_WEBHOOK_SECRET_FILE`;
+- telemetry, Prometheus, bootstrap, Telegram and Yandex secrets when their features are configured.
+
+Both LiveSklad webhook secret files must exist before `preflight-release.sh`, even while a worker
+flag remains disabled. Receiver and sale/order worker flags are non-secret values in release env.
 
 The files are mounted as Docker secrets and imported with Spring Boot config-tree support. Do not
 put their values in Compose, images, source control or command-line arguments.

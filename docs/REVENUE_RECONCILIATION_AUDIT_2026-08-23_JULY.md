@@ -10,6 +10,11 @@ and absent from the synchronized API facts. `МобиСфера` reconciles exac
 The audit was read-only. It did not start synchronization, process receipts,
 or modify production data.
 
+Follow-up on 2026-08-24: the eight-record recovery is still a separate pending production
+operation. The temporary local script is intentionally excluded from Git. Use
+[validated-return-recovery-runbook.md](validated-return-recovery-runbook.md) and do not mark this
+audit reconciled until the post-recovery differences are verified.
+
 ## Production state
 
 - release: `v0.1.0-pilot.22`;

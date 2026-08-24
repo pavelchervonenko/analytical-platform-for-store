@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Status: current application architecture, revalidated on 2026-07-27. The repository contains one
+Status: current application architecture, revalidated on 2026-08-24. The repository contains one
 Spring Boot backend module and a React/Vite/TypeScript SPA. Frontend boundaries and actions are
 documented in `FRONTEND_HANDOFF.md` and `frontend-actions.md`.
 
@@ -12,7 +12,8 @@ Every `@Scheduled` component is architecture-tested to allow only `WORKER` and `
 API/worker force runtime Flyway off and verify the packaged schema version through read-only JDBC.
 The one-shot migrator applies validated lock/statement timeouts and bounded Flyway lock retries;
 CI covers empty-schema and previous-version upgrade paths, while production-like lock timing remains
-a staging acceptance concern.
+a staging acceptance concern. Production currently runs schema V44. V42–V43 add the durable
+LiveSklad webhook inbox/processing state; V44 adds validated return recovery.
 
 ## First-stage boundaries
 
@@ -27,8 +28,9 @@ Current package boundaries:
 - `employee`: normalized employees and store assignments.
 - `product`: products, categories, analytics classification.
 - `sales`: normalized sales documents and items.
-- `integration.livesklad`: LiveSklad HTTP client and DTOs.
-- `sync`: background sync runs, idempotency, retry policy.
+- `integration.livesklad`: bounded LiveSklad client, return-webhook receiver/inbox, sale/order
+  workers and validated recovery.
+- `sync`: durable background sync runs, scheduling, idempotency, retry and cancellation.
 - `metrics`: KPI and dashboard calculations.
 - `performance`: store plans, work shifts, versioned employee-rating formulas and calculation.
 - `salary`: salary calculations and approval workflow.

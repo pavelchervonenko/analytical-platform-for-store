@@ -1,6 +1,6 @@
 # Database design
 
-Status: current through Flyway V25, revalidated on 2026-08-02. The schema is authoritative; frontend
+Status: current through Flyway V44, revalidated on 2026-08-24. The schema is authoritative; frontend
 must use API DTO and never infer database relations directly.
 
 ## Confirmed scope
@@ -12,6 +12,24 @@ must use API DTO and never infer database relations directly.
 - Repair orders are outside the first-stage sales KPI.
 - Returns are recognized on the return date and attributed to the original seller.
 - Product category changes apply only to future sales.
+
+## Migration addendum V26–V44
+
+- V26–V31 harden notification fanout and persisted/validated LLM responses.
+- V32–V36 refine approved product, payroll, cost and phone-protection classification.
+- V37 preserves exact LLM provider input.
+- V38 records attach-rate units/methodology.
+- V39/V39.1 preserve classification/webhook migration compatibility.
+- V40 synchronizes issued-order positions.
+- V41 enforces the approved employee rating roster.
+- V42 creates the durable LiveSklad return-webhook inbox.
+- V43 adds processing lease/retry/terminal metadata and return-before-sale support.
+- V44 adds audited, idempotent validated historical return recovery.
+
+`livesklad_webhook_receipts` is both the deduplicated ingress inbox and the durable state for
+manual recovery. A recovery is accepted only with positive expected amount/position count and an
+ADMIN-scoped idempotency key. The worker validates the fetched return before updating financial
+facts.
 
 ## Data layers
 
@@ -222,7 +240,7 @@ remain dynamic and are not persisted. See `reports.md`.
 
 ## DB/JPA contract verification
 
-Automated tests apply V1 through V25 to a fresh PostgreSQL 16 database and verify all tables,
+Automated tests apply V1 through V44 to a fresh PostgreSQL 16 database and verify all tables,
 entities, and repositories. They compare every physical column with Hibernate metadata, compare
 enum mappings
 with PostgreSQL `CHECK` constraints, compare numeric precision/scale, and verify generated
@@ -255,7 +273,7 @@ adaptive windows, retries, rate-limit reserve, and sanitized failures.
 Integration tests prove atomic daily/monthly rollups, superseded-only raw cleanup, open
 quality evidence protection, latest terminal run/job preservation, status-specific technical
 purges, financial audit preservation, active holds, orphan sync-run repair and payroll optimistic
-version advancement. Migration tests build an empty database through V28 and exercise representative
+version advancement. Migration tests build the current empty schema through V44 and exercise representative
 upgrades, verifying checksums, retained data, backfills and the resulting application model.
 
 ## Deferred modules

@@ -1,102 +1,98 @@
 # Store Analytics
 
-Closed analytics cabinet for store managers. LiveSklad data is synchronized into PostgreSQL first;
-protected backend APIs then expose KPI, data quality, employee ratings, store plans, work schedules,
-payroll revisions, immutable monthly and annual reports, and administration.
+Закрытая аналитическая платформа для руководителей магазинов. Данные LiveSklad сначала
+нормализуются в PostgreSQL, после чего backend предоставляет KPI, качество данных, показатели
+сотрудников, планы и смены, зарплату, отчеты, ИИ-разбор и административные операции.
 
-Current application status on 2026-08-06: the complete backend check passes with 674 tests in
-239 suites and no failures/errors/skips. A real local test database migrated V29→V30, both existing
-report revisions passed integrity verification and authenticated API/SPA acceptance. Browser
-acceptance traversed the principal user and ADMIN sections on desktop, tablet and mobile, including
-the complete test MANAGER lifecycle, without page overflow, HTTP 500 or runtime errors. The React +
-Vite + TypeScript SPA also passes ESLint, 25 Vitest files / 90 tests, generated-contract verification
-and a production build.
+Актуальность: 2026-08-24.
 
-This is application-level acceptance, not production launch approval. Caddy/TLS/trusted proxy,
-immutable image promotion, production database roles/secrets, backup/restore, monitoring, rollback
-and staging-through-domain acceptance remain mandatory in `docs/production-deployment-runbook.md`.
-The YandexGPT 5.1 weekly interpretation path has separately passed a real end-to-end acceptance run
-on aggregated pseudonymized metrics; production LLM/Telegram feature flags remain disabled until
-server-side staging and operational drills are complete.
+## Текущее состояние
 
-## Stack
+- production: `v0.1.0-pilot.22`, commit `2e8f9c2`, Flyway `V44`;
+- production уже использует раздельные `backend-api`, `backend-worker` и `web`, HTTPS/Caddy и
+  управляемый PostgreSQL 16;
+- прием возвратных webhook LiveSklad и worker возвратов продаж включены;
+- worker возвратов заказов остается выключенным до canary настоящего `ORDER_RETURN`;
+- текущий релиз-кандидат проверен локально, но еще не отправлен и не развернут;
+- `v21/schema3` прошла семантическую оценку, однако production default ИИ пока `v4/schema2`.
 
-- Java 21;
-- Spring Boot 4.1.0 and Spring Security 7.1.0;
-- Gradle Kotlin DSL;
-- PostgreSQL 16 and Flyway V1–V30;
-- springdoc OpenAPI 3.0.3 and native Jackson 3;
-- Docker Compose, JUnit, Testcontainers, Checkstyle and JaCoCo;
-- React 19, TypeScript 6, Vite 8, TanStack Query and Zod.
+Точный состав кандидата: [docs/RELEASE_CANDIDATE_2026-08-24.md](docs/RELEASE_CANDIDATE_2026-08-24.md).
 
-## Repository layout
+Последний полный кандидатный прогон:
+
+- backend: `925` тестов без failures/errors/skipped;
+- frontend: `38` файлов / `143` теста, ESLint, contract check и production build;
+- ИИ: `58` unit tests и `26/26` семантических кейсов;
+- Checkstyle, OpenAPI compatibility, security, supply-chain и release-safety checks;
+- локальная визуальная проверка измененных страниц на desktop/tablet/mobile.
+
+Эти результаты относятся к текущему кандидату и не означают, что он уже находится в production.
+
+## Стек
+
+- Java 21, Spring Boot 4.1.0 и Spring Security 7.1.0;
+- PostgreSQL 16, Flyway `V1–V44`, Hibernate validation;
+- Gradle Kotlin DSL, JUnit, Testcontainers, Checkstyle и JaCoCo;
+- React 19, TypeScript 6, Vite 8, TanStack Query и Zod;
+- Docker Compose и Caddy для production.
+
+## Структура репозитория
 
 ```text
-backend/                 Spring Boot backend
-frontend/                Production SPA and its tests
-docs/                    Product, API, architecture and operational documentation
-scripts/                 Safe discovery/review helpers
-outputs/                 Prepared review/import artifacts
-docker/                  Docker and deployment helper files
+backend/                 Spring Boot API, workers, migrations and tests
+frontend/                React SPA, unit/e2e/visual tests
+docs/                    Current contracts, runbooks and historical audits
+scripts/                 Verification and operator tooling
+deploy/                  Production Compose and deployment support
+docker/                  Local/development container assets
 ```
 
-## Start reading
+## Документация
 
-- `docs/PROJECT_HANDOFF.md` — verified project state and next steps;
-- `docs/authentication-api.md` — session, CSRF, password and self-service revocation contract;
-- `docs/audit-log.md` — persistent action coverage and safe metadata contract;
-- `docs/error-handling.md` — typed errors, stable codes, correlation IDs and logging boundary;
-- `docs/observability.md` — backend metrics, health/readiness and safe build information;
-- `docs/resource-limits.md` — API body/cardinality budgets, bulkheads and staging load acceptance;
-- `docs/supply-chain-security.md` — Gradle wrapper and dependency integrity baseline;
-- `docs/data-retention.md` — technical-data lifetimes, rollups and safe rollout procedure;
-- `docs/reports.md` — immutable monthly/annual reports, revisions and backfill;
-- `docs/FRONTEND_HANDOFF.md` — frontend terms, business logic, DTO and endpoint tables;
-- `docs/FRONTEND_ACCEPTANCE.md` — verified browser scenarios, viewport coverage and remaining risks;
-- `docs/frontend-actions.md` — concrete screens, buttons, enable rules and cache invalidation;
-- `docs/frontend-contract.md` — transport and compatibility baseline;
-- `docs/telegram-linking-and-webhook.md` — безопасная привязка аккаунта и webhook boundary;
-- `docs/telegram-delivery-worker.md` — durable Telegram delivery и operator recovery;
-- docs/telegram-staging-acceptance.md — обязательный staging preflight перед production;
-- docs/llm-production-operations.md — порядок приёмки, включения и остановки LLM-контура;
-- docs/yandexgpt-staging-acceptance.md — фактический acceptance и server-side production gate YandexGPT;
-- docs/llm-response-validation.md — граница фактов, safety-нормализация и validation retry;
-- docs/daily-store-pulse.md — отдельная ежедневная backend-проекция и утренняя сводка.
+Начинать с [docs/README.md](docs/README.md). Основные точки входа:
 
-## Local development
+- [docs/PROJECT_HANDOFF.md](docs/PROJECT_HANDOFF.md) — состояние системы и открытые границы;
+- [docs/FRONTEND_HANDOFF.md](docs/FRONTEND_HANDOFF.md) — актуальный UI-контракт;
+- [docs/livesklad-webhook-receiver.md](docs/livesklad-webhook-receiver.md) — возвратные webhook;
+- [docs/validated-return-recovery-runbook.md](docs/validated-return-recovery-runbook.md) —
+  восстановление подтвержденных пропущенных возвратов;
+- [docs/production-deployment-runbook.md](docs/production-deployment-runbook.md) — release/rollback;
+- [docs/AI_INTERPRETATION_V21_WEEKLY_CANARY_2026-08-17.md](docs/AI_INTERPRETATION_V21_WEEKLY_CANARY_2026-08-17.md) —
+  статус `v21/schema3`.
 
-Use Java 21 and provide required configuration through the already configured local environment or
-secret mechanism. `.env.example` documents variable names only; secrets must never be committed,
-printed or included in task context, and `.env` must not be opened during Codex work.
+Файлы с датой/версией в имени являются историческими снимками. Для текущих действий нельзя
+использовать старый release note вместо актуального runbook.
 
-Start the development database:
+## Локальная разработка
+
+Требуются Java 21, Node.js из диапазона `engines` в `frontend/package.json` и Docker.
+
+Запустить PostgreSQL:
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d postgres
 ```
 
-Run the backend from the repository root:
+Backend:
 
 ```bash
 ./gradlew :backend:bootRun
-```
-
-Run the full verification suite:
-
-```bash
 ./gradlew :backend:check
 ```
 
-Run the frontend in another terminal:
+Frontend:
 
 ```bash
 cd frontend
 npm ci
 npm run dev
+npm run check
 ```
 
-Run its full verification suite with `npm run check`.
+Для материального UI-изменения дополнительно выполнить локальный `npm run visual:local`, задать
+`VISUAL_ROUTES` только для затронутых страниц и вручную просмотреть desktop/tablet/mobile снимки
+в `frontend/visual-artifacts/`. Нельзя направлять visual check на production или staging.
 
-The backend uses the `dev` profile by default. Runtime OpenAPI is `/v3/api-docs` and Swagger UI is
-`/swagger-ui/index.html`; both require an authenticated `ADMIN` whose temporary password has been
-changed.
+Runtime OpenAPI: `/v3/api-docs`; Swagger UI: `/swagger-ui/index.html`. Оба интерфейса защищены.
+Секреты и учетные данные передаются только через окружение/secret storage и не фиксируются в
+репозитории, документации, screenshots или shell history.

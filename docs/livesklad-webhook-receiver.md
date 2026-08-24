@@ -225,6 +225,11 @@ automatically. Repeating the same request and key returns the existing queue
 item. Status is available from
 `GET /api/admin/integrations/livesklad/returns/recoveries/{recoveryId}`.
 
+The authoritative operator sequence, stop conditions and batch policy are in
+[validated-return-recovery-runbook.md](validated-return-recovery-runbook.md).
+The local `.codex-prod-recovery/` directory is intentionally not a release artifact; do not
+commit or run a one-off script as a substitute for the validated API.
+
 Verified MAGAZIN recovery inputs for the August reconciliation:
 
 | Document | LiveSklad ID | Expected net amount | Positions |

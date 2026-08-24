@@ -1,133 +1,80 @@
 # Pilot rollout status
 
-Последнее обновление: 2026-08-10. Этот файл фиксирует фактическое состояние первого production
-rollout. Архитектурный стандарт и повторяемая процедура находятся в
-`pilot-production-deployment.md` и `production-deployment-runbook.md`.
+Последнее обновление: 2026-08-24.
 
-## Развёрнутая инфраструктура
+Это текущий краткий статус production. Старые release notes с датой/версией являются историческими
+снимками. Повторяемая процедура: [production-deployment-runbook.md](production-deployment-runbook.md).
 
-- приложение: `https://store-analytics.net`;
-- VPS: Ubuntu 24.04 LTS, public IPv4 `92.53.127.24`, private IPv4 `10.20.0.10`;
-- managed PostgreSQL 16: private IPv4 `10.20.0.20`, база `store_analytics`, schema `app`;
-- private S3: bucket `5e8de462-4a0c-42a7-9a3b-e4d432c18eaf`, versioning и Object Lock включены,
-  максимальный объём 100 GB;
-- backend API и worker: `v0.1.0-pilot.9`, commit `732bdc0`;
-- web: `v0.1.0-pilot.6`;
-- release-state: `v0.1.0-pilot.9-732bdc0`, previous release сохранён как pilot.8;
-- контейнеры `web`, `backend-api`, `backend-worker` находятся в состоянии `healthy`;
-- HTTP перенаправляется на HTTPS; сертификат Caddy и обязательные security headers проверены;
-- API и management ports на host не опубликованы.
+## Развернутый контур
 
-## База данных и безопасность
+- public origin: `https://store-analytics.net`;
+- release: `v0.1.0-pilot.22`, commit `2e8f9c2`;
+- Flyway schema: `V44`;
+- healthy topology: `web`, `backend-api`, `backend-worker`;
+- managed PostgreSQL 16 по private network и TLS `verify-full`;
+- Caddy/HTTPS, HSTS и same-origin SPA/API;
+- nightly encrypted logical backup timer и независимый health monitor;
+- SSH key-only, root login/password auth disabled, UFW ограничивает ingress.
 
-- Flyway schema version: 33;
-- migration role: `store_migrator`;
-- runtime role: `store_runtime`, CRUD без schema CREATE, TRUNCATE и DDL;
-- backup role: `store_backup_reader`, read-only;
-- `search_path=app, pg_catalog` закреплён отдельно для каждой роли;
-- deployment после каждой миграции идемпотентно восстанавливает минимальные schema/object/default
-  privileges;
-- соединения используют TLS 1.3 с `sslmode=verify-full` и закреплённым CA managed PostgreSQL.
+Фактические IP, fingerprints и инфраструктурные параметры остаются в
+[deployment-and-operations.md](deployment-and-operations.md).
 
-## Backup
+## Данные и синхронизация
 
-- первый encrypted logical backup создан и проверен 2026-08-07;
-- object:
-  `postgres/daily/2026/08/07/store-analytics-20260807T153755Z.dump.gpg`;
-- pipeline: `pg_dump` custom format, `pg_restore --list`, AES-256, SHA-256 manifest, S3 upload и
-  `head-object` verification;
-- `store-analytics-backup.timer` включён, ближайшие запуски выполняются ежедневно;
-- перед загрузкой 7 августа внеплановый encrypted logical backup завершён с `Result=success`;
-- restore drill и lifecycle policy остаются отдельными launch gates.
+- плановая синхронизация включена;
+- incremental overlap: три дня;
+- июль и август были загружены для сверки, но полнота каждого периода определяется runtime
+  `dataThroughDate`/quality, а не этой записью;
+- августовская сверка выполняется по завершенным дням;
+- июльский аудит обнаружил восемь подтвержденных возвратов, отсутствующих в приложении;
+- разница июльской выручки: `716 750 ₽`;
+- восстановление этих восьми документов еще является отдельной операторской операцией.
 
-## Pilot data bootstrap
+Аудит: [REVENUE_RECONCILIATION_AUDIT_2026-08-23_JULY.md](REVENUE_RECONCILIATION_AUDIT_2026-08-23_JULY.md).
 
-- initial developer administrator активирован; постоянный пароль хранится только в root-owned
-  secret на VPS;
-- customer-approved classification `customer-approved-2026-08-07-v2` и последующие reviewed
-  supplements импортированы; на конец загрузки 7 августа классифицированы все 2625 products;
-- classification readiness для `2026-07-01`: `true`;
-- initial durable backfill job:
-  `4325e996-92eb-4c09-889f-9ae6607c9730`;
-- initial period `2026-07-01` — `2026-08-06` завершён со статусом `SUCCESS`;
-- точечная задача за 7 августа `819c218d-2bcd-4863-b2c9-ec9c2f8339ed` завершена
-  `SUCCESS` 2026-08-08 в 14:00:11 `Europe/Kaliningrad`;
-- за 7 августа сохранено 50 продаж / 127 позиций для «МАГАЗИН» и 31 продажа / 52 позиции для
-  «МобиСфера»;
-- scheduler проверяет один и тот же overlap 3 дня в 03:15, 04:15 и 05:15
-  `Europe/Kaliningrad`;
-- `LIVESKLAD_RATE_LIMIT` переводит job в `WAITING_RETRY`; worker продолжает автоматически после
-  `next_attempt_at`, завершённые шаги повторно не теряются.
+## Возвратные webhook
 
-## Инцидент синхронизации 2026-08-08
+| Компонент | Production |
+| --- | --- |
+| Receiver | enabled |
+| Sale-return worker | enabled |
+| Order-return worker | disabled до canary |
+| Sale/order secrets | provisioned отдельно |
+| Durable inbox/retry | schema V42–V43 |
+| Validated manual recovery | schema V44 |
 
-- 7 августа отсутствовало в аналитике, потому что одноразовый cron на 03:15 был пропущен во время
-  замены worker-контейнера; запись `INCREMENTAL` в `sync_jobs` не создавалась;
-- исправление добавляет recovery-проверки в 04:15 и 05:15, не создаёт дубли после успеха, не
-  конкурирует с активной задачей и разрешает повтор нового job только после terminal recoverable
-  failure;
-- профильный `SyncJobIntegrationTest` прошёл; полный backend suite обнаружил пять существовавших
-  до изменения несвязанных тестовых расхождений (четыре ожидания schema 32 вместо 33 и одну
-  устаревшую LLM fixture);
-- при загрузке LiveSklad создал 10 новых product identities; они рассмотрены и назначены через
-  ADMIN API, 12 уже сохранённых snapshots точечно reconciled без повторной загрузки дня;
-- итоговые инварианты: products без assignment — 0, активные `UNMAPPED` items — 0, открытые
-  `UNMAPPED_PRODUCT` issues — 0, расхождения assignment/category snapshot — 0;
-- причина повторного появления новых products: отдельные карточки/коды для единиц б/у техники.
-  Для следующего изменения нужен отдельный high-confidence automatic rule layer с тестами ложных
-  срабатываний; случайный fallback в общую категорию запрещён.
+Webhook позволяют ловить будущие события и диагностировать расхождения, но не заменяют сверку
+исторических периодов. Order worker включается только после настоящего события и проверки
+`data.id`.
 
-## Открытые pilot gates
+## ИИ
 
-- [x] initial backfill перешёл в `SUCCESS`;
-- [x] две торговые точки распознаны как «МАГАЗИН» и «МобиСфера»;
-- [ ] продажи, возвраты, сотрудники и payroll сверены на контрольных датах;
-- [ ] созданы три именные customer accounts либо письменно принят риск shared account;
-- [ ] разработчик связал Telegram и получил тестовый technical alert;
-- [ ] Telegram webhook/linking/delivery включены и проверены;
-- [ ] указан Yandex Cloud folder ID, включены snapshot/generation/publication и provider budget;
-- [ ] проведён isolated restore drill и зафиксированы RPO/RTO;
-- [x] временное правило `NOPASSWD` удалено после завершения настройки.
+- production default: prompt `v4`, content schema `2`;
+- `v21/schema3`: `26/26` semantic cases, `4.8/5`;
+- новая схема не активирована автоматически и требует отдельного rollout.
 
-## Операторские команды
+## Текущий релиз-кандидат
 
-Статус контейнеров:
+Ветка `codex/livesklad-daily-webhook-protection` содержит пять проверенных продуктовых commit и один документационный commit поверх production:
 
-```bash
-sudo docker ps
-```
+- semantic evaluation `v21/schema3`;
+- уточнение планов/смен;
+- иерархия структуры продаж и прозрачный attach benchmark;
+- исправление evidence/limited UX ИИ;
+- июльский reconciliation audit.
 
-Статус initial backfill:
+Кандидат не отправлен и не развернут. Backend runtime и migrations не меняются.
+[Полная сводка](RELEASE_CANDIDATE_2026-08-24.md).
 
-```bash
-sudo /opt/store-analytics/deploy/bin/check-initial-backfill.sh
-```
+## Открытые gates
 
-Public smoke:
+- [ ] отправить/развернуть текущий UI-кандидат после final fetch/diff;
+- [ ] восстановить восемь июльских возвратов validated API;
+- [ ] повторить июльскую CRM-сверку до нулевого или объясненного delta;
+- [ ] получить настоящий `ORDER_RETURN` и провести canary order worker;
+- [ ] продолжить помесячный backfill с независимой сверкой обоих магазинов;
+- [ ] закрыть data-quality по сменам/классификации только подтвержденными данными;
+- [ ] провести отдельный production rollout `v21/schema3`;
+- [ ] поддерживать актуальное restore evidence и проверяемые RPO/RTO.
 
-```bash
-sudo env APP_DOMAIN=store-analytics.net \
-  /opt/store-analytics/deploy/bin/smoke.sh
-```
-
-Проверка backup timer:
-
-```bash
-sudo systemctl list-timers store-analytics-backup.timer --no-pager
-```
-
-
-## Автоматическая классификация 2026-08-10
-
-- новые товары сначала сопоставляются с customer-approved assignment по точному LiveSklad ID;
-- при отсутствии assignment применяется versioned high-confidence rule set
-  `livesklad-product-rules-v1`; неоднозначные названия остаются `UNMAPPED`;
-- production dry-run за 8–9 августа содержал 36 distinct products и 44 active sale items;
-- fail-closed reconciliation проверил полный allowlist и точный expected count до изменения;
-- результат: inspected 44, reclassified 44, unresolved 0, resolved DQ issues 36;
-- итоговая проверка: active `UNMAPPED` items 0, open `UNMAPPED_PRODUCT` issues 0;
-- повторная синхронизация LiveSklad не выполнялась, денежные и количественные факты не менялись;
-- one-shot reconciliation после acceptance отключён, worker пересоздан с flag `false`;
-- nightly sync, snapshot, Yandex generation и publication остались включены;
-- перед rollout создан и проверен encrypted backup
-  `postgres/daily/2026/08/10/store-analytics-20260810T125754Z.dump.gpg`.
+Временный `.codex-prod-recovery/` не является release artifact и остается вне Git.

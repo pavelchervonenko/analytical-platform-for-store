@@ -1,6 +1,16 @@
 # Production metrics audit — consolidated summary
 
-Status: `COMPLETE`
+Status: `COMPLETE` for the 2026-08-20 audit; follow-up updated 2026-08-24.
+
+The audit findings remain historical evidence. Current candidate status:
+
+- presentation items 2–7 from Priority 1 are addressed in commits `226df81` and `5fb6dc6`;
+- the seller summary explicitly states that it contains active rating participants;
+- the attach benchmark remains all store documents, while «Вне рейтинга» exposes the residual;
+- changes are verified locally but not yet deployed;
+- return attribution, missing `МобиСфера` shifts and source zero-cost uncertainty remain open;
+- the Yandex Station production classification must be confirmed through the supported assignment
+  and fact-refresh path, not inferred from its display name alone.
 
 Audited scope:
 

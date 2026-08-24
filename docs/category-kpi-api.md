@@ -1,6 +1,6 @@
 # Category KPI API
 
-Status: implemented read-only contract, revalidated on 2026-08-17. The frontend renders this data
+Status: implemented read-only contract, revalidated on 2026-08-24. The frontend renders this data
 without category regrouping or financial recalculation.
 
 Category KPI reads normalized sale and return item snapshots from PostgreSQL. It never calls
@@ -97,6 +97,19 @@ Groups overlap by design: `PHONES` is a subset of `DEVICES`, while `ACCESSORY` a
 normally contribute to `ADDITIONAL_REVENUE`. Group values must not be added together to obtain a
 store total. The category list itself is non-overlapping and reconciles with store KPI because each
 normalized item has exactly one category snapshot.
+
+Frontend therefore renders two hierarchies:
+
+```text
+Техника
+└── Телефоны
+
+Дополнительная выручка
+├── Аксессуары
+└── Услуги
+```
+
+Child rows explain composition and are not additional totals.
 
 ## Formulas and data quality
 

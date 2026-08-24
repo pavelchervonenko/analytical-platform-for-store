@@ -1,102 +1,92 @@
 # Frontend acceptance Store Analytics
 
-Дата последней полной проверки: 2026-08-06.
+Дата последней кандидатной проверки: 2026-08-24.
 
-Документ фиксирует фактически выполненную приемку SPA. Он не заменяет staging/production launch
-gates из `production-deployment-runbook.md` и не содержит учетных данных.
+Этот документ отделяет автоматический/визуальный результат текущего релиз-кандидата от старой
+полной application acceptance и от production smoke.
 
-## Проверенный контур
+## Кандидат
 
-- frontend: локальный Vite dev server и production preview;
-- backend: локальный Spring Boot API;
-- PostgreSQL: локальная тестовая база;
-- браузер: Chromium через Playwright;
-- размеры: desktop `1440x1000`, tablet `768x1024` с touch и mobile Pixel 7.
+Base production: `v0.1.0-pilot.22`. Проверяемый кандидат затрагивает:
 
-Для Node.js действует требование `>=22.22.0` из `frontend/package.json`.
+- `/overview`: иерархия структуры продаж и сравнительная карта допродаж;
+- `/plan`: подписи плановых величин, будущие дни и редактор смен;
+- `/insights`: evidence рядом с выводами и честные limited states.
+
+Документационный commit не меняет UI.
 
 ## Автоматические проверки
 
-Команда `npm run check` выполняет:
+Полный `npm run check` прошел:
 
-1. проверку generated TypeScript типов против текущего OpenAPI;
-2. ESLint без предупреждений;
-3. `25` Vitest files / `90` tests;
-4. TypeScript production build и Vite bundle.
+1. generated transport types совпадают с OpenAPI artifact;
+2. ESLint без ошибок;
+3. `38` test files / `143` tests;
+4. TypeScript и production Vite build.
 
-Итог 2026-08-06: все этапы прошли.
+Изолированная проверка plan commit также прошла с `142` тестами и production build.
 
-Полный Playwright suite против production preview собрал `15` project-tests:
+## Локальная визуальная проверка
 
-- `9` применимых сценариев прошли;
-- `6` сценариев были пропущены намеренно: три требуют постоянных MANAGER credentials, еще три
-  защищены `E2E_MUTATING=true` и не должны менять данные по умолчанию;
-- изменяющий desktop-сценарий жизненного цикла MANAGER отдельно прошел полностью.
+Выполнен `npm run visual:local` только против loopback-окружения для:
 
-## Покрытые пользовательские сценарии
+- `/overview`;
+- `/plan`;
+- `/insights`.
 
-- анонимный переход на закрытый маршрут возвращает на `/login` без раскрытия данных;
-- ADMIN входит и открывает все рабочие разделы;
-- проверены `/overview`, `/employees`, карточка сотрудника, `/plan`, `/payroll`, `/reports`,
-  `/quality`, `/profile` и `/admin`;
-- проверены восемь административных вкладок: пользователи, синхронизация, архив отчетов, правила
-  расчетов, категории, импорт, ИИ-разбор и Telegram;
-- проверены выбор периода, поиск сотрудника, пустой результат поиска, фильтр отчетов, вкладки плана,
-  смен и зарплаты, раскрывающиеся блоки обзора, активный сеанс и открытие/закрытие формы пользователя;
-- MANAGER создан через штатный UI, получил магазин, сменил временный пароль, вошел повторно,
-  открыл рабочие разделы, не получил административную навигацию и был перенаправлен с `/admin`;
-- после проверки тестовая учетная запись MANAGER отключена через штатный UI;
-- на desktop, tablet и mobile проверены отсутствие page-level horizontal overflow, `query-error`,
-  browser runtime errors, HTTP `5xx`, необработанных enum-кодов и буквы `ё` в видимом тексте.
+Просмотрены desktop, tablet и mobile изображения. Дополнительно проверены редактор смен и карта
+допродаж. Проверка включала page overflow, browser errors, query errors и HTTP 5xx.
 
-## Запуск
+Screenshots находятся только в ignored `frontend/visual-artifacts/` и не являются release
+артефактом.
+
+## Что подтверждено
+
+- структура продаж не предлагает сложить вложенные показатели как независимые итоги;
+- benchmark магазина явно подписан как «Все продажи», а остаток вне roster показан отдельно;
+- легенда и цвета сотрудников описывают сравнение с магазинным benchmark;
+- месячный план, темп и дневная цель имеют разные подписи;
+- причина пересчета «Нужно в день» видима пользователю;
+- future-day значения не смешаны с фактом;
+- ИИ evidence не дублируется отдельным одинаковым блоком;
+- limited/unknown данные не подменяются шаблонной положительной формулировкой;
+- layout остается пригодным на трех viewport.
+
+## Что этим прогоном не подтверждено
+
+- candidate еще не развернут и production smoke не выполнялся;
+- full credentialed ADMIN/MANAGER mutation lifecycle не повторялся именно для этого UI-кандидата,
+  потому что изменения не затрагивают auth/admin mutations;
+- реальные YandexGPT и Telegram side effects не выполнялись;
+- order-return webhook canary относится к backend operations, а не к frontend acceptance;
+- восстановление июльских возвратов не входит в UI-проверку.
+
+Историческая полная browser acceptance от 2026-08-06 проверяла ADMIN/MANAGER routes и lifecycle,
+но ее старые числа тестов больше не описывают текущий suite.
+
+## Команды
 
 ```bash
 cd frontend
+npm ci
 npm run check
+VISUAL_ROUTES='/overview,/plan,/insights' npm run visual:local
+```
+
+Credentialed local E2E:
+
+```bash
 E2E_ADMIN_EMAIL=... E2E_ADMIN_PASSWORD=... npm run e2e
 ```
 
-Для проверки постоянной MANAGER-учетки добавить `E2E_MANAGER_EMAIL` и `E2E_MANAGER_PASSWORD`.
-Учетные данные передаются только через окружение/CI secrets и не сохраняются в репозитории.
-
-Изменяющая локальная проверка разрешена только на тестовой базе:
+Мутационный сценарий разрешен только для подготовленного непроизводственного контура:
 
 ```bash
 E2E_MUTATING=true E2E_ADMIN_EMAIL=... E2E_ADMIN_PASSWORD=... \
   npx playwright test e2e/live-acceptance.spec.ts \
-  --project=desktop-chromium --grep "жизненный цикл"
+  --project=desktop-chromium --grep 'MANAGER'
 ```
 
-При наличии E2E credentials Playwright использует один worker: параллельные viewport-проекты не
-должны одновременно изменять server-side session registry одной учетной записи.
-
-## Что не запускается автоматически
-
-Следующие действия требуют отдельной staging-приемки на подготовленных данных, потому что создают
-необратимые финансовые/исторические записи или обращаются к внешним системам:
-
-- финализация рейтинга;
-- расчет, утверждение и отметка выплаты зарплаты;
-- запуск полной синхронизации и импорт классификации;
-- regenerate/cancel ИИ-задач;
-- Telegram link/confirm/revoke/resend.
-
-Их UI, маршруты, доступность и безопасные диалоги входят в обычный browser audit, но успешный
-внешний side effect должен проверяться по соответствующему staging runbook.
-
-## Оставшиеся риски
-
-1. При трех одновременных входах одной ADMIN-учеткой один backend login однажды завершился
-   `500 INTERNAL_ERROR`; последовательные входы стабильны. До production нужен отдельный backend
-   concurrency regression на login/session registration.
-2. Локальная приемка выполнялась в окружении, где одна диагностическая команда обнаружила
-   Node.js `20.19.5`. Release/CI должны использовать заявленный Node.js `>=22.22.0`.
-
-## Источники
-
-- `frontend/e2e/smoke.spec.ts` — короткие anonymous/ADMIN/MANAGER проверки;
-- `frontend/e2e/live-acceptance.spec.ts` — глубокий маршрутный и изменяющий lifecycle audit;
-- `frontend/playwright.config.ts` — viewport-проекты и последовательный credentialed run;
-- `frontend/README.md` — локальный запуск;
-- `docs/production-deployment-runbook.md` — обязательные launch gates.
+Production acceptance выполняется после deploy по
+[production-deployment-runbook.md](production-deployment-runbook.md), с тем же origin для SPA/API
+и без передачи production credentials в репозиторий или screenshots.
