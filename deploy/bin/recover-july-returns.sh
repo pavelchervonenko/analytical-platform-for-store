@@ -4,7 +4,7 @@ set -Eeuo pipefail
 set +x
 umask 077
 
-readonly SCRIPT_VERSION="july-return-recovery-v3"
+readonly SCRIPT_VERSION="july-return-recovery-v4"
 readonly BASE_URL="https://store-analytics.net"
 readonly EXPECTED_RELEASE_PREFIX="v0.1.0-pilot.22"
 readonly EXPECTED_SCHEMA_VERSION="44"
@@ -25,7 +25,7 @@ readonly -a RECOVERIES=(
   'F000352|6a5d2b39e861c25fc24d240d|4990.00|1'
   'F000371|6a660193e861c22b80db7be7|103000.00|9'
   'F000378|6a6c795fb75c90fffe3dea54|4990.00|1'
-  'F000380|6a6cf266aa17fa34a10d64fd|234000.00|10'
+  'F000380|6a6cf266aa17fa34a10d64fd|234000.00|13'
 )
 
 work_dir=""
@@ -111,7 +111,7 @@ validate_dataset() {
   done
 
   [[ "${total_cents}" -eq 71675000 ]] || die "manifest amount must equal 716750.00"
-  [[ "${total_positions}" -eq 39 ]] || die "manifest position count must equal 39"
+  [[ "${total_positions}" -eq 42 ]] || die "manifest API position count must equal 42"
 }
 
 print_plan() {
@@ -123,7 +123,7 @@ print_plan() {
     IFS='|' read -r document_number external_id amount position_count <<<"${row}"
     printf '%-9s %-24s %12s %9s\n' "${document_number}" "${external_id}" "${amount}" "${position_count}"
   done
-  printf 'TOTAL: 8 documents, 716750.00 RUB, 39 positions.\n'
+  printf 'TOTAL: 8 documents, 716750.00 RUB, 42 LiveSklad API positions.\n'
 }
 
 prepare_workspace() {
@@ -160,7 +160,7 @@ validate_secret_file() {
 validate_production_state() {
   [[ "$(id -u)" -eq 0 ]] || die "check/run must execute as root"
   local command_name
-  for command_name in curl jq awk grep sed stat systemctl mktemp tr seq sleep date; do
+  for command_name in curl jq awk grep sed stat systemctl mktemp tr seq sleep date psql; do
     require_command "${command_name}"
   done
   [[ -n "${ADMIN_LOGIN:-}" ]] || die "ADMIN_LOGIN is required for check/run"
@@ -286,6 +286,139 @@ verify_no_active_sync() {
   printf 'No active synchronization jobs.\n'
 }
 
+prepare_f000380_retry() {
+  local db_cert_host db_host_address db_port db_name db_user
+  local db_password_file db_ca_file db_connection password_mode
+
+  db_cert_host="$(release_env_value DB_CERT_HOST)"
+  db_host_address="$(release_env_value DB_HOST_ADDRESS)"
+  db_port="$(release_env_value DB_PORT)"
+  db_name="$(release_env_value DB_NAME)"
+  db_user="$(release_env_value DB_MIGRATOR_USER)"
+  db_password_file="$(release_env_value POSTGRES_MIGRATOR_PASSWORD_FILE)"
+  db_ca_file="$(release_env_value POSTGRES_CA_FILE)"
+
+  [[ -f "${db_password_file}" && ! -L "${db_password_file}" ]] || die "database password must be a regular non-symlink file"
+  [[ -s "${db_password_file}" && -r "${db_password_file}" ]] || die "database password file is missing or unreadable"
+  [[ "$(stat -c '%u' "${db_password_file}")" -eq 0 ]] || die "database password file must be root-owned"
+  password_mode="$(stat -c '%a' "${db_password_file}")"
+  [[ "${password_mode}" == "600" || "${password_mode}" == "400" ]] || die "database password file mode must be 0600 or 0400"
+  [[ -f "${db_ca_file}" && ! -L "${db_ca_file}" && -r "${db_ca_file}" ]] || die "database CA file is missing or unreadable"
+
+  db_connection="host=${db_cert_host} hostaddr=${db_host_address} port=${db_port} dbname=${db_name} user=${db_user} sslmode=verify-full sslrootcert=${db_ca_file} application_name=july-return-forward-fix"
+
+  PGPASSWORD="$(<"${db_password_file}")" psql "${db_connection}" -X -v ON_ERROR_STOP=1 -P pager=off <<'SQL'
+BEGIN;
+SELECT pg_advisory_xact_lock(
+    hashtextextended('july-return-f000380-forward-fix', 0)
+);
+
+DO $forward_fix$
+DECLARE
+    recovery livesklad_webhook_receipts%ROWTYPE;
+    document_exists boolean;
+BEGIN
+    SELECT *
+    INTO recovery
+    FROM livesklad_webhook_receipts
+    WHERE id = '33aa9855-109e-407a-a77f-cf71b82abc3a'::uuid
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'guard failed: F000380 recovery row is missing';
+    END IF;
+
+    SELECT EXISTS (
+        SELECT 1
+        FROM sales_documents
+        WHERE source_system = 'LIVESKLAD'
+          AND external_id = '6a6cf266aa17fa34a10d64fd'
+          AND document_kind = 'RETURN'
+          AND NOT is_deleted
+    )
+    INTO document_exists;
+
+    IF document_exists THEN
+        IF recovery.processing_status = 'PROCESSED'
+                AND recovery.recovery_expected_position_count = 13
+                AND recovery.terminal_failure = false THEN
+            RAISE NOTICE 'F000380 is already recovered with 13 API positions';
+            RETURN;
+        END IF;
+        RAISE EXCEPTION
+            'guard failed: F000380 fact exists in an unexpected recovery state';
+    END IF;
+
+    IF recovery.webhook_kind <> 'SALE_RETURN'
+            OR recovery.event_id
+                <> 'manual-recovery-33aa9855-109e-407a-a77f-cf71b82abc3a'
+            OR recovery.action_name <> 'manualRecovery'
+            OR recovery.source_document_id <> '6a6cf266aa17fa34a10d64fd'
+            OR recovery.recovery_expected_document_number <> 'F000380'
+            OR recovery.recovery_expected_net_amount <> 234000.00
+            OR recovery.payload_mismatch
+            OR recovery.delivery_count <> 1 THEN
+        RAISE EXCEPTION 'guard failed: F000380 immutable identity mismatch';
+    END IF;
+
+    IF recovery.recovery_expected_position_count = 13
+            AND recovery.processing_status IN ('RECEIVED', 'PROCESSING')
+            AND recovery.terminal_failure = false THEN
+        RAISE NOTICE 'F000380 retry is already queued with 13 API positions';
+        RETURN;
+    END IF;
+
+    IF recovery.recovery_expected_position_count <> 10
+            OR recovery.processing_status <> 'FAILED'
+            OR recovery.terminal_failure = false
+            OR recovery.error_code
+                <> 'RETURN_RECOVERY_EXPECTATION_MISMATCH'
+            OR recovery.processing_attempt_count <> 1
+            OR recovery.processed_at IS NOT NULL
+            OR recovery.lease_owner IS NOT NULL
+            OR recovery.lease_until IS NOT NULL THEN
+        RAISE EXCEPTION 'guard failed: F000380 is not the exact first mismatch';
+    END IF;
+
+    UPDATE livesklad_webhook_receipts
+    SET recovery_expected_position_count = 13,
+        processing_status = 'RECEIVED',
+        terminal_failure = false,
+        available_at = now(),
+        error_code = NULL,
+        error_summary = NULL
+    WHERE id = recovery.id;
+
+    INSERT INTO audit_log (
+        actor_user_id,
+        action,
+        entity_type,
+        entity_id,
+        metadata,
+        retention_class,
+        retain_until
+    )
+    VALUES (
+        recovery.recovery_requested_by,
+        'RETURN_RECOVERY_REQUESTED',
+        'RETURN_DOCUMENT',
+        recovery.id::text,
+        jsonb_build_object(
+            'reason', 'Correct grouped CRM rows to LiveSklad API positions',
+            'before', jsonb_build_object('expectedPositionCount', 10),
+            'after', jsonb_build_object('expectedPositionCount', 13)
+        ),
+        'FINANCIAL',
+        NULL
+    );
+
+    RAISE NOTICE 'F000380 requeued with 13 verified API positions';
+END
+$forward_fix$;
+COMMIT;
+SQL
+}
+
 request_recovery() {
   local document_number="$1"
   local external_id="$2"
@@ -374,6 +507,7 @@ main() {
       validate_production_state
       authenticate
       verify_no_active_sync
+      prepare_f000380_retry
       run_recoveries
       ;;
     -h|--help|help)
