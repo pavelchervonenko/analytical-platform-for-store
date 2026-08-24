@@ -4,7 +4,7 @@ set -Eeuo pipefail
 set +x
 umask 077
 
-readonly SCRIPT_VERSION="july-return-recovery-v4"
+readonly SCRIPT_VERSION="july-return-recovery-v5"
 readonly BASE_URL="https://store-analytics.net"
 readonly EXPECTED_RELEASE_PREFIX="v0.1.0-pilot.22"
 readonly EXPECTED_SCHEMA_VERSION="44"
@@ -74,7 +74,7 @@ Usage:
     recover-july-returns.sh run
 
 plan  validates and prints the immutable eight-document manifest; no network or mutation.
-check validates production release/schema/backup/flags, authenticates, and rejects active sync.
+check validates production state and prints safe F000380 LiveSklad expectation fields.
 run   repeats check and submits one recovery at a time, waiting for PROCESSED before continuing.
 USAGE
 }
@@ -155,6 +155,17 @@ validate_secret_file() {
   local mode
   mode="$(stat -c '%a' "${ADMIN_PASSWORD_FILE}")"
   [[ "${mode}" == "600" || "${mode}" == "400" ]] || die "admin password file mode must be 0600 or 0400"
+}
+
+validate_upstream_secret_file() {
+  local secret_file="$1"
+  local secret_name="$2"
+  local mode
+  [[ -f "${secret_file}" && ! -L "${secret_file}" ]] || die "${secret_name} must be a regular non-symlink file"
+  [[ -s "${secret_file}" && -r "${secret_file}" ]] || die "${secret_name} is missing or unreadable"
+  [[ "$(stat -c '%u' "${secret_file}")" -eq 0 ]] || die "${secret_name} must be root-owned"
+  mode="$(stat -c '%a' "${secret_file}")"
+  [[ "${mode}" == "600" || "${mode}" == "400" ]] || die "${secret_name} mode must be 0600 or 0400"
 }
 
 validate_production_state() {
@@ -284,6 +295,74 @@ verify_no_active_sync() {
   active_count="$(jq '[.[] | select(.status == "PENDING" or .status == "RUNNING" or .status == "WAITING_RETRY")] | length' "${response_file}")"
   [[ "${active_count}" -eq 0 ]] || die "found ${active_count} active synchronization job(s)"
   printf 'No active synchronization jobs.\n'
+}
+
+diagnose_f000380() {
+  local upstream_base_url login_file password_file
+  local login_copy password_copy auth_file auth_header_file detail_file
+  local actual external_id document_number position_count net_amount
+
+  upstream_base_url="$(release_env_value LIVESKLAD_BASE_URL)"
+  [[ "${upstream_base_url}" == "https://api.livesklad.com" ]] || die "unexpected LiveSklad base URL"
+  login_file="$(release_env_value LIVESKLAD_LOGIN_FILE)"
+  password_file="$(release_env_value LIVESKLAD_PASSWORD_FILE)"
+  validate_upstream_secret_file "${login_file}" "LiveSklad login"
+  validate_upstream_secret_file "${password_file}" "LiveSklad password"
+
+  login_copy="${work_dir}/livesklad-login"
+  password_copy="${work_dir}/livesklad-password"
+  auth_file="${work_dir}/livesklad-auth.json"
+  auth_header_file="${work_dir}/livesklad-auth-header"
+  detail_file="${work_dir}/livesklad-f000380.json"
+  tr -d '\r\n' <"${login_file}" >"${login_copy}"
+  tr -d '\r\n' <"${password_file}" >"${password_copy}"
+  [[ -s "${login_copy}" && -s "${password_copy}" ]] || die "LiveSklad credentials are empty"
+  chmod 0600 "${login_copy}" "${password_copy}"
+
+  curl --proto '=https' --tlsv1.2 --connect-timeout 5 --max-time 30 \
+    --max-filesize 65536 --fail-with-body --silent --show-error \
+    --header 'Accept: application/json' \
+    --header 'Content-Type: application/x-www-form-urlencoded' \
+    --data-urlencode "login@${login_copy}" \
+    --data-urlencode "password@${password_copy}" \
+    --output "${auth_file}" "${upstream_base_url}/auth" || die "LiveSklad diagnostic authentication failed"
+  chmod 0600 "${auth_file}"
+  jq -er '
+    .token
+    | select(type == "string" and length > 0 and length <= 4096)
+    | select((contains("\r") or contains("\n")) | not)
+    | "Authorization: " + .
+  ' "${auth_file}" >"${auth_header_file}" || die "LiveSklad diagnostic token is invalid"
+  chmod 0600 "${auth_header_file}"
+
+  curl --proto '=https' --tlsv1.2 --connect-timeout 5 --max-time 30 \
+    --max-filesize 1048576 --fail-with-body --silent --show-error \
+    --header 'Accept: application/json' \
+    --header "@${auth_header_file}" \
+    --output "${detail_file}" \
+    "${upstream_base_url}/documents/6a6cf266aa17fa34a10d64fd" || die "LiveSklad F000380 diagnostic fetch failed"
+  chmod 0600 "${detail_file}"
+
+  actual="$(jq -er '
+    .data as $document
+    | select($document.id | type == "string")
+    | select($document.number | type == "string")
+    | select($document.positions | type == "array" and length > 0)
+    | [
+        $document.id,
+        $document.number,
+        ($document.positions | length),
+        ([$document.positions[] | ((.soldPrice | tonumber) * (.count | tonumber))] | add)
+      ]
+    | @tsv
+  ' "${detail_file}")" || die "LiveSklad F000380 diagnostic response is incomplete"
+  IFS=$'\t' read -r external_id document_number position_count net_amount <<<"${actual}"
+  [[ "${external_id}" =~ ^[0-9a-f]{24}$ ]] || die "LiveSklad diagnostic external ID is invalid"
+  [[ "${document_number}" =~ ^F[0-9]{6}$ ]] || die "LiveSklad diagnostic document number is invalid"
+  [[ "${position_count}" =~ ^[1-9][0-9]*$ ]] || die "LiveSklad diagnostic position count is invalid"
+  [[ "${net_amount}" =~ ^[0-9]+([.][0-9]+)?$ ]] || die "LiveSklad diagnostic net amount is invalid"
+  printf 'LiveSklad F000380 actual: external_id=%s document=%s API_positions=%s computed_amount=%s RUB.\n' \
+    "${external_id}" "${document_number}" "${position_count}" "${net_amount}"
 }
 
 prepare_f000380_retry() {
@@ -499,6 +578,7 @@ main() {
       validate_production_state
       authenticate
       verify_no_active_sync
+      diagnose_f000380
       printf 'Read-only production check passed; no recovery was queued.\n'
       ;;
     run)
