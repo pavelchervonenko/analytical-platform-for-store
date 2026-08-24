@@ -4,7 +4,7 @@ set -Eeuo pipefail
 set +x
 umask 077
 
-readonly SCRIPT_VERSION="july-return-recovery-v5"
+readonly SCRIPT_VERSION="july-return-recovery-v6"
 readonly BASE_URL="https://store-analytics.net"
 readonly EXPECTED_RELEASE_PREFIX="v0.1.0-pilot.22"
 readonly EXPECTED_SCHEMA_VERSION="44"
@@ -25,7 +25,7 @@ readonly -a RECOVERIES=(
   'F000352|6a5d2b39e861c25fc24d240d|4990.00|1'
   'F000371|6a660193e861c22b80db7be7|103000.00|9'
   'F000378|6a6c795fb75c90fffe3dea54|4990.00|1'
-  'F000380|6a6cf266aa17fa34a10d64fd|234000.00|13'
+  'F000380|6a6cf266aa17fa34a10d64fd|234000.00|9'
 )
 
 work_dir=""
@@ -111,7 +111,7 @@ validate_dataset() {
   done
 
   [[ "${total_cents}" -eq 71675000 ]] || die "manifest amount must equal 716750.00"
-  [[ "${total_positions}" -eq 42 ]] || die "manifest API position count must equal 42"
+  [[ "${total_positions}" -eq 38 ]] || die "manifest API position count must equal 38"
 }
 
 print_plan() {
@@ -123,7 +123,7 @@ print_plan() {
     IFS='|' read -r document_number external_id amount position_count <<<"${row}"
     printf '%-9s %-24s %12s %9s\n' "${document_number}" "${external_id}" "${amount}" "${position_count}"
   done
-  printf 'TOTAL: 8 documents, 716750.00 RUB, 42 LiveSklad API positions.\n'
+  printf 'TOTAL: 8 documents, 716750.00 RUB, 38 LiveSklad API positions.\n'
 }
 
 prepare_workspace() {
@@ -361,6 +361,10 @@ diagnose_f000380() {
   [[ "${document_number}" =~ ^F[0-9]{6}$ ]] || die "LiveSklad diagnostic document number is invalid"
   [[ "${position_count}" =~ ^[1-9][0-9]*$ ]] || die "LiveSklad diagnostic position count is invalid"
   [[ "${net_amount}" =~ ^[0-9]+([.][0-9]+)?$ ]] || die "LiveSklad diagnostic net amount is invalid"
+  [[ "${external_id}" == "6a6cf266aa17fa34a10d64fd" ]] || die "LiveSklad F000380 external ID changed"
+  [[ "${document_number}" == "F000380" ]] || die "LiveSklad F000380 document number changed"
+  [[ "${position_count}" -eq 9 ]] || die "LiveSklad F000380 API position count changed"
+  jq -en --arg amount "${net_amount}" '($amount | tonumber) == 234000' >/dev/null || die "LiveSklad F000380 computed amount changed"
   printf 'LiveSklad F000380 actual: external_id=%s document=%s API_positions=%s computed_amount=%s RUB.\n' \
     "${external_id}" "${document_number}" "${position_count}" "${net_amount}"
 }
@@ -419,9 +423,9 @@ BEGIN
 
     IF document_exists THEN
         IF recovery.processing_status = 'PROCESSED'
-                AND recovery.recovery_expected_position_count = 13
+                AND recovery.recovery_expected_position_count = 9
                 AND recovery.terminal_failure = false THEN
-            RAISE NOTICE 'F000380 is already recovered with 13 API positions';
+            RAISE NOTICE 'F000380 is already recovered with 9 API positions';
             RETURN;
         END IF;
         RAISE EXCEPTION
@@ -440,27 +444,27 @@ BEGIN
         RAISE EXCEPTION 'guard failed: F000380 immutable identity mismatch';
     END IF;
 
-    IF recovery.recovery_expected_position_count = 13
+    IF recovery.recovery_expected_position_count = 9
             AND recovery.processing_status IN ('RECEIVED', 'PROCESSING')
             AND recovery.terminal_failure = false THEN
-        RAISE NOTICE 'F000380 retry is already queued with 13 API positions';
+        RAISE NOTICE 'F000380 retry is already queued with 9 API positions';
         RETURN;
     END IF;
 
-    IF recovery.recovery_expected_position_count <> 10
+    IF recovery.recovery_expected_position_count <> 13
             OR recovery.processing_status <> 'FAILED'
             OR recovery.terminal_failure = false
             OR recovery.error_code
                 <> 'RETURN_RECOVERY_EXPECTATION_MISMATCH'
-            OR recovery.processing_attempt_count <> 1
+            OR recovery.processing_attempt_count <> 2
             OR recovery.processed_at IS NOT NULL
             OR recovery.lease_owner IS NOT NULL
             OR recovery.lease_until IS NOT NULL THEN
-        RAISE EXCEPTION 'guard failed: F000380 is not the exact first mismatch';
+        RAISE EXCEPTION 'guard failed: F000380 is not the exact second mismatch';
     END IF;
 
     UPDATE livesklad_webhook_receipts
-    SET recovery_expected_position_count = 13,
+    SET recovery_expected_position_count = 9,
         processing_status = 'RECEIVED',
         terminal_failure = false,
         available_at = now(),
@@ -483,15 +487,15 @@ BEGIN
         'RETURN_DOCUMENT',
         recovery.id::text,
         jsonb_build_object(
-            'reason', 'Correct grouped CRM rows to LiveSklad API positions',
-            'before', jsonb_build_object('expectedPositionCount', 10),
-            'after', jsonb_build_object('expectedPositionCount', 13)
+            'reason', 'Use position array count verified directly in LiveSklad',
+            'before', jsonb_build_object('expectedPositionCount', 13),
+            'after', jsonb_build_object('expectedPositionCount', 9)
         ),
         'FINANCIAL',
         NULL
     );
 
-    RAISE NOTICE 'F000380 requeued with 13 verified API positions';
+    RAISE NOTICE 'F000380 requeued with 9 verified API positions';
 END
 $forward_fix$;
 COMMIT;
@@ -587,6 +591,7 @@ main() {
       validate_production_state
       authenticate
       verify_no_active_sync
+      diagnose_f000380
       prepare_f000380_retry
       run_recoveries
       ;;
