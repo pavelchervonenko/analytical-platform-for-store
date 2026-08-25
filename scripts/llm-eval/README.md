@@ -125,7 +125,11 @@ blocking violations.
 Статус без записи:
 
 ```bash
-python3 scripts/llm-eval/review.py status   --manifest scripts/llm-eval/dataset-v2.json   --responses-dir build/llm-eval/<immutable-run>/responses
+python3 scripts/llm-eval/review.py status \
+  --manifest scripts/llm-eval/dataset-v2.json \
+  --responses-dir build/llm-eval/<immutable-run>/responses \
+  --baseline v4 \
+  --candidate v21
 ```
 
 Подготовка immutable A/B packet:
@@ -159,9 +163,12 @@ baseline по ручным и автоматическим метрикам.
 build/llm-eval/v4-v21-full-20260819/responses/
 build/llm-eval/v4-v21-full-20260819/automatic-report-final.json
 build/llm-eval/v4-v21-full-20260819/review-final/
-build/llm-eval/v4-v21-full-20260819/blinded-decision-final.json
-build/llm-eval/v4-v21-full-20260819/blinded-decision-final.md
+build/llm-eval/v4-v21-full-20260819/FINAL-v21-schema3-decision.json
+build/llm-eval/v4-v21-full-20260819/FINAL-v21-schema3-decision.md
 ```
+
+Файлы `blinded-decision-final.*` относятся к более ранней неуспешной ручной оценке и не являются
+источником финального решения.
 
 Итог: v21 26/26 automatic, 26/26 manual, 0 violations, 0 missing/forbidden/critical findings.
 V4 сохранил 110 automatic violations и 11/26 manual pass как контрольный baseline.

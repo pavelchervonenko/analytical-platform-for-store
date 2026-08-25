@@ -8,7 +8,9 @@
 не изменялись.
 
 Обновление 2026-08-21: полный semantic gate v21/schema 3 пройден на 26 сценариях;
-актуальный статус зафиксирован в scripts/llm-eval/README.md.
+актуальный статус зафиксирован в scripts/llm-eval/README.md. Канонический итоговый артефакт —
+`build/llm-eval/v4-v21-full-20260819/FINAL-v21-schema3-decision.json`; одноимённый Markdown-файл
+содержит операторскую сводку.
 
 Этот документ заменяет
 [AI_INTERPRETATION_V19_RELEASE_HANDOFF_2026-08-17.md](AI_INTERPRETATION_V19_RELEASE_HANDOFF_2026-08-17.md)
