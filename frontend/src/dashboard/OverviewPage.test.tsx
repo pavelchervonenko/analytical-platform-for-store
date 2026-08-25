@@ -345,22 +345,71 @@ describe("management overview", () => {
     expect(outsideCell).toHaveAttribute("data-tone", "context");
 
     const annaCell = within(casesRow!).getByTitle(
-      /Анна: 2 \/ 5 = 40%; 66,7% от benchmark магазина/
+      /Анна: 2 \/ 5 = 40%; 66,7% от среднего по магазину/
     );
     expect(annaCell).toHaveAttribute("data-tone", "below");
     expect(within(annaCell).getByText("2 / 5")).toBeInTheDocument();
 
     const ilyaCell = within(casesRow!).getByTitle(
-      /Илья: 3 \/ 4 = 75%; 125% от benchmark магазина/
+      /Илья: 3 \/ 4 = 75%; 125% от среднего по магазину/
     );
     expect(ilyaCell).toHaveAttribute("data-tone", "above");
 
     const chargerRow = screen.getByText("Зарядные устройства и кабели").closest("tr");
     expect(chargerRow).not.toBeNull();
-    expect(within(chargerRow!).getAllByText("нет базы").length).toBeGreaterThan(0);
+    expect(within(chargerRow!).getAllByText("нет продаж для расчёта").length).toBeGreaterThan(0);
+    expect(screen.getByText("Нет или недостаточно продаж")).toBeInTheDocument();
     expect(screen.getByText("Ниже магазина")).toBeInTheDocument();
     expect(screen.getByText("На уровне магазина")).toBeInTheDocument();
     expect(screen.getByText("Выше магазина")).toBeInTheDocument();
     expect(screen.queryByText("Скрытый сотрудник")).not.toBeInTheDocument();
+  });
+
+  it("explains when an employee cannot be compared with the store average", () => {
+    const attachWithoutStoreAverage: AttachRate = {
+      ...attach,
+      rates: [{
+        ...attach.rates[0]!,
+        numeratorReceiptCount: 0,
+        numeratorQuantity: 0,
+        ratePerHundred: 0
+      }]
+    };
+
+    render(
+      <MemoryRouter>
+        <AttachRateMatrix attach={attachWithoutStoreAverage} rating={rating} storeName="Магазин" />
+      </MemoryRouter>
+    );
+
+    const casesRow = screen.getByText("Чехлы Apple / iPhone").closest("tr");
+    expect(casesRow).not.toBeNull();
+    expect(within(casesRow!).getAllByText("нет среднего по магазину")).toHaveLength(2);
+    expect(within(casesRow!).getByTitle(/Анна:.*средний показатель по магазину недоступен/u))
+      .toHaveAttribute("data-tone", "insufficient");
+  });
+
+  it("explains when an employee has too few sales for the rating", () => {
+    const ratingWithInsufficientSales: EmployeeRatingResult = {
+      ...rating,
+      employees: rating.employees.map((entry) => entry.employeeId === annaId
+        ? {
+          ...entry,
+          attachRates: entry.attachRates.map((rate) => ({ ...rate, includedInScore: false }))
+        }
+        : entry)
+    };
+
+    render(
+      <MemoryRouter>
+        <AttachRateMatrix attach={attach} rating={ratingWithInsufficientSales} storeName="Магазин" />
+      </MemoryRouter>
+    );
+
+    const casesRow = screen.getByText("Чехлы Apple / iPhone").closest("tr");
+    expect(casesRow).not.toBeNull();
+    const annaCell = within(casesRow!).getByTitle(/Анна:.*недостаточно продаж для рейтинга/u);
+    expect(annaCell).toHaveAttribute("data-tone", "insufficient");
+    expect(within(annaCell).getByText("недостаточно продаж")).toBeInTheDocument();
   });
 });

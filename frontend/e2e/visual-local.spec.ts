@@ -164,6 +164,18 @@ test.describe("local frontend visual review", () => {
           page.getByRole("dialog", { name: "Выбор периода" })
         ).toHaveCount(0);
       }
+      if (new URL(route, "http://local.test").pathname === "/overview") {
+        const attachMap = page.locator(".attach-map-panel");
+        if (await attachMap.count() > 0) {
+          await attachMap.locator(":scope > summary").click();
+          await expect(attachMap).toHaveAttribute("open", "");
+          await attachMap.screenshot({
+            path: resolve(screenshotDirectory, screenshotName(route) + "-attach-map.png"),
+            animations: "disabled",
+            style: ".topbar, .skip-link { visibility: hidden !important; }"
+          });
+        }
+      }
       await captureVisualArtifacts(page, screenshotDirectory, screenshotName(route));
       if (new URL(route, "http://local.test").pathname === "/plan") {
         const settings = page.locator(".plan-settings-disclosure");

@@ -430,25 +430,25 @@ function AttachCell({
   const noBase = value == null || value.denominator <= 0 || value.rate == null;
   const tone = comparisonTone(value, benchmarkRate, kind);
   const comparison = !noBase && kind === "employee" && benchmarkRate != null && benchmarkRate > 0
-    ? formatPercent(value!.rate! * 100 / benchmarkRate) + " от benchmark магазина"
+    ? formatPercent(value!.rate! * 100 / benchmarkRate) + " от среднего по магазину"
     : null;
   const suffix = kind === "benchmark"
-    ? "; benchmark по всем документам магазина"
+    ? "; средний показатель по всем документам магазина"
     : kind === "context"
       ? "; остаток между магазином и участниками рейтинга"
       : tone === "insufficient"
         ? benchmarkRate == null || benchmarkRate <= 0
-          ? "; benchmark магазина недоступен"
-          : "; недостаточная база для рейтинга"
+          ? "; средний показатель по магазину недоступен"
+          : "; недостаточно продаж для рейтинга"
         : comparison == null ? "" : "; " + comparison;
   const title = noBase
     ? owner + ": нет релевантных продаж техники"
     : owner + ": " + formatNumber(value!.numerator) + " / " + formatNumber(value!.denominator)
       + " = " + formatPercent(value!.rate) + suffix;
   const detail = noBase
-    ? "нет базы"
+    ? "нет продаж для расчёта"
     : tone === "insufficient"
-      ? benchmarkRate == null || benchmarkRate <= 0 ? "нет benchmark" : "мало базы"
+      ? benchmarkRate == null || benchmarkRate <= 0 ? "нет среднего по магазину" : "недостаточно продаж"
       : formatNumber(value!.numerator) + " / " + formatNumber(value!.denominator);
   return (
     <td className="attach-map__cell" data-tone={tone} title={title}>
@@ -505,7 +505,7 @@ export function AttachRateMatrix({
                 <th>Показатель</th>
                 <th
                   className="attach-map__store-heading"
-                  title={"Benchmark " + storeName + " включает все документы магазина, в том числе продажи вне рейтинга и без сотрудника"}
+                  title={"Средний показатель " + storeName + " включает все документы магазина, в том числе продажи вне рейтинга и без сотрудника"}
                 >
                   <TrendingUp size={14} /><span>{storeName}</span><small>Все продажи</small>
                 </th>
@@ -565,11 +565,11 @@ export function AttachRateMatrix({
           </table>
         </div>
         <footer className="attach-map__legend">
-          <span><i data-tone="empty" />Нет или мало базы</span>
+          <span><i data-tone="empty" />Нет или недостаточно продаж</span>
           <span><i data-tone="below" />Ниже магазина</span>
           <span><i data-tone="at-level" />На уровне магазина</span>
           <span><i data-tone="above" />Выше магазина</span>
-          <small>Магазин — benchmark по всем документам. Отклонение до 10% считается уровнем магазина.</small>
+          <small>Средний показатель магазина рассчитан по всем документам. Отклонение до 10% считается уровнем магазина.</small>
         </footer>
       </div>
     </details>
