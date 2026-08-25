@@ -193,7 +193,7 @@ export function PlanPanel() {
         <div className="plan-form-actions">{plan && <button className="button button--ghost" type="button" disabled={mutation.isPending} onClick={cancel}><X size={15} />Отмена</button>}<button className="button button--primary" type="button" disabled={mutation.isPending} onClick={submit}><Save size={15} />{mutation.isPending ? "Сохраняем…" : plan ? "Сохранить изменения" : "Создать план"}</button></div>
       </section>}
 
-      {progress && <DailyPlanTable targets={progress.dailyTargets} asOfDate={progress.asOfDate} />}
+      {progress && <DailyPlanTable targets={progress.dailyTargets} />}
     </div>
   );
 }

@@ -57,25 +57,22 @@ export function SalesStructure({ groups }: { groups: SalesGroup[] }) {
   const otherGroups = groups.filter((group) => !structuredCodes.has(group.groupCode));
 
   return (
-    <>
-      <div className="group-list group-list--hierarchical">
-        {(devices || phones) && (
-          <section className="group-branch" aria-label="Техника и её состав">
-            {devices && <SalesGroupRow group={devices} relation="Итого по категории" />}
-            {phones && <SalesGroupRow group={phones} relation="В том числе" />}
-          </section>
-        )}
-        {(additionalRevenue || accessory || service) && (
-          <section className="group-branch" aria-label="Дополнительная выручка и её состав">
-            {additionalRevenue && <SalesGroupRow group={additionalRevenue} relation="Подытог" />}
-            {accessory && <SalesGroupRow group={accessory} relation="В том числе" />}
-            {service && <SalesGroupRow group={service} relation="В том числе" />}
-          </section>
-        )}
-        {otherGroups.map((group) => <SalesGroupRow group={group} relation="Отдельная категория" key={group.groupCode} />)}
-      </div>
-      <p className="group-list__hint">Вложенные строки уже входят в итог родительской категории — складывать их повторно не нужно.</p>
-    </>
+    <div className="group-list group-list--hierarchical">
+      {(devices || phones) && (
+        <section className="group-branch" aria-label="Техника и её состав">
+          {devices && <SalesGroupRow group={devices} relation="Итого по категории" />}
+          {phones && <SalesGroupRow group={phones} relation="В том числе" />}
+        </section>
+      )}
+      {(additionalRevenue || accessory || service) && (
+        <section className="group-branch" aria-label="Дополнительная выручка и её состав">
+          {additionalRevenue && <SalesGroupRow group={additionalRevenue} relation="Подытог" />}
+          {accessory && <SalesGroupRow group={accessory} relation="В том числе" />}
+          {service && <SalesGroupRow group={service} relation="В том числе" />}
+        </section>
+      )}
+      {otherGroups.map((group) => <SalesGroupRow group={group} relation="Отдельная категория" key={group.groupCode} />)}
+    </div>
   );
 }
 

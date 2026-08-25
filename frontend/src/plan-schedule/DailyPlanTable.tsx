@@ -1,5 +1,5 @@
 import type { PlanDailyTarget } from "../api/contracts";
-import { formatDate, formatDateShort } from "../shared/date";
+import { formatDateShort } from "../shared/date";
 import { formatMoney, formatPercent } from "../shared/format";
 
 interface DailyDirection {
@@ -73,7 +73,7 @@ function CompactDay({ target }: { target: PlanDailyTarget }) {
   );
 }
 
-export function DailyPlanTable({ targets, asOfDate }: { targets: PlanDailyTarget[]; asOfDate: string }) {
+export function DailyPlanTable({ targets }: { targets: PlanDailyTarget[] }) {
   if (targets.length === 0) return null;
 
   const completedTargets = targets.filter((target) => target.completed);
@@ -92,10 +92,6 @@ export function DailyPlanTable({ targets, asOfDate }: { targets: PlanDailyTarget
         </div>
         <span>{targets.length} дн.</span>
       </div>
-      <aside className="daily-plan-explanation" aria-label="Почему дневная цель пересчитывается">
-        <strong>Почему цель меняется</strong>
-        <p>После синхронизации система заново прогнозирует выручку до конца месяца и распределяет оставшуюся сумму аксессуаров и услуг по оставшимся дням. Поэтому будущая цель может меняться ежедневно. Расчёт по данным на {formatDate(asOfDate)}.</p>
-      </aside>
       <div className="table-scroll">
         <table className="daily-plan-table">
           <thead>

@@ -298,7 +298,7 @@ describe("management overview", () => {
     expect(within(additional).getByText("Аксессуары")).toBeInTheDocument();
     expect(within(additional).getByText("Услуги")).toBeInTheDocument();
     expect(within(additional).getAllByText("В том числе")).toHaveLength(2);
-    expect(screen.getByText(/Вложенные строки уже входят в итог/u)).toBeInTheDocument();
+    expect(screen.queryByText(/Вложенные строки уже входят в итог/u)).not.toBeInTheDocument();
   });
 
   it("shows only active rating participants and joins their gross profit", () => {
