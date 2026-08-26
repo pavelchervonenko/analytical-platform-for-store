@@ -1081,16 +1081,25 @@ public class ReturnSyncPersistence {
             return;
         }
         LiveSkladReturnDetailPayload detail = source.detail();
+        boolean saleDetail = "sale".equalsIgnoreCase(detail.sourceType());
+        boolean returnDetail = "saleReturn".equalsIgnoreCase(
+                detail.sourceType()
+        );
         if (!source.externalId().equals(detail.externalId())
-                || !("saleReturn".equalsIgnoreCase(detail.sourceType())
-                || "sale".equalsIgnoreCase(detail.sourceType()))
+                || !(saleDetail || returnDetail)
                 || !store.getExternalId().equals(detail.storeExternalId())
+                || detail.occurredAt() == null
                 || detail.rawPayload() == null
-                || detail.positions() == null
-                || detail.occurredAt().isBefore(period.start())
-                || detail.occurredAt().isAfter(period.end())) {
+                || detail.positions() == null) {
             throw new IllegalArgumentException(
                     "LiveSklad return detail is inconsistent"
+            );
+        }
+        if (returnDetail
+                && (detail.occurredAt().isBefore(period.start())
+                || detail.occurredAt().isAfter(period.end()))) {
+            throw new IllegalArgumentException(
+                    "LiveSklad return detail is outside the requested period"
             );
         }
     }

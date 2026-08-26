@@ -99,6 +99,12 @@ LiveSklad rate limit in a sales, returns, or orders phase halves the current chi
 Permanent payload or configuration failures still require operator intervention. The rolling
 overlap captures late corrections without duplicating normalized facts.
 
+The return discovery feed can include a cash adjustment whose referenced document resolves to an
+ordinary `sale`, not a `saleReturn`. Such a record is retained as sanitized raw evidence and skipped
+with `PARTIAL_SUCCESS`; it must not create or mutate a return fact. The sale document can legitimately
+predate the cash-transaction child window, so only the cash transaction is required to be inside that
+window. A real `saleReturn` detail is still required to fall inside the requested child window.
+
 ## Source request budget
 
 The client observes LiveSklad `remainRequest` and `expireDate`. It preserves five requests as a

@@ -561,7 +561,7 @@ class ReturnSyncIntegrationTest {
     }
 
     @Test
-    void skipsCashReturnReferencingSaleDetailAsQualityIssue() {
+    void skipsCashReturnWhoseReferencedSalePredatesTheTransactionWindow() {
         bootstrapReferences();
         SaleFixture sale = new SaleFixture(
                 "sale-reference",
@@ -597,7 +597,7 @@ class ReturnSyncIntegrationTest {
                 new LiveSkladReturnDetailPayload(
                         source.externalId(),
                         "S-RETURN-REFERENCE",
-                        source.occurredAt(),
+                        sale.occurredAt(),
                         source.sourceUpdatedAt(),
                         "sale",
                         "store-1",
@@ -616,10 +616,23 @@ class ReturnSyncIntegrationTest {
                 Map.of(source.externalId(), detail)
         );
 
-        ReturnSyncResult result = returnSyncService.synchronize(period());
+        ReturnSyncResult result = returnSyncService.synchronize(
+                new ReturnSyncPeriod(
+                        Instant.parse("2026-07-01T11:00:00Z"),
+                        Instant.parse("2026-07-01T13:00:00Z")
+                )
+        );
 
         assertThat(result.status()).isEqualTo(SyncStatus.PARTIAL_SUCCESS);
         assertThat(result.unresolvedDocuments()).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT normalization_status FROM raw_record_versions
+                WHERE entity_type = 'RETURN_DOCUMENT'
+                  AND external_id = 'sale-reference'
+                """,
+                String.class
+        )).isEqualTo(NormalizationStatus.SKIPPED.name());
         assertThat(jdbcTemplate.queryForObject(
                 """
                 SELECT document_kind FROM sales_documents
