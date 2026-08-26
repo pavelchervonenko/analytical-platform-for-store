@@ -302,6 +302,56 @@ release_validate_livesklad_webhook_processing() {
       'order-return processing requires SYNC_INCREMENTAL_OVERLAP_DAYS >= 2'
 }
 
+release_validate_llm_configuration() {
+  local env_file="$1"
+  local enabled prompt_version content_schema_version expected_schema
+
+  enabled="$(release_env_value_or_default \
+    "${env_file}" INTERPRETATION_GENERATION_ENABLED false)" || return 1
+  case "${enabled}" in
+  false)
+    return 0
+    ;;
+  true)
+    ;;
+  *)
+    release_safety_fail \
+      'INTERPRETATION_GENERATION_ENABLED must be true or false'
+    return 1
+    ;;
+  esac
+
+  prompt_version="$(release_env_value "${env_file}" LLM_PROMPT_VERSION)" \
+    || return 1
+  content_schema_version="$(release_env_value \
+    "${env_file}" LLM_CONTENT_SCHEMA_VERSION)" || return 1
+
+  case "${prompt_version}" in
+  weekly-interpretation-v3)
+    expected_schema=1
+    ;;
+  weekly-interpretation-v4|weekly-interpretation-v5|weekly-interpretation-v6|\
+  weekly-interpretation-v7|weekly-interpretation-v8|weekly-interpretation-v9|\
+  weekly-interpretation-v10|weekly-interpretation-v11|weekly-interpretation-v12)
+    expected_schema=2
+    ;;
+  weekly-interpretation-v13|weekly-interpretation-v14|weekly-interpretation-v15|\
+  weekly-interpretation-v16|weekly-interpretation-v17|weekly-interpretation-v18|\
+  weekly-interpretation-v19|weekly-interpretation-v20|weekly-interpretation-v21)
+    expected_schema=3
+    ;;
+  *)
+    release_safety_fail \
+      'LLM_PROMPT_VERSION is not packaged by the production application'
+    return 1
+    ;;
+  esac
+
+  [[ "${content_schema_version}" == "${expected_schema}" ]] \
+    || release_safety_fail \
+      "${prompt_version} requires LLM_CONTENT_SCHEMA_VERSION=${expected_schema}"
+}
+
 release_validate_env_file() {
   local env_file="$1"
   local mode
@@ -315,6 +365,7 @@ release_validate_env_file() {
   release_validate_product_classification_reconciliation "${env_file}" \
     || return 1
   release_validate_livesklad_webhook_processing "${env_file}" || return 1
+  release_validate_llm_configuration "${env_file}" || return 1
   release_validate_secret_files "${env_file}" || return 1
   release_validate_ca_file "${env_file}"
 }

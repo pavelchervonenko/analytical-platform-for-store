@@ -1,12 +1,28 @@
 # Production-эксплуатация LLM-контура
 
-Статус на 2026-08-24: инфраструктурный контур реализован. Production default остается
-`weekly-interpretation-v4` / schema `2`. Кандидат `weekly-interpretation-v21` / schema `3`
-прошел 26/26 automatic и 26/26 blinded manual cases со средней оценкой 4,8/5, а также два
-exact-week provider canary ответа. Он допущен к отдельному application/production canary, но не
-активирован. V15, v19 и v20 остаются историей отбракованных/промежуточных вариантов. Оставшиеся
-gates: exact-image server-side canary, publication/UI/Telegram проверка, failure drills,
-alerts/budget controls и отдельное production approval.
+Статус на 2026-08-26: `weekly-interpretation-v21` / schema `3` выбран для production canary.
+Кандидат прошел 26/26 automatic и 26/26 blinded manual cases со средней оценкой 4,8/5, а также
+два exact-week provider canary ответа. V15, v19 и v20 остаются историей
+отбракованных/промежуточных вариантов.
+
+Перед первым платным production-вызовом обнаружена конфигурационная рассинхронизация:
+`backend-worker` получал выбранные `LLM_PROMPT_VERSION` и
+`LLM_CONTENT_SCHEMA_VERSION`, а `backend-api` использовал встроенный default
+`weekly-interpretation-v4` / schema `2`. Ручная regeneration создаётся API, поэтому она
+могла записать задание со старой парой, даже если worker уже работал на v21/schema 3.
+
+Production Compose теперь передаёт prompt/schema и ограничения generation через общее окружение
+API и worker. Release preflight дополнительно требует явную совместимую пару при включённой
+generation и отклоняет смешанные конфигурации. Пока процессы расходились, новые задания и
+provider-вызовы не создавались.
+
+Acceptance после rollout:
+
+1. подтвердить `v21/schema3` внутри обоих контейнеров;
+2. создать отдельную generation revision для последних снимков обоих магазинов;
+3. получить `SUCCESS`, immutable interpretation и состояние consumer API `READY`;
+4. проверить раздел «ИИ-разбор» для «МАГАЗИН» и «МобиСфера»;
+5. только после этого считать production default принятым.
 
 ## Что уже входит в контур
 

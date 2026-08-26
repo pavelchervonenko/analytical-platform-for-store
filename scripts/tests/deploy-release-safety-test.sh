@@ -68,6 +68,26 @@ export RELEASE_EXPECTED_SECRET_UID
 RELEASE_EXPECTED_SECRET_UID="$(id -u)"
 release_validate_env_file "${release_env}" \
   || fail_test 'valid release fixture was rejected'
+
+printf '%s\n' \
+  'INTERPRETATION_GENERATION_ENABLED=true' \
+  'LLM_PROMPT_VERSION=weekly-interpretation-v21' \
+  'LLM_CONTENT_SCHEMA_VERSION=3' \
+  >>"${release_env}"
+release_validate_llm_configuration "${release_env}" \
+  || fail_test 'valid v21/schema3 generation configuration was rejected'
+sed -i '$d' "${release_env}"
+printf '%s\n' 'LLM_CONTENT_SCHEMA_VERSION=2' >>"${release_env}"
+if release_validate_llm_configuration "${release_env}" >/dev/null 2>&1; then
+  fail_test 'mismatched v21/schema2 generation configuration was accepted'
+fi
+sed -i '$d' "${release_env}"
+sed -i '$d' "${release_env}"
+if release_validate_llm_configuration "${release_env}" >/dev/null 2>&1; then
+  fail_test 'enabled generation without an explicit prompt version was accepted'
+fi
+sed -i '$d' "${release_env}"
+
 release_schema_allows_migration_source "${release_env}" 39 \
   || fail_test 'declared migration source was rejected'
 release_schema_allows_migration_source "${release_env}" 39.1 \

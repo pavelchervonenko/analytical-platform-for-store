@@ -69,6 +69,23 @@ for required_fragment in \
         || fail_test "production Compose is missing: ${required_fragment}"
 done
 
+production_deploy_compose="${PROJECT_ROOT}/deploy/compose.production.yml"
+shared_backend_environment="$(awk '
+  /^x-backend-environment:/ { capture = 1 }
+  /^services:/ { capture = 0 }
+  capture { print }
+' "${production_deploy_compose}")"
+for required_fragment in \
+    'LLM_PROMPT_VERSION: ${LLM_PROMPT_VERSION:-weekly-interpretation-v4}' \
+    'LLM_CONTENT_SCHEMA_VERSION: ${LLM_CONTENT_SCHEMA_VERSION:-2}' \
+    'LLM_MAX_OUTPUT_TOKENS: ${LLM_MAX_OUTPUT_TOKENS:-8000}' \
+    'LLM_MAX_PROVIDER_CALLS: ${LLM_MAX_PROVIDER_CALLS:-2}'; do
+    grep -F -- "${required_fragment}" <<<"${shared_backend_environment}" \
+        >/dev/null \
+        || fail_test \
+          "production API/worker shared environment is missing: ${required_fragment}"
+done
+
 if grep -Eq '^[[:space:]]+(TELEGRAM_BOT_TOKEN|TELEGRAM_WEBHOOK_SECRET):' \
     "${production_compose}"; then
     fail_test 'production Compose exposes a Telegram secret through environment'
