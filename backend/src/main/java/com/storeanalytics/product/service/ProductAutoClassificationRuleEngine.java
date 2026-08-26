@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class ProductAutoClassificationRuleEngine {
 
-    public static final String RULE_VERSION = "livesklad-product-rules-v5";
+    public static final String RULE_VERSION = "livesklad-product-rules-v6";
 
     public Optional<ProductAutoClassificationDecision> classify(Product product) {
         return classify(product.getName(), product.getSourceKind());
@@ -298,7 +298,10 @@ public class ProductAutoClassificationRuleEngine {
     }
 
     private boolean isIphone(String name) {
-        return containsAny(name, "iphone", "айфон");
+        return containsAny(name, "iphone", "айфон")
+                || name.matches(
+                        ".*\\bphone\\s+1[1-9]\\s+(?:pro(?:\\s+max)?|plus|mini|e)\\b.*"
+                );
     }
 
     private boolean isSamsung(String name) {

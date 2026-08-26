@@ -42,6 +42,10 @@ class ProductAutoClassificationRuleEngineTest {
                 "Новый товар без классификационных признаков",
                 ProductSourceKind.PRODUCT
         )).isEmpty();
+        assertThat(engine.classify(
+                "Phone 15 stand",
+                ProductSourceKind.PRODUCT
+        )).isEmpty();
     }
 
     @Test
@@ -223,6 +227,11 @@ class ProductAutoClassificationRuleEngineTest {
 
     private static Stream<Arguments> legacyUnmappedRegressionCases() {
         return Stream.of(
+                arguments(
+                        "Phone 15 Pro Max 256GB Natural Titanium (A) 87% Б/У (H642N5Q7TP)",
+                        "IPHONE_USED",
+                        ProductConditionType.USED
+                ),
                 arguments(
                         "iPhone 17 Pro 256GB Cosmic Orange E-SIM (A) 100% \u0411/\u0423 (H65VWKNYW2)",
                         "IPHONE_USED",

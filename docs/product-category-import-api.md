@@ -72,9 +72,13 @@ Manual backfill returns 409 SYNC_CLASSIFICATION_REQUIRED when readiness is false
 incremental enqueuer skips creation and writes a warning. This is a bootstrap safety barrier. After bootstrap, classification uses two
 ordered layers:
 an effective customer-approved assignment by exact LiveSklad product identity first, then the
-versioned high-confidence rule set `livesklad-product-rules-v4`. A rule result is stored directly in
+versioned high-confidence rule set `livesklad-product-rules-v6`. A rule result is stored directly in
 the sale or return snapshot with its rule version. Ambiguous names are never forced into a fallback
 category and remain visible as `UNMAPPED` for review.
+
+Rule `v6` narrowly recognizes LiveSklad iPhone names with a missing leading `i` only when the name
+contains a supported model suffix such as `Phone 15 Pro Max`. A generic `Phone 15` phrase is not
+enough to classify a product, which keeps unrelated accessories and free-form names in `UNMAPPED`.
 
 If facts were synchronized before an approved rule release, ordinary assignment import still does
 not silently rewrite historical snapshots. A reviewed one-time reconciliation may update only an
