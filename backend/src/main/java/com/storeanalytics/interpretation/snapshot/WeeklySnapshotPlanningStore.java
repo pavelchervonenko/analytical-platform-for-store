@@ -42,6 +42,31 @@ public class WeeklySnapshotPlanningStore {
     }
 
     @Transactional(readOnly = true)
+    public List<StoreTarget> activeStoresAfter(UUID afterStoreId, int limit) {
+        require(limit >= 1 && limit <= 100, "limit must be between 1 and 100");
+        if (afterStoreId == null) {
+            return activeStores(limit);
+        }
+        return jdbcTemplate.query(
+                """
+                SELECT id, timezone
+                FROM stores
+                WHERE is_active = true AND source_system = 'LIVESKLAD'
+                  AND connection_id IS NOT NULL
+                  AND id > ?
+                ORDER BY id
+                LIMIT ?
+                """,
+                (resultSet, rowNumber) -> new StoreTarget(
+                        resultSet.getObject("id", UUID.class),
+                        resultSet.getString("timezone")
+                ),
+                afterStoreId,
+                limit
+        );
+    }
+
+    @Transactional(readOnly = true)
     public Optional<SourceSync> newestSuitableSource(
             UUID storeId,
             Instant requiredCoverage,
@@ -66,6 +91,59 @@ public class WeeklySnapshotPlanningStore {
                 requireNonNull(storeId, "storeId"),
                 Timestamp.from(requireNonNull(requiredCoverage, "requiredCoverage")),
                 Timestamp.from(requireNonNull(now, "now"))
+        );
+        return values.stream().findFirst();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<SourceSync> newestSuitableSource(
+            UUID storeId,
+            Instant requiredCoverageStart,
+            Instant requiredCoverageEnd,
+            Instant now
+    ) {
+        List<SourceSync> values = jdbcTemplate.query(
+                """
+                WITH candidate AS (
+                    SELECT job.id, job.period_start, job.period_end,
+                           job.finished_at, job.created_at
+                    FROM stores store
+                    JOIN sync_jobs job ON job.connection_id = store.connection_id
+                    WHERE store.id = ? AND store.is_active = true
+                      AND job.status = 'SUCCESS' AND job.finished_at IS NOT NULL
+                      AND job.period_end > ? AND job.period_start < ?
+                      AND job.finished_at <= ?
+                ), coverage AS (
+                    SELECT range_agg(
+                               tstzrange(period_start, period_end, '[)')
+                           ) AS intervals
+                    FROM candidate
+                ), latest AS (
+                    SELECT id, period_end, finished_at
+                    FROM candidate
+                    ORDER BY finished_at DESC, created_at DESC, id DESC
+                    LIMIT 1
+                )
+                SELECT latest.id, latest.period_end, latest.finished_at
+                FROM latest
+                CROSS JOIN coverage
+                WHERE coverage.intervals @> tstzrange(?, ?, '[)')
+                """,
+                (resultSet, rowNumber) -> new SourceSync(
+                        resultSet.getObject("id", UUID.class),
+                        resultSet.getTimestamp("period_end").toInstant(),
+                        resultSet.getTimestamp("finished_at").toInstant()
+                ),
+                requireNonNull(storeId, "storeId"),
+                Timestamp.from(requireNonNull(
+                        requiredCoverageStart, "requiredCoverageStart"
+                )),
+                Timestamp.from(requireNonNull(
+                        requiredCoverageEnd, "requiredCoverageEnd"
+                )),
+                Timestamp.from(requireNonNull(now, "now")),
+                Timestamp.from(requiredCoverageStart),
+                Timestamp.from(requiredCoverageEnd)
         );
         return values.stream().findFirst();
     }

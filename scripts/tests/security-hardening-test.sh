@@ -79,7 +79,15 @@ for required_fragment in \
     'LLM_PROMPT_VERSION: ${LLM_PROMPT_VERSION:-weekly-interpretation-v4}' \
     'LLM_CONTENT_SCHEMA_VERSION: ${LLM_CONTENT_SCHEMA_VERSION:-2}' \
     'LLM_MAX_OUTPUT_TOKENS: ${LLM_MAX_OUTPUT_TOKENS:-8000}' \
-    'LLM_MAX_PROVIDER_CALLS: ${LLM_MAX_PROVIDER_CALLS:-2}'; do
+    'LLM_MAX_PROVIDER_CALLS: ${LLM_MAX_PROVIDER_CALLS:-2}' \
+    'WEEKLY_REVIEW_ENABLED: ${WEEKLY_REVIEW_ENABLED:-false}' \
+    'WEEKLY_REVIEW_SNAPSHOT_PLANNER_ENABLED: ${WEEKLY_REVIEW_SNAPSHOT_PLANNER_ENABLED:-false}' \
+    'WEEKLY_REVIEW_SNAPSHOT_PLANNER_SCAN_DELAY: ${WEEKLY_REVIEW_SNAPSHOT_PLANNER_SCAN_DELAY:-5m}' \
+    'WEEKLY_REVIEW_SNAPSHOT_PLANNER_BATCH_SIZE: ${WEEKLY_REVIEW_SNAPSHOT_PLANNER_BATCH_SIZE:-25}' \
+    'WEEKLY_REVIEW_AI_ENABLED: ${WEEKLY_REVIEW_AI_ENABLED:-false}' \
+    'WEEKLY_REVIEW_AI_PLANNER_ENABLED: ${WEEKLY_REVIEW_AI_PLANNER_ENABLED:-false}' \
+    'WEEKLY_REVIEW_AI_WORKER_ENABLED: ${WEEKLY_REVIEW_AI_WORKER_ENABLED:-false}' \
+    'WEEKLY_REVIEW_AI_DAILY_COST_LIMIT_RUB: ${WEEKLY_REVIEW_AI_DAILY_COST_LIMIT_RUB:-100.00}'; do
     grep -F -- "${required_fragment}" <<<"${shared_backend_environment}" \
         >/dev/null \
         || fail_test \
@@ -372,5 +380,6 @@ if grep -F $'\033' "${job_output}" >/dev/null; then
 fi
 
 bash "${PROJECT_ROOT}/scripts/tests/deploy-release-safety-test.sh"
+bash "${PROJECT_ROOT}/scripts/tests/weekly-review-ai-release-safety-test.sh"
 
 printf 'Operator script security tests passed.\n'

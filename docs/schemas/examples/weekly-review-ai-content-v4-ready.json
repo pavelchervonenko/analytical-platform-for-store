@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 4,
+  "summary": {
+    "text": "Чистая выручка выросла относительно предыдущей недели, при этом возвраты требуют внимания.",
+    "evidenceRefs": [
+      "STORE.NET_REVENUE",
+      "STORE.RETURN_REVENUE"
+    ]
+  },
+  "factorExplanations": [
+    {
+      "factorId": "factor:return_revenue",
+      "text": "Сумма возвратов выросла относительно предыдущей недели.",
+      "evidenceRefs": ["STORE.RETURN_REVENUE"]
+    }
+  ],
+  "actionWordings": [
+    {
+      "actionId": "action:restore:return_revenue",
+      "title": "Проверить причины роста возвратов по завершённым продажам",
+      "check": "Сравнить сумму возвратов следующей полной недели с заданным уровнем"
+    }
+  ]
+}

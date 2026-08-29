@@ -184,7 +184,7 @@ class StoreSyncIntegrationTest {
                 Integer.class
         );
 
-        assertThat(tableCount).isEqualTo(60);
+        assertThat(tableCount).isEqualTo(64);
         assertThat(entityManagerFactory.getMetamodel().getEntities()).hasSize(39);
         assertThat(applicationContext.getBeanNamesForType(JpaRepository.class)).hasSize(39);
         assertThat(jdbcTemplate.queryForObject(
@@ -199,7 +199,7 @@ class StoreSyncIntegrationTest {
                   AND NOT tgisinternal
                 """,
                 Integer.class
-        )).isEqualTo(28);
+        )).isEqualTo(29);
     }
 
     @Test
@@ -232,7 +232,11 @@ class StoreSyncIntegrationTest {
                       'notification_event_fanout_receipts',
                       'livesklad_webhook_receipts',
                       'attach_rate_item_facts_v3',
-                      'attach_rate_metric_definitions_v3'
+                      'attach_rate_metric_definitions_v3',
+                      'weekly_review_snapshots',
+                      'weekly_review_ai_enrichments',
+                      'weekly_review_ai_jobs',
+                      'weekly_review_ai_attempts'
                   )
                 ORDER BY table_name, ordinal_position
                 """,

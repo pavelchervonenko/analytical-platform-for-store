@@ -43,6 +43,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -245,7 +246,7 @@ class StoreDataStatusSecurityIntegrationTest {
         createUser("admin-openapi@example.com", UserRole.ADMIN);
         MockHttpSession adminSession = login("admin-openapi@example.com");
 
-        MvcResult openApiResult = mockMvc.perform(
+        ResultActions openApi = mockMvc.perform(
                         get("/v3/api-docs").session(adminSession)
                 )
                 .andExpect(status().isOk())
@@ -256,7 +257,10 @@ class StoreDataStatusSecurityIntegrationTest {
                 ).exists())
                 .andExpect(jsonPath(
                         "$.components.schemas.SyncClassificationReadinessView"
-                ).exists())
+                ).exists());
+        assertWeeklyReviewOpenApi(openApi);
+
+        MvcResult openApiResult = openApi
                 .andExpect(jsonPath(
                         "$.paths['/api/stores/{storeId}/data-quality']"
                 ).exists())
@@ -266,6 +270,7 @@ class StoreDataStatusSecurityIntegrationTest {
                 .andExpect(jsonPath(
                         "$.paths['/api/stores/{storeId}/interpretations/weekly/latest']"
                 ).exists())
+
                 .andExpect(jsonPath(
                         "$.paths['/api/stores/{storeId}/interpretations/weekly/"
                                 + "{interpretationId}']"
@@ -380,6 +385,30 @@ class StoreDataStatusSecurityIntegrationTest {
                 ).exists())
                 .andReturn();
         writeOpenApiArtifact(openApiResult);
+    }
+
+    private void assertWeeklyReviewOpenApi(ResultActions openApi) throws Exception {
+        openApi.andExpect(jsonPath(
+                        "$.paths['/api/stores/{storeId}/weekly-reviews/current']"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.components.schemas.WeeklyReviewResponse.properties.team"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.components.schemas.WeeklyReviewResponse.properties.employees"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.components.schemas.TeamBlock.properties.attentionEmployeeCount"
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.components.schemas.TeamBlock.properties.employeePublicId"
+                ).doesNotExist())
+                .andExpect(jsonPath(
+                        "$.components.schemas.TeamBlock.properties.displayName"
+                ).doesNotExist())
+                .andExpect(jsonPath(
+                        "$.components.schemas.EmployeeCard.properties.displayName"
+                ).exists());
     }
 
     private void writeOpenApiArtifact(MvcResult result) throws IOException {

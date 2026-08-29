@@ -105,6 +105,17 @@ tasks.register<JavaExec>("llmEvalShadow") {
     workingDir(rootDir)
 }
 
+tasks.register<JavaExec>("weeklyReviewAiShadow") {
+    group = "verification"
+    description = "Plans or executes the isolated v22/schema4 YandexGPT shadow corpus."
+    dependsOn("testClasses")
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set(
+        "com.storeanalytics.interpretation.review.ai.WeeklyReviewAiShadowRunner"
+    )
+    workingDir(rootDir)
+}
+
 val generatedOpenApi = layout.buildDirectory.file("openapi/current.json")
 
 tasks.register<Test>("generateOpenApi") {

@@ -160,6 +160,33 @@ app:
       provider-call-timeout: ${INTERPRETATION_GENERATION_PROVIDER_CALL_TIMEOUT:180s}
       max-request-bytes: ${INTERPRETATION_GENERATION_MAX_REQUEST_BYTES:524288}
       max-estimated-cost-rub: ${INTERPRETATION_GENERATION_MAX_ESTIMATED_COST_RUB:50.00}
+    weekly-review:
+      enabled: ${WEEKLY_REVIEW_ENABLED:false}
+    weekly-review-snapshot-planner:
+      enabled: ${WEEKLY_REVIEW_SNAPSHOT_PLANNER_ENABLED:false}
+      scan-delay: ${WEEKLY_REVIEW_SNAPSHOT_PLANNER_SCAN_DELAY:5m}
+      batch-size: ${WEEKLY_REVIEW_SNAPSHOT_PLANNER_BATCH_SIZE:25}
+    weekly-review-ai:
+      enabled: ${WEEKLY_REVIEW_AI_ENABLED:false}
+      planner-enabled: ${WEEKLY_REVIEW_AI_PLANNER_ENABLED:false}
+      worker-enabled: ${WEEKLY_REVIEW_AI_WORKER_ENABLED:false}
+      provider-code: ${WEEKLY_REVIEW_AI_PROVIDER_CODE:YANDEX}
+      temperature: ${WEEKLY_REVIEW_AI_TEMPERATURE:0.1}
+      max-output-tokens: ${WEEKLY_REVIEW_AI_MAX_OUTPUT_TOKENS:1400}
+      max-provider-calls: ${WEEKLY_REVIEW_AI_MAX_PROVIDER_CALLS:2}
+      scan-delay: ${WEEKLY_REVIEW_AI_SCAN_DELAY:1m}
+      worker-delay: ${WEEKLY_REVIEW_AI_WORKER_DELAY:5s}
+      lease-duration: ${WEEKLY_REVIEW_AI_LEASE_DURATION:4m}
+      heartbeat-interval: ${WEEKLY_REVIEW_AI_HEARTBEAT_INTERVAL:30s}
+      provider-call-timeout: ${WEEKLY_REVIEW_AI_PROVIDER_CALL_TIMEOUT:180s}
+      retry-initial-delay: ${WEEKLY_REVIEW_AI_RETRY_INITIAL_DELAY:30s}
+      retry-max-delay: ${WEEKLY_REVIEW_AI_RETRY_MAX_DELAY:10m}
+      job-deadline: ${WEEKLY_REVIEW_AI_JOB_DEADLINE:2h}
+      preparation-sla: ${WEEKLY_REVIEW_AI_PREPARATION_SLA:5m}
+      batch-size: ${WEEKLY_REVIEW_AI_BATCH_SIZE:10}
+      max-request-bytes: ${WEEKLY_REVIEW_AI_MAX_REQUEST_BYTES:131072}
+      max-estimated-cost-rub: ${WEEKLY_REVIEW_AI_MAX_ESTIMATED_COST_RUB:10.00}
+      daily-cost-limit-rub: ${WEEKLY_REVIEW_AI_DAILY_COST_LIMIT_RUB:100.00}
   llm:
     prompt-version: ${LLM_PROMPT_VERSION:weekly-interpretation-v4}
     content-schema-version: ${LLM_CONTENT_SCHEMA_VERSION:2}

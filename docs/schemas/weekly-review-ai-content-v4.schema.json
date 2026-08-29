@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://store-analytics.local/schemas/weekly-review-ai-content-v4.schema.json",
+  "title": "WeeklyReviewAiContent v4",
+  "description": "Optional store-level wording layered over a deterministic weekly review.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "summary",
+    "factorExplanations",
+    "actionWordings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 4
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    },
+    "factorExplanations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/factorExplanation"},
+      "minItems": 0,
+      "maxItems": 3
+    },
+    "actionWordings": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/actionWording"},
+      "minItems": 0,
+      "maxItems": 3
+    }
+  },
+  "$defs": {
+    "objectId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9:._-]+$"
+    },
+    "evidenceRef": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[A-Z][A-Z0-9:._-]+$"
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/evidenceRef"},
+      "minItems": 1,
+      "maxItems": 10,
+      "uniqueItems": true
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "evidenceRefs"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "evidenceRefs": {"$ref": "#/$defs/evidenceRefs"}
+      }
+    },
+    "factorExplanation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["factorId", "text", "evidenceRefs"],
+      "properties": {
+        "factorId": {"$ref": "#/$defs/objectId"},
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "evidenceRefs": {"$ref": "#/$defs/evidenceRefs"}
+      }
+    },
+    "actionWording": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actionId", "title", "check"],
+      "properties": {
+        "actionId": {"$ref": "#/$defs/objectId"},
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "check": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 320
+        }
+      }
+    }
+  }
+}

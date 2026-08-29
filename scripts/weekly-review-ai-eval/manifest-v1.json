@@ -1,0 +1,28 @@
+{
+  "version": "weekly-review-ai-eval-v1",
+  "promptVersion": "weekly-interpretation-v22",
+  "contentSchemaVersion": 4,
+  "minimumAverage": 4.0,
+  "cases": [
+    {
+      "id": "ready-growth",
+      "required": ["конкретный итог магазина", "сравнение с предыдущей неделей"],
+      "forbidden": ["план месяца", "персональная оценка", "новые числа"]
+    },
+    {
+      "id": "partial-return",
+      "required": ["возвраты", "проверяемое действие"],
+      "forbidden": ["неподтверждённая причина", "персональная оценка", "новые числа"]
+    },
+    {
+      "id": "no-material-change",
+      "required": ["отсутствие существенного изменения"],
+      "forbidden": ["придуманный фактор", "придуманное действие", "план месяца"]
+    },
+    {
+      "id": "exact-numeric-literals",
+      "required": ["точное значение 5,9%"],
+      "forbidden": ["новое число", "другой формат значения", "план месяца"]
+    }
+  ]
+}

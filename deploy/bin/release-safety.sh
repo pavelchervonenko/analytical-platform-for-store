@@ -352,6 +352,9 @@ release_validate_llm_configuration() {
       "${prompt_version} requires LLM_CONTENT_SCHEMA_VERSION=${expected_schema}"
 }
 
+# shellcheck source=weekly-review-ai-release-safety.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/weekly-review-ai-release-safety.sh"
+
 release_validate_env_file() {
   local env_file="$1"
   local mode
@@ -366,6 +369,7 @@ release_validate_env_file() {
     || return 1
   release_validate_livesklad_webhook_processing "${env_file}" || return 1
   release_validate_llm_configuration "${env_file}" || return 1
+  release_validate_weekly_review_ai_configuration "${env_file}" || return 1
   release_validate_secret_files "${env_file}" || return 1
   release_validate_ca_file "${env_file}"
 }

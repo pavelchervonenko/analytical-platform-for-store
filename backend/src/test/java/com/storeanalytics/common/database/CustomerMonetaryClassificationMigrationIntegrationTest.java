@@ -31,7 +31,7 @@ class CustomerMonetaryClassificationMigrationIntegrationTest {
 
         flyway(null).migrate();
 
-        assertThat(currentVersion()).isEqualTo("44");
+        assertThat(currentVersion()).isEqualTo("48");
         try (Connection connection = connection();
              Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery("""
