@@ -334,9 +334,11 @@ public final class WeeklyReviewAssembler {
     private String actionTitle(MetricComparison metric) {
         if ("RETURN_REVENUE".equals(metric.code())
                 && metric.direction() == WeeklyReviewResponse.Direction.UP) {
-            return "Проанализировать рост возвратов";
+            return "Разобрать рост возвратов";
         }
-        return "Вернуть показатель «" + metric.label() + "» к уровню прошлой недели";
+        return metric.direction() == WeeklyReviewResponse.Direction.DOWN
+                ? "Разобрать снижение «" + metric.label() + "»"
+                : "Проверить изменение «" + metric.label() + "»";
     }
 
     private List<Evidence> evidence(

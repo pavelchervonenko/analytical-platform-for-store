@@ -85,8 +85,12 @@ public class WeeklyReviewAiJobStateMetrics implements MeterBinder {
                 JOBS_METRIC,
                 counts,
                 state -> value.applyAsDouble(state.get())
-        ).description("Current v22 weekly review AI jobs by operational state")
+        ).description("Current active weekly review AI jobs by operational state")
                 .tag("status", status)
+                .tag("prompt_version", WeeklyReviewAiContract.PROMPT_VERSION)
+                .tag("content_schema_version", String.valueOf(
+                        WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
+                ))
                 .register(registry);
     }
 

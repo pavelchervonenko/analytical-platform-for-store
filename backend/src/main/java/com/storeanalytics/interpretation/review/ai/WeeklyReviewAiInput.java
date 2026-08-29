@@ -22,9 +22,9 @@ public record WeeklyReviewAiInput(
 
     public WeeklyReviewAiInput {
         require(contractVersion == WeeklyReviewAiContract.INPUT_SCHEMA_VERSION,
-                "contractVersion must be 1");
+                "contractVersion must be 3");
         require(WeeklyReviewAiContract.PROMPT_VERSION.equals(promptVersion),
-                "promptVersion must be weekly-interpretation-v22");
+                "promptVersion must be weekly-interpretation-v24");
         require(contentSchemaVersion == WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 "contentSchemaVersion must be 4");
         requireNonNull(summary, "summary");
@@ -38,12 +38,25 @@ public record WeeklyReviewAiInput(
 
     public record SummarySource(
             String outcomeText,
+            String outcomeEffect,
+            List<String> allowedNarratives,
             List<String> evidenceRefs,
             List<String> allowedNumericLiterals
     ) {
 
         public SummarySource {
             requireText(outcomeText, "outcomeText");
+            require("POSITIVE".equals(outcomeEffect)
+                            || "NEGATIVE".equals(outcomeEffect)
+                            || "NEUTRAL".equals(outcomeEffect)
+                            || "MIXED".equals(outcomeEffect),
+                    "outcomeEffect must be POSITIVE, NEGATIVE, NEUTRAL or MIXED");
+            allowedNarratives = strings(
+                    limited(allowedNarratives, "summary.allowedNarratives", 4),
+                    "summary.allowedNarratives"
+            );
+            require(!allowedNarratives.isEmpty(),
+                    "summary.allowedNarratives must not be empty");
             evidenceRefs = references(evidenceRefs, "summary.evidenceRefs");
             allowedNumericLiterals = strings(
                     allowedNumericLiterals, "summary.allowedNumericLiterals"
@@ -55,6 +68,7 @@ public record WeeklyReviewAiInput(
             String factorId,
             String title,
             String detail,
+            String managementMeaning,
             String effect,
             boolean causalLanguageAllowed,
             List<String> evidenceRefs,
@@ -65,6 +79,7 @@ public record WeeklyReviewAiInput(
             requireText(factorId, "factorId");
             requireText(title, "factor.title");
             requireText(detail, "factor.detail");
+            requireText(managementMeaning, "factor.managementMeaning");
             require("POSITIVE".equals(effect) || "NEGATIVE".equals(effect),
                     "factor.effect must be POSITIVE or NEGATIVE");
             evidenceRefs = references(evidenceRefs, "factor.evidenceRefs");

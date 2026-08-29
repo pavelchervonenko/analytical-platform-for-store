@@ -7,9 +7,13 @@ import static org.mockito.Mockito.when;
 
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Action;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Direction;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Effect;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Evidence;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Factor;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Materiality;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricComparison;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricState;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.NarrativeItem;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.ReportState;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.SummaryBlock;
@@ -34,9 +38,15 @@ class WeeklyReviewAiInputCompactorTest {
 
         assertThat(new LlmJsonSchemaValidator(WeeklyReviewAiContract.INPUT_SCHEMA)
                 .validate(json)).isEmpty();
-        assertThat(result.promptVersion()).isEqualTo("weekly-interpretation-v22");
+        assertThat(result.promptVersion())
+                .isEqualTo(WeeklyReviewAiContract.PROMPT_VERSION);
         assertThat(result.summary().outcomeText())
                 .isEqualTo("Чистая выручка — 1000 ₽ (+11,1%)");
+        assertThat(result.summary().outcomeEffect()).isEqualTo("POSITIVE");
+        assertThat(result.summary().allowedNarratives()).containsExactly(
+                "Неделя сильнее предыдущей: Чистая выручка — 1000 ₽ (+11,1%)",
+                "Неделя оказалась сильнее периода сравнения: Чистая выручка — 1000 ₽ (+11,1%)"
+        );
         assertThat(result.summary().evidenceRefs())
                 .containsExactly("STORE.NET_REVENUE");
         assertThat(result.summary().allowedNumericLiterals())
@@ -44,10 +54,15 @@ class WeeklyReviewAiInputCompactorTest {
         assertThat(result.factors()).singleElement().satisfies(factor -> {
             assertThat(factor.factorId()).isEqualTo("factor:return_revenue");
             assertThat(factor.causalLanguageAllowed()).isTrue();
+            assertThat(factor.managementMeaning()).isEqualTo(
+                    "Возвраты уменьшили результат продаж сильнее, "
+                            + "чем в периоде сравнения."
+            );
             assertThat(factor.allowedNumericLiterals())
                     .containsExactly("100", "50", "+100,0", "100.00", "50.00");
         });
         assertThat(result.actions()).singleElement().satisfies(action -> {
+            assertThat(action.title()).isEqualTo("Проанализировать рост возвратов");
             assertThat(action.actionId())
                     .isEqualTo("action:restore:return_revenue");
             assertThat(action.allowedNumericLiterals())
@@ -73,8 +88,49 @@ class WeeklyReviewAiInputCompactorTest {
                 .extracting(component -> component.getName())
                 .containsExactly(
                         "outcomeText",
+                        "outcomeEffect",
+                        "allowedNarratives",
                         "evidenceRefs",
                         "allowedNumericLiterals"
+                );
+    }
+
+    @Test
+    void emitsMixedSummaryWhenRevenueAndProfitMoveInOppositeDirections() {
+        WeeklyReviewResponse response = response(ReportState.READY, "STORE");
+        MetricComparison revenue = metric(
+                "NET_REVENUE", Effect.POSITIVE, Materiality.MATERIAL
+        );
+        MetricComparison profit = metric(
+                "GROSS_PROFIT", Effect.NEGATIVE, Materiality.MATERIAL
+        );
+        when(response.results()).thenReturn(List.of(revenue, profit));
+
+        WeeklyReviewAiInput result = compactor.compact(response);
+
+        assertThat(result.summary().outcomeEffect()).isEqualTo("MIXED");
+    }
+
+    @Test
+    void emitsBackendOwnedManagementMeaningForStructureAndAttachFactors() {
+        WeeklyReviewResponse response = response(ReportState.READY, "STORE");
+        Factor structure = factor(
+                "factor:structure", "STRUCTURE_CHANGE", Direction.DOWN
+        );
+        Factor attach = factor(
+                "factor:attach", "ATTACH_CHANGE", Direction.UP
+        );
+        when(response.factors()).thenReturn(List.of(structure, attach));
+
+        WeeklyReviewAiInput result = compactor.compact(response);
+
+        assertThat(result.factors())
+                .extracting(WeeklyReviewAiInput.FactorSource::managementMeaning)
+                .containsExactly(
+                        "Направление принесло меньше выручки, "
+                                + "чем в периоде сравнения.",
+                        "Товары или услуги этой группы чаще сопровождали "
+                                + "базовые продажи, чем в периоде сравнения."
                 );
     }
 
@@ -130,6 +186,10 @@ class WeeklyReviewAiInputCompactorTest {
 
         Factor factor = mock(Factor.class);
         when(factor.factorId()).thenReturn("factor:return_revenue");
+        when(factor.kind()).thenReturn("RETURN_CHANGE");
+        MetricComparison factorComparison = mock(MetricComparison.class);
+        when(factorComparison.direction()).thenReturn(Direction.UP);
+        when(factor.comparison()).thenReturn(factorComparison);
         when(factor.title()).thenReturn("Сумма возвратов выросла");
         when(factor.detail()).thenReturn("Возвраты: 100 ₽ против 50 ₽ (+100,0%)");
         when(factor.effect()).thenReturn(Effect.NEGATIVE);
@@ -139,11 +199,19 @@ class WeeklyReviewAiInputCompactorTest {
         Action action = mock(Action.class);
         when(action.actionId()).thenReturn("action:restore:return_revenue");
         when(action.scope()).thenReturn("STORE");
-        when(action.title()).thenReturn("Снизить сумму возвратов");
+        when(action.title()).thenReturn("Проанализировать рост возвратов");
+        when(action.metricCode()).thenReturn("RETURN_REVENUE");
         when(action.check()).thenReturn("Сравнить следующую неделю с 50 ₽");
         when(action.evidenceRefs()).thenReturn(List.of("STORE.RETURN_REVENUE"));
 
         when(response.reportState()).thenReturn(reportState);
+        MetricComparison revenue = metric(
+                "NET_REVENUE", Effect.POSITIVE, Materiality.MATERIAL
+        );
+        MetricComparison profit = metric(
+                "GROSS_PROFIT", Effect.POSITIVE, Materiality.MATERIAL
+        );
+        when(response.results()).thenReturn(List.of(revenue, profit));
         when(response.summary()).thenReturn(summary);
         when(response.factors()).thenReturn(List.of(factor));
         when(response.actions()).thenReturn(List.of(action));
@@ -174,11 +242,39 @@ class WeeklyReviewAiInputCompactorTest {
         return response;
     }
 
+    private Factor factor(String factorId, String kind, Direction direction) {
+        Factor factor = mock(Factor.class);
+        MetricComparison comparison = mock(MetricComparison.class);
+        when(comparison.direction()).thenReturn(direction);
+        when(factor.factorId()).thenReturn(factorId);
+        when(factor.kind()).thenReturn(kind);
+        when(factor.comparison()).thenReturn(comparison);
+        when(factor.title()).thenReturn("Изменение показателя");
+        when(factor.detail()).thenReturn("Изменение относительно сравнения");
+        when(factor.effect()).thenReturn(Effect.POSITIVE);
+        when(factor.evidenceRefs()).thenReturn(List.of("STORE.RETURN_REVENUE"));
+        return factor;
+    }
+
     private NarrativeItem narrative(String text, List<String> evidenceRefs) {
         NarrativeItem item = mock(NarrativeItem.class);
         when(item.text()).thenReturn(text);
+        when(item.effect()).thenReturn(Effect.POSITIVE);
         when(item.evidenceRefs()).thenReturn(evidenceRefs);
         return item;
+    }
+
+    private MetricComparison metric(
+            String code,
+            Effect effect,
+            Materiality materiality
+    ) {
+        MetricComparison metric = mock(MetricComparison.class);
+        when(metric.code()).thenReturn(code);
+        when(metric.effect()).thenReturn(effect);
+        when(metric.materiality()).thenReturn(materiality);
+        when(metric.metricState()).thenReturn(MetricState.READY);
+        return metric;
     }
 
     private Evidence evidence(

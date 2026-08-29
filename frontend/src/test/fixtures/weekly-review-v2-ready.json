@@ -1334,7 +1334,7 @@
     "actionType" : "RESTORE_METRIC",
     "scope" : "STORE",
     "employeePublicId" : null,
-    "title" : "Проанализировать рост возвратов",
+    "title" : "Разобрать рост возвратов",
     "metricCode" : "RETURN_REVENUE",
     "target" : {
       "operator" : "AT_MOST",

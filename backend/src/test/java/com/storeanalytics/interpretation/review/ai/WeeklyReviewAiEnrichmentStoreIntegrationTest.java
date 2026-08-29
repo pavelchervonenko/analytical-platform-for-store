@@ -38,6 +38,9 @@ class WeeklyReviewAiEnrichmentStoreIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private WeeklyReviewAiContentCodec codec;
+
     @DynamicPropertySource
     static void configurePostgres(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
@@ -50,7 +53,7 @@ class WeeklyReviewAiEnrichmentStoreIntegrationTest {
         UUID snapshotId = addSnapshot();
         WeeklyReviewAiInput input = input();
         String responseBody = responseBody(
-                "Неделя завершилась ростом чистой выручки."
+                "Неделя сильнее: чистая выручка выросла."
         );
         WeeklyReviewAiValidationResult structural =
                 new WeeklyReviewAiStructuralValidator().validate(responseBody);
@@ -84,7 +87,8 @@ class WeeklyReviewAiEnrichmentStoreIntegrationTest {
 
         assertThat(reused.id()).isEqualTo(first.id());
         assertThat(first.snapshotId()).isEqualTo(snapshotId);
-        assertThat(first.promptVersion()).isEqualTo("weekly-interpretation-v22");
+        assertThat(first.promptVersion())
+                .isEqualTo(WeeklyReviewAiContract.PROMPT_VERSION);
         assertThat(first.contentSchemaVersion()).isEqualTo(4);
         assertThat(first.inputHash()).hasSize(64);
         assertThat(first.contentHash()).hasSize(64);
@@ -105,7 +109,7 @@ class WeeklyReviewAiEnrichmentStoreIntegrationTest {
         assertThatThrownBy(() -> store.persist(
                 snapshotId,
                 input,
-                semanticValidation(input, "Другой итог недели."),
+                semanticValidation(input, "Неделя сильнее: чистая выручка заметно выросла."),
                 VALIDATED_AT,
                 PUBLISHED_AT
         )).isInstanceOf(IllegalStateException.class)
@@ -125,6 +129,64 @@ class WeeklyReviewAiEnrichmentStoreIntegrationTest {
     }
 
     @Test
+    void readsPreviousV23AndLegacyV22UntilActiveV24IsPublished() {
+        UUID snapshotId = addSnapshot();
+        WeeklyReviewAiContent legacyContent = new WeeklyReviewAiContent(
+                4,
+                new WeeklyReviewAiContent.Summary(
+                        "Проверенный итог v22",
+                        List.of("STORE.NET_REVENUE")
+                ),
+                List.of(),
+                List.of()
+        );
+        insertEnrichment(
+                snapshotId, WeeklyReviewAiContract.LEGACY_PROMPT_VERSION,
+                legacyContent, VALIDATED_AT, PUBLISHED_AT
+        );
+
+        PersistedWeeklyReviewAiEnrichment fallback = store.findPublished(
+                snapshotId, PUBLISHED_AT
+        ).orElseThrow();
+        assertThat(fallback.promptVersion())
+                .isEqualTo(WeeklyReviewAiContract.LEGACY_PROMPT_VERSION);
+        assertThat(fallback.content()).isEqualTo(legacyContent);
+
+        WeeklyReviewAiContent previousContent = new WeeklyReviewAiContent(
+                4,
+                new WeeklyReviewAiContent.Summary(
+                        "Проверенный итог v23",
+                        List.of("STORE.NET_REVENUE")
+                ),
+                List.of(),
+                List.of()
+        );
+        insertEnrichment(
+                snapshotId, WeeklyReviewAiContract.PREVIOUS_PROMPT_VERSION,
+                previousContent, VALIDATED_AT.plusSeconds(1),
+                PUBLISHED_AT.plusSeconds(1)
+        );
+        assertThat(store.findPublished(
+                snapshotId, PUBLISHED_AT.plusSeconds(1)
+        ).orElseThrow().promptVersion()).isEqualTo(
+                WeeklyReviewAiContract.PREVIOUS_PROMPT_VERSION
+        );
+
+        WeeklyReviewAiInput activeInput = input();
+        PersistedWeeklyReviewAiEnrichment active = store.persist(
+                snapshotId,
+                activeInput,
+                semanticValidation(activeInput, "Неделя сильнее: проверенный итог новой версии"),
+                VALIDATED_AT.plusSeconds(2),
+                PUBLISHED_AT.plusSeconds(2)
+        );
+
+        assertThat(store.findPublished(
+                snapshotId, PUBLISHED_AT.plusSeconds(2)
+        )).contains(active);
+    }
+
+    @Test
     void rejectsContentWithoutRequiredSchemaVersion() {
         UUID snapshotId = addSnapshot();
 
@@ -135,7 +197,7 @@ class WeeklyReviewAiEnrichmentStoreIntegrationTest {
                     input_hash, content_payload, content_hash,
                     validated_at, published_at
                 ) VALUES (
-                    ?, ?, 'weekly-interpretation-v22', 4, ?,
+                    ?, ?, 'weekly-interpretation-v24', 4, ?,
                     CAST('{}' AS jsonb), ?, ?, ?
                 )
                 """,
@@ -151,13 +213,46 @@ class WeeklyReviewAiEnrichmentStoreIntegrationTest {
                 );
     }
 
+    private void insertEnrichment(
+            UUID snapshotId,
+            String promptVersion,
+            WeeklyReviewAiContent content,
+            Instant validatedAt,
+            Instant publishedAt
+    ) {
+        String canonical = codec.canonical(content);
+        jdbcTemplate.update(
+                """
+                INSERT INTO weekly_review_ai_enrichments (
+                    id, snapshot_id, prompt_version, content_schema_version,
+                    input_hash, content_payload, content_hash,
+                    validated_at, published_at
+                ) VALUES (?, ?, ?, 4, ?, CAST(? AS jsonb), ?, ?, ?)
+                """,
+                UUID.randomUUID(),
+                snapshotId,
+                promptVersion,
+                "d".repeat(64),
+                canonical,
+                codec.hash(canonical),
+                java.sql.Timestamp.from(validatedAt),
+                java.sql.Timestamp.from(publishedAt)
+        );
+    }
+
     private WeeklyReviewAiInput input() {
         return new WeeklyReviewAiInput(
-                1,
-                "weekly-interpretation-v22",
-                4,
+                WeeklyReviewAiContract.INPUT_SCHEMA_VERSION,
+                WeeklyReviewAiContract.PROMPT_VERSION,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 new WeeklyReviewAiInput.SummarySource(
                         "Чистая выручка выросла.",
+                        "POSITIVE",
+                        List.of(
+                                "Неделя сильнее: чистая выручка выросла.",
+                                "Неделя сильнее: чистая выручка заметно выросла.",
+                                "Неделя сильнее: проверенный итог новой версии"
+                        ),
                         List.of("STORE.NET_REVENUE"),
                         List.of()
                 ),

@@ -183,11 +183,13 @@ class WeeklyReviewAiBudgetReservationIntegrationTest {
 
     private PreparedWeeklyReviewAiRequest prepared(WeeklyReviewAiJob job) {
         WeeklyReviewAiInput input = new WeeklyReviewAiInput(
-                1,
+                WeeklyReviewAiContract.INPUT_SCHEMA_VERSION,
                 WeeklyReviewAiContract.PROMPT_VERSION,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 new WeeklyReviewAiInput.SummarySource(
                         "Существенных изменений нет.",
+                        "NEUTRAL",
+                        List.of("Существенных изменений нет."),
                         List.of("STORE.NET_REVENUE"),
                         List.of()
                 ),
@@ -206,7 +208,7 @@ class WeeklyReviewAiBudgetReservationIntegrationTest {
                 job.providerCode(),
                 job.requestedModel(),
                 "system",
-                "{\"contractVersion\":1}",
+                "{\"contractVersion\":2}",
                 "{}",
                 new BigDecimal("0.1"),
                 1400,

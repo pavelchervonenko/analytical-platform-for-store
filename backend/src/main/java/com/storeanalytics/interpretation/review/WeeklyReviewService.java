@@ -10,10 +10,16 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class WeeklyReviewService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+            WeeklyReviewService.class
+    );
 
     private final StoreRepository storeRepository;
     private final WeeklyReviewFactsSource factsSource;
@@ -58,16 +64,27 @@ public class WeeklyReviewService {
         if (!aiSupport.properties().enabled()) {
             return aiSupport.stateResolver().apply(snapshot, clock.instant());
         }
-        return aiSupport.enrichmentStore()
-                .findPublished(snapshot.id(), clock.instant())
-                .map(value -> aiSupport.enricher().apply(
-                        snapshot.response(),
-                        value.validationResult(),
-                        value.publishedAt()
-                ))
-                .orElseGet(() -> aiSupport.stateResolver().apply(
-                        snapshot, clock.instant()
-                ));
+        try {
+            return aiSupport.enrichmentStore()
+                    .findPublished(snapshot.id(), clock.instant())
+                    .map(value -> aiSupport.enricher().apply(
+                            snapshot.response(),
+                            value.validationResult(),
+                            value.publishedAt(),
+                            value.promptVersion(),
+                            value.contentSchemaVersion()
+                    ))
+                    .orElseGet(() -> aiSupport.stateResolver().apply(
+                            snapshot, clock.instant()
+                    ));
+        } catch (IllegalArgumentException | IllegalStateException exception) {
+            LOGGER.error(
+                    "Ignoring invalid weekly review AI enrichment for snapshot {}",
+                    snapshot.id(),
+                    exception
+            );
+            return aiSupport.stateResolver().apply(snapshot, clock.instant());
+        }
     }
 
     private Store store(UUID storeId) {

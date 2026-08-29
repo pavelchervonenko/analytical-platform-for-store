@@ -5,8 +5,12 @@ import static com.storeanalytics.common.validation.ModelValidation.requireNonNul
 
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Action;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Direction;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Evidence;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Factor;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Materiality;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricComparison;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricState;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.NarrativeItem;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.ReportState;
 import java.math.BigDecimal;
@@ -66,8 +70,11 @@ public final class WeeklyReviewAiInputCompactor {
             Map<String, Evidence> evidence
     ) {
         NarrativeItem outcome = response.summary().outcome();
+        String outcomeEffect = summaryOutcomeEffect(response);
         return new WeeklyReviewAiInput.SummarySource(
                 outcome.text(),
+                outcomeEffect,
+                summaryNarratives(outcome.text(), outcomeEffect),
                 outcome.evidenceRefs(),
                 numericLiterals(
                         List.of(outcome.text()),
@@ -75,6 +82,49 @@ public final class WeeklyReviewAiInputCompactor {
                         evidence
                 )
         );
+    }
+
+    private List<String> summaryNarratives(
+            String outcomeText,
+            String outcomeEffect
+    ) {
+        return switch (outcomeEffect) {
+            case "POSITIVE" -> List.of(
+                    "Неделя сильнее предыдущей: " + outcomeText,
+                    "Неделя оказалась сильнее периода сравнения: " + outcomeText
+            );
+            case "NEGATIVE" -> List.of(
+                    "Неделя слабее предыдущей: " + outcomeText,
+                    "Неделя оказалась слабее периода сравнения: " + outcomeText
+            );
+            case "MIXED" -> List.of(
+                    "Картина недели неоднозначная: " + outcomeText,
+                    "Сигналы недели разнонаправлены: " + outcomeText
+            );
+            default -> List.of(
+                    "Стабильная картина недели: " + outcomeText,
+                    "Ключевые результаты без существенных изменений: "
+                            + outcomeText
+            );
+        };
+    }
+
+    private String summaryOutcomeEffect(WeeklyReviewResponse response) {
+        List<String> materialEffects = response.results().stream()
+                .filter(metric -> "NET_REVENUE".equals(metric.code())
+                        || "GROSS_PROFIT".equals(metric.code()))
+                .filter(metric -> metric.metricState() != MetricState.UNAVAILABLE)
+                .filter(metric -> metric.materiality() == Materiality.MATERIAL)
+                .map(MetricComparison::effect)
+                .filter(effect -> effect == WeeklyReviewResponse.Effect.POSITIVE
+                        || effect == WeeklyReviewResponse.Effect.NEGATIVE)
+                .map(Enum::name)
+                .distinct()
+                .toList();
+        if (materialEffects.size() > 1) {
+            return "MIXED";
+        }
+        return materialEffects.isEmpty() ? "NEUTRAL" : materialEffects.getFirst();
     }
 
     private WeeklyReviewAiInput.FactorSource factor(
@@ -86,6 +136,7 @@ public final class WeeklyReviewAiInputCompactor {
                 source.factorId(),
                 source.title(),
                 source.detail(),
+                factorManagementMeaning(source),
                 source.effect().name(),
                 source.contributionAmount() != null,
                 source.evidenceRefs(),
@@ -95,6 +146,24 @@ public final class WeeklyReviewAiInputCompactor {
                         evidence
                 )
         );
+    }
+
+    private String factorManagementMeaning(Factor source) {
+        boolean increased = source.comparison().direction() == Direction.UP;
+        return switch (source.kind()) {
+            case "RETURN_CHANGE" -> "Возвраты уменьшили результат продаж "
+                    + (increased ? "сильнее" : "слабее")
+                    + ", чем в периоде сравнения.";
+            case "STRUCTURE_CHANGE" -> "Направление принесло "
+                    + (increased ? "больше" : "меньше")
+                    + " выручки, чем в периоде сравнения.";
+            case "ATTACH_CHANGE" -> "Товары или услуги этой группы "
+                    + (increased ? "чаще" : "реже")
+                    + " сопровождали базовые продажи, чем в периоде сравнения.";
+            default -> "Значение показателя стало "
+                    + (increased ? "выше" : "ниже")
+                    + ", чем в периоде сравнения.";
+        };
     }
 
     private WeeklyReviewAiInput.ActionSource action(

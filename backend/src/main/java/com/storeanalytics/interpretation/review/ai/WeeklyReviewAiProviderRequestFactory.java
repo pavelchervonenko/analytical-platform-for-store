@@ -27,7 +27,7 @@ import tools.jackson.databind.ObjectWriter;
 import tools.jackson.databind.SerializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Builds the bounded v22/schema4 provider request from an exact V45 snapshot. */
+/** Builds the bounded active schema4 provider request from an exact V45 snapshot. */
 @Component
 public final class WeeklyReviewAiProviderRequestFactory {
 

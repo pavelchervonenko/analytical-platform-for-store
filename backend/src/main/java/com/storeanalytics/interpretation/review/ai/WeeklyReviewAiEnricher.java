@@ -28,14 +28,30 @@ public final class WeeklyReviewAiEnricher {
             WeeklyReviewAiValidationResult validation,
             Instant publishedAt
     ) {
+        return apply(
+                response, validation, publishedAt,
+                WeeklyReviewAiContract.PROMPT_VERSION,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
+        );
+    }
+
+    public WeeklyReviewResponse apply(
+            WeeklyReviewResponse response,
+            WeeklyReviewAiValidationResult validation,
+            Instant publishedAt,
+            String promptVersion,
+            int contentSchemaVersion
+    ) {
         WeeklyReviewResponse source = requireNonNull(response, "response");
         WeeklyReviewAiValidationResult result = requireNonNull(
                 validation, "validation"
         );
         Instant published = requireNonNull(publishedAt, "publishedAt");
-        if (!result.semanticValidated()
+        String prompt = requireNonNull(promptVersion, "promptVersion");
+        if (!WeeklyReviewAiContract.isReadable(prompt, contentSchemaVersion)
+                || !result.semanticValidated()
                 || result.content() == null
-                || !matches(source, result.content())) {
+                || !matches(source, result.content(), prompt)) {
             return source;
         }
         WeeklyReviewAiContent content = result.content();
@@ -54,13 +70,13 @@ public final class WeeklyReviewAiEnricher {
                 source.salesStructure(),
                 source.team(),
                 source.employees(),
-                actions(source.actions(), content.actionWordings()),
+                actions(source.actions(), content.actionWordings(), prompt),
                 source.limitations(),
                 source.evidence(),
                 new AiEnhancement(
                         AiState.READY,
-                        WeeklyReviewAiContract.PROMPT_VERSION,
-                        WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                        prompt,
+                        contentSchemaVersion,
                         published
                 )
         );
@@ -68,7 +84,8 @@ public final class WeeklyReviewAiEnricher {
 
     private boolean matches(
             WeeklyReviewResponse response,
-            WeeklyReviewAiContent content
+            WeeklyReviewAiContent content,
+            String promptVersion
     ) {
         if ((response.reportState() != ReportState.READY
                 && response.reportState() != ReportState.PARTIAL)
@@ -98,7 +115,10 @@ public final class WeeklyReviewAiEnricher {
             if (!"STORE".equals(source.scope())
                     || source.employeePublicId() != null
                     || !source.actionId().equals(wording.actionId())
-                    || !source.check().equals(wording.check())) {
+                    || !source.check().equals(wording.check())
+                    || (WeeklyReviewAiContract.hasBackendOwnedActionTitle(
+                            promptVersion
+                    ) && !source.title().equals(wording.title()))) {
                 return false;
             }
         }
@@ -148,7 +168,8 @@ public final class WeeklyReviewAiEnricher {
 
     private List<Action> actions(
             List<Action> source,
-            List<WeeklyReviewAiContent.ActionWording> wordings
+            List<WeeklyReviewAiContent.ActionWording> wordings,
+            String promptVersion
     ) {
         List<Action> result = new ArrayList<>(source.size());
         for (int index = 0; index < source.size(); index++) {
@@ -159,7 +180,9 @@ public final class WeeklyReviewAiEnricher {
                     action.actionType(),
                     action.scope(),
                     action.employeePublicId(),
-                    wordings.get(index).title(),
+                    WeeklyReviewAiContract.hasBackendOwnedActionTitle(
+                            promptVersion
+                    ) ? action.title() : wordings.get(index).title(),
                     action.metricCode(),
                     action.target(),
                     action.check(),

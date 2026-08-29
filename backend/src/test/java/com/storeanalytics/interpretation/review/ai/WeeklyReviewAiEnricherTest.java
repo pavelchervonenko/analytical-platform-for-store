@@ -31,7 +31,7 @@ class WeeklyReviewAiEnricherTest {
     private final WeeklyReviewAiEnricher enricher = new WeeklyReviewAiEnricher();
 
     @Test
-    void changesOnlyApprovedWordingAndAiMetadata() {
+    void changesOnlyApprovedWordingAndSupportsLegacySnapshotTitle() {
         WeeklyReviewResponse base = report();
 
         WeeklyReviewResponse result = enricher.apply(
@@ -47,7 +47,6 @@ class WeeklyReviewAiEnricherTest {
                         "summary.outcome.text",
                         "summary.generatedBy",
                         "factors.detail",
-                        "actions.title",
                         "actions.generatedBy",
                         "aiEnhancement"
                 )
@@ -63,7 +62,7 @@ class WeeklyReviewAiEnricherTest {
             assertThat(factor.contributionAmount()).isEqualByComparingTo("-50.00");
         });
         assertThat(result.actions()).singleElement().satisfies(action -> {
-            assertThat(action.title()).isEqualTo("Разобрать причины возвратов");
+            assertThat(action.title()).isEqualTo("Проанализировать рост возвратов");
             assertThat(action.check()).isEqualTo("Сравнить со следующей полной неделей");
             assertThat(action.target()).isSameAs(base.actions().getFirst().target());
             assertThat(action.generatedBy()).isEqualTo(GeneratedBy.AI_ENHANCED);
@@ -83,6 +82,44 @@ class WeeklyReviewAiEnricherTest {
         assertThat(result.evidence()).isSameAs(base.evidence());
         assertThat(result.provenance()).isSameAs(base.provenance());
     }
+
+    @Test
+    void preservesLegacyPromptVersionWhenApplyingReadFallback() {
+        WeeklyReviewResponse result = enricher.apply(
+                report(),
+                WeeklyReviewAiValidationResult.semanticallyValid(
+                        changedActionTitleContent(), "{\"canonical\":true}"
+                ),
+                PUBLISHED_AT,
+                WeeklyReviewAiContract.LEGACY_PROMPT_VERSION,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
+        );
+
+        assertThat(result.aiEnhancement()).isEqualTo(new AiEnhancement(
+                AiState.READY,
+                WeeklyReviewAiContract.LEGACY_PROMPT_VERSION,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                PUBLISHED_AT
+        ));
+        assertThat(result.actions().getFirst().title())
+                .isEqualTo("Разобрать причины возвратов");
+    }
+
+    @Test
+    void rejectsChangedActionTitleForActivePrompt() {
+        WeeklyReviewResponse base = report();
+
+        WeeklyReviewResponse result = enricher.apply(
+                base,
+                WeeklyReviewAiValidationResult.semanticallyValid(
+                        changedActionTitleContent(), "{}"
+                ),
+                PUBLISHED_AT
+        );
+
+        assertThat(result).isSameAs(base);
+    }
+
 
     @Test
     void returnsExactDeterministicReportWhenValidationFailed() {
@@ -157,7 +194,7 @@ class WeeklyReviewAiEnricherTest {
                 "RESTORE",
                 "STORE",
                 null,
-                "Проверить возвраты",
+                "Проанализировать рост возвратов",
                 "RETURN_REVENUE",
                 new ActionTarget("AT_MOST", new BigDecimal("50.00"), Unit.RUB),
                 "Сравнить со следующей полной неделей",
@@ -192,6 +229,20 @@ class WeeklyReviewAiEnricherTest {
         );
     }
 
+    private WeeklyReviewAiContent changedActionTitleContent() {
+        WeeklyReviewAiContent base = content();
+        return new WeeklyReviewAiContent(
+                base.schemaVersion(),
+                base.summary(),
+                base.factorExplanations(),
+                List.of(new WeeklyReviewAiContent.ActionWording(
+                        "action:restore:return_revenue",
+                        "Разобрать причины возвратов",
+                        "Сравнить со следующей полной неделей"
+                ))
+        );
+    }
+
     private WeeklyReviewAiContent content() {
         return new WeeklyReviewAiContent(
                 4,
@@ -206,7 +257,7 @@ class WeeklyReviewAiEnricherTest {
                 )),
                 List.of(new WeeklyReviewAiContent.ActionWording(
                         "action:restore:return_revenue",
-                        "Разобрать причины возвратов",
+                        "Проанализировать рост возвратов",
                         "Сравнить со следующей полной неделей"
                 ))
         );

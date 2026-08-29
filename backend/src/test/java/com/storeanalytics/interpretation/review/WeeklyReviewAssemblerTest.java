@@ -88,7 +88,7 @@ class WeeklyReviewAssemblerTest {
         assertThat(result.factors().getFirst().effect()).isEqualTo(Effect.NEGATIVE);
         assertThat(result.actions()).singleElement().satisfies(action -> {
             assertThat(action.metricCode()).isEqualTo("RETURN_REVENUE");
-            assertThat(action.title()).isEqualTo("Проанализировать рост возвратов");
+            assertThat(action.title()).isEqualTo("Разобрать рост возвратов");
             assertThat(action.target().operator()).isEqualTo("AT_MOST");
             assertThat(action.target().value()).isEqualByComparingTo("50.00");
         });

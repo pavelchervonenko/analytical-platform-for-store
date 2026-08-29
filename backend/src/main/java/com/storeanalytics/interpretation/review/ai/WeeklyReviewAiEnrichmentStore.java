@@ -127,15 +127,51 @@ public class WeeklyReviewAiEnrichmentStore {
             UUID snapshotId,
             Instant asOf
     ) {
-        List<PersistedWeeklyReviewAiEnrichment> values = jdbcTemplate.query(
+        UUID snapshot = requireNonNull(snapshotId, "snapshotId");
+        Instant publishedAsOf = requireNonNull(asOf, "asOf");
+        Optional<PersistedWeeklyReviewAiEnrichment> active =
+                findPublishedInternal(
+                        snapshot,
+                        WeeklyReviewAiContract.PROMPT_VERSION,
+                        WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                        publishedAsOf
+                );
+        if (active.isPresent()) {
+            return active;
+        }
+        Optional<PersistedWeeklyReviewAiEnrichment> previous =
+                findPublishedInternal(
+                        snapshot,
+                        WeeklyReviewAiContract.PREVIOUS_PROMPT_VERSION,
+                        WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                        publishedAsOf
+                );
+        return previous.isPresent()
+                ? previous
+                : findPublishedInternal(
+                        snapshot,
+                        WeeklyReviewAiContract.LEGACY_PROMPT_VERSION,
+                        WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                        publishedAsOf
+                );
+    }
+
+    private Optional<PersistedWeeklyReviewAiEnrichment> findPublishedInternal(
+            UUID snapshotId,
+            String promptVersion,
+            int contentSchemaVersion,
+            Instant asOf
+    ) {
+        return single(jdbcTemplate.query(
                 FIND_PUBLISHED_SQL,
-                this::mapRow,
-                requireNonNull(snapshotId, "snapshotId"),
-                WeeklyReviewAiContract.PROMPT_VERSION,
-                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
-                Timestamp.from(requireNonNull(asOf, "asOf"))
-        );
-        return single(values);
+                (resultSet, rowNumber) -> mapRow(
+                        resultSet, rowNumber, promptVersion, contentSchemaVersion
+                ),
+                snapshotId,
+                promptVersion,
+                contentSchemaVersion,
+                Timestamp.from(asOf)
+        ));
     }
 
     private void lockSnapshot(UUID snapshotId) {
@@ -155,7 +191,10 @@ public class WeeklyReviewAiEnrichmentStore {
     ) {
         return single(jdbcTemplate.query(
                 FIND_SQL,
-                this::mapRow,
+                (resultSet, rowNumber) -> mapRow(
+                        resultSet, rowNumber,
+                        promptVersion, contentSchemaVersion
+                ),
                 snapshotId,
                 promptVersion,
                 contentSchemaVersion
@@ -164,19 +203,23 @@ public class WeeklyReviewAiEnrichmentStore {
 
     private PersistedWeeklyReviewAiEnrichment mapRow(
             ResultSet resultSet,
-            int rowNumber
+            int rowNumber,
+            String expectedPromptVersion,
+            int expectedContentSchemaVersion
     ) throws SQLException {
         WeeklyReviewAiContent content = codec.deserialize(
                 resultSet.getString("content_payload")
         );
         String canonicalContent = codec.canonical(content);
         String contentHash = resultSet.getString("content_hash");
-        boolean headerMatches = resultSet.getString("prompt_version").equals(
-                WeeklyReviewAiContract.PROMPT_VERSION
-        ) && resultSet.getInt("content_schema_version")
-                == WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
-                && content.schemaVersion()
-                == resultSet.getInt("content_schema_version");
+        String promptVersion = resultSet.getString("prompt_version");
+        int contentSchemaVersion = resultSet.getInt("content_schema_version");
+        boolean headerMatches = promptVersion.equals(expectedPromptVersion)
+                && contentSchemaVersion == expectedContentSchemaVersion
+                && WeeklyReviewAiContract.isReadable(
+                        promptVersion, contentSchemaVersion
+                )
+                && content.schemaVersion() == contentSchemaVersion;
         if (!headerMatches
                 || !contentHash.equals(codec.hash(canonicalContent))) {
             throw new IllegalStateException(

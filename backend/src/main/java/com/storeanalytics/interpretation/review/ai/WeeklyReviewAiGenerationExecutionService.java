@@ -33,6 +33,14 @@ public class WeeklyReviewAiGenerationExecutionService {
 
     public void execute(WeeklyReviewAiJob job, String owner) {
         Instant now = clock.instant();
+        if (!WeeklyReviewAiContract.isActive(
+                job.promptVersion(), job.contentSchemaVersion())) {
+            jobStore.failClaimed(
+                    job, owner, "JOB_CONTRACT_MISMATCH",
+                    "Weekly review AI job contract is not active", now
+            );
+            return;
+        }
         PersistedWeeklyReviewSnapshot snapshot = snapshotStore
                 .findById(job.snapshotId())
                 .orElse(null);

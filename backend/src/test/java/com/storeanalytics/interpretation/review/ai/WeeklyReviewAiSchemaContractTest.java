@@ -56,10 +56,20 @@ class WeeklyReviewAiSchemaContractTest {
     @Test
     void contractUsesNewImmutableVersionWithoutChangingLegacyRegistry() {
         assertThat(WeeklyReviewAiContract.PROMPT_VERSION)
-                .isEqualTo("weekly-interpretation-v22");
+                .isEqualTo("weekly-interpretation-v24");
+        assertThat(WeeklyReviewAiContract.INPUT_SCHEMA_VERSION).isEqualTo(3);
         assertThat(WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION).isEqualTo(4);
         assertThat(WeeklyReviewAiContract.SYSTEM_PROMPT)
-                .isEqualTo("prompts/llm/weekly-interpretation-v22.md");
+                .isEqualTo("prompts/llm/weekly-interpretation-v24.md");
+        assertThat(WeeklyReviewAiContract.isReadable(
+                WeeklyReviewAiContract.PREVIOUS_PROMPT_VERSION, 4
+        )).isTrue();
+        assertThat(WeeklyReviewAiContract.isReadable(
+                WeeklyReviewAiContract.LEGACY_PROMPT_VERSION, 4
+        )).isTrue();
+        assertThat(WeeklyReviewAiContract.isActive(
+                WeeklyReviewAiContract.LEGACY_PROMPT_VERSION, 4
+        )).isFalse();
     }
 
     private static String resource(String name) throws IOException {

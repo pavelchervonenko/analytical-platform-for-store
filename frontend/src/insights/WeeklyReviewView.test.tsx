@@ -83,7 +83,7 @@ describe("WeeklyReviewView", () => {
       "Это изменение напрямую уменьшило чистую выручку."
     )).toBeInTheDocument();
     expect(within(summary).getByText("Что сделать")).toBeInTheDocument();
-    expect(within(summary).getByText("Проанализировать рост возвратов"))
+    expect(within(summary).getByText("Разобрать рост возвратов"))
       .toBeInTheDocument();
     expect(within(summary).queryByText(review.summary.positive!.text)).not.toBeInTheDocument();
     expect(within(summary).queryByText(review.summary.risk!.text)).not.toBeInTheDocument();

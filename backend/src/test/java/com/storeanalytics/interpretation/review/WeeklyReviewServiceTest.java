@@ -64,7 +64,9 @@ class WeeklyReviewServiceTest {
         when(enricher.apply(
                 base,
                 enrichment.validationResult(),
-                enrichment.publishedAt()
+                enrichment.publishedAt(),
+                enrichment.promptVersion(),
+                enrichment.contentSchemaVersion()
         )).thenReturn(enriched);
 
         WeeklyReviewService service = new WeeklyReviewService(
@@ -85,8 +87,58 @@ class WeeklyReviewServiceTest {
         verify(enricher).apply(
                 base,
                 enrichment.validationResult(),
-                enrichment.publishedAt()
+                enrichment.publishedAt(),
+                enrichment.promptVersion(),
+                enrichment.contentSchemaVersion()
         );
+    }
+
+    @Test
+    void invalidOptionalEnrichmentFallsBackToDeterministicSnapshot() {
+        UUID storeId = UUID.randomUUID();
+        UUID snapshotId = UUID.randomUUID();
+        StoreRepository stores = mock(StoreRepository.class);
+        Store store = mock(Store.class);
+        when(store.getId()).thenReturn(storeId);
+        when(store.getTimezone()).thenReturn("Europe/Moscow");
+        when(stores.findById(storeId)).thenReturn(Optional.of(store));
+        WeeklyReviewResponse base = mock(WeeklyReviewResponse.class);
+        PersistedWeeklyReviewSnapshot persisted = new PersistedWeeklyReviewSnapshot(
+                snapshotId,
+                storeId,
+                1,
+                null,
+                base,
+                "a".repeat(64),
+                NOW
+        );
+        WeeklyReviewSnapshotStore snapshots = mock(WeeklyReviewSnapshotStore.class);
+        when(snapshots.findLatest(eq(storeId), any(DateRange.class)))
+                .thenReturn(Optional.of(persisted));
+        WeeklyReviewAiEnrichmentStore enrichments =
+                mock(WeeklyReviewAiEnrichmentStore.class);
+        when(enrichments.findPublished(snapshotId, NOW)).thenThrow(
+                new IllegalStateException("AI enrichment integrity validation failed")
+        );
+        WeeklyReviewAiStateResolver stateResolver =
+                mock(WeeklyReviewAiStateResolver.class);
+        when(stateResolver.apply(persisted, NOW)).thenReturn(base);
+
+        WeeklyReviewService service = new WeeklyReviewService(
+                stores,
+                mock(WeeklyReviewFactsSource.class),
+                snapshots,
+                new WeeklyReviewAiReadSupport(
+                        enrichments,
+                        mock(WeeklyReviewAiEnricher.class),
+                        stateResolver,
+                        WeeklyReviewAiTestProperties.properties(true, false, false)
+                ),
+                Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+
+        assertThat(service.current(storeId)).containsSame(base);
+        verify(stateResolver).apply(persisted, NOW);
     }
 
     @Test
@@ -152,7 +204,7 @@ class WeeklyReviewServiceTest {
         return new PersistedWeeklyReviewAiEnrichment(
                 UUID.randomUUID(),
                 snapshotId,
-                "weekly-interpretation-v22",
+                "weekly-interpretation-v23",
                 4,
                 "b".repeat(64),
                 content,

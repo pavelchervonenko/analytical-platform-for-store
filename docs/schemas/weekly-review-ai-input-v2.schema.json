@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://store-analytics.local/schemas/weekly-review-ai-input-v2.schema.json",
+  "title": "WeeklyReviewAiInput v2",
+  "description": "Minimal store-only source for optional weekly review wording.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "promptVersion",
+    "contentSchemaVersion",
+    "summary",
+    "factors",
+    "actions",
+    "evidence"
+  ],
+  "properties": {
+    "contractVersion": {"const": 2},
+    "promptVersion": {"const": "weekly-interpretation-v23"},
+    "contentSchemaVersion": {"const": 4},
+    "summary": {"$ref": "#/$defs/summary"},
+    "factors": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/factor"},
+      "maxItems": 3
+    },
+    "actions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/action"},
+      "maxItems": 3
+    },
+    "evidence": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/evidence"},
+      "minItems": 1,
+      "maxItems": 64
+    }
+  },
+  "$defs": {
+    "reference": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[A-Z][A-Z0-9:._-]+$"
+    },
+    "references": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/reference"},
+      "minItems": 1,
+      "maxItems": 10,
+      "uniqueItems": true
+    },
+    "numericLiterals": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "maxLength": 40},
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcomeText",
+        "outcomeEffect",
+        "evidenceRefs",
+        "allowedNumericLiterals"
+      ],
+      "properties": {
+        "outcomeText": {"type": "string", "minLength": 1, "maxLength": 600},
+        "outcomeEffect": {"enum": ["POSITIVE", "NEGATIVE", "NEUTRAL", "MIXED"]},
+        "evidenceRefs": {"$ref": "#/$defs/references"},
+        "allowedNumericLiterals": {"$ref": "#/$defs/numericLiterals"}
+      }
+    },
+    "factor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "factorId",
+        "title",
+        "detail",
+        "managementMeaning",
+        "effect",
+        "causalLanguageAllowed",
+        "evidenceRefs",
+        "allowedNumericLiterals"
+      ],
+      "properties": {
+        "factorId": {"type": "string", "minLength": 3, "maxLength": 160},
+        "title": {"type": "string", "minLength": 1, "maxLength": 400},
+        "detail": {"type": "string", "minLength": 1, "maxLength": 600},
+        "managementMeaning": {"type": "string", "minLength": 1, "maxLength": 600},
+        "effect": {"enum": ["POSITIVE", "NEGATIVE"]},
+        "causalLanguageAllowed": {"type": "boolean"},
+        "evidenceRefs": {"$ref": "#/$defs/references"},
+        "allowedNumericLiterals": {"$ref": "#/$defs/numericLiterals"}
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actionId",
+        "title",
+        "check",
+        "evidenceRefs",
+        "allowedNumericLiterals"
+      ],
+      "properties": {
+        "actionId": {"type": "string", "minLength": 3, "maxLength": 160},
+        "title": {"type": "string", "minLength": 1, "maxLength": 400},
+        "check": {"type": "string", "minLength": 1, "maxLength": 600},
+        "evidenceRefs": {"$ref": "#/$defs/references"},
+        "allowedNumericLiterals": {"$ref": "#/$defs/numericLiterals"}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidenceRef",
+        "label",
+        "unit",
+        "currentValue",
+        "previousValue"
+      ],
+      "properties": {
+        "evidenceRef": {"$ref": "#/$defs/reference"},
+        "label": {"type": "string", "minLength": 1, "maxLength": 240},
+        "unit": {"enum": ["RUB", "PERCENT", "PER_100", "COUNT", "HOURS", "STATUS"]},
+        "currentValue": {
+          "anyOf": [{"type": "string", "minLength": 1, "maxLength": 160}, {"type": "null"}]
+        },
+        "previousValue": {
+          "anyOf": [{"type": "string", "minLength": 1, "maxLength": 160}, {"type": "null"}]
+        }
+      }
+    }
+  }
+}

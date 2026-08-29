@@ -96,6 +96,40 @@ class WeeklyReviewAiGenerationExecutionServiceTest {
     }
 
     @Test
+    void rejectsLegacyJobBeforeSnapshotOrProviderPreparation() {
+        WeeklyReviewAiJob legacy = new WeeklyReviewAiJob(
+                job.id(),
+                job.snapshotId(),
+                WeeklyReviewAiContract.LEGACY_PROMPT_VERSION,
+                job.contentSchemaVersion(),
+                job.providerCode(),
+                job.requestedModel(),
+                job.status(),
+                job.attemptCount(),
+                job.maxAttempts(),
+                job.nextAttemptAt(),
+                job.deadlineAt(),
+                job.leaseOwner(),
+                job.leaseUntil(),
+                job.lastErrorCode(),
+                job.lastErrorMessage(),
+                job.lastValidationCodes(),
+                job.createdAt(),
+                job.updatedAt()
+        );
+
+        service.execute(legacy, OWNER);
+
+        verify(jobStore).failClaimed(
+                legacy, OWNER, "JOB_CONTRACT_MISMATCH",
+                "Weekly review AI job contract is not active", NOW
+        );
+        verify(snapshotStore, never()).findById(any());
+        verify(requestFactory, never()).prepare(any());
+        verify(provider, never()).generate(any());
+    }
+
+    @Test
     void publishesOnlySemanticallyValidatedResponse() {
         LlmProviderResponseReceipt response = receipt(validResponse());
         WeeklyReviewAiValidationResult valid = semanticValid();
@@ -210,11 +244,13 @@ class WeeklyReviewAiGenerationExecutionServiceTest {
 
     private PreparedWeeklyReviewAiRequest prepared(WeeklyReviewAiJob value) {
         WeeklyReviewAiInput input = new WeeklyReviewAiInput(
-                1,
+                WeeklyReviewAiContract.INPUT_SCHEMA_VERSION,
                 WeeklyReviewAiContract.PROMPT_VERSION,
                 4,
                 new WeeklyReviewAiInput.SummarySource(
                         "Чистая выручка выросла.",
+                        "POSITIVE",
+                        List.of("Чистая выручка выросла."),
                         List.of("STORE.NET_REVENUE"),
                         List.of()
                 ),
@@ -227,7 +263,7 @@ class WeeklyReviewAiGenerationExecutionServiceTest {
         );
         LlmProviderRequest request = new LlmProviderRequest(
                 value.id(), value.providerCode(), value.requestedModel(),
-                "system", "{\"contractVersion\":1}", "{}",
+                "system", "{\"contractVersion\":2}", "{}",
                 new BigDecimal("0.1"), 1400, NOW.plusSeconds(180)
         );
         return new PreparedWeeklyReviewAiRequest(

@@ -126,11 +126,13 @@ class WeeklyReviewAiCompletionServiceIntegrationTest {
 
     private PreparedWeeklyReviewAiRequest prepared(WeeklyReviewAiJob job) {
         WeeklyReviewAiInput input = new WeeklyReviewAiInput(
-                1,
+                WeeklyReviewAiContract.INPUT_SCHEMA_VERSION,
                 WeeklyReviewAiContract.PROMPT_VERSION,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 new WeeklyReviewAiInput.SummarySource(
                         "Чистая выручка выросла.",
+                        "POSITIVE",
+                        List.of("Неделя сильнее: чистая выручка выросла."),
                         List.of("STORE.NET_REVENUE"),
                         List.of()
                 ),
@@ -149,7 +151,7 @@ class WeeklyReviewAiCompletionServiceIntegrationTest {
                 job.providerCode(),
                 job.requestedModel(),
                 "system",
-                "{\"contractVersion\":1}",
+                "{\"contractVersion\":3}",
                 "{}",
                 new BigDecimal("0.1"),
                 1400,
@@ -190,7 +192,7 @@ class WeeklyReviewAiCompletionServiceIntegrationTest {
                 {
                   "schemaVersion": 4,
                   "summary": {
-                    "text": "Чистая выручка выросла.",
+                    "text": "Неделя сильнее: чистая выручка выросла.",
                     "evidenceRefs": ["STORE.NET_REVENUE"]
                   },
                   "factorExplanations": [],

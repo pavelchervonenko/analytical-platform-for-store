@@ -93,6 +93,36 @@ class WeeklyReviewAiJobStoreIntegrationTest {
     }
 
     @Test
+    void activeWorkerLeavesPendingLegacyJobUntouched() {
+        Instant legacyNow = NOW.minus(Duration.ofDays(365));
+        UUID snapshotId = addSnapshot(
+                addStore("AI legacy pending"), LocalDate.of(2025, 8, 17), 1,
+                "BLOCKED"
+        );
+        long activePendingBefore = store.countByStatus(
+                WeeklyReviewAiJobStatus.PENDING
+        );
+        UUID legacyJobId = addLegacyJob(snapshotId, legacyNow);
+
+        assertThat(store.countByStatus(WeeklyReviewAiJobStatus.PENDING))
+                .isEqualTo(activePendingBefore);
+
+        assertThat(store.claimNext(
+                "v23-worker", Duration.ofMinutes(4), legacyNow
+        )).isEmpty();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM weekly_review_ai_jobs WHERE id = ?",
+                String.class,
+                legacyJobId
+        )).isEqualTo("PENDING");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT attempt_count FROM weekly_review_ai_jobs WHERE id = ?",
+                Integer.class,
+                legacyJobId
+        )).isZero();
+    }
+
+    @Test
     void retriesSemanticFailureThenFinalizesImmutableSuccess() {
         UUID snapshotId = addSnapshot(
                 addStore("AI retry"), LocalDate.of(2026, 8, 17), 1
@@ -205,11 +235,36 @@ class WeeklyReviewAiJobStoreIntegrationTest {
         )).isEqualTo("FAILED");
     }
 
+    private UUID addLegacyJob(UUID snapshotId, Instant createdAt) {
+        UUID jobId = UUID.randomUUID();
+        jdbcTemplate.update(
+                """
+                INSERT INTO weekly_review_ai_jobs (
+                    id, snapshot_id, prompt_version, content_schema_version,
+                    provider_code, requested_model, status, attempt_count,
+                    max_attempts, next_attempt_at, deadline_at,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, 4, ?, ?, ?, 0, 2, ?, ?, ?, ?)
+                """,
+                jobId,
+                snapshotId,
+                WeeklyReviewAiContract.LEGACY_PROMPT_VERSION,
+                "YANDEX",
+                "gpt://folder/yandexgpt-5.1",
+                "PENDING",
+                java.sql.Timestamp.from(createdAt),
+                java.sql.Timestamp.from(createdAt.plus(Duration.ofHours(2))),
+                java.sql.Timestamp.from(createdAt),
+                java.sql.Timestamp.from(createdAt)
+        );
+        return jobId;
+    }
+
     private PreparedWeeklyReviewAiRequest prepared(
             WeeklyReviewAiJob job,
             WeeklyReviewAiInput input
     ) {
-        String inputJson = "{\"contractVersion\":1}";
+        String inputJson = "{\"contractVersion\":2}";
         LlmProviderRequest request = new LlmProviderRequest(
                 job.id(), job.providerCode(), job.requestedModel(), "system",
                 inputJson, "{}", new BigDecimal("0.1"), 1400,
@@ -244,11 +299,13 @@ class WeeklyReviewAiJobStoreIntegrationTest {
 
     private WeeklyReviewAiInput input() {
         return new WeeklyReviewAiInput(
-                1,
+                WeeklyReviewAiContract.INPUT_SCHEMA_VERSION,
                 WeeklyReviewAiContract.PROMPT_VERSION,
                 4,
                 new WeeklyReviewAiInput.SummarySource(
                         "Чистая выручка выросла.",
+                        "POSITIVE",
+                        List.of("Чистая выручка выросла."),
                         List.of("STORE.NET_REVENUE"),
                         List.of()
                 ),

@@ -30,7 +30,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-/** Durable lease, retry and receipt persistence for the isolated v22 worker. */
+/** Durable lease, retry and receipt persistence for the isolated active worker. */
 @Component
 public class WeeklyReviewAiJobStore {
 
@@ -197,12 +197,20 @@ public class WeeklyReviewAiJobStore {
                     last_error_message = 'Weekly review AI generation deadline expired',
                     lease_owner = NULL, lease_until = NULL
                 WHERE status IN ('PENDING', 'RETRY_WAIT')
+                  AND prompt_version = ?
+                  AND content_schema_version = ?
                   AND deadline_at <= ?
-                """, Timestamp.from(timestamp), Timestamp.from(timestamp));
+                """,
+                Timestamp.from(timestamp),
+                WeeklyReviewAiContract.PROMPT_VERSION,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                Timestamp.from(timestamp));
         List<UUID> candidates = jdbcTemplate.query("""
                 SELECT id
                 FROM weekly_review_ai_jobs
                 WHERE status IN ('PENDING', 'RETRY_WAIT')
+                  AND prompt_version = ?
+                  AND content_schema_version = ?
                   AND next_attempt_at <= ?
                   AND deadline_at > ?
                   AND attempt_count < max_attempts
@@ -211,6 +219,8 @@ public class WeeklyReviewAiJobStore {
                 LIMIT 1
                 """,
                 (resultSet, rowNumber) -> resultSet.getObject("id", UUID.class),
+                WeeklyReviewAiContract.PROMPT_VERSION,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 Timestamp.from(timestamp),
                 Timestamp.from(timestamp)
         );
@@ -241,10 +251,17 @@ public class WeeklyReviewAiJobStore {
             Instant now
     ) {
         WeeklyReviewAiJob claimed = requireNonNull(job, "job");
+        require(WeeklyReviewAiContract.isActive(
+                        claimed.promptVersion(), claimed.contentSchemaVersion()),
+                "Weekly review AI job contract is not active");
         String leaseOwner = requireText(owner, "owner");
         PreparedWeeklyReviewAiRequest request = requireNonNull(
                 prepared, "prepared"
         );
+        require(claimed.promptVersion().equals(request.input().promptVersion())
+                        && claimed.contentSchemaVersion()
+                        == request.input().contentSchemaVersion(),
+                "Weekly review AI request contract does not match job");
         LlmProviderPreflight estimate = requireNonNull(preflight, "preflight");
         Instant timestamp = requireNonNull(now, "now");
         reserveDailyBudget(estimate, timestamp);
@@ -441,10 +458,17 @@ public class WeeklyReviewAiJobStore {
 
     @Transactional(readOnly = true)
     public long countByStatus(WeeklyReviewAiJobStatus status) {
-        Long value = jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM weekly_review_ai_jobs WHERE status = ?",
+        Long value = jdbcTemplate.queryForObject("""
+                SELECT count(*)
+                FROM weekly_review_ai_jobs
+                WHERE status = ?
+                  AND prompt_version = ?
+                  AND content_schema_version = ?
+                """,
                 Long.class,
-                requireNonNull(status, "status").name()
+                requireNonNull(status, "status").name(),
+                WeeklyReviewAiContract.PROMPT_VERSION,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
         );
         return value == null ? 0L : value;
     }
@@ -454,8 +478,15 @@ public class WeeklyReviewAiJobStore {
         Long value = jdbcTemplate.queryForObject("""
                 SELECT count(*)
                 FROM weekly_review_ai_jobs
-                WHERE status = 'RUNNING' AND lease_until < ?
-                """, Long.class, Timestamp.from(requireNonNull(now, "now")));
+                WHERE status = 'RUNNING'
+                  AND prompt_version = ?
+                  AND content_schema_version = ?
+                  AND lease_until < ?
+                """,
+                Long.class,
+                WeeklyReviewAiContract.PROMPT_VERSION,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                Timestamp.from(requireNonNull(now, "now")));
         return value == null ? 0L : value;
     }
 
@@ -465,8 +496,14 @@ public class WeeklyReviewAiJobStore {
                 SELECT count(*)
                 FROM weekly_review_ai_jobs
                 WHERE status IN ('PENDING', 'RUNNING', 'RETRY_WAIT')
+                  AND prompt_version = ?
+                  AND content_schema_version = ?
                   AND created_at < ?
-                """, Long.class, Timestamp.from(requireNonNull(
+                """,
+                Long.class,
+                WeeklyReviewAiContract.PROMPT_VERSION,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                Timestamp.from(requireNonNull(
                         createdBefore, "createdBefore"
                 )));
         return value == null ? 0L : value;
@@ -526,9 +563,13 @@ public class WeeklyReviewAiJobStore {
                   AND attempt.status = 'STARTED'
                   AND attempt.finished_at IS NULL
                   AND job.status = 'RUNNING'
+                  AND job.prompt_version = ?
+                  AND job.content_schema_version = ?
                   AND job.lease_until < ?
                 """,
                 Timestamp.from(now),
+                WeeklyReviewAiContract.PROMPT_VERSION,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 Timestamp.from(now)
         );
         jdbcTemplate.update("""
@@ -541,10 +582,15 @@ public class WeeklyReviewAiJobStore {
                     next_attempt_at = ?, lease_owner = NULL, lease_until = NULL,
                     last_error_code = 'LEASE_EXPIRED',
                     last_error_message = 'Weekly review AI worker lease expired'
-                WHERE status = 'RUNNING' AND lease_until < ?
+                WHERE status = 'RUNNING'
+                  AND prompt_version = ?
+                  AND content_schema_version = ?
+                  AND lease_until < ?
                 """,
                 Timestamp.from(now),
                 Timestamp.from(now),
+                WeeklyReviewAiContract.PROMPT_VERSION,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 Timestamp.from(now)
         );
     }
