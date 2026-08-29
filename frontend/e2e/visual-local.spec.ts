@@ -1,11 +1,70 @@
 import { mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
+import { makeWeeklyReview } from "../src/test/weeklyReviewFixture";
 
 const email = process.env.VISUAL_EMAIL?.trim() || process.env.E2E_ADMIN_EMAIL?.trim();
 const password = process.env.VISUAL_PASSWORD || process.env.E2E_ADMIN_PASSWORD;
 const configuredRoutes = process.env.VISUAL_ROUTES?.trim() || "/insights";
+const useFixtureApi = process.env.VISUAL_USE_FIXTURES === "true";
 const templateEmails = new Set(["manager@example.com", "replace-with-local-email"]);
+const visualStoreId = "10000000-0000-4000-8000-000000000001";
+
+async function installFixtureApi(page: Page) {
+  const json = async (route: Route, body: unknown) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(body)
+    });
+  };
+
+  await page.route("**/api/auth/me", async (route) => json(route, {
+    id: "20000000-0000-4000-8000-000000000001",
+    email: "visual-manager@example.com",
+    displayName: "Руководитель магазина",
+    role: "MANAGER",
+    passwordChangeRequired: false,
+    allStores: false,
+    storeIds: [visualStoreId]
+  }));
+  await page.route("**/api/stores", async (route) => json(route, [{
+    id: visualStoreId,
+    name: "МАГАЗИН",
+    address: null,
+    timezone: "Europe/Moscow",
+    businessDayStart: "06:00:00",
+    opensAt: "09:00:00",
+    closesAt: "21:00:00",
+    active: true
+  }]));
+  await page.route("**/api/stores/*/data-status", async (route) => json(route, {
+    storeId: visualStoreId,
+    status: "READY",
+    expectedThroughDate: "2026-08-26",
+    dataThroughDate: "2026-08-26",
+    salesDataThroughDate: "2026-08-26",
+    returnsDataThroughDate: "2026-08-26",
+    lagDays: 0,
+    lastCompletedSyncAt: "2026-08-27T04:30:00Z",
+    synchronization: {
+      active: false,
+      id: null,
+      type: null,
+      status: null,
+      phase: null,
+      startedAt: null,
+      nextAttemptAt: null
+    },
+    openQualityIssueCount: 0,
+    lastError: null,
+    lastErrorAt: null,
+    checkedAt: "2026-08-27T04:35:00Z"
+  }));
+  await page.route("**/api/stores/*/weekly-reviews/current", async (route) => {
+    await json(route, makeWeeklyReview());
+  });
+}
 
 function parseRoutes(value: string): string[] {
   const routes = [...new Set(value.split(",").map((route) => route.trim()).filter(Boolean))];
@@ -74,7 +133,12 @@ async function captureVisualArtifacts(page: Page, directory: string, name: strin
   await page.screenshot({
     path: resolve(directory, `${name}.png`),
     fullPage: true,
-    animations: "disabled"
+    animations: "disabled",
+    style: [
+      ".skip-link { display: none !important; }",
+      ".topbar { position: relative !important; }",
+      ".sidebar { position: absolute !important; }"
+    ].join(" ")
   });
 
   const pageSize = await page.evaluate(() => ({
@@ -110,7 +174,14 @@ const visualRoutes = parseRoutes(configuredRoutes);
 
 test.describe("local frontend visual review", () => {
   test.beforeEach(async ({ page }) => {
-    await login(page);
+    if (useFixtureApi) {
+      await installFixtureApi(page);
+      await page.goto("/insights");
+      await expect(page).toHaveURL(/\/insights(?:\?|$)/u);
+      await expect(page.locator("#main-content")).toBeVisible();
+    } else {
+      await login(page);
+    }
   });
 
   for (const route of visualRoutes) {
@@ -128,11 +199,34 @@ test.describe("local frontend visual review", () => {
         }
       });
 
+      if (!useFixtureApi && new URL(route, "http://local.test").pathname === "/insights") {
+        await page.route("**/api/stores/*/weekly-reviews/current", async (requestRoute) => {
+          await requestRoute.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify(makeWeeklyReview())
+          });
+        });
+      }
+
       await page.goto(route, { waitUntil: "domcontentloaded" });
       await waitForStablePage(page);
 
       let capturePeriodDialog = false;
       if (new URL(route, "http://local.test").pathname === "/insights") {
+        for (const selector of [
+          ".weekly-review-formula > summary",
+          ".weekly-review-evidence > summary",
+          ".weekly-review-secondary > summary"
+        ]) {
+          const summary = page.locator(selector).first();
+          const details = summary.locator("..");
+          await summary.focus();
+          await page.keyboard.press("Enter");
+          await expect(details).toHaveAttribute("open", "");
+          await page.keyboard.press("Enter");
+          await expect(details).not.toHaveAttribute("open", "");
+        }
         const firstEmployee = page.locator(".insight-employee").first();
         await firstEmployee.locator(":scope > summary").click();
         await expect(firstEmployee).toHaveAttribute("open", "");

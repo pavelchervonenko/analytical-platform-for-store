@@ -24,9 +24,9 @@ vi.mock("../stores/WorkspaceProvider", () => ({
   })
 }));
 
-vi.mock("./WeeklyInsightView", () => ({
-  WeeklyInsightView: ({ storeId }: { storeId: string }) => (
-    <div data-testid="weekly-insight-view">{storeId}</div>
+vi.mock("./WeeklyReviewView", () => ({
+  WeeklyReviewView: ({ storeId }: { storeId: string }) => (
+    <div data-testid="weekly-review-view">{storeId}</div>
   )
 }));
 
@@ -34,12 +34,12 @@ describe("AI insight placement", () => {
   it("does not render the weekly AI interpretation on the overview", () => {
     render(<OverviewPage />);
 
-    expect(screen.queryByTestId("weekly-insight-view")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("weekly-review-view")).not.toBeInTheDocument();
   });
 
   it("keeps the weekly AI interpretation in its dedicated section", () => {
     render(<InsightsPreviewPage />);
 
-    expect(screen.getByTestId("weekly-insight-view")).toHaveTextContent("store-1");
+    expect(screen.getByTestId("weekly-review-view")).toHaveTextContent("store-1");
   });
 });

@@ -1,0 +1,2607 @@
+{
+  "contractVersion" : 2,
+  "versions" : {
+    "metricsPolicy" : "weekly-metrics-v4",
+    "snapshotPolicy" : "weekly-snapshot-v7",
+    "qualityPolicy" : "weekly-quality-v4"
+  },
+  "period" : {
+    "timezone" : "Europe/Moscow",
+    "current" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previous" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentLabel" : "17–23 августа 2026",
+    "previousLabel" : "10–16 августа 2026"
+  },
+  "provenance" : {
+    "snapshotPublicId" : "weekly-review-test",
+    "revision" : 1,
+    "calculatedAt" : "2026-08-24T04:00:00Z",
+    "sourceDataUpdatedAt" : "2026-08-24T03:50:00Z",
+    "revisionChanged" : false,
+    "previousRevisionPublishedAt" : null
+  },
+  "reportState" : "READY",
+  "qualitySummary" : {
+    "blockingCount" : 0,
+    "warningCount" : 0,
+    "affectedBlockCount" : 0,
+    "message" : "Данные готовы"
+  },
+  "sourceCoverage" : [ {
+    "sourceCode" : "SALES",
+    "requiredForReport" : true,
+    "affectedBlockIds" : [ "results" ],
+    "currentThroughDate" : "2026-08-23",
+    "previousThroughDate" : "2026-08-23",
+    "state" : "COMPLETE",
+    "message" : null
+  }, {
+    "sourceCode" : "RETURNS",
+    "requiredForReport" : true,
+    "affectedBlockIds" : [ "results" ],
+    "currentThroughDate" : "2026-08-23",
+    "previousThroughDate" : "2026-08-23",
+    "state" : "COMPLETE",
+    "message" : null
+  }, {
+    "sourceCode" : "EMPLOYEE_ATTRIBUTION",
+    "requiredForReport" : false,
+    "affectedBlockIds" : [ "team", "employees" ],
+    "currentThroughDate" : "2026-08-23",
+    "previousThroughDate" : "2026-08-16",
+    "state" : "COMPLETE",
+    "message" : null
+  } ],
+  "summary" : {
+    "blockId" : "summary",
+    "state" : "READY",
+    "outcome" : {
+      "itemId" : "summary:outcome",
+      "text" : "Чистая выручка за неделю — 1000 ₽ (+11.1%). Валовая прибыль — 400 ₽ (+11.1%)",
+      "effect" : "POSITIVE",
+      "evidenceRefs" : [ "STORE.NET_REVENUE", "STORE.GROSS_PROFIT" ]
+    },
+    "positive" : {
+      "itemId" : "summary:positive",
+      "text" : "Техника: 700 ₽ против 600 ₽ (+16.7%)",
+      "effect" : "POSITIVE",
+      "evidenceRefs" : [ "STORE.STRUCTURE.DEVICES.REVENUE" ]
+    },
+    "risk" : {
+      "itemId" : "summary:risk",
+      "text" : "Возвраты: 100 ₽ против 50 ₽ (+100.0%)",
+      "effect" : "NEGATIVE",
+      "evidenceRefs" : [ "STORE.RETURN_REVENUE" ]
+    },
+    "generatedBy" : "DETERMINISTIC"
+  },
+  "results" : [ {
+    "metricId" : "store:net_revenue",
+    "code" : "NET_REVENUE",
+    "label" : "Чистая выручка",
+    "unit" : "RUB",
+    "current" : 1000.00,
+    "previous" : 900.00,
+    "absoluteDelta" : 100.00,
+    "changePercent" : 11.11,
+    "comparisonKind" : "PERCENT_AVAILABLE",
+    "direction" : "UP",
+    "effect" : "POSITIVE",
+    "metricState" : "READY",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "currentSample" : null,
+    "previousSample" : null,
+    "evidenceRefs" : [ "STORE.NET_REVENUE" ]
+  }, {
+    "metricId" : "store:gross_profit",
+    "code" : "GROSS_PROFIT",
+    "label" : "Валовая прибыль",
+    "unit" : "RUB",
+    "current" : 400.00,
+    "previous" : 360.00,
+    "absoluteDelta" : 40.00,
+    "changePercent" : 11.11,
+    "comparisonKind" : "PERCENT_AVAILABLE",
+    "direction" : "UP",
+    "effect" : "POSITIVE",
+    "metricState" : "READY",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "currentSample" : null,
+    "previousSample" : null,
+    "evidenceRefs" : [ "STORE.GROSS_PROFIT" ]
+  }, {
+    "metricId" : "store:margin-percent",
+    "code" : "MARGIN_PERCENT",
+    "label" : "Маржа",
+    "unit" : "PERCENT",
+    "current" : 40.00,
+    "previous" : 40.00,
+    "absoluteDelta" : 0.00,
+    "changePercent" : 0.00,
+    "comparisonKind" : "PERCENT_AVAILABLE",
+    "direction" : "FLAT",
+    "effect" : "NEUTRAL",
+    "metricState" : "READY",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "currentSample" : null,
+    "previousSample" : null,
+    "evidenceRefs" : [ "STORE.MARGIN_PERCENT" ]
+  }, {
+    "metricId" : "store:average_sale",
+    "code" : "AVERAGE_SALE",
+    "label" : "Средняя продажа",
+    "unit" : "RUB",
+    "current" : 61.11,
+    "previous" : 52.78,
+    "absoluteDelta" : 8.33,
+    "changePercent" : 15.78,
+    "comparisonKind" : "PERCENT_AVAILABLE",
+    "direction" : "UP",
+    "effect" : "POSITIVE",
+    "metricState" : "READY",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "currentSample" : {
+      "numerator" : 1100.00,
+      "denominator" : 18,
+      "numeratorLabel" : "Выручка продаж",
+      "denominatorLabel" : "Завершённые продажи"
+    },
+    "previousSample" : {
+      "numerator" : 950.00,
+      "denominator" : 18,
+      "numeratorLabel" : "Выручка продаж",
+      "denominatorLabel" : "Завершённые продажи"
+    },
+    "evidenceRefs" : [ "STORE.AVERAGE_SALE" ]
+  } ],
+  "revenueDecomposition" : {
+    "salesRevenue" : {
+      "metricId" : "store:sales_revenue",
+      "code" : "SALES_REVENUE",
+      "label" : "Продажи",
+      "unit" : "RUB",
+      "current" : 1100.00,
+      "previous" : 950.00,
+      "absoluteDelta" : 150.00,
+      "changePercent" : 15.79,
+      "comparisonKind" : "PERCENT_AVAILABLE",
+      "direction" : "UP",
+      "effect" : "POSITIVE",
+      "metricState" : "READY",
+      "sufficiency" : "SUFFICIENT",
+      "materiality" : "MATERIAL",
+      "currentSample" : null,
+      "previousSample" : null,
+      "evidenceRefs" : [ "STORE.SALES_REVENUE" ]
+    },
+    "returnRevenue" : {
+      "metricId" : "store:return_revenue",
+      "code" : "RETURN_REVENUE",
+      "label" : "Возвраты",
+      "unit" : "RUB",
+      "current" : 100.00,
+      "previous" : 50.00,
+      "absoluteDelta" : 50.00,
+      "changePercent" : 100.00,
+      "comparisonKind" : "PERCENT_AVAILABLE",
+      "direction" : "UP",
+      "effect" : "NEGATIVE",
+      "metricState" : "READY",
+      "sufficiency" : "SUFFICIENT",
+      "materiality" : "MATERIAL",
+      "currentSample" : null,
+      "previousSample" : null,
+      "evidenceRefs" : [ "STORE.RETURN_REVENUE" ]
+    },
+    "netRevenue" : {
+      "metricId" : "store:net_revenue",
+      "code" : "NET_REVENUE",
+      "label" : "Чистая выручка",
+      "unit" : "RUB",
+      "current" : 1000.00,
+      "previous" : 900.00,
+      "absoluteDelta" : 100.00,
+      "changePercent" : 11.11,
+      "comparisonKind" : "PERCENT_AVAILABLE",
+      "direction" : "UP",
+      "effect" : "POSITIVE",
+      "metricState" : "READY",
+      "sufficiency" : "SUFFICIENT",
+      "materiality" : "MATERIAL",
+      "currentSample" : null,
+      "previousSample" : null,
+      "evidenceRefs" : [ "STORE.NET_REVENUE" ]
+    },
+    "saleDocumentCount" : {
+      "metricId" : "store:sale_document_count",
+      "code" : "SALE_DOCUMENT_COUNT",
+      "label" : "Количество продаж",
+      "unit" : "COUNT",
+      "current" : 18,
+      "previous" : 18,
+      "absoluteDelta" : 0,
+      "changePercent" : 0.00,
+      "comparisonKind" : "PERCENT_AVAILABLE",
+      "direction" : "FLAT",
+      "effect" : "NEUTRAL",
+      "metricState" : "READY",
+      "sufficiency" : "SUFFICIENT",
+      "materiality" : "NOT_MATERIAL",
+      "currentSample" : null,
+      "previousSample" : null,
+      "evidenceRefs" : [ "STORE.SALE_DOCUMENT_COUNT" ]
+    },
+    "returnDocumentCount" : {
+      "metricId" : "store:return_document_count",
+      "code" : "RETURN_DOCUMENT_COUNT",
+      "label" : "Количество возвратов",
+      "unit" : "COUNT",
+      "current" : 2,
+      "previous" : 1,
+      "absoluteDelta" : 1,
+      "changePercent" : 100.00,
+      "comparisonKind" : "PERCENT_AVAILABLE",
+      "direction" : "UP",
+      "effect" : "NEUTRAL",
+      "metricState" : "READY",
+      "sufficiency" : "SUFFICIENT",
+      "materiality" : "MATERIAL",
+      "currentSample" : null,
+      "previousSample" : null,
+      "evidenceRefs" : [ "STORE.RETURN_DOCUMENT_COUNT" ]
+    },
+    "identityValid" : true
+  },
+  "factors" : [ {
+    "factorId" : "factor:return_revenue",
+    "kind" : "RETURN_CHANGE",
+    "title" : "Возвраты выросли",
+    "detail" : "Возвраты: 100 ₽ против 50 ₽ (+100.0%)",
+    "comparison" : {
+      "metricId" : "store:return_revenue",
+      "code" : "RETURN_REVENUE",
+      "label" : "Возвраты",
+      "unit" : "RUB",
+      "current" : 100.00,
+      "previous" : 50.00,
+      "absoluteDelta" : 50.00,
+      "changePercent" : 100.00,
+      "comparisonKind" : "PERCENT_AVAILABLE",
+      "direction" : "UP",
+      "effect" : "NEGATIVE",
+      "metricState" : "READY",
+      "sufficiency" : "SUFFICIENT",
+      "materiality" : "MATERIAL",
+      "currentSample" : null,
+      "previousSample" : null,
+      "evidenceRefs" : [ "STORE.RETURN_REVENUE" ]
+    },
+    "contributionAmount" : -50.00,
+    "effect" : "NEGATIVE",
+    "evidenceRefs" : [ "STORE.RETURN_REVENUE" ]
+  }, {
+    "factorId" : "factor:devices_revenue",
+    "kind" : "STRUCTURE_CHANGE",
+    "title" : "Выручка направления «Техника» выросла",
+    "detail" : "Техника: 700 ₽ против 600 ₽ (+16.7%)",
+    "comparison" : {
+      "metricId" : "structure:devices:revenue",
+      "code" : "DEVICES_REVENUE",
+      "label" : "Техника",
+      "unit" : "RUB",
+      "current" : 700.00,
+      "previous" : 600.00,
+      "absoluteDelta" : 100.00,
+      "changePercent" : 16.67,
+      "comparisonKind" : "PERCENT_AVAILABLE",
+      "direction" : "UP",
+      "effect" : "POSITIVE",
+      "metricState" : "READY",
+      "sufficiency" : "SUFFICIENT",
+      "materiality" : "MATERIAL",
+      "currentSample" : null,
+      "previousSample" : null,
+      "evidenceRefs" : [ "STORE.STRUCTURE.DEVICES.REVENUE" ]
+    },
+    "contributionAmount" : null,
+    "effect" : "POSITIVE",
+    "evidenceRefs" : [ "STORE.STRUCTURE.DEVICES.REVENUE" ]
+  } ],
+  "salesStructure" : {
+    "blockId" : "sales-structure",
+    "state" : "READY",
+    "root" : {
+      "nodeId" : "structure:net-revenue",
+      "code" : "NET_REVENUE",
+      "label" : "Чистая выручка",
+      "subtotal" : true,
+      "childrenIncludedInValue" : true,
+      "comparison" : {
+        "metricId" : "structure:net-revenue:revenue",
+        "code" : "NET_REVENUE_REVENUE",
+        "label" : "Чистая выручка",
+        "unit" : "RUB",
+        "current" : 1000.00,
+        "previous" : 900.00,
+        "absoluteDelta" : 100.00,
+        "changePercent" : 11.11,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "UP",
+        "effect" : "POSITIVE",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_MATERIAL",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "STORE.STRUCTURE.NET_REVENUE.REVENUE" ]
+      },
+      "shareComparison" : {
+        "metricId" : "structure:net-revenue:share",
+        "code" : "NET_REVENUE_SHARE",
+        "label" : "Доля: Чистая выручка",
+        "unit" : "PERCENT",
+        "current" : 100.00,
+        "previous" : 100.00,
+        "absoluteDelta" : 0.00,
+        "changePercent" : 0.00,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "FLAT",
+        "effect" : "NEUTRAL",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_MATERIAL",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "STORE.STRUCTURE.NET_REVENUE.SHARE" ]
+      },
+      "children" : [ {
+        "nodeId" : "structure:devices",
+        "code" : "DEVICES",
+        "label" : "Техника",
+        "subtotal" : true,
+        "childrenIncludedInValue" : true,
+        "comparison" : {
+          "metricId" : "structure:devices:revenue",
+          "code" : "DEVICES_REVENUE",
+          "label" : "Техника",
+          "unit" : "RUB",
+          "current" : 700.00,
+          "previous" : 600.00,
+          "absoluteDelta" : 100.00,
+          "changePercent" : 16.67,
+          "comparisonKind" : "PERCENT_AVAILABLE",
+          "direction" : "UP",
+          "effect" : "POSITIVE",
+          "metricState" : "READY",
+          "sufficiency" : "SUFFICIENT",
+          "materiality" : "MATERIAL",
+          "currentSample" : null,
+          "previousSample" : null,
+          "evidenceRefs" : [ "STORE.STRUCTURE.DEVICES.REVENUE" ]
+        },
+        "shareComparison" : {
+          "metricId" : "structure:devices:share",
+          "code" : "DEVICES_SHARE",
+          "label" : "Доля: Техника",
+          "unit" : "PERCENT",
+          "current" : 70.00,
+          "previous" : 66.67,
+          "absoluteDelta" : 3.33,
+          "changePercent" : 4.99,
+          "comparisonKind" : "PERCENT_AVAILABLE",
+          "direction" : "UP",
+          "effect" : "NEUTRAL",
+          "metricState" : "READY",
+          "sufficiency" : "SUFFICIENT",
+          "materiality" : "MATERIAL",
+          "currentSample" : null,
+          "previousSample" : null,
+          "evidenceRefs" : [ "STORE.STRUCTURE.DEVICES.SHARE" ]
+        },
+        "children" : [ {
+          "nodeId" : "structure:phones",
+          "code" : "PHONES",
+          "label" : "Телефоны",
+          "subtotal" : false,
+          "childrenIncludedInValue" : false,
+          "comparison" : {
+            "metricId" : "structure:phones:revenue",
+            "code" : "PHONES_REVENUE",
+            "label" : "Телефоны",
+            "unit" : "RUB",
+            "current" : 500.00,
+            "previous" : 450.00,
+            "absoluteDelta" : 50.00,
+            "changePercent" : 11.11,
+            "comparisonKind" : "PERCENT_AVAILABLE",
+            "direction" : "UP",
+            "effect" : "POSITIVE",
+            "metricState" : "READY",
+            "sufficiency" : "SUFFICIENT",
+            "materiality" : "NOT_MATERIAL",
+            "currentSample" : null,
+            "previousSample" : null,
+            "evidenceRefs" : [ "STORE.STRUCTURE.PHONES.REVENUE" ]
+          },
+          "shareComparison" : {
+            "metricId" : "structure:phones:share",
+            "code" : "PHONES_SHARE",
+            "label" : "Доля: Телефоны",
+            "unit" : "PERCENT",
+            "current" : 50.00,
+            "previous" : 50.00,
+            "absoluteDelta" : 0.00,
+            "changePercent" : 0.00,
+            "comparisonKind" : "PERCENT_AVAILABLE",
+            "direction" : "FLAT",
+            "effect" : "NEUTRAL",
+            "metricState" : "READY",
+            "sufficiency" : "SUFFICIENT",
+            "materiality" : "NOT_MATERIAL",
+            "currentSample" : null,
+            "previousSample" : null,
+            "evidenceRefs" : [ "STORE.STRUCTURE.PHONES.SHARE" ]
+          },
+          "children" : [ ]
+        }, {
+          "nodeId" : "structure:other-devices",
+          "code" : "OTHER_DEVICES",
+          "label" : "Другая техника",
+          "subtotal" : false,
+          "childrenIncludedInValue" : false,
+          "comparison" : {
+            "metricId" : "structure:other-devices:revenue",
+            "code" : "OTHER_DEVICES_REVENUE",
+            "label" : "Другая техника",
+            "unit" : "RUB",
+            "current" : 200.00,
+            "previous" : 150.00,
+            "absoluteDelta" : 50.00,
+            "changePercent" : 33.33,
+            "comparisonKind" : "PERCENT_AVAILABLE",
+            "direction" : "UP",
+            "effect" : "POSITIVE",
+            "metricState" : "READY",
+            "sufficiency" : "SUFFICIENT",
+            "materiality" : "MATERIAL",
+            "currentSample" : null,
+            "previousSample" : null,
+            "evidenceRefs" : [ "STORE.STRUCTURE.OTHER_DEVICES.REVENUE" ]
+          },
+          "shareComparison" : {
+            "metricId" : "structure:other-devices:share",
+            "code" : "OTHER_DEVICES_SHARE",
+            "label" : "Доля: Другая техника",
+            "unit" : "PERCENT",
+            "current" : 20.00,
+            "previous" : 16.67,
+            "absoluteDelta" : 3.33,
+            "changePercent" : 19.98,
+            "comparisonKind" : "PERCENT_AVAILABLE",
+            "direction" : "UP",
+            "effect" : "NEUTRAL",
+            "metricState" : "READY",
+            "sufficiency" : "SUFFICIENT",
+            "materiality" : "MATERIAL",
+            "currentSample" : null,
+            "previousSample" : null,
+            "evidenceRefs" : [ "STORE.STRUCTURE.OTHER_DEVICES.SHARE" ]
+          },
+          "children" : [ ]
+        } ]
+      }, {
+        "nodeId" : "structure:additional-revenue",
+        "code" : "ADDITIONAL_REVENUE",
+        "label" : "Дополнительная выручка",
+        "subtotal" : true,
+        "childrenIncludedInValue" : true,
+        "comparison" : {
+          "metricId" : "structure:additional-revenue:revenue",
+          "code" : "ADDITIONAL_REVENUE_REVENUE",
+          "label" : "Дополнительная выручка",
+          "unit" : "RUB",
+          "current" : 200.00,
+          "previous" : 180.00,
+          "absoluteDelta" : 20.00,
+          "changePercent" : 11.11,
+          "comparisonKind" : "PERCENT_AVAILABLE",
+          "direction" : "UP",
+          "effect" : "POSITIVE",
+          "metricState" : "READY",
+          "sufficiency" : "SUFFICIENT",
+          "materiality" : "NOT_MATERIAL",
+          "currentSample" : null,
+          "previousSample" : null,
+          "evidenceRefs" : [ "STORE.STRUCTURE.ADDITIONAL_REVENUE.REVENUE" ]
+        },
+        "shareComparison" : {
+          "metricId" : "structure:additional-revenue:share",
+          "code" : "ADDITIONAL_REVENUE_SHARE",
+          "label" : "Доля: Дополнительная выручка",
+          "unit" : "PERCENT",
+          "current" : 20.00,
+          "previous" : 20.00,
+          "absoluteDelta" : 0.00,
+          "changePercent" : 0.00,
+          "comparisonKind" : "PERCENT_AVAILABLE",
+          "direction" : "FLAT",
+          "effect" : "NEUTRAL",
+          "metricState" : "READY",
+          "sufficiency" : "SUFFICIENT",
+          "materiality" : "NOT_MATERIAL",
+          "currentSample" : null,
+          "previousSample" : null,
+          "evidenceRefs" : [ "STORE.STRUCTURE.ADDITIONAL_REVENUE.SHARE" ]
+        },
+        "children" : [ {
+          "nodeId" : "structure:accessory",
+          "code" : "ACCESSORY",
+          "label" : "Аксессуары",
+          "subtotal" : false,
+          "childrenIncludedInValue" : false,
+          "comparison" : {
+            "metricId" : "structure:accessory:revenue",
+            "code" : "ACCESSORY_REVENUE",
+            "label" : "Аксессуары",
+            "unit" : "RUB",
+            "current" : 100.00,
+            "previous" : 90.00,
+            "absoluteDelta" : 10.00,
+            "changePercent" : 11.11,
+            "comparisonKind" : "PERCENT_AVAILABLE",
+            "direction" : "UP",
+            "effect" : "POSITIVE",
+            "metricState" : "READY",
+            "sufficiency" : "SUFFICIENT",
+            "materiality" : "NOT_MATERIAL",
+            "currentSample" : null,
+            "previousSample" : null,
+            "evidenceRefs" : [ "STORE.STRUCTURE.ACCESSORY.REVENUE" ]
+          },
+          "shareComparison" : {
+            "metricId" : "structure:accessory:share",
+            "code" : "ACCESSORY_SHARE",
+            "label" : "Доля: Аксессуары",
+            "unit" : "PERCENT",
+            "current" : 10.00,
+            "previous" : 10.00,
+            "absoluteDelta" : 0.00,
+            "changePercent" : 0.00,
+            "comparisonKind" : "PERCENT_AVAILABLE",
+            "direction" : "FLAT",
+            "effect" : "NEUTRAL",
+            "metricState" : "READY",
+            "sufficiency" : "SUFFICIENT",
+            "materiality" : "NOT_MATERIAL",
+            "currentSample" : null,
+            "previousSample" : null,
+            "evidenceRefs" : [ "STORE.STRUCTURE.ACCESSORY.SHARE" ]
+          },
+          "children" : [ ]
+        }, {
+          "nodeId" : "structure:service",
+          "code" : "SERVICE",
+          "label" : "Услуги, гарантии и защита",
+          "subtotal" : false,
+          "childrenIncludedInValue" : false,
+          "comparison" : {
+            "metricId" : "structure:service:revenue",
+            "code" : "SERVICE_REVENUE",
+            "label" : "Услуги, гарантии и защита",
+            "unit" : "RUB",
+            "current" : 100.00,
+            "previous" : 90.00,
+            "absoluteDelta" : 10.00,
+            "changePercent" : 11.11,
+            "comparisonKind" : "PERCENT_AVAILABLE",
+            "direction" : "UP",
+            "effect" : "POSITIVE",
+            "metricState" : "READY",
+            "sufficiency" : "SUFFICIENT",
+            "materiality" : "NOT_MATERIAL",
+            "currentSample" : null,
+            "previousSample" : null,
+            "evidenceRefs" : [ "STORE.STRUCTURE.SERVICE.REVENUE" ]
+          },
+          "shareComparison" : {
+            "metricId" : "structure:service:share",
+            "code" : "SERVICE_SHARE",
+            "label" : "Доля: Услуги, гарантии и защита",
+            "unit" : "PERCENT",
+            "current" : 10.00,
+            "previous" : 10.00,
+            "absoluteDelta" : 0.00,
+            "changePercent" : 0.00,
+            "comparisonKind" : "PERCENT_AVAILABLE",
+            "direction" : "FLAT",
+            "effect" : "NEUTRAL",
+            "metricState" : "READY",
+            "sufficiency" : "SUFFICIENT",
+            "materiality" : "NOT_MATERIAL",
+            "currentSample" : null,
+            "previousSample" : null,
+            "evidenceRefs" : [ "STORE.STRUCTURE.SERVICE.SHARE" ]
+          },
+          "children" : [ ]
+        }, {
+          "nodeId" : "structure:other-additional",
+          "code" : "OTHER_ADDITIONAL",
+          "label" : "Прочие дополнительные категории",
+          "subtotal" : false,
+          "childrenIncludedInValue" : false,
+          "comparison" : {
+            "metricId" : "structure:other-additional:revenue",
+            "code" : "OTHER_ADDITIONAL_REVENUE",
+            "label" : "Прочие дополнительные категории",
+            "unit" : "RUB",
+            "current" : 0.00,
+            "previous" : 0.00,
+            "absoluteDelta" : 0.00,
+            "changePercent" : null,
+            "comparisonKind" : "NO_BASE",
+            "direction" : "FLAT",
+            "effect" : "NEUTRAL",
+            "metricState" : "READY",
+            "sufficiency" : "SUFFICIENT",
+            "materiality" : "NOT_EVALUATED",
+            "currentSample" : null,
+            "previousSample" : null,
+            "evidenceRefs" : [ "STORE.STRUCTURE.OTHER_ADDITIONAL.REVENUE" ]
+          },
+          "shareComparison" : {
+            "metricId" : "structure:other-additional:share",
+            "code" : "OTHER_ADDITIONAL_SHARE",
+            "label" : "Доля: Прочие дополнительные категории",
+            "unit" : "PERCENT",
+            "current" : 0.00,
+            "previous" : 0.00,
+            "absoluteDelta" : 0.00,
+            "changePercent" : null,
+            "comparisonKind" : "NO_BASE",
+            "direction" : "FLAT",
+            "effect" : "NEUTRAL",
+            "metricState" : "READY",
+            "sufficiency" : "SUFFICIENT",
+            "materiality" : "NOT_MATERIAL",
+            "currentSample" : null,
+            "previousSample" : null,
+            "evidenceRefs" : [ "STORE.STRUCTURE.OTHER_ADDITIONAL.SHARE" ]
+          },
+          "children" : [ ]
+        } ]
+      }, {
+        "nodeId" : "structure:other",
+        "code" : "OTHER",
+        "label" : "Остальное",
+        "subtotal" : false,
+        "childrenIncludedInValue" : false,
+        "comparison" : {
+          "metricId" : "structure:other:revenue",
+          "code" : "OTHER_REVENUE",
+          "label" : "Остальное",
+          "unit" : "RUB",
+          "current" : 100.00,
+          "previous" : 120.00,
+          "absoluteDelta" : -20.00,
+          "changePercent" : -16.67,
+          "comparisonKind" : "PERCENT_AVAILABLE",
+          "direction" : "DOWN",
+          "effect" : "NEGATIVE",
+          "metricState" : "READY",
+          "sufficiency" : "SUFFICIENT",
+          "materiality" : "MATERIAL",
+          "currentSample" : null,
+          "previousSample" : null,
+          "evidenceRefs" : [ "STORE.STRUCTURE.OTHER.REVENUE" ]
+        },
+        "shareComparison" : {
+          "metricId" : "structure:other:share",
+          "code" : "OTHER_SHARE",
+          "label" : "Доля: Остальное",
+          "unit" : "PERCENT",
+          "current" : 10.00,
+          "previous" : 13.33,
+          "absoluteDelta" : -3.33,
+          "changePercent" : -24.98,
+          "comparisonKind" : "PERCENT_AVAILABLE",
+          "direction" : "DOWN",
+          "effect" : "NEUTRAL",
+          "metricState" : "READY",
+          "sufficiency" : "SUFFICIENT",
+          "materiality" : "MATERIAL",
+          "currentSample" : null,
+          "previousSample" : null,
+          "evidenceRefs" : [ "STORE.STRUCTURE.OTHER.SHARE" ]
+        },
+        "children" : [ ]
+      } ]
+    },
+    "attachMetrics" : [ ],
+    "limitations" : [ ]
+  },
+  "team" : {
+    "blockId" : "team",
+    "state" : "READY",
+    "roster" : {
+      "activeAssignedWithActivity" : 3,
+      "participatesInBenchmark" : 3,
+      "sufficientByAnyMetric" : 3,
+      "limitedOrInsufficient" : 0,
+      "excludedFromBenchmark" : 0
+    },
+    "observations" : [ {
+      "observationId" : "team:net_revenue:positive",
+      "title" : "Чистая выручка вырос у нескольких сотрудников",
+      "detail" : "Изменение выше порога отмечено у 2 сотрудников",
+      "effect" : "POSITIVE",
+      "evidenceRefs" : [ "TEAM.NET_REVENUE.POSITIVE" ]
+    }, {
+      "observationId" : "team:revenue_per_hour:positive",
+      "title" : "Выручка в час вырос у нескольких сотрудников",
+      "detail" : "Изменение выше порога отмечено у 2 сотрудников",
+      "effect" : "POSITIVE",
+      "evidenceRefs" : [ "TEAM.REVENUE_PER_HOUR.POSITIVE" ]
+    } ],
+    "attentionEmployeeCount" : 0,
+    "benchmarkPolicy" : {
+      "method" : "MEDIAN",
+      "minimumEligibleCount" : 3,
+      "label" : "Медиана магазина, 3 сотрудников"
+    },
+    "limitations" : [ ]
+  },
+  "employees" : [ {
+    "employeePublicId" : "d52840bc-99b9-4662-b724-7b5be5dfccbf",
+    "displayName" : "Анна",
+    "participatesInBenchmark" : true,
+    "sortGroup" : "POSITIVE",
+    "metrics" : {
+      "completedSales" : {
+        "metricId" : "employee:d52840bc-99b9-4662-b724-7b5be5dfccbf:completed_sales",
+        "code" : "COMPLETED_SALES",
+        "label" : "Количество продаж",
+        "unit" : "COUNT",
+        "current" : 6,
+        "previous" : 6,
+        "absoluteDelta" : 0,
+        "changePercent" : 0.00,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "FLAT",
+        "effect" : "NEUTRAL",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_MATERIAL",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.COMPLETED_SALES" ]
+      },
+      "netRevenue" : {
+        "metricId" : "employee:d52840bc-99b9-4662-b724-7b5be5dfccbf:net_revenue",
+        "code" : "NET_REVENUE",
+        "label" : "Чистая выручка",
+        "unit" : "RUB",
+        "current" : 400.00,
+        "previous" : 360.00,
+        "absoluteDelta" : 40.00,
+        "changePercent" : 11.11,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "UP",
+        "effect" : "POSITIVE",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "MATERIAL",
+        "currentSample" : {
+          "numerator" : 400.00,
+          "denominator" : 6,
+          "numeratorLabel" : "Чистая выручка сотрудника",
+          "denominatorLabel" : "Завершённые продажи"
+        },
+        "previousSample" : {
+          "numerator" : 360.00,
+          "denominator" : 6,
+          "numeratorLabel" : "Чистая выручка сотрудника",
+          "denominatorLabel" : "Завершённые продажи"
+        },
+        "evidenceRefs" : [ "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.NET_REVENUE" ]
+      },
+      "additionalRevenue" : {
+        "metricId" : "employee:d52840bc-99b9-4662-b724-7b5be5dfccbf:additional_revenue",
+        "code" : "ADDITIONAL_REVENUE",
+        "label" : "Дополнительная выручка",
+        "unit" : "RUB",
+        "current" : 0,
+        "previous" : 0,
+        "absoluteDelta" : 0,
+        "changePercent" : null,
+        "comparisonKind" : "NO_BASE",
+        "direction" : "FLAT",
+        "effect" : "NEUTRAL",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_EVALUATED",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.ADDITIONAL_REVENUE" ]
+      },
+      "additionalShare" : {
+        "metricId" : "employee:d52840bc-99b9-4662-b724-7b5be5dfccbf:additional_share",
+        "code" : "ADDITIONAL_SHARE",
+        "label" : "Доля дополнительной выручки",
+        "unit" : "PERCENT",
+        "current" : 0.00,
+        "previous" : 0.00,
+        "absoluteDelta" : 0.00,
+        "changePercent" : null,
+        "comparisonKind" : "NO_BASE",
+        "direction" : "FLAT",
+        "effect" : "NEUTRAL",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_MATERIAL",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.ADDITIONAL_SHARE" ]
+      },
+      "shiftCount" : {
+        "metricId" : "employee:d52840bc-99b9-4662-b724-7b5be5dfccbf:shift_count",
+        "code" : "SHIFT_COUNT",
+        "label" : "Количество смен",
+        "unit" : "COUNT",
+        "current" : 2,
+        "previous" : 2,
+        "absoluteDelta" : 0,
+        "changePercent" : 0.00,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "FLAT",
+        "effect" : "NEUTRAL",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_MATERIAL",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.SHIFT_COUNT" ]
+      },
+      "workedHours" : {
+        "metricId" : "employee:d52840bc-99b9-4662-b724-7b5be5dfccbf:worked_hours",
+        "code" : "WORKED_HOURS",
+        "label" : "Отработанные часы",
+        "unit" : "HOURS",
+        "current" : 14.00,
+        "previous" : 14.00,
+        "absoluteDelta" : 0.00,
+        "changePercent" : 0.00,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "FLAT",
+        "effect" : "NEUTRAL",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_MATERIAL",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.WORKED_HOURS" ]
+      },
+      "revenuePerHour" : {
+        "metricId" : "employee:d52840bc-99b9-4662-b724-7b5be5dfccbf:revenue_per_hour",
+        "code" : "REVENUE_PER_HOUR",
+        "label" : "Выручка в час",
+        "unit" : "RUB",
+        "current" : 28.57,
+        "previous" : 25.71,
+        "absoluteDelta" : 2.86,
+        "changePercent" : 11.12,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "UP",
+        "effect" : "POSITIVE",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "MATERIAL",
+        "currentSample" : {
+          "numerator" : 400.00,
+          "denominator" : 14.00,
+          "numeratorLabel" : "Выручка",
+          "denominatorLabel" : "Отработанные часы"
+        },
+        "previousSample" : {
+          "numerator" : 360.00,
+          "denominator" : 14.00,
+          "numeratorLabel" : "Выручка",
+          "denominatorLabel" : "Отработанные часы"
+        },
+        "evidenceRefs" : [ "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.REVENUE_PER_HOUR" ]
+      },
+      "attachMetrics" : [ ]
+    },
+    "ownDynamics" : [ {
+      "observationId" : "employee:d52840bc-99b9-4662-b724-7b5be5dfccbf:net_revenue",
+      "title" : "Чистая выручка вырос",
+      "detail" : "Текущая неделя: 400 ₽; предыдущая: 360 ₽",
+      "effect" : "POSITIVE",
+      "evidenceRefs" : [ "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.NET_REVENUE" ]
+    }, {
+      "observationId" : "employee:d52840bc-99b9-4662-b724-7b5be5dfccbf:revenue_per_hour",
+      "title" : "Выручка в час вырос",
+      "detail" : "Текущая неделя: 29 ₽; предыдущая: 26 ₽",
+      "effect" : "POSITIVE",
+      "evidenceRefs" : [ "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.REVENUE_PER_HOUR" ]
+    } ],
+    "peerComparison" : {
+      "metricCode" : "NET_REVENUE",
+      "employeeValue" : 400.00,
+      "benchmarkValue" : 350.00,
+      "benchmarkMethod" : "MEDIAN",
+      "eligibleCount" : 3,
+      "absoluteDelta" : 50.00,
+      "changePercent" : 14.29,
+      "effect" : "POSITIVE",
+      "evidenceRefs" : [ "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.NET_REVENUE", "TEAM.MEDIAN.NET_REVENUE" ]
+    },
+    "strength" : {
+      "observationId" : "employee:d52840bc-99b9-4662-b724-7b5be5dfccbf:net_revenue",
+      "title" : "Чистая выручка вырос",
+      "detail" : "Текущая неделя: 400 ₽; предыдущая: 360 ₽",
+      "effect" : "POSITIVE",
+      "evidenceRefs" : [ "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.NET_REVENUE" ]
+    },
+    "attention" : null,
+    "action" : null,
+    "limitations" : [ ]
+  }, {
+    "employeePublicId" : "b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b",
+    "displayName" : "Вера",
+    "participatesInBenchmark" : true,
+    "sortGroup" : "POSITIVE",
+    "metrics" : {
+      "completedSales" : {
+        "metricId" : "employee:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b:completed_sales",
+        "code" : "COMPLETED_SALES",
+        "label" : "Количество продаж",
+        "unit" : "COUNT",
+        "current" : 6,
+        "previous" : 6,
+        "absoluteDelta" : 0,
+        "changePercent" : 0.00,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "FLAT",
+        "effect" : "NEUTRAL",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_MATERIAL",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.COMPLETED_SALES" ]
+      },
+      "netRevenue" : {
+        "metricId" : "employee:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b:net_revenue",
+        "code" : "NET_REVENUE",
+        "label" : "Чистая выручка",
+        "unit" : "RUB",
+        "current" : 250.00,
+        "previous" : 220.00,
+        "absoluteDelta" : 30.00,
+        "changePercent" : 13.64,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "UP",
+        "effect" : "POSITIVE",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "MATERIAL",
+        "currentSample" : {
+          "numerator" : 250.00,
+          "denominator" : 6,
+          "numeratorLabel" : "Чистая выручка сотрудника",
+          "denominatorLabel" : "Завершённые продажи"
+        },
+        "previousSample" : {
+          "numerator" : 220.00,
+          "denominator" : 6,
+          "numeratorLabel" : "Чистая выручка сотрудника",
+          "denominatorLabel" : "Завершённые продажи"
+        },
+        "evidenceRefs" : [ "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.NET_REVENUE" ]
+      },
+      "additionalRevenue" : {
+        "metricId" : "employee:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b:additional_revenue",
+        "code" : "ADDITIONAL_REVENUE",
+        "label" : "Дополнительная выручка",
+        "unit" : "RUB",
+        "current" : 0,
+        "previous" : 0,
+        "absoluteDelta" : 0,
+        "changePercent" : null,
+        "comparisonKind" : "NO_BASE",
+        "direction" : "FLAT",
+        "effect" : "NEUTRAL",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_EVALUATED",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.ADDITIONAL_REVENUE" ]
+      },
+      "additionalShare" : {
+        "metricId" : "employee:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b:additional_share",
+        "code" : "ADDITIONAL_SHARE",
+        "label" : "Доля дополнительной выручки",
+        "unit" : "PERCENT",
+        "current" : 0.00,
+        "previous" : 0.00,
+        "absoluteDelta" : 0.00,
+        "changePercent" : null,
+        "comparisonKind" : "NO_BASE",
+        "direction" : "FLAT",
+        "effect" : "NEUTRAL",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_MATERIAL",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.ADDITIONAL_SHARE" ]
+      },
+      "shiftCount" : {
+        "metricId" : "employee:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b:shift_count",
+        "code" : "SHIFT_COUNT",
+        "label" : "Количество смен",
+        "unit" : "COUNT",
+        "current" : 2,
+        "previous" : 2,
+        "absoluteDelta" : 0,
+        "changePercent" : 0.00,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "FLAT",
+        "effect" : "NEUTRAL",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_MATERIAL",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.SHIFT_COUNT" ]
+      },
+      "workedHours" : {
+        "metricId" : "employee:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b:worked_hours",
+        "code" : "WORKED_HOURS",
+        "label" : "Отработанные часы",
+        "unit" : "HOURS",
+        "current" : 14.00,
+        "previous" : 14.00,
+        "absoluteDelta" : 0.00,
+        "changePercent" : 0.00,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "FLAT",
+        "effect" : "NEUTRAL",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_MATERIAL",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.WORKED_HOURS" ]
+      },
+      "revenuePerHour" : {
+        "metricId" : "employee:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b:revenue_per_hour",
+        "code" : "REVENUE_PER_HOUR",
+        "label" : "Выручка в час",
+        "unit" : "RUB",
+        "current" : 17.86,
+        "previous" : 15.71,
+        "absoluteDelta" : 2.15,
+        "changePercent" : 13.69,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "UP",
+        "effect" : "POSITIVE",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "MATERIAL",
+        "currentSample" : {
+          "numerator" : 250.00,
+          "denominator" : 14.00,
+          "numeratorLabel" : "Выручка",
+          "denominatorLabel" : "Отработанные часы"
+        },
+        "previousSample" : {
+          "numerator" : 220.00,
+          "denominator" : 14.00,
+          "numeratorLabel" : "Выручка",
+          "denominatorLabel" : "Отработанные часы"
+        },
+        "evidenceRefs" : [ "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.REVENUE_PER_HOUR" ]
+      },
+      "attachMetrics" : [ ]
+    },
+    "ownDynamics" : [ {
+      "observationId" : "employee:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b:net_revenue",
+      "title" : "Чистая выручка вырос",
+      "detail" : "Текущая неделя: 250 ₽; предыдущая: 220 ₽",
+      "effect" : "POSITIVE",
+      "evidenceRefs" : [ "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.NET_REVENUE" ]
+    }, {
+      "observationId" : "employee:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b:revenue_per_hour",
+      "title" : "Выручка в час вырос",
+      "detail" : "Текущая неделя: 18 ₽; предыдущая: 16 ₽",
+      "effect" : "POSITIVE",
+      "evidenceRefs" : [ "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.REVENUE_PER_HOUR" ]
+    } ],
+    "peerComparison" : {
+      "metricCode" : "NET_REVENUE",
+      "employeeValue" : 250.00,
+      "benchmarkValue" : 350.00,
+      "benchmarkMethod" : "MEDIAN",
+      "eligibleCount" : 3,
+      "absoluteDelta" : -100.00,
+      "changePercent" : -28.57,
+      "effect" : "NEGATIVE",
+      "evidenceRefs" : [ "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.NET_REVENUE", "TEAM.MEDIAN.NET_REVENUE" ]
+    },
+    "strength" : {
+      "observationId" : "employee:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b:net_revenue",
+      "title" : "Чистая выручка вырос",
+      "detail" : "Текущая неделя: 250 ₽; предыдущая: 220 ₽",
+      "effect" : "POSITIVE",
+      "evidenceRefs" : [ "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.NET_REVENUE" ]
+    },
+    "attention" : null,
+    "action" : null,
+    "limitations" : [ ]
+  }, {
+    "employeePublicId" : "f5748bf4-d59b-443b-a4bd-e6507cdf3dbe",
+    "displayName" : "Борис",
+    "participatesInBenchmark" : true,
+    "sortGroup" : "STABLE",
+    "metrics" : {
+      "completedSales" : {
+        "metricId" : "employee:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe:completed_sales",
+        "code" : "COMPLETED_SALES",
+        "label" : "Количество продаж",
+        "unit" : "COUNT",
+        "current" : 6,
+        "previous" : 6,
+        "absoluteDelta" : 0,
+        "changePercent" : 0.00,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "FLAT",
+        "effect" : "NEUTRAL",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_MATERIAL",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.COMPLETED_SALES" ]
+      },
+      "netRevenue" : {
+        "metricId" : "employee:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe:net_revenue",
+        "code" : "NET_REVENUE",
+        "label" : "Чистая выручка",
+        "unit" : "RUB",
+        "current" : 350.00,
+        "previous" : 320.00,
+        "absoluteDelta" : 30.00,
+        "changePercent" : 9.38,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "UP",
+        "effect" : "POSITIVE",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_MATERIAL",
+        "currentSample" : {
+          "numerator" : 350.00,
+          "denominator" : 6,
+          "numeratorLabel" : "Чистая выручка сотрудника",
+          "denominatorLabel" : "Завершённые продажи"
+        },
+        "previousSample" : {
+          "numerator" : 320.00,
+          "denominator" : 6,
+          "numeratorLabel" : "Чистая выручка сотрудника",
+          "denominatorLabel" : "Завершённые продажи"
+        },
+        "evidenceRefs" : [ "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.NET_REVENUE" ]
+      },
+      "additionalRevenue" : {
+        "metricId" : "employee:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe:additional_revenue",
+        "code" : "ADDITIONAL_REVENUE",
+        "label" : "Дополнительная выручка",
+        "unit" : "RUB",
+        "current" : 0,
+        "previous" : 0,
+        "absoluteDelta" : 0,
+        "changePercent" : null,
+        "comparisonKind" : "NO_BASE",
+        "direction" : "FLAT",
+        "effect" : "NEUTRAL",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_EVALUATED",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.ADDITIONAL_REVENUE" ]
+      },
+      "additionalShare" : {
+        "metricId" : "employee:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe:additional_share",
+        "code" : "ADDITIONAL_SHARE",
+        "label" : "Доля дополнительной выручки",
+        "unit" : "PERCENT",
+        "current" : 0.00,
+        "previous" : 0.00,
+        "absoluteDelta" : 0.00,
+        "changePercent" : null,
+        "comparisonKind" : "NO_BASE",
+        "direction" : "FLAT",
+        "effect" : "NEUTRAL",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_MATERIAL",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.ADDITIONAL_SHARE" ]
+      },
+      "shiftCount" : {
+        "metricId" : "employee:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe:shift_count",
+        "code" : "SHIFT_COUNT",
+        "label" : "Количество смен",
+        "unit" : "COUNT",
+        "current" : 2,
+        "previous" : 2,
+        "absoluteDelta" : 0,
+        "changePercent" : 0.00,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "FLAT",
+        "effect" : "NEUTRAL",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_MATERIAL",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.SHIFT_COUNT" ]
+      },
+      "workedHours" : {
+        "metricId" : "employee:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe:worked_hours",
+        "code" : "WORKED_HOURS",
+        "label" : "Отработанные часы",
+        "unit" : "HOURS",
+        "current" : 14.00,
+        "previous" : 14.00,
+        "absoluteDelta" : 0.00,
+        "changePercent" : 0.00,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "FLAT",
+        "effect" : "NEUTRAL",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_MATERIAL",
+        "currentSample" : null,
+        "previousSample" : null,
+        "evidenceRefs" : [ "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.WORKED_HOURS" ]
+      },
+      "revenuePerHour" : {
+        "metricId" : "employee:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe:revenue_per_hour",
+        "code" : "REVENUE_PER_HOUR",
+        "label" : "Выручка в час",
+        "unit" : "RUB",
+        "current" : 25.00,
+        "previous" : 22.86,
+        "absoluteDelta" : 2.14,
+        "changePercent" : 9.36,
+        "comparisonKind" : "PERCENT_AVAILABLE",
+        "direction" : "UP",
+        "effect" : "POSITIVE",
+        "metricState" : "READY",
+        "sufficiency" : "SUFFICIENT",
+        "materiality" : "NOT_MATERIAL",
+        "currentSample" : {
+          "numerator" : 350.00,
+          "denominator" : 14.00,
+          "numeratorLabel" : "Выручка",
+          "denominatorLabel" : "Отработанные часы"
+        },
+        "previousSample" : {
+          "numerator" : 320.00,
+          "denominator" : 14.00,
+          "numeratorLabel" : "Выручка",
+          "denominatorLabel" : "Отработанные часы"
+        },
+        "evidenceRefs" : [ "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.REVENUE_PER_HOUR" ]
+      },
+      "attachMetrics" : [ ]
+    },
+    "ownDynamics" : [ ],
+    "peerComparison" : {
+      "metricCode" : "NET_REVENUE",
+      "employeeValue" : 350.00,
+      "benchmarkValue" : 350.00,
+      "benchmarkMethod" : "MEDIAN",
+      "eligibleCount" : 3,
+      "absoluteDelta" : 0.00,
+      "changePercent" : 0.00,
+      "effect" : "NEUTRAL",
+      "evidenceRefs" : [ "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.NET_REVENUE", "TEAM.MEDIAN.NET_REVENUE" ]
+    },
+    "strength" : null,
+    "attention" : null,
+    "action" : null,
+    "limitations" : [ ]
+  } ],
+  "actions" : [ {
+    "actionId" : "action:restore:return_revenue",
+    "priority" : "HIGH",
+    "actionType" : "RESTORE_METRIC",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "title" : "Проанализировать рост возвратов",
+    "metricCode" : "RETURN_REVENUE",
+    "target" : {
+      "operator" : "AT_MOST",
+      "value" : 50.00,
+      "unit" : "RUB"
+    },
+    "check" : "Сравнить следующую полную неделю с 50 ₽",
+    "horizon" : "NEXT_FULL_WEEK",
+    "generatedBy" : "DETERMINISTIC",
+    "evidenceRefs" : [ "STORE.RETURN_REVENUE" ]
+  } ],
+  "limitations" : [ ],
+  "evidence" : [ {
+    "evidenceRef" : "STORE.NET_REVENUE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "NET_REVENUE",
+    "label" : "Чистая выручка",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 1000.00,
+    "previousValue" : 900.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.GROSS_PROFIT",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "GROSS_PROFIT",
+    "label" : "Валовая прибыль",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 400.00,
+    "previousValue" : 360.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.MARGIN_PERCENT",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "MARGIN_PERCENT",
+    "label" : "Маржа",
+    "unit" : "PERCENT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 40.00,
+    "previousValue" : 40.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.AVERAGE_SALE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "AVERAGE_SALE",
+    "label" : "Средняя продажа",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 61.11,
+    "previousValue" : 52.78,
+    "currentNumerator" : 1100.00,
+    "currentDenominator" : 18,
+    "previousNumerator" : 950.00,
+    "previousDenominator" : 18,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.SALES_REVENUE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "SALES_REVENUE",
+    "label" : "Продажи",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 1100.00,
+    "previousValue" : 950.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.RETURN_REVENUE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "RETURN_REVENUE",
+    "label" : "Возвраты",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 100.00,
+    "previousValue" : 50.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.SALE_DOCUMENT_COUNT",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "SALE_DOCUMENT_COUNT",
+    "label" : "Количество продаж",
+    "unit" : "COUNT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 18,
+    "previousValue" : 18,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.RETURN_DOCUMENT_COUNT",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "RETURN_DOCUMENT_COUNT",
+    "label" : "Количество возвратов",
+    "unit" : "COUNT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 2,
+    "previousValue" : 1,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.NET_REVENUE.REVENUE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "NET_REVENUE_REVENUE",
+    "label" : "Чистая выручка",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 1000.00,
+    "previousValue" : 900.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.NET_REVENUE.SHARE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "NET_REVENUE_SHARE",
+    "label" : "Доля: Чистая выручка",
+    "unit" : "PERCENT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 100.00,
+    "previousValue" : 100.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.DEVICES.REVENUE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "DEVICES_REVENUE",
+    "label" : "Техника",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 700.00,
+    "previousValue" : 600.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.DEVICES.SHARE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "DEVICES_SHARE",
+    "label" : "Доля: Техника",
+    "unit" : "PERCENT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 70.00,
+    "previousValue" : 66.67,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.PHONES.REVENUE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "PHONES_REVENUE",
+    "label" : "Телефоны",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 500.00,
+    "previousValue" : 450.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.PHONES.SHARE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "PHONES_SHARE",
+    "label" : "Доля: Телефоны",
+    "unit" : "PERCENT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 50.00,
+    "previousValue" : 50.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.OTHER_DEVICES.REVENUE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "OTHER_DEVICES_REVENUE",
+    "label" : "Другая техника",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 200.00,
+    "previousValue" : 150.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.OTHER_DEVICES.SHARE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "OTHER_DEVICES_SHARE",
+    "label" : "Доля: Другая техника",
+    "unit" : "PERCENT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 20.00,
+    "previousValue" : 16.67,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.ADDITIONAL_REVENUE.REVENUE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "ADDITIONAL_REVENUE_REVENUE",
+    "label" : "Дополнительная выручка",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 200.00,
+    "previousValue" : 180.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.ADDITIONAL_REVENUE.SHARE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "ADDITIONAL_REVENUE_SHARE",
+    "label" : "Доля: Дополнительная выручка",
+    "unit" : "PERCENT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 20.00,
+    "previousValue" : 20.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.ACCESSORY.REVENUE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "ACCESSORY_REVENUE",
+    "label" : "Аксессуары",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 100.00,
+    "previousValue" : 90.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.ACCESSORY.SHARE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "ACCESSORY_SHARE",
+    "label" : "Доля: Аксессуары",
+    "unit" : "PERCENT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 10.00,
+    "previousValue" : 10.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.SERVICE.REVENUE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "SERVICE_REVENUE",
+    "label" : "Услуги, гарантии и защита",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 100.00,
+    "previousValue" : 90.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.SERVICE.SHARE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "SERVICE_SHARE",
+    "label" : "Доля: Услуги, гарантии и защита",
+    "unit" : "PERCENT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 10.00,
+    "previousValue" : 10.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.OTHER_ADDITIONAL.REVENUE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "OTHER_ADDITIONAL_REVENUE",
+    "label" : "Прочие дополнительные категории",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 0.00,
+    "previousValue" : 0.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_EVALUATED",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.OTHER_ADDITIONAL.SHARE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "OTHER_ADDITIONAL_SHARE",
+    "label" : "Доля: Прочие дополнительные категории",
+    "unit" : "PERCENT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 0.00,
+    "previousValue" : 0.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.OTHER.REVENUE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "OTHER_REVENUE",
+    "label" : "Остальное",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 100.00,
+    "previousValue" : 120.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "STORE.STRUCTURE.OTHER.SHARE",
+    "scope" : "STORE",
+    "employeePublicId" : null,
+    "metricCode" : "OTHER_SHARE",
+    "label" : "Доля: Остальное",
+    "unit" : "PERCENT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 10.00,
+    "previousValue" : 13.33,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.COMPLETED_SALES",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "d52840bc-99b9-4662-b724-7b5be5dfccbf",
+    "metricCode" : "COMPLETED_SALES",
+    "label" : "Количество продаж",
+    "unit" : "COUNT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 6,
+    "previousValue" : 6,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.NET_REVENUE",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "d52840bc-99b9-4662-b724-7b5be5dfccbf",
+    "metricCode" : "NET_REVENUE",
+    "label" : "Чистая выручка",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 400.00,
+    "previousValue" : 360.00,
+    "currentNumerator" : 400.00,
+    "currentDenominator" : 6,
+    "previousNumerator" : 360.00,
+    "previousDenominator" : 6,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.ADDITIONAL_REVENUE",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "d52840bc-99b9-4662-b724-7b5be5dfccbf",
+    "metricCode" : "ADDITIONAL_REVENUE",
+    "label" : "Дополнительная выручка",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 0,
+    "previousValue" : 0,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_EVALUATED",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.ADDITIONAL_SHARE",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "d52840bc-99b9-4662-b724-7b5be5dfccbf",
+    "metricCode" : "ADDITIONAL_SHARE",
+    "label" : "Доля дополнительной выручки",
+    "unit" : "PERCENT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 0.00,
+    "previousValue" : 0.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.SHIFT_COUNT",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "d52840bc-99b9-4662-b724-7b5be5dfccbf",
+    "metricCode" : "SHIFT_COUNT",
+    "label" : "Количество смен",
+    "unit" : "COUNT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 2,
+    "previousValue" : 2,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.WORKED_HOURS",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "d52840bc-99b9-4662-b724-7b5be5dfccbf",
+    "metricCode" : "WORKED_HOURS",
+    "label" : "Отработанные часы",
+    "unit" : "HOURS",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 14.00,
+    "previousValue" : 14.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.REVENUE_PER_HOUR",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "d52840bc-99b9-4662-b724-7b5be5dfccbf",
+    "metricCode" : "REVENUE_PER_HOUR",
+    "label" : "Выручка в час",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 28.57,
+    "previousValue" : 25.71,
+    "currentNumerator" : 400.00,
+    "currentDenominator" : 14.00,
+    "previousNumerator" : 360.00,
+    "previousDenominator" : 14.00,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "TEAM.MEDIAN.NET_REVENUE",
+    "scope" : "TEAM",
+    "employeePublicId" : null,
+    "metricCode" : "NET_REVENUE_MEDIAN",
+    "label" : "Медиана чистой выручки сотрудников",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 350.00,
+    "previousValue" : null,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_EVALUATED",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.COMPLETED_SALES",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b",
+    "metricCode" : "COMPLETED_SALES",
+    "label" : "Количество продаж",
+    "unit" : "COUNT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 6,
+    "previousValue" : 6,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.NET_REVENUE",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b",
+    "metricCode" : "NET_REVENUE",
+    "label" : "Чистая выручка",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 250.00,
+    "previousValue" : 220.00,
+    "currentNumerator" : 250.00,
+    "currentDenominator" : 6,
+    "previousNumerator" : 220.00,
+    "previousDenominator" : 6,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.ADDITIONAL_REVENUE",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b",
+    "metricCode" : "ADDITIONAL_REVENUE",
+    "label" : "Дополнительная выручка",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 0,
+    "previousValue" : 0,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_EVALUATED",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.ADDITIONAL_SHARE",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b",
+    "metricCode" : "ADDITIONAL_SHARE",
+    "label" : "Доля дополнительной выручки",
+    "unit" : "PERCENT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 0.00,
+    "previousValue" : 0.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.SHIFT_COUNT",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b",
+    "metricCode" : "SHIFT_COUNT",
+    "label" : "Количество смен",
+    "unit" : "COUNT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 2,
+    "previousValue" : 2,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.WORKED_HOURS",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b",
+    "metricCode" : "WORKED_HOURS",
+    "label" : "Отработанные часы",
+    "unit" : "HOURS",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 14.00,
+    "previousValue" : 14.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.REVENUE_PER_HOUR",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b",
+    "metricCode" : "REVENUE_PER_HOUR",
+    "label" : "Выручка в час",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 17.86,
+    "previousValue" : 15.71,
+    "currentNumerator" : 250.00,
+    "currentDenominator" : 14.00,
+    "previousNumerator" : 220.00,
+    "previousDenominator" : 14.00,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.COMPLETED_SALES",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "f5748bf4-d59b-443b-a4bd-e6507cdf3dbe",
+    "metricCode" : "COMPLETED_SALES",
+    "label" : "Количество продаж",
+    "unit" : "COUNT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 6,
+    "previousValue" : 6,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.NET_REVENUE",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "f5748bf4-d59b-443b-a4bd-e6507cdf3dbe",
+    "metricCode" : "NET_REVENUE",
+    "label" : "Чистая выручка",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 350.00,
+    "previousValue" : 320.00,
+    "currentNumerator" : 350.00,
+    "currentDenominator" : 6,
+    "previousNumerator" : 320.00,
+    "previousDenominator" : 6,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.ADDITIONAL_REVENUE",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "f5748bf4-d59b-443b-a4bd-e6507cdf3dbe",
+    "metricCode" : "ADDITIONAL_REVENUE",
+    "label" : "Дополнительная выручка",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 0,
+    "previousValue" : 0,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_EVALUATED",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.ADDITIONAL_SHARE",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "f5748bf4-d59b-443b-a4bd-e6507cdf3dbe",
+    "metricCode" : "ADDITIONAL_SHARE",
+    "label" : "Доля дополнительной выручки",
+    "unit" : "PERCENT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 0.00,
+    "previousValue" : 0.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.SHIFT_COUNT",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "f5748bf4-d59b-443b-a4bd-e6507cdf3dbe",
+    "metricCode" : "SHIFT_COUNT",
+    "label" : "Количество смен",
+    "unit" : "COUNT",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 2,
+    "previousValue" : 2,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.WORKED_HOURS",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "f5748bf4-d59b-443b-a4bd-e6507cdf3dbe",
+    "metricCode" : "WORKED_HOURS",
+    "label" : "Отработанные часы",
+    "unit" : "HOURS",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 14.00,
+    "previousValue" : 14.00,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.REVENUE_PER_HOUR",
+    "scope" : "EMPLOYEE",
+    "employeePublicId" : "f5748bf4-d59b-443b-a4bd-e6507cdf3dbe",
+    "metricCode" : "REVENUE_PER_HOUR",
+    "label" : "Выручка в час",
+    "unit" : "RUB",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : 25.00,
+    "previousValue" : 22.86,
+    "currentNumerator" : 350.00,
+    "currentDenominator" : 14.00,
+    "previousNumerator" : 320.00,
+    "previousDenominator" : 14.00,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "NOT_MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "TEAM.NET_REVENUE.POSITIVE",
+    "scope" : "TEAM",
+    "employeePublicId" : null,
+    "metricCode" : "TEAM.NET_REVENUE.POSITIVE",
+    "label" : "Чистая выручка вырос у нескольких сотрудников",
+    "unit" : "STATUS",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : "Изменение выше порога отмечено у 2 сотрудников",
+    "previousValue" : null,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  }, {
+    "evidenceRef" : "TEAM.REVENUE_PER_HOUR.POSITIVE",
+    "scope" : "TEAM",
+    "employeePublicId" : null,
+    "metricCode" : "TEAM.REVENUE_PER_HOUR.POSITIVE",
+    "label" : "Выручка в час вырос у нескольких сотрудников",
+    "unit" : "STATUS",
+    "currentPeriod" : {
+      "start" : "2026-08-17",
+      "end" : "2026-08-23"
+    },
+    "previousPeriod" : {
+      "start" : "2026-08-10",
+      "end" : "2026-08-16"
+    },
+    "currentValue" : "Изменение выше порога отмечено у 2 сотрудников",
+    "previousValue" : null,
+    "currentNumerator" : null,
+    "currentDenominator" : null,
+    "previousNumerator" : null,
+    "previousDenominator" : null,
+    "formulaVersion" : "weekly-metrics-v4",
+    "sufficiency" : "SUFFICIENT",
+    "materiality" : "MATERIAL",
+    "available" : true
+  } ],
+  "aiEnhancement" : {
+    "state" : "DISABLED",
+    "promptVersion" : null,
+    "contentSchemaVersion" : null,
+    "publishedAt" : null
+  }
+}

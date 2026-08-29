@@ -66,6 +66,7 @@ import {
   type TelegramLinkCreated
 } from "./contracts";
 import { weeklyInsightSchema, type WeeklyInsight } from "./weeklyInsightContract";
+import { weeklyReviewSchema, type WeeklyReview } from "./weeklyReviewContract";
 import { ApiClientError, apiClient, isApiClientError, type EtaggedResource } from "./client";
 
 export const queryKeys = {
@@ -76,6 +77,7 @@ export const queryKeys = {
   systemStatus: ["system", "status"] as const,
   storeStatus: (storeId: string) => ["stores", storeId, "data-status"] as const,
   weeklyInsight: (storeId: string) => ["stores", storeId, "insights", "weekly", "current"] as const,
+  weeklyReview: (storeId: string) => ["stores", storeId, "weekly-reviews", "current"] as const,
   storeKpi: (storeId: string, start: string, end: string) => ["stores", storeId, "kpi", start, end] as const,
   employeeKpi: (storeId: string, start: string, end: string) => ["stores", storeId, "kpi", "employees", start, end] as const,
   categories: (storeId: string, start: string, end: string) => ["stores", storeId, "categories", start, end] as const,
@@ -231,6 +233,17 @@ export function getWeeklyInsight(storeId: string): Promise<WeeklyInsight> {
   return apiClient.request(`${storePath(storeId)}/insights/weekly/current`, {
     schema: weeklyInsightSchema
   });
+}
+
+export async function getWeeklyReview(storeId: string): Promise<WeeklyReview | null> {
+  try {
+    return await apiClient.request(`${storePath(storeId)}/weekly-reviews/current`, {
+      schema: weeklyReviewSchema
+    });
+  } catch (error) {
+    if (isApiClientError(error) && error.status === 404) return null;
+    throw error;
+  }
 }
 
 export function getStoreKpi(storeId: string, start: string, end: string): Promise<StoreKpi> {

@@ -322,8 +322,8 @@ export type EmployeeAttachRatingEntry = {
     storeRatePercent?: number;
     includedInScore?: boolean;
     score?: number;
-    denominatorQuantity?: number;
     numeratorQuantity?: number;
+    denominatorQuantity?: number;
 };
 
 export type EmployeeRatingEntry = {
@@ -450,6 +450,34 @@ export type CurrentUserResponse = {
 export type ChangePasswordRequest = {
     currentPassword: string;
     newPassword: string;
+};
+
+export type DateRange = {
+    start?: string;
+    end?: string;
+};
+
+export type WeeklyReviewSnapshotView = {
+    snapshotId?: string;
+    storeId?: string;
+    revision?: number;
+    supersedesSnapshotId?: string;
+    period?: DateRange;
+    reportState?: 'PREPARING' | 'READY' | 'PARTIAL' | 'BLOCKED';
+    contentHash?: string;
+    createdAt?: string;
+};
+
+export type WeeklyReviewAiJobView = {
+    jobId?: string;
+    snapshotId?: string;
+    status?: 'PENDING' | 'RUNNING' | 'RETRY_WAIT' | 'SUCCEEDED' | 'FAILED';
+    attemptCount?: number;
+    maxAttempts?: number;
+    nextAttemptAt?: string;
+    deadlineAt?: string;
+    lastErrorCode?: string;
+    lastValidationCodes?: Array<string>;
 };
 
 export type CreateUserRequest = {
@@ -640,6 +668,289 @@ export type StoreSummaryView = {
     active?: boolean;
 };
 
+export type Action = {
+    actionId?: string;
+    priority?: string;
+    actionType?: string;
+    scope?: string;
+    employeePublicId?: string;
+    title?: string;
+    metricCode?: string;
+    target?: ActionTarget;
+    check?: string;
+    horizon?: string;
+    generatedBy?: 'DETERMINISTIC' | 'AI_ENHANCED';
+    evidenceRefs?: Array<string>;
+};
+
+export type ActionTarget = {
+    operator?: string;
+    value?: number;
+    unit?: 'RUB' | 'PERCENT' | 'PER_100' | 'COUNT' | 'HOURS' | 'STATUS';
+};
+
+export type AiEnhancement = {
+    state?: 'PREPARING' | 'READY' | 'DELAYED' | 'UNAVAILABLE' | 'DISABLED' | 'NOT_APPLICABLE';
+    promptVersion?: string;
+    contentSchemaVersion?: number;
+    publishedAt?: string;
+};
+
+export type AttachMetric = {
+    metricId?: string;
+    code?: string;
+    label?: string;
+    comparison?: MetricComparison;
+};
+
+export type BenchmarkPolicy = {
+    method?: string;
+    minimumEligibleCount?: number;
+    label?: string;
+};
+
+export type EmployeeCard = {
+    employeePublicId?: string;
+    displayName?: string;
+    participatesInBenchmark?: boolean;
+    sortGroup?: string;
+    metrics?: EmployeeMetricSet;
+    ownDynamics?: Array<Observation>;
+    peerComparison?: PeerComparison;
+    strength?: Observation;
+    attention?: Observation;
+    action?: Action;
+    limitations?: Array<string>;
+};
+
+export type EmployeeMetricSet = {
+    completedSales?: MetricComparison;
+    netRevenue?: MetricComparison;
+    additionalRevenue?: MetricComparison;
+    additionalShare?: MetricComparison;
+    shiftCount?: MetricComparison;
+    workedHours?: MetricComparison;
+    revenuePerHour?: MetricComparison;
+    attachMetrics?: Array<AttachMetric>;
+};
+
+export type Evidence = {
+    evidenceRef?: string;
+    scope?: string;
+    employeePublicId?: string;
+    metricCode?: string;
+    label?: string;
+    unit?: 'RUB' | 'PERCENT' | 'PER_100' | 'COUNT' | 'HOURS' | 'STATUS';
+    currentPeriod?: DateRange;
+    previousPeriod?: DateRange;
+    currentValue?: unknown;
+    previousValue?: unknown;
+    currentNumerator?: number;
+    currentDenominator?: number;
+    previousNumerator?: number;
+    previousDenominator?: number;
+    formulaVersion?: string;
+    sufficiency?: 'SUFFICIENT' | 'LIMITED' | 'INSUFFICIENT' | 'NOT_EVALUATED';
+    materiality?: 'MATERIAL' | 'NOT_MATERIAL' | 'NOT_EVALUATED';
+    available?: boolean;
+};
+
+export type Factor = {
+    factorId?: string;
+    kind?: string;
+    title?: string;
+    detail?: string;
+    comparison?: MetricComparison;
+    contributionAmount?: number;
+    effect?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'UNKNOWN';
+    evidenceRefs?: Array<string>;
+};
+
+export type Limitation = {
+    limitationId?: string;
+    code?: string;
+    severity?: string;
+    scope?: string;
+    employeePublicId?: string;
+    affectedBlockIds?: Array<string>;
+    affectedMetricCodes?: Array<string>;
+    period?: DateRange;
+    affectedCount?: number;
+    summary?: string;
+    resolution?: string;
+    evidenceRefs?: Array<string>;
+};
+
+export type MetricComparison = {
+    metricId?: string;
+    code?: string;
+    label?: string;
+    unit?: 'RUB' | 'PERCENT' | 'PER_100' | 'COUNT' | 'HOURS' | 'STATUS';
+    current?: number;
+    previous?: number;
+    absoluteDelta?: number;
+    changePercent?: number;
+    comparisonKind?: 'PERCENT_AVAILABLE' | 'NO_BASE' | 'NON_POSITIVE_BASE' | 'UNAVAILABLE';
+    direction?: 'UP' | 'DOWN' | 'FLAT' | 'UNKNOWN';
+    effect?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'UNKNOWN';
+    metricState?: 'READY' | 'LIMITED' | 'UNAVAILABLE' | 'NOT_APPLICABLE';
+    sufficiency?: 'SUFFICIENT' | 'LIMITED' | 'INSUFFICIENT' | 'NOT_EVALUATED';
+    materiality?: 'MATERIAL' | 'NOT_MATERIAL' | 'NOT_EVALUATED';
+    currentSample?: Sample;
+    previousSample?: Sample;
+    evidenceRefs?: Array<string>;
+};
+
+export type NarrativeItem = {
+    itemId?: string;
+    text?: string;
+    effect?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'UNKNOWN';
+    evidenceRefs?: Array<string>;
+};
+
+export type Observation = {
+    observationId?: string;
+    title?: string;
+    detail?: string;
+    effect?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'UNKNOWN';
+    evidenceRefs?: Array<string>;
+};
+
+export type PeerComparison = {
+    metricCode?: string;
+    employeeValue?: number;
+    benchmarkValue?: number;
+    benchmarkMethod?: string;
+    eligibleCount?: number;
+    absoluteDelta?: number;
+    changePercent?: number;
+    effect?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'UNKNOWN';
+    evidenceRefs?: Array<string>;
+};
+
+export type PeriodContext = {
+    timezone?: string;
+    current?: DateRange;
+    previous?: DateRange;
+    currentLabel?: string;
+    previousLabel?: string;
+};
+
+export type Provenance = {
+    snapshotPublicId?: string;
+    revision?: number;
+    calculatedAt?: string;
+    sourceDataUpdatedAt?: string;
+    revisionChanged?: boolean;
+    previousRevisionPublishedAt?: string;
+};
+
+export type QualitySummary = {
+    blockingCount?: number;
+    warningCount?: number;
+    affectedBlockCount?: number;
+    message?: string;
+};
+
+export type RevenueDecomposition = {
+    salesRevenue?: MetricComparison;
+    returnRevenue?: MetricComparison;
+    netRevenue?: MetricComparison;
+    saleDocumentCount?: MetricComparison;
+    returnDocumentCount?: MetricComparison;
+    identityValid?: boolean;
+};
+
+export type RosterSummary = {
+    activeAssignedWithActivity?: number;
+    participatesInBenchmark?: number;
+    sufficientByAnyMetric?: number;
+    limitedOrInsufficient?: number;
+    excludedFromBenchmark?: number;
+};
+
+export type SalesStructureBlock = {
+    blockId?: string;
+    state?: 'READY' | 'LIMITED' | 'INSUFFICIENT' | 'NOT_APPLICABLE';
+    root?: StructureNode;
+    attachMetrics?: Array<AttachMetric>;
+    limitations?: Array<string>;
+};
+
+export type Sample = {
+    numerator?: number;
+    denominator?: number;
+    numeratorLabel?: string;
+    denominatorLabel?: string;
+};
+
+export type SourceCoverage = {
+    sourceCode?: 'SALES' | 'RETURNS' | 'CLASSIFICATION' | 'COST' | 'EMPLOYEE_ATTRIBUTION' | 'SHIFTS';
+    requiredForReport?: boolean;
+    affectedBlockIds?: Array<string>;
+    currentThroughDate?: string;
+    previousThroughDate?: string;
+    state?: 'COMPLETE' | 'PARTIAL' | 'MISSING' | 'NOT_REQUIRED';
+    message?: string;
+};
+
+export type StructureNode = {
+    nodeId?: string;
+    code?: string;
+    label?: string;
+    subtotal?: boolean;
+    childrenIncludedInValue?: boolean;
+    comparison?: MetricComparison;
+    shareComparison?: MetricComparison;
+    children?: Array<StructureNode>;
+};
+
+export type SummaryBlock = {
+    blockId?: string;
+    state?: 'READY' | 'LIMITED' | 'INSUFFICIENT' | 'NOT_APPLICABLE';
+    outcome?: NarrativeItem;
+    positive?: NarrativeItem;
+    risk?: NarrativeItem;
+    generatedBy?: 'DETERMINISTIC' | 'AI_ENHANCED';
+};
+
+export type TeamBlock = {
+    blockId?: string;
+    state?: 'READY' | 'LIMITED' | 'INSUFFICIENT' | 'NOT_APPLICABLE';
+    roster?: RosterSummary;
+    observations?: Array<Observation>;
+    attentionEmployeeCount?: number;
+    benchmarkPolicy?: BenchmarkPolicy;
+    limitations?: Array<string>;
+};
+
+export type VersionSet = {
+    metricsPolicy?: string;
+    snapshotPolicy?: string;
+    qualityPolicy?: string;
+};
+
+export type WeeklyReviewResponse = {
+    contractVersion?: number;
+    versions?: VersionSet;
+    period?: PeriodContext;
+    provenance?: Provenance;
+    reportState?: 'PREPARING' | 'READY' | 'PARTIAL' | 'BLOCKED';
+    qualitySummary?: QualitySummary;
+    sourceCoverage?: Array<SourceCoverage>;
+    summary?: SummaryBlock;
+    results?: Array<MetricComparison>;
+    revenueDecomposition?: RevenueDecomposition;
+    factors?: Array<Factor>;
+    salesStructure?: SalesStructureBlock;
+    team?: TeamBlock;
+    employees?: Array<EmployeeCard>;
+    actions?: Array<Action>;
+    limitations?: Array<Limitation>;
+    evidence?: Array<Evidence>;
+    aiEnhancement?: AiEnhancement;
+};
+
 export type PageResponseReportSummaryView = {
     items?: Array<ReportSummaryView>;
     page?: number;
@@ -680,8 +991,8 @@ export type AnnualAttachRateTotals = {
     numeratorReceiptCount?: number;
     denominatorReceiptCount?: number;
     ratePerHundred?: number;
-    denominatorQuantity?: number;
     numeratorQuantity?: number;
+    denominatorQuantity?: number;
 };
 
 export type AnnualCategoryTotals = {
@@ -745,8 +1056,8 @@ export type AttachRateEntry = {
     numeratorReceiptCount?: number;
     denominatorReceiptCount?: number;
     ratePerHundred?: number;
-    denominatorQuantity?: number;
     numeratorQuantity?: number;
+    denominatorQuantity?: number;
 };
 
 export type AttachRateResult = {
@@ -2169,6 +2480,42 @@ export type ChangePasswordResponses = {
 
 export type ChangePasswordResponse = ChangePasswordResponses[keyof ChangePasswordResponses];
 
+export type GenerateData = {
+    body?: never;
+    path: {
+        storeId: string;
+    };
+    query?: never;
+    url: '/api/admin/weekly-reviews/stores/{storeId}/generate';
+};
+
+export type GenerateResponses = {
+    /**
+     * Created
+     */
+    201: WeeklyReviewSnapshotView;
+};
+
+export type GenerateResponse = GenerateResponses[keyof GenerateResponses];
+
+export type Generate1Data = {
+    body?: never;
+    path: {
+        snapshotId: string;
+    };
+    query?: never;
+    url: '/api/admin/weekly-review-ai/snapshots/{snapshotId}/generate';
+};
+
+export type Generate1Responses = {
+    /**
+     * Accepted
+     */
+    202: WeeklyReviewAiJobView;
+};
+
+export type Generate1Response = Generate1Responses[keyof Generate1Responses];
+
 export type FindAllData = {
     body?: never;
     path?: never;
@@ -2591,6 +2938,24 @@ export type FindResponses = {
 
 export type FindResponse = FindResponses[keyof FindResponses];
 
+export type CurrentData = {
+    body?: never;
+    path: {
+        storeId: string;
+    };
+    query?: never;
+    url: '/api/stores/{storeId}/weekly-reviews/current';
+};
+
+export type CurrentResponses = {
+    /**
+     * OK
+     */
+    200: WeeklyReviewResponse;
+};
+
+export type CurrentResponse = CurrentResponses[keyof CurrentResponses];
+
 export type List1Data = {
     body?: never;
     path: {
@@ -2997,7 +3362,7 @@ export type Latest1Responses = {
 
 export type Latest1Response = Latest1Responses[keyof Latest1Responses];
 
-export type CurrentData = {
+export type Current1Data = {
     body?: never;
     path: {
         storeId: string;
@@ -3006,14 +3371,14 @@ export type CurrentData = {
     url: '/api/stores/{storeId}/insights/weekly/current';
 };
 
-export type CurrentResponses = {
+export type Current1Responses = {
     /**
      * OK
      */
     200: WeeklyInsightResponse;
 };
 
-export type CurrentResponse = CurrentResponses[keyof CurrentResponses];
+export type Current1Response = Current1Responses[keyof Current1Responses];
 
 export type DirectoryData = {
     body?: never;
@@ -3215,6 +3580,24 @@ export type CsrfResponses = {
 };
 
 export type CsrfResponse = CsrfResponses[keyof CsrfResponses];
+
+export type FindJobData = {
+    body?: never;
+    path: {
+        jobId: string;
+    };
+    query?: never;
+    url: '/api/admin/weekly-review-ai/jobs/{jobId}';
+};
+
+export type FindJobResponses = {
+    /**
+     * OK
+     */
+    200: WeeklyReviewAiJobView;
+};
+
+export type FindJobResponse = FindJobResponses[keyof FindJobResponses];
 
 export type GetBackfillData = {
     body?: never;
