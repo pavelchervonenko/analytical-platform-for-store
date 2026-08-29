@@ -105,7 +105,36 @@ class WeeklySnapshotJobStoreIntegrationTest {
     }
 
     @Test
-    void autoRevisionCanFinishUnchangedAgainstItsValidatedBaseSnapshot() {
+    void terminalFailureClampsFinishedAtWhenClockMovesBackwards() {
+        TestGraph graph = createGraph();
+        WeeklySnapshotJob queued = jobStore.enqueue(
+                request(
+                        graph, graph.firstSyncJobId(), WeeklySnapshotJobType.INITIAL,
+                        null, 1
+                ),
+                NOW
+        );
+        WeeklySnapshotJob claimed = jobStore.claimNext(
+                "snapshot-worker", Duration.ofMinutes(2), NOW
+        ).orElseThrow();
+
+        WeeklySnapshotJob failed = jobStore.retryOrFail(
+                claimed.id(),
+                "snapshot-worker",
+                false,
+                "SNAPSHOT_EXECUTION",
+                "Weekly snapshot execution failed: SNAPSHOT_EXECUTION",
+                NOW.plusSeconds(30),
+                NOW.minusMillis(1)
+        );
+
+        assertThat(queued.id()).isEqualTo(claimed.id());
+        assertThat(failed.status()).isEqualTo(WeeklySnapshotJobStatus.FAILED);
+        assertThat(failed.finishedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void autoRevisionCanFinishUnchangedWhenClockMovesBackwards() {
         TestGraph graph = createGraph();
         WeeklySnapshotDraft draft = draft(graph.storeId());
         WeeklySnapshotWriteResult base = snapshotStore.persist(
@@ -136,7 +165,7 @@ class WeeklySnapshotJobStoreIntegrationTest {
                         WeeklySnapshotWriteOutcome.UNCHANGED,
                         base.snapshot()
                 ),
-                NOW.plusSeconds(5)
+                NOW.minusMillis(1)
         );
 
         assertThat(queued.id()).isEqualTo(claimed.id());
@@ -144,7 +173,7 @@ class WeeklySnapshotJobStoreIntegrationTest {
         assertThat(completed.outcome()).isEqualTo(WeeklySnapshotWriteOutcome.UNCHANGED);
         assertThat(completed.resultSnapshotId()).isEqualTo(base.snapshot().id());
         assertThat(completed.leaseOwner()).isNull();
-        assertThat(completed.finishedAt()).isEqualTo(NOW.plusSeconds(5));
+        assertThat(completed.finishedAt()).isEqualTo(NOW);
     }
 
     private WeeklySnapshotJobRequest request(

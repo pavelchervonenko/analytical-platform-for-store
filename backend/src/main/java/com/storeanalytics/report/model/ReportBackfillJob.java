@@ -204,7 +204,7 @@ public class ReportBackfillJob extends AbstractMutableEntity {
             cancel(now);
         } else {
             status = ReportBackfillJobStatus.SUCCESS;
-            finishedAt = requireNonNull(now, "now");
+            finishedAt = terminalTimestamp(now);
         }
     }
 
@@ -227,7 +227,7 @@ public class ReportBackfillJob extends AbstractMutableEntity {
             nextAttemptAt = requireNonNull(nextAttempt, "nextAttempt");
         } else {
             status = ReportBackfillJobStatus.FAILED;
-            finishedAt = requireNonNull(now, "now");
+            finishedAt = terminalTimestamp(now);
         }
     }
 
@@ -273,10 +273,16 @@ public class ReportBackfillJob extends AbstractMutableEntity {
         leaseUntil = null;
     }
 
+    private Instant terminalTimestamp(Instant now) {
+        Instant candidate = requireNonNull(now, "now");
+        return startedAt != null && candidate.isBefore(startedAt)
+                ? startedAt : candidate;
+    }
+
     private void cancel(Instant now) {
         status = ReportBackfillJobStatus.CANCELLED;
         errorSummary = null;
-        finishedAt = requireNonNull(now, "now");
+        finishedAt = terminalTimestamp(now);
     }
 
     private String boundedSummary(String summary) {

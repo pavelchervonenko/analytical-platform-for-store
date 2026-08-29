@@ -151,7 +151,9 @@ public class WeeklySnapshotJobStore {
             require(Objects.equals(job.baseSnapshotId(), snapshot.id()),
                     "UNCHANGED result must point to baseSnapshotId");
         }
-        Instant timestamp = requireNonNull(now, "now");
+        Instant timestamp = notBeforeStarted(
+                job, requireNonNull(now, "now")
+        );
         jdbcTemplate.update(
                 """
                 UPDATE analytics_snapshot_jobs
@@ -179,7 +181,9 @@ public class WeeklySnapshotJobStore {
             Instant now
     ) {
         WeeklySnapshotJob job = requireOwnedRunning(jobId, owner);
-        Instant timestamp = requireNonNull(now, "now");
+        Instant timestamp = notBeforeStarted(
+                job, requireNonNull(now, "now")
+        );
         boolean retry = retryable && job.attemptCount() < job.maxAttempts()
                 && !job.cancelRequested();
         if (retry) {
@@ -220,6 +224,12 @@ public class WeeklySnapshotJobStore {
     @Transactional(readOnly = true)
     public boolean requestExists(WeeklySnapshotJobRequest request) {
         return findRequest(requireNonNull(request, "request")).isPresent();
+    }
+
+    private Instant notBeforeStarted(WeeklySnapshotJob job, Instant candidate) {
+        Instant startedAt = job.startedAt();
+        return startedAt != null && candidate.isBefore(startedAt)
+                ? startedAt : candidate;
     }
 
     private void validateSource(WeeklySnapshotJobRequest request) {

@@ -85,6 +85,44 @@ class ReportBackfillJobTest {
         assertThat(job.getTotalRetries()).isEqualTo(3);
     }
 
+    @Test
+    void clampsSuccessfulTimestampWhenWallClockMovesBackwards() {
+        ReportBackfillJob job = newJob();
+        Instant firstClaim = START.plusSeconds(10);
+        for (int month = 1; month <= 12; month++) {
+            Instant now = firstClaim.plusSeconds(month);
+            job.claim(OWNER, Duration.ofMinutes(30), now);
+            job.completeMonthlyStep(OWNER, false, false, now);
+        }
+        job.claim(OWNER, Duration.ofMinutes(30), firstClaim.plusSeconds(20));
+        job.completeAnnualStep(OWNER, null, START);
+
+        assertThat(job.getStatus()).isEqualTo(ReportBackfillJobStatus.SUCCESS);
+        assertThat(job.getFinishedAt()).isEqualTo(firstClaim.plusSeconds(1));
+    }
+
+    @Test
+    void clampsFailedTimestampWhenWallClockMovesBackwards() {
+        ReportBackfillJob job = newJob();
+        Instant started = START.plusSeconds(10);
+        job.claim(OWNER, Duration.ofMinutes(30), started);
+        job.retryOrFail(OWNER, "permanent", false, START, START);
+
+        assertThat(job.getStatus()).isEqualTo(ReportBackfillJobStatus.FAILED);
+        assertThat(job.getFinishedAt()).isEqualTo(started);
+    }
+
+    @Test
+    void clampsCancelledTimestampWhenWallClockMovesBackwards() {
+        ReportBackfillJob job = newJob();
+        Instant started = START.plusSeconds(10);
+        job.claim(OWNER, Duration.ofMinutes(30), started);
+        job.requestCancellation(START);
+
+        assertThat(job.cancelClaimedIfRequested(OWNER, START)).isTrue();
+        assertThat(job.getFinishedAt()).isEqualTo(started);
+    }
+
     private ReportBackfillJob newJob() {
         return ReportBackfillJob.create(
                 new ReportBackfillJobDefinition(

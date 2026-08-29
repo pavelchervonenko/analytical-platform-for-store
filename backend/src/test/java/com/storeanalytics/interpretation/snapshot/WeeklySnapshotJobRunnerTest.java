@@ -76,6 +76,32 @@ class WeeklySnapshotJobRunnerTest {
     }
 
     @Test
+    void retryDeadlineRemainsAfterStartedAtWhenClockMovesBackwards() {
+        Instant startedAt = NOW.plusSeconds(5);
+        WeeklySnapshotJob claimed = mock(WeeklySnapshotJob.class);
+        WeeklySnapshotJob waiting = mock(WeeklySnapshotJob.class);
+        when(claimed.id()).thenReturn(UUID.randomUUID());
+        when(claimed.attemptCount()).thenReturn(1);
+        when(claimed.startedAt()).thenReturn(startedAt);
+        when(jobStore.claimNext(OWNER, LEASE, NOW)).thenReturn(Optional.of(claimed));
+        when(executionService.execute(claimed, OWNER)).thenThrow(
+                new TransientDataAccessResourceException("clock rollback")
+        );
+        when(jobStore.retryOrFail(
+                claimed.id(),
+                OWNER,
+                true,
+                "TRANSIENT_DATABASE",
+                "Weekly snapshot execution failed: TRANSIENT_DATABASE",
+                startedAt.plus(INITIAL_DELAY),
+                startedAt
+        )).thenReturn(waiting);
+
+        assertThat(runner.runNext(OWNER, LEASE, INITIAL_DELAY, MAX_DELAY))
+                .contains(waiting);
+    }
+
+    @Test
     void failsContractViolationWithoutRetryOrLeakingExceptionMessage() {
         WeeklySnapshotJob claimed = job(1);
         WeeklySnapshotJob failed = mock(WeeklySnapshotJob.class);

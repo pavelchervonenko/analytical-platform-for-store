@@ -59,7 +59,7 @@ public class WeeklySnapshotJobRunner {
             return Optional.of(executionService.execute(job, workerOwner));
         } catch (RuntimeException exception) {
             WeeklySnapshotJobFailure failure = failureClassifier.classify(exception);
-            Instant failedAt = clock.instant();
+            Instant failedAt = notBeforeStarted(job, clock.instant());
             Duration delay = retryDelay(job.attemptCount(), initialDelay, maxDelay);
             WeeklySnapshotJob result = jobStore.retryOrFail(
                     job.id(),
@@ -75,6 +75,12 @@ public class WeeklySnapshotJobRunner {
             }
             return Optional.of(result);
         }
+    }
+
+    private Instant notBeforeStarted(WeeklySnapshotJob job, Instant candidate) {
+        Instant startedAt = job.startedAt();
+        return startedAt != null && candidate.isBefore(startedAt)
+                ? startedAt : candidate;
     }
 
     private Duration retryDelay(
