@@ -28,11 +28,14 @@ export YANDEX_AI_MODEL_URI='gpt://<folder>/<versioned-model>'
 export YANDEX_AI_API_KEY='<temporary-key>'
 export WEEKLY_REVIEW_AI_EVAL_MAX_PAID_CALLS=4
 export WEEKLY_REVIEW_AI_EVAL_CASE_OFFSET=0
-export WEEKLY_REVIEW_AI_EVAL_MAX_COST_RUB=16.00
+export WEEKLY_REVIEW_AI_EVAL_MAX_COST_RUB=<approved-remaining-cap>
 export WEEKLY_REVIEW_AI_EVAL_OUTPUT_DIR='build/weekly-review-ai-eval/<new-run>'
 export CONFIRM_WEEKLY_REVIEW_AI_SHADOW='CALL_WEEKLY_REVIEW_AI_SHADOW'
 ./gradlew :backend:weeklyReviewAiShadow
 ```
+
+`approved-remaining-cap` нельзя копировать из прошлых запусков: перед каждым вызовом его заново
+вычисляют как разрешённый общий бюджет минус фактическая стоимость всех предыдущих paid-прогонов.
 
 Для последовательного прогона в общем бюджете `CASE_OFFSET` выбирает начало из четырёх
 фиксированных cases; runner отклоняет выход диапазона за корпус. Runner отклоняет `/latest`, нулевые цены, повторное использование каталога, путь вне

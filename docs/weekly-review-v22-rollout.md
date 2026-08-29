@@ -1,7 +1,10 @@
 # Weekly review v22/schema4 — production rollout
 
 Дата: 2026-08-29
-Статус: кандидат подготовлен; production activation не выполнялась
+Статус: исторический runbook immutable v22; активный rollout описан в `weekly-review-v24-rollout.md`
+
+> Этот документ применяется только к неизменяемому `weekly-interpretation-v22`. Указание
+> не повторять paid shadow относится только к v22 и не распространяется на v23/v24.
 
 ## 1. Первый deploy без активации
 

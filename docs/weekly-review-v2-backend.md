@@ -12,7 +12,8 @@
 | Metrics policy | `weekly-metrics-v4` |
 | Snapshot policy | `weekly-snapshot-v7` |
 | Quality policy | `weekly-quality-v4` |
-| AI prompt | `weekly-interpretation-v22` |
+| AI prompt | `weekly-interpretation-v24` |
+| AI provider input | `weekly-review-ai-input-v3` |
 | AI schema | `4` |
 
 Номера `v4/v7/v4` выбраны после проверки production baseline: в старом контуре уже используются
@@ -107,7 +108,7 @@ endpoint.
 Миграция `V46__add_weekly_review_ai_enrichments.sql` не изменяет V45 payload. Она хранит только
 семантически проверенные формулировки для exact `snapshot_id`:
 
-- AI может заменить только `summary.outcome.text`, `Factor.detail` и `Action.title`;
+- AI может заменить только `summary.outcome.text` и `Factor.detail`; в v23/v24 `Action.title` и `Action.check` остаются backend-owned, legacy v22 fallback сохраняет прежний контракт;
 - `summary.positive/risk`, facts, periods, targets, checks, team/employees, limitations, evidence и
   provenance остаются из V45;
 - structural-valid без semantic marker не применяется и не сохраняется;
@@ -172,7 +173,7 @@ Cache-Control: private, no-store
 показывает прежний v21/schema3 экран. При наличии semantic-valid V46 row endpoint возвращает
 безопасно объединённый report, иначе исходный deterministic V45. Существующий
 `GET /api/stores/{storeId}/insights/weekly/current` продолжает обслуживать v21/schema3 без
-адаптера и без изменения payload. Это даёт per-store canary: только магазин с ручным v22 snapshot
+адаптера и без изменения payload. Это даёт per-store canary: только магазин с вручную созданным deterministic weekly snapshot
 переключается на новый экран; остальные остаются на v21.
 
 Frontend не доверяет transport type как runtime-гарантии: ответ проходит строгую Zod-проверку

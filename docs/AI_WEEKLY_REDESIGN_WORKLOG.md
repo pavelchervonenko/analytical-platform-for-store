@@ -1,9 +1,8 @@
 # Редизайн страницы «ИИ-разбор»: план и рабочий журнал
 
 Дата начала: 2026-08-26
-Статус: этап 6 завершён; release-коммиты подготовлены, CANDIDATE_ELIGIBLE_FOR_CANARY, production activation не выполнялась
-Production baseline: `weekly-interpretation-v21`, content schema `3`, release
-`v0.1.0-pilot.25`
+Статус: этап 6 в работе; v24 targeted/offline gate пройдены, paid/full gate и production-canary ожидаются
+Production baseline: release `v0.1.0-pilot.26`; v22/schema4 canary с v21/schema3 fallback
 
 Этот документ является основной точкой продолжения редизайна страницы «ИИ-разбор». Он хранит
 принятые продуктовые решения, последовательность этапов, критерии приёмки, найденные проблемы,
@@ -257,7 +256,7 @@ Backend отвечает за:
 
 ### Этап 6. Полная проверка и production rollout
 
-Статус: **NOT STARTED**.
+Статус: **IN PROGRESS — LOCAL GATES COMPLETE, PRODUCTION CANARY PENDING**.
 
 Последовательность gate:
 
@@ -435,7 +434,7 @@ validated enrichment, затем спроектировать отдельное
 ### 2026-08-27 — этап 4 — safe application и immutable V46
 
 Статус подэтапа: `COMPLETED`; provider integration и production activation по-прежнему запрещены.
-Уточнён ownership: AI меняет только `summary.outcome.text`, `Factor.detail` и `Action.title`.
+Исторический контракт v22 разрешал AI менять `summary.outcome.text`, `Factor.detail` и `Action.title`; в v23 заголовок действия переведён в backend ownership.
 Отдельные `summary.positive/risk`, числа, periods, factor comparison/contribution, action
 target/check/horizon, team, employees, limitations, evidence и provenance остаются неизменными.
 Numeric allowlist теперь объектный и объединяет только литералы исходного текста с exact values его
@@ -534,7 +533,7 @@ checkstyle main/test, production compose, security/release-safety, Python blind 
 
 ## 9. Текущая точка продолжения
 
-Активный этап: **этап 6 — COMPLETED / RELEASE READY DEFAULT-OFF**.
+Активный этап: **этап 6 — V24 CALIBRATION AND FULL RELEASE GATE IN PROGRESS**.
 
 Безопасная точка: v22/schema4 реализован end-to-end от immutable V45 facts до bounded provider
 lifecycle и optional immutable V46 enrichment. Runtime default-off; новый frontend зафиксирован в release-ветке, production activation не
@@ -663,3 +662,31 @@ ESLint, OpenAPI types и production build — PASS. Финальный backend g
 compatibility, supply-chain, security, release-safety и checkstyle — PASS. Повторный независимый
 release review — PASS, блокеров нет. Новых платных вызовов, deploy и production activation не выполнялось. Реализация разделена на
 логические backend, frontend и documentation commits.
+
+
+### 2026-08-29 — этап 6 — v23 управленческая калибровка и полный regression
+
+Статус этапа до/после: локальный v23 candidate прошёл автоматические и semantic gate; production-canary не выполнялся.
+
+Provider input версионирован как `weekly-review-ai-input-v2`: backend передаёт `summary.outcomeEffect` и предметный `factor.managementMeaning`, а модель больше не определяет направление недели и смысл показателя самостоятельно. Prompt `weekly-interpretation-v23` отделяет единый итог от факторов и действий; validator запрещает неподтверждённое уточнение «предыдущая полная неделя». V22 enrichment остаётся fallback.
+
+Offline corpus расширен до 41 сценарий. Последовательная paid-калибровка израсходовала 14,104 ₽ из разрешённых 20 ₽. Финальный ответ semantic-valid; независимый blind reviewer — PASS, 4,8/5, hard gates — 0. Дополнительные платные вызовы остановлены.
+
+Полный backend gate после исправлений: `1045 tests, 0 failures, 0 errors`; Checkstyle main/test, generated OpenAPI compatibility, security/release-safety и supply-chain (`449 components`, `840 artifacts`) — PASS. Frontend gate: `41 files, 175 tests`, generated contracts, ESLint и production build — PASS.
+
+Full regression выявил редкий откат системных часов между claim и завершением snapshot-job. `WeeklySnapshotJobStore` и runner теперь не допускают `finished_at < started_at` и строят retry deadline от монотонного времени; добавлены unit/integration regression tests. Повторный targeted и полный прогон — PASS.
+
+Открыто: финальное независимое code/release review, разделение на логические коммиты, default-off deploy и ручной canary «МобиСферы».
+
+
+### 2026-08-29 — этап 6 — v24 fail-closed management contract
+
+Независимое review v23 выявило принципиальный риск: корректный префикс summary мог сопровождаться свободным противоречащим продолжением. Paid prompt v23 оставлен immutable. Активный candidate переведён на `weekly-interpretation-v24`, provider input `weekly-review-ai-input-v3` и corpus `weekly-review-ai-eval-v5`.
+
+Backend формирует полный allowlist `summary.allowedNarratives`; validator принимает только дословный элемент списка. Factor строится из exact `managementMeaning` и фиксированной оценки effect; title/check действия остаются backend-owned. Read-path использует fallback `v24 → v23 → v22`, старые jobs и enrichments не переписываются.
+
+Targeted contract/semantic/compactor tests, 41-case offline corpus и Checkstyle — PASS. Network-free maximum для четырёх paid cases — 14,9472 ₽; v23 уже использовал 14,104 ₽ из общего лимита 20 ₽, поэтому v24 разрешён только последовательными вызовами с отдельным hard cap и case offset.
+
+Полный локальный gate: backend `1052 tests, 0 failures, 0 errors, 0 skipped`, Checkstyle и OpenAPI compatibility — PASS; frontend `41 files, 175 tests`, ESLint и production build — PASS; security, release-safety и supply-chain gates — PASS. Независимый review не выявил P0/P1 в реализации. Paid shadow, финальный committed-tree review и production-canary ожидаются.
+
+Clock-rollback защита расширена на terminal transitions `ReportBackfillJob`; отдельные regression tests покрывают SUCCESS, FAILED и CANCELLED.
