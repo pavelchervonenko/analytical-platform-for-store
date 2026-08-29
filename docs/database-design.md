@@ -1,6 +1,6 @@
 # Database design
 
-Status: current through Flyway V44, revalidated on 2026-08-24. The schema is authoritative; frontend
+Status: current through Flyway V48, revalidated on 2026-08-29. The schema is authoritative; frontend
 must use API DTO and never infer database relations directly.
 
 ## Confirmed scope
@@ -13,7 +13,7 @@ must use API DTO and never infer database relations directly.
 - Returns are recognized on the return date and attributed to the original seller.
 - Product category changes apply only to future sales.
 
-## Migration addendum V26–V44
+## Migration addendum V26–V48
 
 - V26–V31 harden notification fanout and persisted/validated LLM responses.
 - V32–V36 refine approved product, payroll, cost and phone-protection classification.
@@ -25,11 +25,24 @@ must use API DTO and never infer database relations directly.
 - V42 creates the durable LiveSklad return-webhook inbox.
 - V43 adds processing lease/retry/terminal metadata and return-before-sale support.
 - V44 adds audited, idempotent validated historical return recovery.
+- V45 adds immutable, revisioned deterministic weekly-review v2 snapshots.
+- V46 adds immutable validated AI wording linked to an exact V45 snapshot revision.
+- V47 adds durable generation jobs, leased bounded retries and immutable provider attempts.
+- V48 binds JSON headers to immutable columns and persists provider outcome for conservative
+  daily-budget accounting.
 
 `livesklad_webhook_receipts` is both the deduplicated ingress inbox and the durable state for
 manual recovery. A recovery is accepted only with positive expected amount/position count and an
 ADMIN-scoped idempotency key. The worker validates the fetched return before updating financial
-facts.
+facts. `weekly_review_snapshots` is a separate append-only contract: revision chains are validated
+on insert and database triggers reject update/delete. `weekly_review_ai_enrichments` never rewrites
+that payload: it stores prompt/schema identity, input/content SHA-256 and canonical validated wording;
+a unique key permits one content version per snapshot/prompt/schema and a trigger rejects update/delete.
+`weekly_review_ai_generation_jobs` deduplicates exact snapshot/prompt/schema/input work and stores
+lease/retry/terminal state. `weekly_review_ai_attempts` is append-only after completion and preserves
+request/response hashes, provider usage/cost and validation outcome. Starting an attempt reserves its
+estimated daily cost under a database table lock; an unknown provider outcome keeps that estimate
+reserved until the end of the UTC day.
 
 ## Data layers
 
@@ -240,7 +253,7 @@ remain dynamic and are not persisted. See `reports.md`.
 
 ## DB/JPA contract verification
 
-Automated tests apply V1 through V44 to a fresh PostgreSQL 16 database and verify all tables,
+Automated tests apply V1 through V48 to a fresh PostgreSQL 16 database and verify all tables,
 entities, and repositories. They compare every physical column with Hibernate metadata, compare
 enum mappings
 with PostgreSQL `CHECK` constraints, compare numeric precision/scale, and verify generated
@@ -273,8 +286,10 @@ adaptive windows, retries, rate-limit reserve, and sanitized failures.
 Integration tests prove atomic daily/monthly rollups, superseded-only raw cleanup, open
 quality evidence protection, latest terminal run/job preservation, status-specific technical
 purges, financial audit preservation, active holds, orphan sync-run repair and payroll optimistic
-version advancement. Migration tests build the current empty schema through V44 and exercise representative
-upgrades, verifying checksums, retained data, backfills and the resulting application model.
+version advancement. Migration tests build the current empty schema through V48 and exercise representative
+upgrades, verifying checksums, retained data, backfills and the resulting application model. A
+dedicated populated-V47 upgrade test verifies the V48 provider-outcome backfill and proves that the
+final-attempt immutability trigger is active again after migration.
 
 ## Deferred modules
 

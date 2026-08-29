@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Status: current application architecture, revalidated on 2026-08-24. The repository contains one
+Status: current application architecture, revalidated on 2026-08-29. The repository contains one
 Spring Boot backend module and a React/Vite/TypeScript SPA. Frontend boundaries and actions are
 documented in `FRONTEND_HANDOFF.md` and `frontend-actions.md`.
 
@@ -13,7 +13,10 @@ API/worker force runtime Flyway off and verify the packaged schema version throu
 The one-shot migrator applies validated lock/statement timeouts and bounded Flyway lock retries;
 CI covers empty-schema and previous-version upgrade paths, while production-like lock timing remains
 a staging acceptance concern. Production currently runs schema V44. V42–V43 add the durable
-LiveSklad webhook inbox/processing state; V44 adds validated return recovery.
+LiveSklad webhook inbox/processing state; V44 adds validated return recovery. The development
+candidate adds additive V45 immutable weekly-review v2 snapshots, V46 validated AI wording, V47
+durable bounded generation jobs/attempts and V48 JSON/budget hardening. Read, deterministic planner
+and AI runtime are independently default-off; 404 falls back to unchanged v21/schema3.
 
 ## First-stage boundaries
 
