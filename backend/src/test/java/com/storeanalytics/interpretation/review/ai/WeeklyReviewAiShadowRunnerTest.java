@@ -17,6 +17,7 @@ class WeeklyReviewAiShadowRunnerTest {
 
         assertThat(settings.mode()).isEqualTo(WeeklyReviewAiShadowRunner.MODE_PLAN);
         assertThat(settings.maxPaidCalls()).isZero();
+        assertThat(settings.caseOffset()).isZero();
         assertThat(settings.modelUri()).doesNotEndWith("/latest");
     }
 
@@ -47,6 +48,13 @@ class WeeklyReviewAiShadowRunnerTest {
                 new BigDecimal("5.01")
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("above explicit cap");
+
+        Map<String, String> invalidOffset = executionEnvironment();
+        invalidOffset.put("WEEKLY_REVIEW_AI_EVAL_CASE_OFFSET", "4");
+        assertThatThrownBy(() ->
+                WeeklyReviewAiShadowRunner.Settings.from(invalidOffset)
+        ).isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("bounded paid calls");
     }
 
     private Map<String, String> executionEnvironment() {

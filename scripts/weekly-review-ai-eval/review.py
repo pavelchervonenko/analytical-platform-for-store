@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Integrity-checked blind review packet for weekly-review AI v22 outputs."""
+"""Integrity-checked blind review packet for weekly-review AI v24 outputs."""
 
 import argparse
 import hashlib
@@ -8,11 +8,11 @@ from pathlib import Path
 
 
 DIMENSIONS = (
-    "clarity",
-    "specificity",
-    "actionability",
-    "evidenceFidelity",
+    "summaryCoherence",
     "nonDuplication",
+    "factorMeaning",
+    "actionPracticality",
+    "clarityAndTone",
 )
 
 
@@ -26,6 +26,17 @@ def sha256(text):
 
 def load_outputs(manifest_path, responses_dir):
     manifest = read_json(manifest_path)
+    repository_root = manifest_path.resolve().parents[2]
+    for path_key, hash_key in (
+        ("promptPath", "promptSha256"),
+        ("inputSchemaPath", "inputSchemaSha256"),
+    ):
+        if path_key in manifest:
+            resource = repository_root / manifest[path_key]
+            if not resource.is_file():
+                raise ValueError(f"missing immutable resource: {resource}")
+            if sha256(resource.read_text(encoding="utf-8")) != manifest[hash_key]:
+                raise ValueError(f"immutable resource hash mismatch: {resource}")
     outputs = []
     for case in manifest["cases"]:
         input_path = responses_dir / f"{case['id']}.input.json"
@@ -40,6 +51,19 @@ def load_outputs(manifest_path, responses_dir):
                 f"missing input/response/receipt for {case['id']}"
             )
         provider_input = input_path.read_text(encoding="utf-8")
+        provider_payload = json.loads(provider_input)
+        if (
+            manifest.get("promptVersion") is not None
+            and provider_payload.get("promptVersion")
+            != manifest["promptVersion"]
+        ):
+            raise ValueError(f"prompt version mismatch for {case['id']}")
+        if (
+            manifest.get("inputSchemaVersion") is not None
+            and provider_payload.get("contractVersion")
+            != manifest["inputSchemaVersion"]
+        ):
+            raise ValueError(f"input schema version mismatch for {case['id']}")
         response = response_path.read_text(encoding="utf-8")
         receipt = read_json(receipt_path)
         if receipt.get("corpusVersion") != manifest["version"]:
@@ -138,6 +162,7 @@ def finalize(manifest_path, responses_dir, review_dir, report_path):
         average = sum(values) / len(values)
         case_passed = (
             average >= manifest["minimumAverage"]
+            and min(values) >= manifest.get("minimumDimension", 1)
             and score.get("requiredFindingsCovered") is True
             and not score.get("forbiddenFindings")
             and not score.get("criticalErrors")
@@ -185,7 +210,7 @@ def parse_args():
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=Path("scripts/weekly-review-ai-eval/manifest-v3.json"),
+        default=Path("scripts/weekly-review-ai-eval/manifest-v5.json"),
     )
     parser.add_argument("--responses-dir", type=Path, required=True)
     parser.add_argument("--review-dir", type=Path)

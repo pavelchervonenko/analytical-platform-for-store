@@ -10,7 +10,7 @@ class WeeklyReviewAiOfflineEvaluatorTest {
     void passesEveryVersionedSemanticCase() {
         var results = new WeeklyReviewAiOfflineEvaluator().evaluate();
 
-        assertThat(results).hasSize(17);
+        assertThat(results).hasSize(41);
         assertThat(results)
                 .as("corpus %s", WeeklyReviewAiEvaluationCorpus.VERSION)
                 .allMatch(WeeklyReviewAiOfflineEvaluator.EvaluationResult::passed);

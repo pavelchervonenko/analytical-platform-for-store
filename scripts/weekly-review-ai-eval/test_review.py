@@ -24,6 +24,7 @@ class WeeklyReviewAiReviewTest(unittest.TestCase):
                 {
                     "version": "test-v1",
                     "minimumAverage": 4.0,
+                    "minimumDimension": 3,
                     "cases": [
                         {
                             "id": "case-a",
@@ -113,6 +114,36 @@ class WeeklyReviewAiReviewTest(unittest.TestCase):
                 self.root / "report.json",
             )
 
+
+    def test_finalize_rejects_low_dimension_despite_high_average(self):
+        review_dir = self.root / "review"
+        REVIEW.prepare(self.manifest, self.responses, review_dir)
+        scores_path = review_dir / "scores.json"
+        scores = json.loads(scores_path.read_text(encoding="utf-8"))
+        scores["completed"] = True
+        for score in scores["scores"]:
+            score["dimensions"] = {dimension: 5 for dimension in REVIEW.DIMENSIONS}
+            score["dimensions"][REVIEW.DIMENSIONS[0]] = 2
+            score["requiredFindingsCovered"] = True
+        scores_path.write_text(json.dumps(scores), encoding="utf-8")
+
+        report_path = self.root / "decision-low-dimension.json"
+        self.assertEqual(
+            REVIEW.finalize(
+                self.manifest, self.responses, review_dir, report_path
+            ),
+            1,
+        )
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(report["decision"], "REJECTED")
+
+    def test_load_outputs_rejects_prompt_version_mismatch(self):
+        manifest = json.loads(self.manifest.read_text(encoding="utf-8"))
+        manifest["promptVersion"] = "weekly-interpretation-v24"
+        self.manifest.write_text(json.dumps(manifest), encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "prompt version mismatch"):
+            REVIEW.load_outputs(self.manifest, self.responses)
 
     def test_prepare_rejects_tampered_provider_input(self):
         input_path = self.responses / "case-a.input.json"

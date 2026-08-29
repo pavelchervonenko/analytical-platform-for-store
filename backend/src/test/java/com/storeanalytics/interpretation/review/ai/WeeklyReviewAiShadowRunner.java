@@ -31,7 +31,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.SerializationFeature;
 
-/** Test-runtime-only, explicit-budget v22 semantic shadow runner. */
+/** Test-runtime-only, explicit-budget v24 semantic shadow runner. */
 public final class WeeklyReviewAiShadowRunner {
 
     static final String MODE_PLAN = "plan";
@@ -89,6 +89,7 @@ public final class WeeklyReviewAiShadowRunner {
             return 0;
         }
         List<PreparedCase> selected = cases.stream()
+                .skip(settings.caseOffset())
                 .limit(settings.maxPaidCalls())
                 .toList();
         BigDecimal selectedMaximum = selected.stream()
@@ -278,6 +279,7 @@ public final class WeeklyReviewAiShadowRunner {
             BigDecimal inputPrice,
             BigDecimal outputPrice,
             int maxPaidCalls,
+            int caseOffset,
             BigDecimal maxCostRub,
             String confirmation,
             Path outputDirectory
@@ -321,6 +323,8 @@ public final class WeeklyReviewAiShadowRunner {
                             "YANDEX_AI_OUTPUT_RUB_PER_THOUSAND_TOKENS", "0.8"
                     )),
                     calls,
+                    integer(environment,
+                            "WEEKLY_REVIEW_AI_EVAL_CASE_OFFSET", 0),
                     cap,
                     environment.getOrDefault(
                             "CONFIRM_WEEKLY_REVIEW_AI_SHADOW", ""
@@ -363,6 +367,7 @@ public final class WeeklyReviewAiShadowRunner {
                 );
             }
             if (execute && (maxPaidCalls < 1 || maxPaidCalls > 4
+                    || caseOffset < 0 || caseOffset + maxPaidCalls > 4
                     || maxCostRub == null || maxCostRub.signum() <= 0)) {
                 throw new IllegalArgumentException(
                         "Execute mode requires bounded paid calls and RUB cap"
