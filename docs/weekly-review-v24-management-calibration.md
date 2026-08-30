@@ -70,14 +70,17 @@ deterministic report.
 `WEEKLY_REVIEW_AI_ENABLED`; сохранённые v22/v23/v24 enrichment и audit attempts не удаляются.
 
 
-## Текущий результат v24 на 2026-08-29
+## Итог v24 на 2026-08-30
 
 - `weekly-review-ai-eval-v5`: 41 offline-сценарий, PASS;
 - targeted contract, validator, compactor и Checkstyle: PASS;
 - network-free plan: 4 cases, maximum 14,9472 ₽;
 - ранее израсходовано v23: 14,104 ₽ из общего разрешённого лимита 20 ₽;
-- v24 paid calls ещё не выполнялись; разрешены только последовательные calls с hard cap на остаток;
+- выполнен один paid case `positive-growth`: semantic validation — PASS, стоимость 1,036 ₽;
 - полный backend regression: 1052 теста, 0 failures/errors/skipped; Checkstyle и OpenAPI compatibility — PASS;
 - frontend regression: 41 test file / 175 тестов, ESLint и production build — PASS;
 - security/release/supply-chain gates — PASS;
-- paid calibration, blind review и production-canary ожидаются.
+- independent blind review: hard gates — 0, средняя оценка — 4,4/5, но
+  `manager usefulness` — 2/5 из-за почти дословного повторения backend input;
+- итоговый gate — **REJECT**: v24 не допускается к production-canary; дополнительные paid-вызовы
+  остановлены, следующий candidate обязан использовать новую immutable prompt/input/corpus version.

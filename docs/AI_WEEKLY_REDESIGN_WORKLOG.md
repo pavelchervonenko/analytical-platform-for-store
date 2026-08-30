@@ -687,6 +687,8 @@ Backend формирует полный allowlist `summary.allowedNarratives`; v
 
 Targeted contract/semantic/compactor tests, 41-case offline corpus и Checkstyle — PASS. Network-free maximum для четырёх paid cases — 14,9472 ₽; v23 уже использовал 14,104 ₽ из общего лимита 20 ₽, поэтому v24 разрешён только последовательными вызовами с отдельным hard cap и case offset.
 
-Полный локальный gate: backend `1052 tests, 0 failures, 0 errors, 0 skipped`, Checkstyle и OpenAPI compatibility — PASS; frontend `41 files, 175 tests`, ESLint и production build — PASS; security, release-safety и supply-chain gates — PASS. Независимый review не выявил P0/P1 в реализации. Paid shadow, финальный committed-tree review и production-canary ожидаются.
+Полный локальный gate: backend `1052 tests, 0 failures, 0 errors, 0 skipped`, Checkstyle и OpenAPI compatibility — PASS; frontend `41 files, 175 tests`, ESLint и production build — PASS; security, release-safety и supply-chain gates — PASS. Независимый code review не выявил P0/P1 в реализации.
+
+Один paid `positive-growth` case прошёл semantic validation и стоил 1,036 ₽. Independent blind review не нашёл hard-gate нарушений и дал среднюю оценку 4,4/5, но `manager usefulness` — только 2/5: summary и factor почти дословно повторяли backend input. V24 закрыт со статусом REJECT, дополнительные paid calls и production-canary остановлены. Следующая итерация должна быть отдельной immutable prompt/input/corpus version и добавлять управленческий синтез без ослабления factual boundary.
 
 Clock-rollback защита расширена на terminal transitions `ReportBackfillJob`; отдельные regression tests покрывают SUCCESS, FAILED и CANCELLED.

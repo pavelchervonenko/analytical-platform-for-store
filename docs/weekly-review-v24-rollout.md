@@ -99,14 +99,17 @@ WEEKLY_REVIEW_AI_ENABLED=false
 `WEEKLY_REVIEW_AI_PLANNER_ENABLED` остаются `false`.
 
 
-## 7. Текущий локальный gate 2026-08-29
+## 7. Итоговый gate 2026-08-30
 
 - offline corpus `weekly-review-ai-eval-v5`: 41 сценарий, PASS;
 - targeted contract/validator/compactor и Checkstyle: PASS;
 - network-free maximum: 14,9472 ₽ для четырёх cases;
-- общий paid budget: 20 ₽, из них v23 использовал 14,104 ₽; v24 calls ещё не выполнялись;
+- общий paid budget: 20 ₽; v23 использовал 14,104 ₽, один v24 case — 1,036 ₽;
 - backend: 1052 теста, Checkstyle, генерация и compatibility-проверка OpenAPI — PASS;
 - frontend: 41 test file / 175 тестов, ESLint и production build — PASS;
 - release safety, operator security и supply-chain gates — PASS;
-- предварительный code review не выявил P0/P1; финальный допуск ожидает paid-output blind review;
-- paid calibration и production-canary ожидаются.
+- предварительный code review не выявил P0/P1;
+- paid-output `positive-growth` прошёл semantic validation, но blind review отклонил его:
+  средняя оценка 4,4/5, `manager usefulness` 2/5;
+- v24 rollout закрыт со статусом **REJECT**. Production-canary и дополнительные v24 paid calls
+  запрещены; продолжение требует новой immutable версии.
