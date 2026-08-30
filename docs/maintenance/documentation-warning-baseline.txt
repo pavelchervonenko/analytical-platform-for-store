@@ -1,0 +1,6 @@
+# Transitional warnings allowed before stage 8. New warnings fail CI.
+backup artifact remains under docs: docs/AI_WEEKLY_REDESIGN_WORKLOG.md.orig
+backup artifact remains under docs: docs/database-design.md.orig
+backup artifact remains under docs: docs/livesklad-webhook-receiver.md.orig
+backup artifact remains under docs: docs/weekly-review-v2-backend.md.orig
+backup artifact remains under docs: docs/weekly-review-v22-ai-contract.md.orig

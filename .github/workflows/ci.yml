@@ -15,6 +15,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  documentation:
+    name: Documentation integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify documentation checker
+        run: python3 -m unittest scripts/tests/test_documentation_check.py
+
+      - name: Verify documentation baseline
+        env:
+          DOCUMENTATION_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD^' }}
+        run: python3 scripts/check-documentation.py
+
   backend:
     name: Backend checks
     runs-on: ubuntu-latest
