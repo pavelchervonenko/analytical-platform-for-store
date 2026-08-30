@@ -1,4 +1,4 @@
-path	tracking	kind	owner	status	action	target	verification
+path	tracking	kind	owner	migration_status	action	target	verification
 AGENTS.md	tracked	working-policy	project	current-needs-extension	keep	AGENTS.md	Add documentation impact rules only after lifecycle policy is approved
 BACKEND_STARTUP_SYNC_REGRESSION_AUDIT.md	tracked	audit-handoff	backend	historical	history	docs/history/audits/2026/07/backend/	Preserve the original audit task and dirty-worktree context as evidence
 BACKEND_STARTUP_SYNC_REGRESSION_AUDIT_RESULT.md	tracked	audit-result	backend	historical	history	docs/history/audits/2026/07/backend/	Preserve verification results and link durable rules to current contracts
@@ -20,9 +20,18 @@ docs/PRODUCTION_RELEASE_V0.1.0_PILOT_14_2026-08-17.md	tracked	release-record	ope
 docs/PRODUCTION_RELEASE_V0.1.0_PILOT_15_2026-08-17.md	tracked	release-record	operations	historical	history	docs/history/releases/2026/08/	Preserve immutable release evidence
 docs/RELEASE_CANDIDATE_2026-08-24.md	tracked	release-recovery-record	operations	historical-mixed	split	docs/history/releases/2026/08/ + docs/history/incidents/2026/08/return-recovery/ + docs/history/audits/2026/08/reconciliation/	Separate candidate status recovery outcome and post-recovery CRM reconciliation evidence
 docs/pilot-rollout-status.md	tracked	status-snapshot	operations	stale	history	docs/history/releases/2026/08/	Must not remain a current production source
-docs/maintenance/documentation-reform-plan.md	tracked	maintenance-plan	project	current	keep	docs/maintenance/documentation-reform-plan.md	Update only at phase checkpoints
+docs/maintenance/documentation-reform-plan.md	tracked	maintenance-plan	project	working-active	keep	docs/maintenance/documentation-reform-plan.md	Update only at phase checkpoints and archive after the reform closes
 docs/maintenance/documentation-inventory.md	tracked	inventory-guide	project	current	keep	docs/maintenance/documentation-inventory.md	Keep synchronized with the TSV registry
 docs/maintenance/documentation-inventory.tsv	tracked	inventory-registry	project	current	keep	docs/maintenance/documentation-inventory.tsv	Completeness check must compare this column with filesystem scope
+docs/maintenance/documentation-policy.md	tracked	documentation-policy	project	current	keep	docs/maintenance/documentation-policy.md	Verify lifecycle metadata and source-of-truth rules at every structural change
+docs/maintenance/documentation-ownership.md	tracked	ownership-policy	project	current	keep	docs/maintenance/documentation-ownership.md	Use logical owners until real CODEOWNERS identities exist
+docs/maintenance/templates/README.md	tracked	template-index	project	current	keep	docs/maintenance/templates/README.md	Keep synchronized with the supported template set
+docs/maintenance/templates/current.md	tracked	documentation-template	project	current	keep	docs/maintenance/templates/current.md	Validate required current-contract sections during migration
+docs/maintenance/templates/runbook.md	tracked	documentation-template	operations	current	keep	docs/maintenance/templates/runbook.md	Validate operational stop rollback verification and evidence sections
+docs/maintenance/templates/decision.md	tracked	documentation-template	project	current	keep	docs/maintenance/templates/decision.md	Preserve accepted decisions by supersession instead of rewriting
+docs/maintenance/templates/evidence.md	tracked	documentation-template	operations	current	keep	docs/maintenance/templates/evidence.md	Ensure historical records remain observational and immutable
+docs/maintenance/templates/archive.md	tracked	documentation-template	project	current	keep	docs/maintenance/templates/archive.md	Require a replacement or explicit reason when archiving
+docs/maintenance/templates/working.md	tracked	documentation-template	project	current	keep	docs/maintenance/templates/working.md	Require a review deadline and an explicit extraction target
 docs/AI_INTERPRETATION_FULL_AUDIT_2026-08-14.md	tracked	audit	ai	historical-mixed	split	docs/history/audits/2026/08/ai/ + docs/decisions/	Extract accepted decisions before freezing the 1700-line evidence
 docs/AI_INTERPRETATION_V15_RELEASE_HANDOFF_2026-08-17.md	tracked	handoff	ai	historical	history	docs/history/handoffs/2026/08/ai/	Preserve release evidence
 docs/AI_INTERPRETATION_V19_RELEASE_HANDOFF_2026-08-17.md	tracked	handoff	ai	historical	history	docs/history/handoffs/2026/08/ai/	Preserve release evidence

@@ -1,3 +1,27 @@
+---
+doc_schema: 1
+doc_type: current
+status: current
+owner: project
+audience:
+  - developer
+last_verified: 2026-08-31
+requirement_sources:
+  - docs/maintenance/documentation-reform-plan.md
+implementation_sources:
+  - docs/maintenance/documentation-inventory.tsv
+verification_sources:
+  - docs/maintenance/documentation-inventory.tsv
+runtime_evidence: []
+required_reviewers:
+  - information-architecture
+review_triggers:
+  - documentation-structure-change
+  - inventory-scope-change
+supersedes: []
+superseded_by: null
+---
+
 # Инвентаризация документации
 
 Статус: этап 1 завершен; реестр готов к использованию в следующих этапах.
@@ -32,6 +56,8 @@
 - `docs/schemas/` содержит 18 JSON Schema и примеров;
 - этап 1 добавил три файла в `docs/maintenance/`, поэтому текущий реестр охватывает 157 файлов в
   `docs/` и 13 documentation-like файлов вне `docs/`, всего 170 строк без заголовка.
+- этап 2 добавляет policy, ownership и семь template-файлов; после их фиксации реестр будет
+  охватывать 166 файлов в `docs/` и 13 файлов вне `docs/`, всего 179 строк без заголовка.
 
 ## Поля реестра
 
@@ -39,7 +65,8 @@
 - `tracking` — `tracked` или `ignored`;
 - `kind` — фактический тип материала;
 - `owner` — область, отвечающая за содержание;
-- `status` — состояние на момент аудита;
+- `migration_status` — состояние материала на момент реформы; это не нормативный front matter
+  `status`;
 - `action` — предварительное решение следующего этапа;
 - `target` — предполагаемый канонический раздел или замена;
 - `verification` — обязательная проверка перед изменением судьбы файла.
@@ -90,6 +117,8 @@
 
 ## Результат проверки
 
+Результат этапа 1:
+
 - Полнота: `PASS` — 170 уникальных записей, пропусков, лишних путей и дубликатов нет.
 - Структура TSV: `PASS` — восемь заполненных полей в каждой строке.
 - Tracking: `PASS` — tracked/ignored соответствует состоянию Git после staging этапа.
@@ -100,3 +129,16 @@
 
 Реестр не утверждает, что исходное содержание уже актуально. Он задает проверяемый порядок, в
 котором это содержание будет сверяться, консолидироваться и переноситься.
+
+Результат этапа 2:
+
+- Полнота: `PASS` — 179 уникальных записей: 166 файлов в `docs/` и 13 вне `docs/`.
+- Tracking: `PASS` — 174 tracked и 5 намеренно ignored файлов совпадают с Git.
+- Metadata: `PASS` — front matter действующих maintenance-документов и YAML всех семи шаблонов
+  корректно разбираются и соответствуют lifecycle policy.
+- Links/format: `PASS` — локальные ссылки maintenance-пакета существуют, `git diff --check`
+  замечаний не выявил.
+- Product/template review: `PASS` — requirement, implementation, verification и runtime evidence
+  разделены; ADR и ограниченный canary verdict не выдают решение или частичную проверку за rollout.
+- Operations/information-architecture review: `PASS` — working lifecycle отделен от draft status,
+  production-state отложен до runtime-этапа 3, а составные runbook gates и risk matrix проверены.
