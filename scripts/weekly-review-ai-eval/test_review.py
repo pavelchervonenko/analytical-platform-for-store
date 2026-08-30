@@ -23,6 +23,11 @@ class WeeklyReviewAiReviewTest(unittest.TestCase):
             json.dumps(
                 {
                     "version": "test-v1",
+                    "promptVersion": "weekly-interpretation-v25",
+                    "inputSchemaVersion": 1,
+                    "selectionSchemaVersion": 1,
+                    "contentSchemaVersion": 4,
+                    "reviewContentKind": "RENDERED_SCHEMA4",
                     "minimumAverage": 4.0,
                     "minimumDimension": 3,
                     "cases": [
@@ -42,9 +47,20 @@ class WeeklyReviewAiReviewTest(unittest.TestCase):
             encoding="utf-8",
         )
         for case_id in ("case-a", "case-b"):
-            provider_input = json.dumps({"contractVersion": 1, "case": case_id})
+            provider_input = json.dumps(
+                {
+                    "contractVersion": 1,
+                    "promptVersion": "weekly-interpretation-v25",
+                    "contentSchemaVersion": 4,
+                    "case": case_id,
+                }
+            )
             (self.responses / f"{case_id}.input.json").write_text(
                 provider_input, encoding="utf-8"
+            )
+            provider_response = json.dumps({"selectionSchemaVersion": 1})
+            (self.responses / f"{case_id}.provider.json").write_text(
+                provider_response, encoding="utf-8"
             )
             response = json.dumps({"schemaVersion": 4, "case": case_id})
             (self.responses / f"{case_id}.json").write_text(
@@ -55,8 +71,17 @@ class WeeklyReviewAiReviewTest(unittest.TestCase):
                     {
                         "corpusVersion": "test-v1",
                         "caseId": case_id,
+                        "promptVersion": "weekly-interpretation-v25",
+                        "inputSchemaVersion": 1,
+                        "selectionSchemaVersion": 1,
+                        "contentSchemaVersion": 4,
+                        "reviewContentKind": "RENDERED_SCHEMA4",
                         "semanticValidated": True,
                         "inputHash": REVIEW.sha256(provider_input),
+                        "providerResponseHash": REVIEW.sha256(
+                            provider_response
+                        ),
+                        "reviewContentHash": REVIEW.sha256(response),
                         "requestHash": "a" * 64,
                     }
                 ),
@@ -139,15 +164,56 @@ class WeeklyReviewAiReviewTest(unittest.TestCase):
 
     def test_load_outputs_rejects_prompt_version_mismatch(self):
         manifest = json.loads(self.manifest.read_text(encoding="utf-8"))
-        manifest["promptVersion"] = "weekly-interpretation-v24"
+        manifest["promptVersion"] = "weekly-interpretation-v26"
         self.manifest.write_text(json.dumps(manifest), encoding="utf-8")
 
         with self.assertRaisesRegex(ValueError, "prompt version mismatch"):
             REVIEW.load_outputs(self.manifest, self.responses)
 
+    def test_load_outputs_rejects_wrong_review_content_kind(self):
+        receipt_path = self.responses / "case-a.receipt.json"
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        receipt["reviewContentKind"] = "REJECTED_PROVIDER_RESPONSE"
+        receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "review content kind mismatch"):
+            REVIEW.load_outputs(self.manifest, self.responses)
+
+    def test_prepare_rejects_tampered_provider_response(self):
+        provider_path = self.responses / "case-a.provider.json"
+        provider_path.write_text("{}", encoding="utf-8")
+
+        with self.assertRaisesRegex(
+            ValueError, "provider response integrity mismatch"
+        ):
+            REVIEW.prepare(
+                self.manifest, self.responses, self.root / "provider-review"
+            )
+
+    def test_prepare_rejects_tampered_rendered_content(self):
+        content_path = self.responses / "case-a.json"
+        content_path.write_text("{}", encoding="utf-8")
+
+        with self.assertRaisesRegex(
+            ValueError, "review content integrity mismatch"
+        ):
+            REVIEW.prepare(
+                self.manifest, self.responses, self.root / "content-review"
+            )
+
     def test_prepare_rejects_tampered_provider_input(self):
         input_path = self.responses / "case-a.input.json"
-        input_path.write_text("{}", encoding="utf-8")
+        input_path.write_text(
+            json.dumps(
+                {
+                    "contractVersion": 1,
+                    "promptVersion": "weekly-interpretation-v25",
+                    "contentSchemaVersion": 4,
+                    "case": "tampered",
+                }
+            ),
+            encoding="utf-8",
+        )
 
         with self.assertRaisesRegex(ValueError, "input integrity mismatch"):
             REVIEW.prepare(
@@ -155,6 +221,25 @@ class WeeklyReviewAiReviewTest(unittest.TestCase):
                 self.responses,
                 self.root / "review",
             )
+
+
+    def test_load_outputs_rejects_tampered_immutable_resource(self):
+        resource = self.root / "resource.txt"
+        resource.write_text("stable", encoding="utf-8")
+        nested_manifest = self.root / "scripts/eval/manifest.json"
+        nested_manifest.parent.mkdir(parents=True)
+        manifest = json.loads(self.manifest.read_text(encoding="utf-8"))
+        manifest["promptPath"] = "resource.txt"
+        manifest["promptSha256"] = REVIEW.sha256("stable")
+        nested_manifest.write_text(json.dumps(manifest), encoding="utf-8")
+
+        REVIEW.load_outputs(nested_manifest, self.responses)
+
+        resource.write_text("tampered", encoding="utf-8")
+        with self.assertRaisesRegex(
+            ValueError, "immutable resource hash mismatch"
+        ):
+            REVIEW.load_outputs(nested_manifest, self.responses)
 
 
 if __name__ == "__main__":

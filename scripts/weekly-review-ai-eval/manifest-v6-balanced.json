@@ -1,0 +1,45 @@
+{
+  "version": "weekly-review-ai-eval-v6",
+  "promptVersion": "weekly-interpretation-v25",
+  "inputSchemaVersion": 4,
+  "selectionSchemaVersion": 1,
+  "contentSchemaVersion": 4,
+  "reviewContentKind": "RENDERED_SCHEMA4",
+  "promptPath": "docs/prompts/weekly-interpretation-v25.md",
+  "promptSha256": "727846251107f8fd09567d338ad8937991aa8f47b01e92fd4907fea6efe3edc1",
+  "inputSchemaPath": "docs/schemas/weekly-review-ai-input-v4.schema.json",
+  "inputSchemaSha256": "2eed41ead515f29c104216b9eeb359bc82e2facd100a14602f0f74fc60dc721f",
+  "selectionSchemaPath": "docs/schemas/weekly-review-ai-selection-v1.schema.json",
+  "selectionSchemaSha256": "92dcd6202e6ab51dcbaaba103f05b3f5f1a0a835403cad88e28f2739943b3e9b",
+  "contentSchemaPath": "docs/schemas/weekly-review-ai-content-v4.schema.json",
+  "contentSchemaSha256": "4930b518ef8894fccf5d2a974a9fbe737f12ff5e1337663edfee77ea7ad95b65",
+  "rendererPath": "backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiRendererV25.java",
+  "rendererSha256": "56814d2c88db5b53b0a34aeadf4bb9eba18d6899c105ad2cbbbdc56bb9fceeb6",
+  "corpusPath": "backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiEvaluationCorpus.java",
+  "corpusSha256": "6ab219aa0a2eee4cf69be7ad4c03b503d4c933a50dbba8614f91a0780553d696",
+  "fixturesPath": "backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiTestFixtures.java",
+  "fixturesSha256": "37753ffa616f4e0483d56fd72b3b2912dd83599c6f018cbab31cf09095aa65d6",
+  "shadowRunnerPath": "backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiShadowRunner.java",
+  "shadowRunnerSha256": "a9f44c9d22abba94ee38ddd8169430d5e865439959692ee4d22d3cbbbc9e6e8e",
+  "reviewScriptPath": "scripts/weekly-review-ai-eval/review.py",
+  "reviewScriptSha256": "d2bc5044995f67b9ff5148c7526d0be0d885c47006d64ddc9135beda8de6afb6",
+  "minimumAverage": 4.0,
+  "minimumDimension": 3,
+  "cases": [
+    {
+      "id": "balanced-strength-risk",
+      "required": [
+        "неоднозначный итог без объявления всей недели сильнее или слабее",
+        "явное разделение сильной стороны attach-rate и риска возвратов",
+        "два неповторяющихся управленческих смысла факторов"
+      ],
+      "forbidden": [
+        "однозначная оценка всей недели",
+        "сокрытие положительного или отрицательного фактора",
+        "неподтверждённая причинность",
+        "чистый цифровой пересказ",
+        "новые числа"
+      ]
+    }
+  ]
+}

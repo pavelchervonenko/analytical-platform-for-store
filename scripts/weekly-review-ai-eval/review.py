@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Integrity-checked blind review packet for weekly-review AI v24 outputs."""
+"""Integrity-checked blind review packet for weekly-review AI v25 rendered outputs."""
 
 import argparse
 import hashlib
@@ -9,6 +9,7 @@ from pathlib import Path
 
 DIMENSIONS = (
     "summaryCoherence",
+    "managementUsefulness",
     "nonDuplication",
     "factorMeaning",
     "actionPracticality",
@@ -30,6 +31,13 @@ def load_outputs(manifest_path, responses_dir):
     for path_key, hash_key in (
         ("promptPath", "promptSha256"),
         ("inputSchemaPath", "inputSchemaSha256"),
+        ("selectionSchemaPath", "selectionSchemaSha256"),
+        ("contentSchemaPath", "contentSchemaSha256"),
+        ("rendererPath", "rendererSha256"),
+        ("corpusPath", "corpusSha256"),
+        ("fixturesPath", "fixturesSha256"),
+        ("shadowRunnerPath", "shadowRunnerSha256"),
+        ("reviewScriptPath", "reviewScriptSha256"),
     ):
         if path_key in manifest:
             resource = repository_root / manifest[path_key]
@@ -40,10 +48,12 @@ def load_outputs(manifest_path, responses_dir):
     outputs = []
     for case in manifest["cases"]:
         input_path = responses_dir / f"{case['id']}.input.json"
+        provider_path = responses_dir / f"{case['id']}.provider.json"
         response_path = responses_dir / f"{case['id']}.json"
         receipt_path = responses_dir / f"{case['id']}.receipt.json"
         if (
             not input_path.is_file()
+            or not provider_path.is_file()
             or not response_path.is_file()
             or not receipt_path.is_file()
         ):
@@ -64,16 +74,50 @@ def load_outputs(manifest_path, responses_dir):
             != manifest["inputSchemaVersion"]
         ):
             raise ValueError(f"input schema version mismatch for {case['id']}")
+        if (
+            manifest.get("contentSchemaVersion") is not None
+            and provider_payload.get("contentSchemaVersion")
+            != manifest["contentSchemaVersion"]
+        ):
+            raise ValueError(f"content schema version mismatch for {case['id']}")
+        provider_response = provider_path.read_text(encoding="utf-8")
         response = response_path.read_text(encoding="utf-8")
         receipt = read_json(receipt_path)
         if receipt.get("corpusVersion") != manifest["version"]:
             raise ValueError(f"corpus version mismatch for {case['id']}")
         if receipt.get("caseId") != case["id"]:
             raise ValueError(f"receipt case mismatch for {case['id']}")
+        for manifest_key, receipt_key in (
+            ("promptVersion", "promptVersion"),
+            ("inputSchemaVersion", "inputSchemaVersion"),
+            ("selectionSchemaVersion", "selectionSchemaVersion"),
+            ("contentSchemaVersion", "contentSchemaVersion"),
+        ):
+            if (
+                manifest.get(manifest_key) is not None
+                and receipt.get(receipt_key) != manifest[manifest_key]
+            ):
+                raise ValueError(
+                    f"receipt {manifest_key} mismatch for {case['id']}"
+                )
         if sha256(provider_input) != receipt.get("inputHash"):
             raise ValueError(f"input integrity mismatch for {case['id']}")
+        if sha256(provider_response) != receipt.get("providerResponseHash"):
+            raise ValueError(
+                f"provider response integrity mismatch for {case['id']}"
+            )
+        if sha256(response) != receipt.get("reviewContentHash"):
+            raise ValueError(
+                f"review content integrity mismatch for {case['id']}"
+            )
         if receipt.get("semanticValidated") is not True:
             raise ValueError(f"semantic gate did not pass for {case['id']}")
+        expected_content_kind = manifest.get("reviewContentKind")
+        if (
+            expected_content_kind is not None
+            and receipt.get("reviewContentKind") != expected_content_kind
+        ):
+            raise ValueError(f"review content kind mismatch for {case['id']}")
         outputs.append((case, provider_input, response, receipt))
     return manifest, outputs
 
@@ -210,7 +254,7 @@ def parse_args():
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=Path("scripts/weekly-review-ai-eval/manifest-v5.json"),
+        default=Path("scripts/weekly-review-ai-eval/manifest-v6.json"),
     )
     parser.add_argument("--responses-dir", type=Path, required=True)
     parser.add_argument("--review-dir", type=Path)
