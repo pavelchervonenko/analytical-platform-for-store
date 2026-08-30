@@ -340,3 +340,11 @@ CI-защита вводится поэтапно:
    становятся блокирующими;
 4. внешние URL и review age остаются предупреждениями, чтобы сетевой сбой или календарная дата не
    блокировали безопасный релиз.
+
+Текущая реализация — `scripts/check-documentation.py`, его unit tests и job `documentation` в
+`.github/workflows/ci.yml`. Проверка сравнивает реестр с базовой Git-ревизией: строка удалённого
+файла сохраняется как tombstone, runtime-artifact удалить нельзя, а обычное удаление возможно
+только после отдельной ревизии с `action=delete-candidate`, tracked fragment map и tracked
+PASS-evidence независимого reviewer-а. Переходный warning baseline является allowlist: новые
+предупреждения блокируют CI, а отсутствие локального ignored `.orig` в чистом checkout ошибкой не
+является. На этапе 8 allowlist удаляется вместе с backup-файлами и включается `--strict`.

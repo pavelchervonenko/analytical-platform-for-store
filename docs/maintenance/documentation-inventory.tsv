@@ -14,6 +14,8 @@ scripts/llm-eval/requirements.txt	tracked	tooling-manifest	ai	current-needs-veri
 scripts/weekly-review-ai-eval/README.md	tracked	evaluation-tool-guide	ai	mixed	split	scripts/weekly-review-ai-eval/README.md + docs/history/audits/2026/08/ai-evaluations/	Keep safe execution instructions co-located and move paid cost receipts and dated outcomes to history
 docs/README.md	tracked	index	project	stale	rewrite	docs/README.md	Rebuild navigation after target structure exists
 docs/PROJECT_HANDOFF.md	tracked	handoff	project	stale-mixed	split	docs/history/handoffs/2026/08/ + docs/current/architecture/	Extract only durable architecture context; build project-state independently from verified runtime
+docs/current/project-state.md	tracked	current-state	project	current	keep	docs/current/project-state.md	Refresh only from sanitized immutable production evidence after every runtime change
+docs/history/releases/2026/08/v0.1.0-pilot.27-production-verification.md	tracked	release-verification	operations	historical	history	docs/history/releases/2026/08/	Preserve immutable sanitized evidence and its explicit verification limits
 docs/PRODUCTION_PILOT_WORKING_PRACTICES.md	tracked	working-policy	operations	current-needs-verification	consolidate	docs/maintenance/working-practices.md	Reconcile with AGENTS and remove duplicated operational rules
 docs/PRODUCTION_PILOT_CONTINUATION_HANDOFF_2026-08-11.md	tracked	handoff	operations	historical	history	docs/history/handoffs/2026/08/	Preserve as immutable pilot evidence
 docs/PRODUCTION_RELEASE_V0.1.0_PILOT_14_2026-08-17.md	tracked	release-record	operations	historical	history	docs/history/releases/2026/08/	Preserve immutable release evidence

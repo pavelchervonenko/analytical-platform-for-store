@@ -58,11 +58,14 @@ superseded_by: null
   `docs/` и 13 documentation-like файлов вне `docs/`, всего 170 строк без заголовка.
 - этап 2 добавляет policy, ownership и семь template-файлов; после их фиксации реестр будет
   охватывать 166 файлов в `docs/` и 13 файлов вне `docs/`, всего 179 строк без заголовка.
+- CI baseline и этап 3 добавили warning allowlist, канонический project-state и immutable release
+  evidence. Текущий реестр охватывает 169 файлов в `docs/` и 13 файлов вне `docs/`, всего 182
+  строки без заголовка: 177 tracked и 5 ignored.
 
 ## Поля реестра
 
 - `path` — путь от корня репозитория;
-- `tracking` — `tracked` или `ignored`;
+- `tracking` — `tracked`, `ignored` или постоянный tombstone `removed`;
 - `kind` — фактический тип материала;
 - `owner` — область, отвечающая за содержание;
 - `migration_status` — состояние материала на момент реформы; это не нормативный front matter
@@ -142,3 +145,14 @@ superseded_by: null
   разделены; ADR и ограниченный canary verdict не выдают решение или частичную проверку за rollout.
 - Operations/information-architecture review: `PASS` — working lifecycle отделен от draft status,
   production-state отложен до runtime-этапа 3, а составные runbook gates и risk matrix проверены.
+
+Результат CI baseline и этапа 3:
+
+- Полнота: `PASS` — 182 записи, включая единственный project-state и immutable `pilot.27` evidence.
+- Protection: `PASS` — base-aware tombstone, runtime-artifact и production-runbook gates прошли
+  adversarial review; fake evidence и удаление строки реестра блокируются.
+- Clean checkout: `PASS` — 14 unit tests, metadata/link/inventory check и `git diff --check`.
+- Runtime boundary: `PASS` — release/schema/digests/flags имеют дату наблюдения и не копируются в
+  README, архитектуру или runbook.
+- Recovery safety: `PASS` — старые handoff/status inline помечают июльскую recovery завершённой и
+  запрещают повторный запуск.

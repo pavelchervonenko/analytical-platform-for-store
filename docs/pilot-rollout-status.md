@@ -1,11 +1,15 @@
 # Pilot rollout status
 
+> **Historical status — do not use as a runbook or current production source.** The release/schema
+> values below are obsolete. Current verified state: [current/project-state.md](current/project-state.md).
+> The listed recovery of eight July returns is complete and reconciled; **do not rerun it**.
+
 Последнее обновление: 2026-08-24.
 
-Это текущий краткий статус production. Старые release notes с датой/версией являются историческими
-снимками. Повторяемая процедура: [production-deployment-runbook.md](production-deployment-runbook.md).
+Это исторический status-снимок, а не текущий production source. Повторяемая процедура на момент
+снимка: [production-deployment-runbook.md](production-deployment-runbook.md).
 
-## Развернутый контур
+## Контур на дату исторического снимка
 
 - public origin: `https://store-analytics.net`;
 - release: `v0.1.0-pilot.22`, commit `2e8f9c2`;
@@ -28,7 +32,7 @@
 - августовская сверка выполняется по завершенным дням;
 - июльский аудит обнаружил восемь подтвержденных возвратов, отсутствующих в приложении;
 - разница июльской выручки: `716 750 ₽`;
-- восстановление этих восьми документов еще является отдельной операторской операцией.
+- **errata:** восстановление восьми документов завершено и сверено с CRM; **do not rerun**.
 
 Аудит: [REVENUE_RECONCILIATION_AUDIT_2026-08-23_JULY.md](REVENUE_RECONCILIATION_AUDIT_2026-08-23_JULY.md).
 
@@ -69,8 +73,8 @@ Webhook позволяют ловить будущие события и диа�
 ## Открытые gates
 
 - [ ] отправить/развернуть текущий UI-кандидат после final fetch/diff;
-- [ ] восстановить восемь июльских возвратов validated API;
-- [ ] повторить июльскую CRM-сверку до нулевого или объясненного delta;
+- [x] восемь июльских возвратов восстановлены validated API — **do not rerun**;
+- [x] июльская CRM-сверка завершена с точным совпадением;
 - [ ] получить настоящий `ORDER_RETURN` и провести canary order worker;
 - [ ] продолжить помесячный backfill с независимой сверкой обоих магазинов;
 - [ ] закрыть data-quality по сменам/классификации только подтвержденными данными;

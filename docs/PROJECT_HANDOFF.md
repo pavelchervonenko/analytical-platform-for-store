@@ -1,17 +1,23 @@
 # Передача контекста проекта Store Analytics
 
+> **Historical handoff — do not use for production operations.** This snapshot contains obsolete
+> release, schema and recovery status. Current verified state:
+> [current/project-state.md](current/project-state.md). The eight July returns described below were
+> recovered and reconciled; **do not rerun that recovery from this file**.
+
 Дата сверки с кодом: 2026-08-24.
 
-Это основная точка входа для разработки и эксплуатации. Индекс документов:
-[README.md](README.md). Состав ближайшего релиза:
+Это исторический handoff, сохранённый для происхождения решений. Действующая точка входа:
+[current/project-state.md](current/project-state.md). Исторический индекс: [README.md](README.md).
+Состав кандидата на дату снимка:
 [RELEASE_CANDIDATE_2026-08-24.md](RELEASE_CANDIDATE_2026-08-24.md).
 
 Секреты, токены, cookie, реальные персональные данные и внешние идентификаторы здесь не хранятся.
 `.env` нельзя печатать, коммитить или добавлять в task context.
 
-## 1. Production и релиз-кандидат
+## 1. Исторический production-снимок и релиз-кандидат
 
-Текущее подтвержденное состояние production:
+На дату исходного снимка production имел следующее состояние; эти значения больше не текущие:
 
 - release `v0.1.0-pilot.22`, commit `2e8f9c2`;
 - schema `V44`;
@@ -131,8 +137,9 @@ Sale-return worker получает полный документ по `data.id`
 ### Подтвержденные пропуски
 
 Штатный validated recovery endpoint сверяет external ID, номер, сумму и количество позиций до
-изменения данных. Для июльской сверки известны восемь пропущенных возвратов с общей разницей
-`716 750 ₽`; операция восстановления еще не считается выполненной.
+изменения данных. Для июльской сверки были известны восемь пропущенных возвратов с общей разницей
+`716 750 ₽`. **Errata:** операция впоследствии завершена, а сверка с CRM сошлась; повторный запуск
+запрещён. Итог: [current/project-state.md](current/project-state.md#data-and-return-recovery).
 
 Временный каталог `.codex-prod-recovery/` намеренно не входит в Git. Источник истины:
 [validated-return-recovery-runbook.md](validated-return-recovery-runbook.md).
@@ -214,7 +221,7 @@ Visual-проверка только локальная. Screenshots могут 
 1. Проверить состав documentation commit и рабочее дерево.
 2. С рабочим SSH agent выполнить `git fetch` и проверить divergence перед push.
 3. Развернуть текущий frontend-кандидат отдельным release change.
-4. Восстановить подтвержденные июльские возвраты отдельной операцией и повторить CRM-сверку.
+4. [x] Июльские возвраты восстановлены и сверены с CRM — **completed, do not rerun**.
 5. Дождаться настоящего `ORDER_RETURN`, проверить `data.id` и только затем canary order worker.
 6. Продолжать backfill исторических месяцев с независимой сверкой каждого магазина/месяца.
 7. Исправлять внешние data-quality проблемы (смены, классификация, несвязанные возвраты) только на

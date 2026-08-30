@@ -1,38 +1,25 @@
 # Документация Store Analytics
 
-Актуальность индекса: 2026-08-26.
-
-Этот файл разделяет действующие документы и исторические снимки. Если сведения расходятся,
-приоритет имеют код, миграции, автоматические проверки и документы из раздела «Актуальные».
-
-## Текущее состояние
-
-- production: `v0.1.0-pilot.23`, commit `0491e02`, schema `V44`;
-- поверх production локально готовятся два backend-исправления: узкая классификация опечатки
-  `Phone 15 Pro Max` и безопасный пропуск корректировки оплаты, попавшей в поток возвратов;
-- приемник возвратных webhook и worker возвратов продаж включены; worker возвратов заказов остается
-  выключенным до проверки настоящего `ORDER_RETURN`;
-- ИИ-схема `v21/schema3` прошла отдельный семантический прогон, но production default пока
-  `v4/schema2`.
-
-Сводка релиз-кандидата и точные ограничения находятся в
-[RELEASE_CANDIDATE_2026-08-24.md](RELEASE_CANDIDATE_2026-08-24.md).
+Этот индекс ведёт к действующим контрактам, runbook и immutable evidence. Текущее проверенное
+production-состояние хранится только в [current/project-state.md](current/project-state.md).
+Датированные release, audit, canary и handoff-файлы не являются текущими инструкциями.
 
 ## С чего начать
 
-1. [PROJECT_HANDOFF.md](PROJECT_HANDOFF.md) — архитектура, состояние production и открытые задачи.
-2. [RELEASE_CANDIDATE_2026-08-24.md](RELEASE_CANDIDATE_2026-08-24.md) — что войдет в ближайший
-   релиз и что намеренно исключено.
-3. [FRONTEND_HANDOFF.md](FRONTEND_HANDOFF.md) и
-   [FRONTEND_ACCEPTANCE.md](FRONTEND_ACCEPTANCE.md) — UI-контракт и фактическая проверка SPA.
-4. [livesklad-webhook-receiver.md](livesklad-webhook-receiver.md) — прием и обработка возвратных
-   webhook.
-5. [validated-return-recovery-runbook.md](validated-return-recovery-runbook.md) — безопасное
-   восстановление известных пропущенных возвратов.
-6. [production-deployment-runbook.md](production-deployment-runbook.md) — обязательный порядок
-   production-релиза и отката.
+1. [current/project-state.md](current/project-state.md) — последнее проверенное runtime-состояние и
+   честные ограничения evidence.
+2. [maintenance/documentation-policy.md](maintenance/documentation-policy.md) — классы документов,
+   источники истины и правила обновления.
+3. [maintenance/documentation-reform-plan.md](maintenance/documentation-reform-plan.md) — этапы и
+   текущая контрольная точка.
+4. [maintenance/documentation-inventory.md](maintenance/documentation-inventory.md) — полный реестр
+   действующих, исторических и устаревших материалов.
 
-## Актуальные документы
+## Переходный индекс предметных документов
+
+Раздел ниже временный: перечисленные файлы проходят сверку с кодом и переносятся в `current/`,
+`runbooks/`, `security/`, `decisions/`, `history/` или `archive/`. Пока у файла нет статуса
+`current` по новой политике, его содержание нужно подтверждать реализацией и тестами.
 
 ### Архитектура и эксплуатация
 
@@ -88,15 +75,15 @@
 `*_AUDIT_*.md`, `CHECKPOINT_*.md`, `PRODUCTION_RELEASE_*.md`,
 `AI_INTERPRETATION_*_HANDOFF_*.md` и `PRODUCTION_PILOT_*.md`.
 
-Актуальный результат июльской сверки:
-[REVENUE_RECONCILIATION_AUDIT_2026-08-23_JULY.md](REVENUE_RECONCILIATION_AUDIT_2026-08-23_JULY.md).
+Июльский [предварительный аудит до восстановления](REVENUE_RECONCILIATION_AUDIT_2026-08-23_JULY.md)
+содержит устаревший `ACTION_REQUIRED` и не является инструкцией. Восстановление восьми возвратов
+завершено; итог и запрет повторного запуска зафиксированы в
+[current/project-state.md](current/project-state.md#data-and-return-recovery).
 
 ## Правила обновления
 
-- изменение API сопровождается правкой тематического контракта;
-- новая миграция отражается в `PROJECT_HANDOFF.md`, `database-design.md` и release note;
-- изменение UI сопровождается обновлением `frontend-actions.md` и локальной визуальной проверкой;
-- production-факт записывается только после фактического развертывания;
-- секреты, реальные токены, пароли и персональные данные в документацию не попадают;
-- временные production-скрипты не считаются релизным артефактом без dry-run, защит окружения,
-  тестов и отдельного review.
+Нормативные правила, ownership, review gates и шаблоны находятся в
+[maintenance/documentation-policy.md](maintenance/documentation-policy.md) и
+[maintenance/documentation-ownership.md](maintenance/documentation-ownership.md). Production-факт
+публикуется только из sanitized runtime evidence; секреты, полные environment-файлы и персональные
+данные в документацию не включаются.
