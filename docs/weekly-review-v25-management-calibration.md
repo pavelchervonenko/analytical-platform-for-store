@@ -1,7 +1,7 @@
 # Weekly review v25/schema4 — управленческая калибровка
 
 Дата: 2026-08-30
-Статус: полный local/paid gate и независимые review пройдены; candidate допущен к canary, production-canary не выполнен
+Статус: local/paid gates и первый production-canary пройдены; v25 развёрнут default-off, planners выключены
 
 ## Причина v25
 
@@ -63,9 +63,30 @@ finalize; исходный production secret не изменялся.
 
 ## Платный бюджет
 
-Общий разрешённый бюджет — 20 ₽. Использовано 16,016 ₽: v23 — 14,104 ₽, один v24 case —
-1,036 ₽, один v25 case — 0,876 ₽. Остаток — 3,984 ₽. Дополнительные paid calls не требуются;
-любой новый вызов всё равно потребует отдельного явного разрешения и нового hard cap.
+Калибровочный бюджет — 20 ₽. До production-canary использовано 16,016 ₽: v23 — 14,104 ₽,
+один v24 case — 1,036 ₽, один v25 case — 0,876 ₽. Отдельно разрешённый production-canary
+стоил 1,203200 ₽; совокупная известная стоимость v23–v25 calibration и canary — 17,219200 ₽.
+Дополнительные paid calls не требуются; любой новый вызов всё равно потребует отдельного явного
+разрешения и нового hard cap.
 
-V25 допущен к default-off production-canary, но это решение само по себе не выполняет deploy,
-не включает planner/worker flags и не публикует enrichment.
+## Production-canary
+
+Release `v0.1.0-pilot.27` с exact commit
+`ea90ec81c3c33729e86d515e937bd9d82c39e636` развёрнут на schema 48. Автоматические snapshot/AI
+planners оставлены выключенными, AI worker включён только для ручной очереди.
+
+Для «МобиСферы» создан immutable snapshot завершённой недели `2026-08-17..2026-08-23` со
+статусом `PARTIAL`, после чего поставлен ровно один exact `weekly-interpretation-v25/schema4` job.
+Job завершился `SUCCEEDED` с первой попытки: provider outcome `RESPONSE_RECEIVED`, HTTP 200,
+1390 input и 114 output tokens, actual cost 1,203200 ₽. Structural/semantic validation — `VALID`,
+validation violations и job validation codes — пустые.
+
+Публичный read path вернул `AI_ENHANCED/READY` с фактическим v25/schema4. Сравнение полного ответа
+до/после после нормализации только разрешённых AI-owned полей подтвердило отсутствие изменений
+backend-owned данных. В AI-тексте нет PII, новых чисел, месячного плана, текущей неполной недели
+или кадровых оценок. Независимый blind reviewer дал PASS при среднем `3,5/5`, минимуме `3/5` и
+нуле hard-gate нарушений. Остаточные неблокирующие замечания — шаблонность factor details и
+недостаточно операциональная формулировка действий «разобрать».
+
+Первый store-canary — PASS; решение о втором магазине и автоматических planners остаётся
+отдельным change.

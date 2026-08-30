@@ -724,5 +724,29 @@ blind packet принимает только `RENDERED_SCHEMA4`. Независ�
 Integrity-checked blind review: 4,5/5, minimum dimension 3/5, forbidden/critical findings — 0;
 решение `CANDIDATE_ELIGIBLE_FOR_CANARY`. Неблокирующее замечание — factor explanations частично
 повторяют summary и дают ограниченный дополнительный смысл. Всего из лимита 20 ₽ использовано
-16,016 ₽, остаток 3,984 ₽. Временные API key/env копии удалены локально и на production; deploy
-и production-canary не выполнялись.
+16,016 ₽, остаток 3,984 ₽. Временные API key/env копии удалены локально и на production; на этой
+точке deploy и production-canary ещё не выполнялись.
+
+### 2026-08-30 — этап 6 — production rollout v25 и первый store-canary
+
+Exact commit `ea90ec81c3c33729e86d515e937bd9d82c39e636` опубликован тегом
+`v0.1.0-pilot.27`. GitHub release workflow повторно выполнил backend/migration и frontend gates и
+опубликовал immutable backend/web images. Production preflight и Compose config прошли до
+migrator; backup был подтверждён, активных sync, report backfill, snapshot и weekly AI jobs не
+было. Схема осталась V48, Flyway подтвердил 49 migrations без нового изменения. API, worker и web
+healthy; public и независимый liveness/readiness smoke — PASS; свежие логи не содержат contract,
+validation, provider или schema errors.
+
+Release развёрнут с `WEEKLY_REVIEW_ENABLED=true`, AI worker enabled и обоими автоматическими
+planners disabled. Для «МобиСферы» вручную создан snapshot завершённой недели 17–23 августа 2026
+со статусом PARTIAL и один exact v25/schema4 job. Job завершился `SUCCEEDED` с первой попытки:
+semantic `VALID`, violations `[]`, provider outcome `RESPONSE_RECEIVED`, HTTP 200, 1504 tokens,
+actual cost 1,203200 ₽. Immutable enrichment опубликован через штатный read path.
+
+Сравнение полного ответа до/после с нормализацией только разрешённых AI-owned полей подтвердило
+`backendOwnedStable=true`, unexpected difference paths — `[]`. В тексте нет PII, придуманных
+чисел, месячного плана, неполной текущей недели или кадровых оценок. Независимый blind reviewer —
+PASS, среднее 3,5/5, минимум 3/5, hard gates — 0; неблокирующие замечания относятся к шаблонности
+факторов и операциональности действий. Первый production store-canary — PASS. Массовая
+автоматизация не включена: snapshot и AI planners остаются `false` до отдельного решения о втором
+магазине и rollout policy.
