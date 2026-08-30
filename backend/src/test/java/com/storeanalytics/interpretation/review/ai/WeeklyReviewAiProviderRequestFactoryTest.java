@@ -26,7 +26,7 @@ class WeeklyReviewAiProviderRequestFactoryTest {
             );
 
     @Test
-    void packagesExactV24InputPromptAndSchema() {
+    void packagesExactV25InputPromptAndSelectionSchema() {
         PersistedWeeklyReviewSnapshot snapshot = snapshot();
         WeeklyReviewAiInput input = WeeklyReviewAiEvaluationCorpus
                 .onlineCases().getFirst().input();
@@ -52,10 +52,11 @@ class WeeklyReviewAiProviderRequestFactoryTest {
         assertThat(prepared.inputHash()).matches("[a-f0-9]{64}");
         assertThat(prepared.requestHash()).matches("[a-f0-9]{64}");
         assertThat(prepared.request().systemPrompt())
-                .contains("optional enrichment system prompt v24")
+                .contains("optional enrichment system prompt v25")
                 .doesNotContain("Предыдущий ответ был отклонён");
         assertThat(prepared.request().responseSchemaJson())
-                .contains("\"schemaVersion\":{\"const\":4}");
+                .contains("\"selectionSchemaVersion\":{\"const\":1}")
+                .doesNotContain("factorExplanations", "actionWordings");
         assertThat(prepared.request().callDeadline())
                 .isEqualTo(now.plus(Duration.ofMinutes(3)));
     }

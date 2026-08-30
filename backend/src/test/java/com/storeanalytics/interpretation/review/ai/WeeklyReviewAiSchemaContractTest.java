@@ -19,7 +19,8 @@ class WeeklyReviewAiSchemaContractTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
-    void canonicalExampleConformsToSchemaFour() throws IOException {
+    void canonicalContentExampleStillConformsToPublicSchemaFour()
+            throws IOException {
         LlmJsonSchemaValidator validator = new LlmJsonSchemaValidator(
                 WeeklyReviewAiContract.CONTENT_SCHEMA
         );
@@ -28,7 +29,34 @@ class WeeklyReviewAiSchemaContractTest {
     }
 
     @Test
-    void schemaContainsOnlyOptionalStoreLevelEnrichment() throws IOException {
+    void providerSelectionSchemaContainsNoFreeTextFields()
+            throws IOException {
+        JsonNode schema = objectMapper.readTree(resource(
+                WeeklyReviewAiContract.SELECTION_SCHEMA
+        ));
+
+        assertThat(schema.path("properties").propertyNames())
+                .containsExactlyInAnyOrderElementsOf(Set.of(
+                        "selectionSchemaVersion",
+                        "summary",
+                        "factorSelections"
+                ));
+        assertThat(schema.path("additionalProperties").asBoolean()).isFalse();
+        assertThat(schema.path("$defs").path("summarySelection")
+                .path("properties").propertyNames())
+                .containsExactlyInAnyOrder(
+                        "selector",
+                        "primaryFactorId",
+                        "secondaryFactorId"
+                );
+        assertThat(schema.path("$defs").path("factorSelection")
+                .path("properties").propertyNames())
+                .containsExactlyInAnyOrder("factorId", "selector");
+    }
+
+    @Test
+    void contentSchemaRemainsStoreLevelAndBackwardCompatible()
+            throws IOException {
         JsonNode schema = objectMapper.readTree(resource(
                 WeeklyReviewAiContract.CONTENT_SCHEMA
         ));
@@ -42,41 +70,37 @@ class WeeklyReviewAiSchemaContractTest {
                 ));
         assertThat(schema.path("required")).hasSize(4);
         assertThat(schema.path("additionalProperties").asBoolean()).isFalse();
-        assertThat(resource(WeeklyReviewAiContract.CONTENT_SCHEMA))
-                .doesNotContain(
-                        "\"employees\"",
-                        "\"employeePublicId\"",
-                        "\"monthlyPlan\"",
-                        "\"period\"",
-                        "\"target\"",
-                        "\"displayName\""
-                );
     }
 
     @Test
-    void contractUsesNewImmutableVersionWithoutChangingLegacyRegistry() {
+    void contractUsesImmutableV25AndReadsThreePreviousVersions() {
         assertThat(WeeklyReviewAiContract.PROMPT_VERSION)
-                .isEqualTo("weekly-interpretation-v24");
-        assertThat(WeeklyReviewAiContract.INPUT_SCHEMA_VERSION).isEqualTo(3);
+                .isEqualTo("weekly-interpretation-v25");
+        assertThat(WeeklyReviewAiContract.INPUT_SCHEMA_VERSION).isEqualTo(4);
+        assertThat(WeeklyReviewAiContract.SELECTION_SCHEMA_VERSION).isOne();
         assertThat(WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION).isEqualTo(4);
         assertThat(WeeklyReviewAiContract.SYSTEM_PROMPT)
-                .isEqualTo("prompts/llm/weekly-interpretation-v24.md");
-        assertThat(WeeklyReviewAiContract.isReadable(
-                WeeklyReviewAiContract.PREVIOUS_PROMPT_VERSION, 4
-        )).isTrue();
-        assertThat(WeeklyReviewAiContract.isReadable(
-                WeeklyReviewAiContract.LEGACY_PROMPT_VERSION, 4
-        )).isTrue();
+                .isEqualTo("prompts/llm/weekly-interpretation-v25.md");
+        assertThat(WeeklyReviewAiContract.readablePromptVersions())
+                .containsExactly(
+                        "weekly-interpretation-v25",
+                        "weekly-interpretation-v24",
+                        "weekly-interpretation-v23",
+                        "weekly-interpretation-v22"
+                );
         assertThat(WeeklyReviewAiContract.isActive(
-                WeeklyReviewAiContract.LEGACY_PROMPT_VERSION, 4
+                WeeklyReviewAiContract.PREVIOUS_PROMPT_VERSION, 4
         )).isFalse();
     }
 
     private static String resource(String name) throws IOException {
-        ClassLoader loader = WeeklyReviewAiSchemaContractTest.class.getClassLoader();
+        ClassLoader loader = WeeklyReviewAiSchemaContractTest.class
+                .getClassLoader();
         try (InputStream input = loader.getResourceAsStream(name)) {
             if (input == null) {
-                throw new IllegalStateException("Missing test resource: " + name);
+                throw new IllegalStateException(
+                        "Missing test resource: " + name
+                );
             }
             return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }

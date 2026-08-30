@@ -5,13 +5,11 @@ import static com.storeanalytics.common.validation.ModelValidation.requireNonNul
 
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Action;
-import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Direction;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Evidence;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Factor;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Materiality;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricComparison;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricState;
-import com.storeanalytics.interpretation.review.WeeklyReviewResponse.NarrativeItem;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.ReportState;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -20,17 +18,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
-/** Projects a deterministic report into a bounded store-only provider payload. */
+/** Projects a deterministic report into bounded facts and editorial choices. */
 @Component
 public final class WeeklyReviewAiInputCompactor {
-
-    private static final Pattern NUMERIC_LITERAL = Pattern.compile(
-            "(?<![\\p{L}\\p{N}])[+-]?\\d+(?:[\\s\\u00A0]\\d{3})*(?:[.,]\\d+)?"
-    );
 
     public WeeklyReviewAiInput compact(WeeklyReviewResponse response) {
         WeeklyReviewResponse source = requireNonNull(response, "response");
@@ -42,14 +34,12 @@ public final class WeeklyReviewAiInputCompactor {
 
         Map<String, Evidence> indexedEvidence = index(source.evidence());
         List<WeeklyReviewAiInput.FactorSource> factors = source.factors().stream()
-                .map(value -> factor(value, indexedEvidence))
+                .map(this::factor)
                 .toList();
         List<WeeklyReviewAiInput.ActionSource> actions = source.actions().stream()
-                .map(value -> action(value, indexedEvidence))
+                .map(this::action)
                 .toList();
-        WeeklyReviewAiInput.SummarySource summary = summary(
-                source, indexedEvidence
-        );
+        WeeklyReviewAiInput.SummarySource summary = summary(source, factors);
         Set<String> references = new LinkedHashSet<>(summary.evidenceRefs());
         factors.forEach(value -> references.addAll(value.evidenceRefs()));
         actions.forEach(value -> references.addAll(value.evidenceRefs()));
@@ -58,6 +48,7 @@ public final class WeeklyReviewAiInputCompactor {
                 WeeklyReviewAiContract.INPUT_SCHEMA_VERSION,
                 WeeklyReviewAiContract.PROMPT_VERSION,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                source.reportState().name(),
                 summary,
                 factors,
                 actions,
@@ -67,46 +58,30 @@ public final class WeeklyReviewAiInputCompactor {
 
     private WeeklyReviewAiInput.SummarySource summary(
             WeeklyReviewResponse response,
-            Map<String, Evidence> evidence
+            List<WeeklyReviewAiInput.FactorSource> factors
     ) {
-        NarrativeItem outcome = response.summary().outcome();
-        String outcomeEffect = summaryOutcomeEffect(response);
+        boolean hasPositive = factors.stream()
+                .anyMatch(value -> "POSITIVE".equals(value.effect()));
+        boolean hasNegative = factors.stream()
+                .anyMatch(value -> "NEGATIVE".equals(value.effect()));
+        List<String> selectors;
+        if (hasPositive && hasNegative) {
+            selectors = List.of("SUMMARY_BALANCED");
+        } else if (hasNegative) {
+            selectors = List.of("SUMMARY_RISK");
+        } else if (hasPositive) {
+            selectors = List.of("SUMMARY_STRENGTH");
+        } else {
+            selectors = List.of("SUMMARY_OUTCOME");
+        }
         return new WeeklyReviewAiInput.SummarySource(
-                outcome.text(),
-                outcomeEffect,
-                summaryNarratives(outcome.text(), outcomeEffect),
-                outcome.evidenceRefs(),
-                numericLiterals(
-                        List.of(outcome.text()),
-                        outcome.evidenceRefs(),
-                        evidence
-                )
+                summaryOutcomeEffect(response),
+                selectors,
+                factors.stream()
+                        .map(WeeklyReviewAiInput.FactorSource::factorId)
+                        .toList(),
+                response.summary().outcome().evidenceRefs()
         );
-    }
-
-    private List<String> summaryNarratives(
-            String outcomeText,
-            String outcomeEffect
-    ) {
-        return switch (outcomeEffect) {
-            case "POSITIVE" -> List.of(
-                    "Неделя сильнее предыдущей: " + outcomeText,
-                    "Неделя оказалась сильнее периода сравнения: " + outcomeText
-            );
-            case "NEGATIVE" -> List.of(
-                    "Неделя слабее предыдущей: " + outcomeText,
-                    "Неделя оказалась слабее периода сравнения: " + outcomeText
-            );
-            case "MIXED" -> List.of(
-                    "Картина недели неоднозначная: " + outcomeText,
-                    "Сигналы недели разнонаправлены: " + outcomeText
-            );
-            default -> List.of(
-                    "Стабильная картина недели: " + outcomeText,
-                    "Ключевые результаты без существенных изменений: "
-                            + outcomeText
-            );
-        };
     }
 
     private String summaryOutcomeEffect(WeeklyReviewResponse response) {
@@ -127,49 +102,23 @@ public final class WeeklyReviewAiInputCompactor {
         return materialEffects.isEmpty() ? "NEUTRAL" : materialEffects.getFirst();
     }
 
-    private WeeklyReviewAiInput.FactorSource factor(
-            Factor factor,
-            Map<String, Evidence> evidence
-    ) {
+    private WeeklyReviewAiInput.FactorSource factor(Factor factor) {
         Factor source = requireNonNull(factor, "factor");
         return new WeeklyReviewAiInput.FactorSource(
                 source.factorId(),
+                source.kind(),
                 source.title(),
-                source.detail(),
-                factorManagementMeaning(source),
+                source.comparison().direction().name(),
                 source.effect().name(),
                 source.contributionAmount() != null,
-                source.evidenceRefs(),
-                numericLiterals(
-                        List.of(source.title(), source.detail()),
-                        source.evidenceRefs(),
-                        evidence
-                )
+                "POSITIVE".equals(source.effect().name())
+                        ? List.of("FACTOR_SIGNAL", "FACTOR_STRENGTH")
+                        : List.of("FACTOR_RISK", "FACTOR_CONTROL"),
+                source.evidenceRefs()
         );
     }
 
-    private String factorManagementMeaning(Factor source) {
-        boolean increased = source.comparison().direction() == Direction.UP;
-        return switch (source.kind()) {
-            case "RETURN_CHANGE" -> "Возвраты уменьшили результат продаж "
-                    + (increased ? "сильнее" : "слабее")
-                    + ", чем в периоде сравнения.";
-            case "STRUCTURE_CHANGE" -> "Направление принесло "
-                    + (increased ? "больше" : "меньше")
-                    + " выручки, чем в периоде сравнения.";
-            case "ATTACH_CHANGE" -> "Товары или услуги этой группы "
-                    + (increased ? "чаще" : "реже")
-                    + " сопровождали базовые продажи, чем в периоде сравнения.";
-            default -> "Значение показателя стало "
-                    + (increased ? "выше" : "ниже")
-                    + ", чем в периоде сравнения.";
-        };
-    }
-
-    private WeeklyReviewAiInput.ActionSource action(
-            Action action,
-            Map<String, Evidence> evidence
-    ) {
+    private WeeklyReviewAiInput.ActionSource action(Action action) {
         Action source = requireNonNull(action, "action");
         require("STORE".equals(source.scope())
                         && source.employeePublicId() == null,
@@ -178,12 +127,7 @@ public final class WeeklyReviewAiInputCompactor {
                 source.actionId(),
                 source.title(),
                 source.check(),
-                source.evidenceRefs(),
-                numericLiterals(
-                        List.of(source.title(), source.check()),
-                        source.evidenceRefs(),
-                        evidence
-                )
+                source.evidenceRefs()
         );
     }
 
@@ -225,31 +169,5 @@ public final class WeeklyReviewAiInputCompactor {
             return decimal.toPlainString();
         }
         return source == null ? null : source.toString();
-    }
-
-    private List<String> numericLiterals(
-            List<String> texts,
-            List<String> evidenceRefs,
-            Map<String, Evidence> evidence
-    ) {
-        Set<String> result = new LinkedHashSet<>();
-        texts.forEach(text -> addNumericLiterals(result, text));
-        for (String reference : evidenceRefs) {
-            Evidence value = evidence.get(reference);
-            require(value != null, "AI input evidence reference must resolve");
-            addNumericLiterals(result, this.value(value.currentValue()));
-            addNumericLiterals(result, this.value(value.previousValue()));
-        }
-        return List.copyOf(result);
-    }
-
-    private void addNumericLiterals(Set<String> target, String text) {
-        if (text == null) {
-            return;
-        }
-        Matcher matcher = NUMERIC_LITERAL.matcher(text);
-        while (matcher.find()) {
-            target.add(matcher.group());
-        }
     }
 }

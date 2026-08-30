@@ -64,27 +64,41 @@ public class WeeklyReviewService {
         if (!aiSupport.properties().enabled()) {
             return aiSupport.stateResolver().apply(snapshot, clock.instant());
         }
+        Instant now = clock.instant();
         try {
-            return aiSupport.enrichmentStore()
-                    .findPublished(snapshot.id(), clock.instant())
-                    .map(value -> aiSupport.enricher().apply(
+            for (var value : aiSupport.enrichmentStore()
+                    .findPublishedCandidates(snapshot.id(), now)) {
+                try {
+                    var applied = aiSupport.enricher().applyIfCompatible(
                             snapshot.response(),
                             value.validationResult(),
                             value.publishedAt(),
                             value.promptVersion(),
                             value.contentSchemaVersion()
-                    ))
-                    .orElseGet(() -> aiSupport.stateResolver().apply(
-                            snapshot, clock.instant()
-                    ));
+                    );
+                    if (applied.isPresent()) {
+                        return applied.get();
+                    }
+                    LOGGER.error(
+                            "Ignoring incompatible weekly review AI "
+                                    + "enrichment for snapshot {} and prompt {}",
+                            snapshot.id(), value.promptVersion()
+                    );
+                } catch (IllegalArgumentException | IllegalStateException exception) {
+                    LOGGER.error(
+                            "Ignoring invalid weekly review AI enrichment "
+                                    + "for snapshot {} and prompt {}",
+                            snapshot.id(), value.promptVersion(), exception
+                    );
+                }
+            }
         } catch (IllegalArgumentException | IllegalStateException exception) {
             LOGGER.error(
-                    "Ignoring invalid weekly review AI enrichment for snapshot {}",
-                    snapshot.id(),
-                    exception
+                    "Ignoring weekly review AI read failure for snapshot {}",
+                    snapshot.id(), exception
             );
-            return aiSupport.stateResolver().apply(snapshot, clock.instant());
         }
+        return aiSupport.stateResolver().apply(snapshot, now);
     }
 
     private Store store(UUID storeId) {

@@ -11,7 +11,6 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -112,9 +111,19 @@ class WeeklyReviewAiCompletionServiceIntegrationTest {
                 NOW.plusSeconds(2)
         );
 
-        assertThat(enrichmentStore.findPublished(
-                snapshotId, NOW.plusSeconds(10)
-        )).isPresent();
+        PersistedWeeklyReviewAiEnrichment enrichment = enrichmentStore
+                .findPublished(snapshotId, NOW.plusSeconds(10))
+                .orElseThrow();
+        assertThat(enrichment.content().summary().text())
+                .isEqualTo("Неделя завершилась лучше периода сравнения.");
+        assertThat(enrichment.canonicalContent())
+                .doesNotContain("SUMMARY_", "FACTOR_");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT response_payload FROM weekly_review_ai_attempts "
+                        + "WHERE id = ?",
+                String.class,
+                attempt.id()
+        )).contains("SUMMARY_OUTCOME");
         assertThat(jobStore.findById(pending.id()).orElseThrow().status())
                 .isEqualTo(WeeklyReviewAiJobStatus.SUCCEEDED);
         assertThat(jdbcTemplate.queryForObject(
@@ -125,27 +134,8 @@ class WeeklyReviewAiCompletionServiceIntegrationTest {
     }
 
     private PreparedWeeklyReviewAiRequest prepared(WeeklyReviewAiJob job) {
-        WeeklyReviewAiInput input = new WeeklyReviewAiInput(
-                WeeklyReviewAiContract.INPUT_SCHEMA_VERSION,
-                WeeklyReviewAiContract.PROMPT_VERSION,
-                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
-                new WeeklyReviewAiInput.SummarySource(
-                        "Чистая выручка выросла.",
-                        "POSITIVE",
-                        List.of("Неделя сильнее: чистая выручка выросла."),
-                        List.of("STORE.NET_REVENUE"),
-                        List.of()
-                ),
-                List.of(),
-                List.of(),
-                List.of(new WeeklyReviewAiInput.EvidenceSource(
-                        "STORE.NET_REVENUE",
-                        "Чистая выручка",
-                        "RUB",
-                        "1000.00",
-                        "900.00"
-                ))
-        );
+        WeeklyReviewAiInput input =
+                WeeklyReviewAiTestFixtures.minimalInput("POSITIVE");
         LlmProviderRequest request = new LlmProviderRequest(
                 job.id(),
                 job.providerCode(),
@@ -188,17 +178,7 @@ class WeeklyReviewAiCompletionServiceIntegrationTest {
     }
 
     private String responseBody() {
-        return """
-                {
-                  "schemaVersion": 4,
-                  "summary": {
-                    "text": "Неделя сильнее: чистая выручка выросла.",
-                    "evidenceRefs": ["STORE.NET_REVENUE"]
-                  },
-                  "factorExplanations": [],
-                  "actionWordings": []
-                }
-                """;
+        return WeeklyReviewAiTestFixtures.outcomeSelection();
     }
 
     private UUID addSnapshot() {

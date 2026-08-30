@@ -14,242 +14,199 @@ class WeeklyReviewAiSemanticValidatorTest {
             );
 
     @Test
-    void acceptsExactStoreOnlyEnrichment() {
+    void acceptsSelectorsAndReturnsRenderedUserText() {
         WeeklyReviewAiValidationResult result = validator.validate(
-                input(false), validResponse()
+                WeeklyReviewAiTestFixtures.positiveWithReturnRisk(),
+                WeeklyReviewAiTestFixtures.returnRiskSelection()
+        );
+
+        assertThat(result.outcome())
+                .as("violations=%s", result.violations())
+                .isEqualTo(LlmValidationOutcome.VALID);
+        assertThat(result.semanticValidated()).isTrue();
+        assertThat(result.content().summary().text())
+                .contains("Неделя завершилась лучше периода сравнения")
+                .contains("давление возвратов")
+                .doesNotContain("SUMMARY_", "FACTOR_");
+        assertThat(result.content().factorExplanations().getFirst().text())
+                .isEqualTo(
+                        "Давление возвратов на результат усилилось "
+                                + "относительно периода сравнения. "
+                                + "Это отдельная зона контроля."
+                );
+        assertThat(result.content().actionWordings().getFirst().title())
+                .isEqualTo("Разобрать рост возвратов");
+    }
+
+    @Test
+    void rejectsLegacyFreeTextResponseAtStructuralBoundary() {
+        WeeklyReviewAiValidationResult result = validator.validate(
+                WeeklyReviewAiTestFixtures.minimalInput("POSITIVE"),
+                """
+                {
+                  "schemaVersion": 4,
+                  "summary": {"text": "Произвольный текст"},
+                  "factorExplanations": [],
+                  "actionWordings": []
+                }
+                """
+        );
+
+        assertThat(result.outcome())
+                .isEqualTo(LlmValidationOutcome.STRUCTURAL_INVALID);
+        assertThat(result.semanticValidated()).isFalse();
+    }
+
+    @Test
+    void rejectsUnknownOrMissingFactorSet() {
+        assertViolation(
+                WeeklyReviewAiTestFixtures.returnRiskSelection().replace(
+                        "factor:return_revenue",
+                        "factor:invented"
+                ),
+                "FACTOR_SET_MISMATCH"
+        );
+        assertViolation(
+                WeeklyReviewAiTestFixtures.returnRiskSelection().replace(
+                        """
+                            {
+                              "factorId": "factor:return_revenue",
+                              "selector": "FACTOR_CONTROL"
+                            }
+                        """,
+                        ""
+                ),
+                "FACTOR_SET_MISMATCH"
+        );
+    }
+
+    @Test
+    void rejectsSummarySelectorOutsideInputAllowlist() {
+        assertViolation(
+                WeeklyReviewAiTestFixtures.returnRiskSelection().replace(
+                        "SUMMARY_RISK",
+                        "SUMMARY_STRENGTH"
+                ),
+                "SUMMARY_SELECTOR_NOT_ALLOWED"
+        );
+    }
+
+    @Test
+    void rejectsUnexpectedSecondaryFocus() {
+        assertViolation(
+                riskSelectionWithSecondary(),
+                "SUMMARY_FOCUS_UNEXPECTED"
+        );
+    }
+
+    @Test
+    void rejectsFactorSelectorOutsidePerFactorAllowlist() {
+        assertViolation(
+                WeeklyReviewAiTestFixtures.returnRiskSelection().replace(
+                        "FACTOR_CONTROL",
+                        "FACTOR_STRENGTH"
+                ),
+                "FACTOR_SELECTOR_NOT_ALLOWED"
+        );
+    }
+
+    @Test
+    void outcomeSelectorCannotHideKnownRisk() {
+        WeeklyReviewAiInput input =
+                WeeklyReviewAiTestFixtures.positiveWithReturnRisk();
+        String response = WeeklyReviewAiTestFixtures.returnRiskSelection()
+                .replace("SUMMARY_RISK", "SUMMARY_OUTCOME");
+
+        WeeklyReviewAiValidationResult result = validator.validate(
+                input, response
+        );
+
+        assertThat(result.violations())
+                .extracting(value -> value.code())
+                .contains("SUMMARY_SELECTOR_NOT_ALLOWED");
+    }
+
+    @Test
+    void partialInputAddsBoundedConfidenceSentence() {
+        WeeklyReviewAiValidationResult result = validator.validate(
+                WeeklyReviewAiTestFixtures.minimalInput(
+                        "NEUTRAL", "PARTIAL"
+                ),
+                WeeklyReviewAiTestFixtures.outcomeSelection()
         );
 
         assertThat(result.outcome()).isEqualTo(LlmValidationOutcome.VALID);
-        assertThat(result.content()).isNotNull();
-        assertThat(result.semanticValidated()).isTrue();
+        assertThat(result.content().summary().text())
+                .endsWith("Вывод основан только на доступной части данных.");
     }
 
     @Test
-    void rejectsAddedRemovedOrReorderedBackendObjects() {
-        assertViolation("""
+    void balancedSelectionSynthesizesStrengthAndRisk() {
+        WeeklyReviewAiInput input = balancedInput();
+        String selection = """
                 {
-                  "schemaVersion": 4,
+                  "selectionSchemaVersion": 1,
                   "summary": {
-                    "text": "Неделя сильнее предыдущей: выручка выросла, возвраты требуют внимания.",
-                    "evidenceRefs": ["STORE.NET_REVENUE", "STORE.RETURN_REVENUE"]
+                    "selector": "SUMMARY_BALANCED",
+                    "primaryFactorId": "factor:accessory_attach",
+                    "secondaryFactorId": "factor:return_revenue"
                   },
-                  "factorExplanations": [],
-                  "actionWordings": [
+                  "factorSelections": [
                     {
-                      "actionId": "action:restore:return_revenue",
-                      "title": "Разобрать рост возвратов",
-                      "check": "Сравнить со следующей полной неделей"
+                      "factorId": "factor:accessory_attach",
+                      "selector": "FACTOR_STRENGTH"
+                    },
+                    {
+                      "factorId": "factor:return_revenue",
+                      "selector": "FACTOR_RISK"
                     }
                   ]
                 }
-                """, "FACTOR_SET_MISMATCH");
+                """;
 
-        assertViolation(validResponse().replace(
-                "action:restore:return_revenue",
-                "action:invented"
-        ), "ACTION_SET_MISMATCH");
-    }
-
-    @Test
-    void rejectsEvidenceOutsideObjectAllowlist() {
-        assertViolation(validResponse().replace(
-                "\"evidenceRefs\": [\"STORE.RETURN_REVENUE\"]",
-                "\"evidenceRefs\": [\"STORE.NET_REVENUE\"]"
-        ), "FACTOR_EVIDENCE_MISMATCH");
-    }
-
-    @Test
-    void rejectsNewNumbersAndUnapprovedCausalLanguage() {
-        assertViolation(validResponse().replace(
-                "Возвраты уменьшили результат продаж сильнее, чем в периоде сравнения — это зона внимания.",
-                "Возвраты выросли на 12% относительно предыдущей недели."
-        ), "UNAPPROVED_NUMBER");
-
-        assertViolation(validResponse().replace(
-                "Возвраты уменьшили результат продаж сильнее, чем в периоде сравнения — это зона внимания.",
-                "Выручка изменилась из-за роста возвратов; это зона внимания."
-        ), "UNAPPROVED_CAUSALITY");
-
-        WeeklyReviewAiValidationResult causal = validator.validate(
-                input(true),
-                validResponse()
+        WeeklyReviewAiValidationResult result = validator.validate(
+                input, selection
         );
-        assertThat(causal.outcome()).isEqualTo(LlmValidationOutcome.VALID);
+
+        assertThat(result.outcome())
+                .as("violations=%s", result.violations())
+                .isEqualTo(LlmValidationOutcome.VALID);
+        assertThat(result.content().summary().text())
+                .contains("Сильная сторона")
+                .contains("зона внимания")
+                .contains("доля аксессуаров выросла")
+                .contains("давление возвратов");
+        assertThat(result.content().summary().evidenceRefs())
+                .containsExactly(
+                        "STORE.NET_REVENUE",
+                        "STORE.ACCESSORY_ATTACH_RATE",
+                        "STORE.RETURN_REVENUE"
+                );
     }
 
-    @Test
-    void returnEvidenceDoesNotAuthorizeGeneralRevenueClaims() {
-        assertViolation(validResponse().replace(
-                "Возвраты уменьшили результат продаж сильнее, чем в периоде "
-                        + "сравнения — это зона внимания.",
-                "Возвраты уменьшили результат продаж сильнее, чем в периоде "
-                        + "сравнения; общая выручка — зона внимания."
-        ), "UNAPPROVED_METRIC");
-    }
-
-    @Test
-    void rejectsPlanAndDuplicateNarrative() {
-        assertViolation(validResponse().replace(
-                "Неделя сильнее предыдущей: выручка выросла, возвраты требуют внимания.",
-                "План месяца требует внимания."
-        ), "FORBIDDEN_HORIZON");
-
-        assertViolation(validResponse().replace(
-                "Разобрать рост возвратов",
-                "Возвраты уменьшили результат продаж сильнее, чем в периоде сравнения — это зона внимания."
-        ), "DUPLICATE_NARRATIVE");
-    }
-
-    @Test
-    void rejectsManagementContractViolations() {
-        assertViolation(validResponse().replace(
-                "Неделя сильнее", "Неделя слабее"
-        ), "SUMMARY_NARRATIVE_CHANGED");
-        assertViolation(validResponse().replace(
-                "Неделя сильнее предыдущей: выручка выросла, возвраты требуют внимания.",
-                "Выручка выросла, возвраты требуют внимания."
-        ), "SUMMARY_NARRATIVE_CHANGED");
-        assertViolation(validResponse().replace(
-                "Возвраты уменьшили результат продаж сильнее, чем в периоде "
-                                + "сравнения — это зона внимания.",
-                "Возвраты выросли относительно предыдущей недели."
-        ), "SOURCE_NARRATIVE_RESTATED");
-        assertViolation(validResponse().replace(
-                "Разобрать рост возвратов", "Проверить"
-        ), "ACTION_TITLE_WORD_COUNT");
-        assertViolation(validResponse().replace(
-                "Возвраты уменьшили результат продаж сильнее, чем в периоде "
-                        + "сравнения — это зона внимания.",
-                "Возвраты уменьшили результат продаж сильнее, чем в периоде сравнения."
-        ), "FACTOR_EFFECT_MISSING");
-        assertViolation(validResponse().replace(
-                "Разобрать рост возвратов", "Восстановить уровень возвратов"
-        ), "DESIRED_OUTCOME_ACTION");
-
-        assertViolation(validResponse().replace(
-                "Неделя сильнее", "Неделя сильнее не стала"
-        ), "SUMMARY_NARRATIVE_CHANGED");
-        assertViolation(validResponse().replace(
-                "это зона внимания.",
-                "зоной внимания это не является."
-        ), "FACTOR_EFFECT_MISSING");
-        assertViolation(validResponse().replace(
-                "Возвраты уменьшили результат продаж",
-                "Нельзя с достаточной уверенностью утверждать, что "
-                        + "Возвраты уменьшили результат продаж"
-        ), "MANAGEMENT_MEANING_MISSING");
-
-        WeeklyReviewAiValidationResult positive = validator.validate(
-                input(false, "POSITIVE"),
-                validResponse().replace(
-                        "Возвраты уменьшили результат продаж сильнее, чем в периоде "
-                                + "сравнения — это зона внимания.",
-                        "Возвраты снизились; это зона внимания."
-                )
-        );
-        assertThat(positive.violations())
-                .extracting(value -> value.code())
-                .contains("FACTOR_EFFECT_CONTRADICTION");
-    }
-
-    @Test
-    void rejectsMissingManagementMeaningAndChangedAction() {
-        assertViolation(validResponse().replace(
-                "Возвраты уменьшили результат продаж сильнее, чем в периоде "
-                        + "сравнения — это зона внимания.",
-                "Возвраты снизились; это зона внимания."
-        ), "MANAGEMENT_MEANING_MISSING");
-
-        assertViolation(validResponse().replace(
-                "Разобрать рост возвратов",
-                "Оформить возврат клиенту"
-        ), "ACTION_TITLE_CHANGED");
-    }
-
-    @Test
-    void mixedSummaryRejectsWholeWeekDirection() {
-        WeeklyReviewAiValidationResult contradiction = validator.validate(
-                input(false, "NEGATIVE", "MIXED"),
-                validResponse()
-        );
-        assertThat(contradiction.violations())
-                .extracting(value -> value.code())
-                .contains("SUMMARY_NARRATIVE_CHANGED");
-
-        WeeklyReviewAiValidationResult valid = validator.validate(
-                input(false, "NEGATIVE", "MIXED"),
-                validResponse().replace(
-                        "Неделя сильнее предыдущей: выручка выросла, возвраты требуют внимания.",
-                        "Картина недели неоднозначная: выручка выросла, "
-                                + "возвраты требуют внимания."
-                )
-        );
-        assertThat(valid.outcome()).isEqualTo(LlmValidationOutcome.VALID);
-    }
-
-    @Test
-    void rejectsNegatedManagementSignals() {
-        assertViolation(validResponse().replace(
-                "Неделя сильнее", "Неделя не сильнее"
-        ), "SUMMARY_NARRATIVE_CHANGED");
-        assertViolation(validResponse().replace(
-                "это зона внимания.", "это не зона внимания."
-        ), "FACTOR_EFFECT_MISSING");
-        assertViolation(validResponse().replace(
-                "Возвраты уменьшили результат продаж",
-                "Неверно, что Возвраты уменьшили результат продаж"
-        ), "MANAGEMENT_MEANING_MISSING");
-
-        assertViolation(validResponse().replace(
-                "Неделя сильнее предыдущей",
-                "Неделя может считаться сильнее предыдущей"
-        ), "SUMMARY_NARRATIVE_CHANGED");
-        assertViolation(validResponse().replace(
-                "Неделя сильнее предыдущей: выручка выросла, "
-                        + "возвраты требуют внимания.",
-                "Неделя сильнее предыдущей: выручка выросла, "
-                        + "хотя это спорно."
-        ), "SUMMARY_NARRATIVE_CHANGED");
-        assertViolation(validResponse().replace(
-                "это зона внимания.",
-                "это может считаться зоной внимания."
-        ), "FACTOR_EFFECT_MISSING");
-        assertViolation(validResponse().replace(
-                "это зона внимания.",
-                "это зона внимания; такой вывод остаётся под вопросом."
-        ), "FACTOR_EFFECT_MISSING");
-
-        WeeklyReviewAiValidationResult positive = validator.validate(
-                input(false, "POSITIVE"),
-                validResponse().replace(
-                        "это зона внимания.",
-                        "это положительный сигнал, но улучшения нет."
-                )
-        );
-        assertThat(positive.violations())
-                .extracting(value -> value.code())
-                .contains("FACTOR_EFFECT_MISSING");
-    }
-
-    @Test
-    void rejectsUnsupportedPreviousFullWeekQualifier() {
-        assertViolation(validResponse().replace(
-                "в периоде сравнения",
-                "на предыдущей полной неделе"
-        ), "UNAPPROVED_PERIOD_QUALIFIER");
-    }
-
-    @Test
-    void rejectsChangedBackendOwnedActionCheck() {
-        assertViolation(validResponse().replace(
-                "Сравнить со следующей полной неделей",
-                "Проверить результат через две недели"
-        ), "ACTION_CHECK_MISMATCH");
+    private String riskSelectionWithSecondary() {
+        return """
+                {
+                  "selectionSchemaVersion": 1,
+                  "summary": {
+                    "selector": "SUMMARY_RISK",
+                    "primaryFactorId": "factor:return_revenue",
+                    "secondaryFactorId": "factor:another"
+                  },
+                  "factorSelections": [
+                    {
+                      "factorId": "factor:return_revenue",
+                      "selector": "FACTOR_CONTROL"
+                    }
+                  ]
+                }
+                """;
     }
 
     private void assertViolation(String response, String code) {
         WeeklyReviewAiValidationResult result = validator.validate(
-                input(false), response
+                WeeklyReviewAiTestFixtures.positiveWithReturnRisk(),
+                response
         );
 
         assertThat(result.outcome())
@@ -259,95 +216,70 @@ class WeeklyReviewAiSemanticValidatorTest {
                 .contains(code);
     }
 
-    private WeeklyReviewAiInput input(boolean causalLanguageAllowed) {
-        return input(causalLanguageAllowed, "NEGATIVE", "POSITIVE");
-    }
-
-    private WeeklyReviewAiInput input(
-            boolean causalLanguageAllowed,
-            String factorEffect
-    ) {
-        return input(causalLanguageAllowed, factorEffect, "POSITIVE");
-    }
-
-    private WeeklyReviewAiInput input(
-            boolean causalLanguageAllowed,
-            String factorEffect,
-            String summaryEffect
-    ) {
+    private WeeklyReviewAiInput balancedInput() {
         return new WeeklyReviewAiInput(
                 WeeklyReviewAiContract.INPUT_SCHEMA_VERSION,
                 WeeklyReviewAiContract.PROMPT_VERSION,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                "READY",
                 new WeeklyReviewAiInput.SummarySource(
-                        "Выручка выросла, возвраты требуют внимания.",
-                        summaryEffect,
-                        List.of("MIXED".equals(summaryEffect)
-                                ? "Картина недели неоднозначная: выручка выросла, возвраты требуют внимания."
-                                : "Неделя сильнее предыдущей: выручка выросла, возвраты требуют внимания."),
+                        "MIXED",
+                        List.of("SUMMARY_BALANCED"),
                         List.of(
-                                "STORE.NET_REVENUE",
-                                "STORE.RETURN_REVENUE"
+                                "factor:accessory_attach",
+                                "factor:return_revenue"
                         ),
-                        List.of()
+                        List.of("STORE.NET_REVENUE")
                 ),
-                List.of(new WeeklyReviewAiInput.FactorSource(
-                        "factor:return_revenue",
-                        "Возвраты выросли",
-                        "Возвраты выросли относительно предыдущей недели.",
-                        "Возвраты уменьшили результат продаж сильнее, чем в периоде сравнения.",
-                        factorEffect,
-                        causalLanguageAllowed,
-                        List.of("STORE.RETURN_REVENUE"),
-                        List.of()
-                )),
-                List.of(new WeeklyReviewAiInput.ActionSource(
-                        "action:restore:return_revenue",
-                        "Разобрать рост возвратов",
-                        "Сравнить со следующей полной неделей",
-                        List.of("STORE.RETURN_REVENUE"),
-                        List.of()
-                )),
                 List.of(
-                        evidence("STORE.NET_REVENUE", "Чистая выручка"),
-                        evidence("STORE.RETURN_REVENUE", "Возвраты")
+                        new WeeklyReviewAiInput.FactorSource(
+                                "factor:accessory_attach",
+                                "ATTACH_CHANGE",
+                                "Доля аксессуаров выросла",
+                                "UP",
+                                "POSITIVE",
+                                false,
+                                List.of(
+                                        "FACTOR_SIGNAL",
+                                        "FACTOR_STRENGTH"
+                                ),
+                                List.of("STORE.ACCESSORY_ATTACH_RATE")
+                        ),
+                        new WeeklyReviewAiInput.FactorSource(
+                                "factor:return_revenue",
+                                "RETURN_CHANGE",
+                                "Возвраты выросли",
+                                "UP",
+                                "NEGATIVE",
+                                true,
+                                List.of("FACTOR_RISK", "FACTOR_CONTROL"),
+                                List.of("STORE.RETURN_REVENUE")
+                        )
+                ),
+                List.of(),
+                List.of(
+                        WeeklyReviewAiTestFixtures.evidence(
+                                "STORE.NET_REVENUE",
+                                "Чистая выручка",
+                                "RUB",
+                                "126000",
+                                "118000"
+                        ),
+                        WeeklyReviewAiTestFixtures.evidence(
+                                "STORE.ACCESSORY_ATTACH_RATE",
+                                "Доля аксессуаров",
+                                "PERCENT",
+                                "9.1",
+                                "7.4"
+                        ),
+                        WeeklyReviewAiTestFixtures.evidence(
+                                "STORE.RETURN_REVENUE",
+                                "Возвраты",
+                                "RUB",
+                                "14000",
+                                "7000"
+                        )
                 )
         );
-    }
-
-    private WeeklyReviewAiInput.EvidenceSource evidence(
-            String reference,
-            String label
-    ) {
-        return new WeeklyReviewAiInput.EvidenceSource(
-                reference, label, "RUB", "available", "available"
-        );
-    }
-
-    private String validResponse() {
-        return """
-                {
-                  "schemaVersion": 4,
-                  "summary": {
-                    "text": "Неделя сильнее предыдущей: выручка выросла, возвраты требуют внимания.",
-                    "evidenceRefs": ["STORE.NET_REVENUE", "STORE.RETURN_REVENUE"]
-                  },
-                  "factorExplanations": [
-                    {
-                      "factorId": "factor:return_revenue",
-                      "text": "Возвраты уменьшили результат продаж сильнее, чем в \
-                периоде сравнения — это зона внимания.",
-                      "evidenceRefs": ["STORE.RETURN_REVENUE"]
-                    }
-                  ],
-                  "actionWordings": [
-                    {
-                      "actionId": "action:restore:return_revenue",
-                      "title": "Разобрать рост возвратов",
-                      "check": "Сравнить со следующей полной неделей"
-                    }
-                  ]
-                }
-                """;
     }
 }

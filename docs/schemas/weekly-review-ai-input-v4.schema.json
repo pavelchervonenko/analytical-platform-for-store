@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://store-analytics.local/schemas/weekly-review-ai-input-v4.schema.json",
+  "title": "WeeklyReviewAiInput v4",
+  "description": "Store-only facts and bounded editorial choices for v25.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "promptVersion",
+    "contentSchemaVersion",
+    "reportState",
+    "summary",
+    "factors",
+    "actions",
+    "evidence"
+  ],
+  "properties": {
+    "contractVersion": {"const": 4},
+    "promptVersion": {"const": "weekly-interpretation-v25"},
+    "contentSchemaVersion": {"const": 4},
+    "reportState": {"enum": ["READY", "PARTIAL"]},
+    "summary": {"$ref": "#/$defs/summary"},
+    "factors": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/factor"},
+      "maxItems": 3
+    },
+    "actions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/action"},
+      "maxItems": 3
+    },
+    "evidence": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/evidence"},
+      "minItems": 1,
+      "maxItems": 64
+    }
+  },
+  "$defs": {
+    "objectId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9:._-]+$"
+    },
+    "reference": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[A-Z][A-Z0-9:._-]+$"
+    },
+    "references": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/reference"},
+      "minItems": 1,
+      "maxItems": 10,
+      "uniqueItems": true
+    },
+    "summarySelector": {
+      "enum": [
+        "SUMMARY_OUTCOME",
+        "SUMMARY_STRENGTH",
+        "SUMMARY_RISK",
+        "SUMMARY_BALANCED"
+      ]
+    },
+    "factorSelector": {
+      "enum": [
+        "FACTOR_SIGNAL",
+        "FACTOR_STRENGTH",
+        "FACTOR_RISK",
+        "FACTOR_CONTROL"
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcomeEffect",
+        "allowedSelectors",
+        "allowedFocusFactorIds",
+        "evidenceRefs"
+      ],
+      "properties": {
+        "outcomeEffect": {
+          "enum": ["POSITIVE", "NEGATIVE", "NEUTRAL", "MIXED"]
+        },
+        "allowedSelectors": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/summarySelector"},
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "allowedFocusFactorIds": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/objectId"},
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "evidenceRefs": {"$ref": "#/$defs/references"}
+      }
+    },
+    "factor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "factorId",
+        "kind",
+        "title",
+        "direction",
+        "effect",
+        "causalLanguageAllowed",
+        "allowedSelectors",
+        "evidenceRefs"
+      ],
+      "properties": {
+        "factorId": {"$ref": "#/$defs/objectId"},
+        "kind": {"type": "string", "minLength": 1, "maxLength": 80},
+        "title": {"type": "string", "minLength": 1, "maxLength": 400},
+        "direction": {"enum": ["UP", "DOWN", "FLAT", "UNKNOWN"]},
+        "effect": {"enum": ["POSITIVE", "NEGATIVE"]},
+        "causalLanguageAllowed": {"type": "boolean"},
+        "allowedSelectors": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/factorSelector"},
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "evidenceRefs": {"$ref": "#/$defs/references"}
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actionId", "title", "check", "evidenceRefs"],
+      "properties": {
+        "actionId": {"$ref": "#/$defs/objectId"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 400},
+        "check": {"type": "string", "minLength": 1, "maxLength": 600},
+        "evidenceRefs": {"$ref": "#/$defs/references"}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidenceRef",
+        "label",
+        "unit",
+        "currentValue",
+        "previousValue"
+      ],
+      "properties": {
+        "evidenceRef": {"$ref": "#/$defs/reference"},
+        "label": {"type": "string", "minLength": 1, "maxLength": 240},
+        "unit": {
+          "enum": [
+            "RUB",
+            "PERCENT",
+            "PER_100",
+            "COUNT",
+            "HOURS",
+            "STATUS"
+          ]
+        },
+        "currentValue": {
+          "anyOf": [
+            {"type": "string", "minLength": 1, "maxLength": 160},
+            {"type": "null"}
+          ]
+        },
+        "previousValue": {
+          "anyOf": [
+            {"type": "string", "minLength": 1, "maxLength": 160},
+            {"type": "null"}
+          ]
+        }
+      }
+    }
+  }
+}

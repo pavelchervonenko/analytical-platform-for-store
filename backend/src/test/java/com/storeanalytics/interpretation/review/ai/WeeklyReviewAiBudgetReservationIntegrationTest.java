@@ -13,7 +13,6 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -182,27 +181,8 @@ class WeeklyReviewAiBudgetReservationIntegrationTest {
     }
 
     private PreparedWeeklyReviewAiRequest prepared(WeeklyReviewAiJob job) {
-        WeeklyReviewAiInput input = new WeeklyReviewAiInput(
-                WeeklyReviewAiContract.INPUT_SCHEMA_VERSION,
-                WeeklyReviewAiContract.PROMPT_VERSION,
-                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
-                new WeeklyReviewAiInput.SummarySource(
-                        "Существенных изменений нет.",
-                        "NEUTRAL",
-                        List.of("Существенных изменений нет."),
-                        List.of("STORE.NET_REVENUE"),
-                        List.of()
-                ),
-                List.of(),
-                List.of(),
-                List.of(new WeeklyReviewAiInput.EvidenceSource(
-                        "STORE.NET_REVENUE",
-                        "Чистая выручка",
-                        "RUB",
-                        "0",
-                        "0"
-                ))
-        );
+        WeeklyReviewAiInput input =
+                WeeklyReviewAiTestFixtures.minimalInput("NEUTRAL");
         LlmProviderRequest request = new LlmProviderRequest(
                 job.id(),
                 job.providerCode(),

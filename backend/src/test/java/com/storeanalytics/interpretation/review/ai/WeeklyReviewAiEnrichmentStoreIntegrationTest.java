@@ -52,9 +52,7 @@ class WeeklyReviewAiEnrichmentStoreIntegrationTest {
     void storesOneImmutableValidatedEnrichmentPerSnapshotAndVersion() {
         UUID snapshotId = addSnapshot();
         WeeklyReviewAiInput input = input();
-        String responseBody = responseBody(
-                "Неделя сильнее: чистая выручка выросла."
-        );
+        String responseBody = WeeklyReviewAiTestFixtures.outcomeSelection();
         WeeklyReviewAiValidationResult structural =
                 new WeeklyReviewAiStructuralValidator().validate(responseBody);
         assertThatThrownBy(() -> store.persist(
@@ -109,7 +107,7 @@ class WeeklyReviewAiEnrichmentStoreIntegrationTest {
         assertThatThrownBy(() -> store.persist(
                 snapshotId,
                 input,
-                semanticValidation(input, "Неделя сильнее: чистая выручка заметно выросла."),
+                differentValidation(),
                 VALIDATED_AT,
                 PUBLISHED_AT
         )).isInstanceOf(IllegalStateException.class)
@@ -129,7 +127,49 @@ class WeeklyReviewAiEnrichmentStoreIntegrationTest {
     }
 
     @Test
-    void readsPreviousV23AndLegacyV22UntilActiveV24IsPublished() {
+    void validatesPersistsReadsAndAppliesV25RiskEndToEnd() {
+        UUID snapshotId = addSnapshot();
+        WeeklyReviewAiInput input = riskInputMatchingReport();
+        WeeklyReviewAiValidationResult validation =
+                new WeeklyReviewAiSemanticValidator(
+                        new WeeklyReviewAiStructuralValidator()
+                ).validate(
+                        input, WeeklyReviewAiTestFixtures.returnRiskSelection()
+                );
+        assertThat(validation.semanticValidated()).isTrue();
+
+        store.persist(
+                snapshotId, input, validation, VALIDATED_AT, PUBLISHED_AT
+        );
+        PersistedWeeklyReviewAiEnrichment loaded = store.findPublished(
+                snapshotId, PUBLISHED_AT
+        ).orElseThrow();
+        var enriched = new WeeklyReviewAiEnricher().apply(
+                WeeklyReviewAiEnricherTest.report(),
+                loaded.validationResult(),
+                loaded.publishedAt(),
+                loaded.promptVersion(),
+                loaded.contentSchemaVersion()
+        );
+
+        assertThat(enriched.aiEnhancement().promptVersion())
+                .isEqualTo(WeeklyReviewAiContract.PROMPT_VERSION);
+        assertThat(enriched.summary().outcome().text())
+                .contains("Главная зона внимания")
+                .contains("давление возвратов");
+        assertThat(enriched.summary().outcome().evidenceRefs())
+                .containsExactly(
+                        "STORE.NET_REVENUE",
+                        "STORE.RETURN_REVENUE"
+                );
+        assertThat(enriched.factors().getFirst().detail())
+                .contains("отдельная зона контроля");
+        assertThat(enriched.actions().getFirst().title())
+                .isEqualTo("Проанализировать рост возвратов");
+    }
+
+    @Test
+    void readsV25ThenV24ThenV23ThenV22() {
         UUID snapshotId = addSnapshot();
         WeeklyReviewAiContent legacyContent = new WeeklyReviewAiContent(
                 4,
@@ -152,7 +192,7 @@ class WeeklyReviewAiEnrichmentStoreIntegrationTest {
                 .isEqualTo(WeeklyReviewAiContract.LEGACY_PROMPT_VERSION);
         assertThat(fallback.content()).isEqualTo(legacyContent);
 
-        WeeklyReviewAiContent previousContent = new WeeklyReviewAiContent(
+        WeeklyReviewAiContent v23Content = new WeeklyReviewAiContent(
                 4,
                 new WeeklyReviewAiContent.Summary(
                         "Проверенный итог v23",
@@ -162,12 +202,32 @@ class WeeklyReviewAiEnrichmentStoreIntegrationTest {
                 List.of()
         );
         insertEnrichment(
-                snapshotId, WeeklyReviewAiContract.PREVIOUS_PROMPT_VERSION,
-                previousContent, VALIDATED_AT.plusSeconds(1),
+                snapshotId, WeeklyReviewAiContract.V23_PROMPT_VERSION,
+                v23Content, VALIDATED_AT.plusSeconds(1),
                 PUBLISHED_AT.plusSeconds(1)
         );
         assertThat(store.findPublished(
                 snapshotId, PUBLISHED_AT.plusSeconds(1)
+        ).orElseThrow().promptVersion()).isEqualTo(
+                WeeklyReviewAiContract.V23_PROMPT_VERSION
+        );
+
+        WeeklyReviewAiContent v24Content = new WeeklyReviewAiContent(
+                4,
+                new WeeklyReviewAiContent.Summary(
+                        "Проверенный итог v24",
+                        List.of("STORE.NET_REVENUE")
+                ),
+                List.of(),
+                List.of()
+        );
+        insertEnrichment(
+                snapshotId, WeeklyReviewAiContract.PREVIOUS_PROMPT_VERSION,
+                v24Content, VALIDATED_AT.plusSeconds(2),
+                PUBLISHED_AT.plusSeconds(2)
+        );
+        assertThat(store.findPublished(
+                snapshotId, PUBLISHED_AT.plusSeconds(2)
         ).orElseThrow().promptVersion()).isEqualTo(
                 WeeklyReviewAiContract.PREVIOUS_PROMPT_VERSION
         );
@@ -176,14 +236,75 @@ class WeeklyReviewAiEnrichmentStoreIntegrationTest {
         PersistedWeeklyReviewAiEnrichment active = store.persist(
                 snapshotId,
                 activeInput,
-                semanticValidation(activeInput, "Неделя сильнее: проверенный итог новой версии"),
-                VALIDATED_AT.plusSeconds(2),
-                PUBLISHED_AT.plusSeconds(2)
+                semanticValidation(activeInput),
+                VALIDATED_AT.plusSeconds(3),
+                PUBLISHED_AT.plusSeconds(3)
         );
 
         assertThat(store.findPublished(
-                snapshotId, PUBLISHED_AT.plusSeconds(2)
+                snapshotId, PUBLISHED_AT.plusSeconds(3)
         )).contains(active);
+    }
+
+    @Test
+    void skipsCorruptedV25AndReadsValidV24Fallback() {
+        UUID snapshotId = addSnapshot();
+        WeeklyReviewAiContent v24Content = new WeeklyReviewAiContent(
+                4,
+                new WeeklyReviewAiContent.Summary(
+                        "Проверенный fallback v24",
+                        List.of("STORE.NET_REVENUE")
+                ),
+                List.of(),
+                List.of()
+        );
+        insertEnrichment(
+                snapshotId, WeeklyReviewAiContract.PREVIOUS_PROMPT_VERSION,
+                v24Content, VALIDATED_AT, PUBLISHED_AT
+        );
+        WeeklyReviewAiContent v25Content = new WeeklyReviewAiContent(
+                4,
+                new WeeklyReviewAiContent.Summary(
+                        "Повреждённый v25",
+                        List.of("STORE.NET_REVENUE")
+                ),
+                List.of(),
+                List.of()
+        );
+        String canonical = codec.canonical(v25Content);
+        jdbcTemplate.update(
+                """
+                INSERT INTO weekly_review_ai_enrichments (
+                    id, snapshot_id, prompt_version, content_schema_version,
+                    input_hash, content_payload, content_hash,
+                    validated_at, published_at
+                ) VALUES (?, ?, ?, 4, ?, CAST(? AS jsonb), ?, ?, ?)
+                """,
+                UUID.randomUUID(),
+                snapshotId,
+                WeeklyReviewAiContract.PROMPT_VERSION,
+                "e".repeat(64),
+                canonical,
+                "f".repeat(64),
+                java.sql.Timestamp.from(VALIDATED_AT.plusSeconds(1)),
+                java.sql.Timestamp.from(PUBLISHED_AT.plusSeconds(1))
+        );
+
+        List<PersistedWeeklyReviewAiEnrichment> candidates =
+                store.findPublishedCandidates(
+                        snapshotId, PUBLISHED_AT.plusSeconds(1)
+                );
+
+        assertThat(candidates).singleElement().satisfies(value -> {
+            assertThat(value.promptVersion()).isEqualTo(
+                    WeeklyReviewAiContract.PREVIOUS_PROMPT_VERSION
+            );
+            assertThat(value.content()).isEqualTo(v24Content);
+        });
+        assertThat(store.findPublished(
+                snapshotId, PUBLISHED_AT.plusSeconds(1)
+        )).map(PersistedWeeklyReviewAiEnrichment::promptVersion)
+                .contains(WeeklyReviewAiContract.PREVIOUS_PROMPT_VERSION);
     }
 
     @Test
@@ -240,55 +361,78 @@ class WeeklyReviewAiEnrichmentStoreIntegrationTest {
         );
     }
 
-    private WeeklyReviewAiInput input() {
+    private WeeklyReviewAiInput riskInputMatchingReport() {
         return new WeeklyReviewAiInput(
-                WeeklyReviewAiContract.INPUT_SCHEMA_VERSION,
+                4,
                 WeeklyReviewAiContract.PROMPT_VERSION,
-                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                4,
+                "READY",
                 new WeeklyReviewAiInput.SummarySource(
-                        "Чистая выручка выросла.",
                         "POSITIVE",
-                        List.of(
-                                "Неделя сильнее: чистая выручка выросла.",
-                                "Неделя сильнее: чистая выручка заметно выросла.",
-                                "Неделя сильнее: проверенный итог новой версии"
-                        ),
-                        List.of("STORE.NET_REVENUE"),
-                        List.of()
+                        List.of("SUMMARY_RISK"),
+                        List.of("factor:return_revenue"),
+                        List.of("STORE.NET_REVENUE")
                 ),
-                List.of(),
-                List.of(),
-                List.of(new WeeklyReviewAiInput.EvidenceSource(
-                        "STORE.NET_REVENUE",
-                        "Чистая выручка",
-                        "RUB",
-                        "1000.00",
-                        "900.00"
-                ))
+                List.of(new WeeklyReviewAiInput.FactorSource(
+                        "factor:return_revenue",
+                        "RETURN_CHANGE",
+                        "Возвраты",
+                        "UP",
+                        "NEGATIVE",
+                        true,
+                        List.of("FACTOR_RISK", "FACTOR_CONTROL"),
+                        List.of("STORE.RETURN_REVENUE")
+                )),
+                List.of(new WeeklyReviewAiInput.ActionSource(
+                        "action:restore:return_revenue",
+                        "Проанализировать рост возвратов",
+                        "Сравнить со следующей полной неделей",
+                        List.of("STORE.RETURN_REVENUE")
+                )),
+                List.of(
+                        WeeklyReviewAiTestFixtures.evidence(
+                                "STORE.NET_REVENUE",
+                                "Чистая выручка",
+                                "RUB",
+                                "120000",
+                                "113315"
+                        ),
+                        WeeklyReviewAiTestFixtures.evidence(
+                                "STORE.RETURN_REVENUE",
+                                "Возвраты",
+                                "RUB",
+                                "15000",
+                                "8000"
+                        )
+                )
         );
     }
 
+    private WeeklyReviewAiInput input() {
+        return WeeklyReviewAiTestFixtures.minimalInput("POSITIVE");
+    }
+
     private WeeklyReviewAiValidationResult semanticValidation(
-            WeeklyReviewAiInput input,
-            String summary
+            WeeklyReviewAiInput input
     ) {
         return new WeeklyReviewAiSemanticValidator(
                 new WeeklyReviewAiStructuralValidator()
-        ).validate(input, responseBody(summary));
+        ).validate(input, WeeklyReviewAiTestFixtures.outcomeSelection());
     }
 
-    private String responseBody(String summary) {
-        return """
-                {
-                  "schemaVersion": 4,
-                  "summary": {
-                    "text": "%s",
-                    "evidenceRefs": ["STORE.NET_REVENUE"]
-                  },
-                  "factorExplanations": [],
-                  "actionWordings": []
-                }
-                """.formatted(summary);
+    private WeeklyReviewAiValidationResult differentValidation() {
+        WeeklyReviewAiContent content = new WeeklyReviewAiContent(
+                4,
+                new WeeklyReviewAiContent.Summary(
+                        "Другой проверенный итог",
+                        List.of("STORE.NET_REVENUE")
+                ),
+                List.of(),
+                List.of()
+        );
+        return WeeklyReviewAiValidationResult.semanticallyValid(
+                content, codec.canonical(content)
+        );
     }
 
     private UUID addSnapshot() {

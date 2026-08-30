@@ -243,24 +243,8 @@ class WeeklyReviewAiGenerationExecutionServiceTest {
     }
 
     private PreparedWeeklyReviewAiRequest prepared(WeeklyReviewAiJob value) {
-        WeeklyReviewAiInput input = new WeeklyReviewAiInput(
-                WeeklyReviewAiContract.INPUT_SCHEMA_VERSION,
-                WeeklyReviewAiContract.PROMPT_VERSION,
-                4,
-                new WeeklyReviewAiInput.SummarySource(
-                        "Чистая выручка выросла.",
-                        "POSITIVE",
-                        List.of("Чистая выручка выросла."),
-                        List.of("STORE.NET_REVENUE"),
-                        List.of()
-                ),
-                List.of(),
-                List.of(),
-                List.of(new WeeklyReviewAiInput.EvidenceSource(
-                        "STORE.NET_REVENUE", "Чистая выручка", "RUB",
-                        "1000", "900"
-                ))
-        );
+        WeeklyReviewAiInput input =
+                WeeklyReviewAiTestFixtures.minimalInput("POSITIVE");
         LlmProviderRequest request = new LlmProviderRequest(
                 value.id(), value.providerCode(), value.requestedModel(),
                 "system", "{\"contractVersion\":2}", "{}",

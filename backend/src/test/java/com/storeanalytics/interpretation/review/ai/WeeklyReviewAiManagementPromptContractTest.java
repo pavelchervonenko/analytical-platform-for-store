@@ -10,25 +10,23 @@ import org.junit.jupiter.api.Test;
 class WeeklyReviewAiManagementPromptContractTest {
 
     @Test
-    void activePromptRequiresManagementReadingInsteadOfNumericRestatement()
+    void activePromptLimitsProviderToEditorialSelectors()
             throws IOException {
         String prompt = resource(WeeklyReviewAiContract.SYSTEM_PROMPT);
 
         assertThat(WeeklyReviewAiContract.PROMPT_VERSION)
-                .isEqualTo("weekly-interpretation-v24");
-        assertThat(WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION).isEqualTo(4);
+                .isEqualTo("weekly-interpretation-v25");
+        assertThat(WeeklyReviewAiContract.SELECTION_SCHEMA_VERSION).isOne();
         assertThat(prompt).contains(
-                "не пересказать таблицу",
-                "управленческое чтение",
-                "summary.allowedNarratives",
-                "скопируй её в `summary.text` дословно",
-                "`summary.outcomeEffect` и `summary.outcomeText`",
-                "managementMeaning",
-                "периодом сравнения",
-                "точной формуле без дополнительных слов",
-                "короткая проверяемая команда из 2–8 слов",
-                "Скопируй его из input",
-                "не заменяй глагол"
+                "не пишешь пользовательский текст",
+                "только разрешённые selector-токены",
+                "summary.allowedSelectors",
+                "SUMMARY_OUTCOME",
+                "SUMMARY_STRENGTH",
+                "SUMMARY_RISK",
+                "SUMMARY_BALANCED",
+                "factorSelections",
+                "ровно один раз и в исходном порядке"
         );
     }
 
@@ -38,34 +36,42 @@ class WeeklyReviewAiManagementPromptContractTest {
         String prompt = resource(WeeklyReviewAiContract.SYSTEM_PROMPT);
 
         assertThat(prompt).contains(
-                "Не рассчитывай и не изменяй числа",
-                "Не придумывай причины",
-                "Поле `check` также скопируй из input дословно",
-                "Не создавай персональный контент",
-                "Не упоминай месячный план",
-                "не доказывает тренд или тенденцию",
-                "советы, поручения, операции",
-                "возможное влияние, другие показатели",
-                "не добавляй слово «полная»",
-                "ровно одним предложением",
-                "подготовленное backend безопасное объяснение",
-                "Показатели отдельных factors не переноси в summary"
+                "Не создавай текст, числа, даты, причины, советы",
+                "только данные магазина",
+                "reportState=PARTIAL",
+                "backend сам добавит ограничение",
+                "Не меняй эффект factor",
+                "Не используй причинность как основание выбора",
+                "Используй только selectors и factor IDs"
+        );
+        assertThat(prompt).doesNotContain(
+                "скопируй её в",
+                "managementMeaning",
+                "allowedNarratives"
         );
     }
 
     @Test
-    void previousPromptRemainsPackagedForAuditAndRollback() throws IOException {
-        String previous = resource(
+    void threePreviousPromptsRemainPackagedForAuditAndRollback()
+            throws IOException {
+        String v24 = resource(
+                "prompts/llm/weekly-interpretation-v24.md"
+        );
+        String v23 = resource(
                 "prompts/llm/weekly-interpretation-v23.md"
         );
-        String legacy = resource(
+        String v22 = resource(
                 "prompts/llm/weekly-interpretation-v22.md"
         );
         String active = resource(WeeklyReviewAiContract.SYSTEM_PROMPT);
 
-        assertThat(previous).isNotBlank();
-        assertThat(legacy).isNotBlank();
-        assertThat(active).isNotEqualTo(previous).isNotEqualTo(legacy);
+        assertThat(v24).isNotBlank();
+        assertThat(v23).isNotBlank();
+        assertThat(v22).isNotBlank();
+        assertThat(active)
+                .isNotEqualTo(v24)
+                .isNotEqualTo(v23)
+                .isNotEqualTo(v22);
     }
 
     private static String resource(String name) throws IOException {
@@ -73,7 +79,9 @@ class WeeklyReviewAiManagementPromptContractTest {
                 .getClassLoader();
         try (InputStream input = loader.getResourceAsStream(name)) {
             if (input == null) {
-                throw new IllegalStateException("Missing test resource: " + name);
+                throw new IllegalStateException(
+                        "Missing test resource: " + name
+                );
             }
             return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }

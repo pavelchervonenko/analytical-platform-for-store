@@ -189,6 +189,7 @@ public class WeeklyReviewAiJobStore {
         String leaseOwner = requireText(owner, "owner");
         Duration lease = positive(leaseDuration, "leaseDuration");
         Instant timestamp = requireNonNull(now, "now");
+        retireSuperseded(timestamp);
         recoverExpired(timestamp);
         jdbcTemplate.update("""
                 UPDATE weekly_review_ai_jobs
@@ -549,6 +550,51 @@ public class WeeklyReviewAiJobStore {
                     "Weekly review AI request exceeds daily budget"
             );
         }
+    }
+
+    private void retireSuperseded(Instant now) {
+        jdbcTemplate.update("""
+                UPDATE weekly_review_ai_attempts attempt
+                SET status = 'FAILED',
+                    error_code = 'JOB_CONTRACT_SUPERSEDED',
+                    error_message = 'Weekly review AI contract superseded',
+                    provider_outcome = 'UNKNOWN',
+                    finished_at = ?
+                FROM weekly_review_ai_jobs job
+                WHERE attempt.job_id = job.id
+                  AND attempt.status = 'STARTED'
+                  AND attempt.finished_at IS NULL
+                  AND job.status = 'RUNNING'
+                  AND (job.prompt_version <> ?
+                       OR job.content_schema_version <> ?)
+                  AND job.lease_until < ?
+                """,
+                Timestamp.from(now),
+                WeeklyReviewAiContract.PROMPT_VERSION,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                Timestamp.from(now)
+        );
+        jdbcTemplate.update("""
+                UPDATE weekly_review_ai_jobs
+                SET status = 'FAILED', next_attempt_at = ?,
+                    lease_owner = NULL, lease_until = NULL,
+                    last_error_code = 'JOB_CONTRACT_SUPERSEDED',
+                    last_error_message =
+                        'Weekly review AI contract superseded'
+                WHERE (prompt_version <> ?
+                       OR content_schema_version <> ?)
+                  AND (
+                      (status IN ('PENDING', 'RETRY_WAIT')
+                       AND deadline_at <= ?)
+                      OR (status = 'RUNNING' AND lease_until < ?)
+                  )
+                """,
+                Timestamp.from(now),
+                WeeklyReviewAiContract.PROMPT_VERSION,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                Timestamp.from(now),
+                Timestamp.from(now)
+        );
     }
 
     private void recoverExpired(Instant now) {

@@ -27,7 +27,7 @@ import tools.jackson.databind.ObjectWriter;
 import tools.jackson.databind.SerializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Builds the bounded active schema4 provider request from an exact V45 snapshot. */
+/** Builds the bounded active selector-only provider request from an exact V45 snapshot. */
 @Component
 public final class WeeklyReviewAiProviderRequestFactory {
 
@@ -55,7 +55,7 @@ public final class WeeklyReviewAiProviderRequestFactory {
                 WeeklyReviewAiContract.INPUT_SCHEMA
         );
         systemPrompt = resource(WeeklyReviewAiContract.SYSTEM_PROMPT);
-        responseSchema = jsonResource(WeeklyReviewAiContract.CONTENT_SCHEMA);
+        responseSchema = jsonResource(WeeklyReviewAiContract.SELECTION_SCHEMA);
     }
 
     public PreparedWeeklyReviewAiRequest prepare(

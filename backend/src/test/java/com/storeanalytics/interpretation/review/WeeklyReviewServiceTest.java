@@ -58,16 +58,16 @@ class WeeklyReviewServiceTest {
         PersistedWeeklyReviewAiEnrichment enrichment = enrichment(snapshotId);
         WeeklyReviewAiEnrichmentStore enrichments =
                 mock(WeeklyReviewAiEnrichmentStore.class);
-        when(enrichments.findPublished(snapshotId, NOW))
-                .thenReturn(Optional.of(enrichment));
+        when(enrichments.findPublishedCandidates(snapshotId, NOW))
+                .thenReturn(List.of(enrichment));
         WeeklyReviewAiEnricher enricher = mock(WeeklyReviewAiEnricher.class);
-        when(enricher.apply(
+        when(enricher.applyIfCompatible(
                 base,
                 enrichment.validationResult(),
                 enrichment.publishedAt(),
                 enrichment.promptVersion(),
                 enrichment.contentSchemaVersion()
-        )).thenReturn(enriched);
+        )).thenReturn(Optional.of(enriched));
 
         WeeklyReviewService service = new WeeklyReviewService(
                 stores,
@@ -83,8 +83,8 @@ class WeeklyReviewServiceTest {
         );
 
         assertThat(service.current(storeId)).containsSame(enriched);
-        verify(enrichments).findPublished(snapshotId, NOW);
-        verify(enricher).apply(
+        verify(enrichments).findPublishedCandidates(snapshotId, NOW);
+        verify(enricher).applyIfCompatible(
                 base,
                 enrichment.validationResult(),
                 enrichment.publishedAt(),
@@ -117,7 +117,7 @@ class WeeklyReviewServiceTest {
                 .thenReturn(Optional.of(persisted));
         WeeklyReviewAiEnrichmentStore enrichments =
                 mock(WeeklyReviewAiEnrichmentStore.class);
-        when(enrichments.findPublished(snapshotId, NOW)).thenThrow(
+        when(enrichments.findPublishedCandidates(snapshotId, NOW)).thenThrow(
                 new IllegalStateException("AI enrichment integrity validation failed")
         );
         WeeklyReviewAiStateResolver stateResolver =
@@ -139,6 +139,65 @@ class WeeklyReviewServiceTest {
 
         assertThat(service.current(storeId)).containsSame(base);
         verify(stateResolver).apply(persisted, NOW);
+    }
+
+    @Test
+    void incompatibleV25FallsBackToCompatibleV24() {
+        UUID storeId = UUID.randomUUID();
+        UUID snapshotId = UUID.randomUUID();
+        StoreRepository stores = mock(StoreRepository.class);
+        Store store = mock(Store.class);
+        when(store.getId()).thenReturn(storeId);
+        when(store.getTimezone()).thenReturn("Europe/Moscow");
+        when(stores.findById(storeId)).thenReturn(Optional.of(store));
+        WeeklyReviewResponse base = mock(WeeklyReviewResponse.class);
+        WeeklyReviewResponse enriched = mock(WeeklyReviewResponse.class);
+        PersistedWeeklyReviewSnapshot persisted =
+                new PersistedWeeklyReviewSnapshot(
+                        snapshotId, storeId, 1, null, base,
+                        "a".repeat(64), NOW
+                );
+        WeeklyReviewSnapshotStore snapshots =
+                mock(WeeklyReviewSnapshotStore.class);
+        when(snapshots.findLatest(eq(storeId), any(DateRange.class)))
+                .thenReturn(Optional.of(persisted));
+        PersistedWeeklyReviewAiEnrichment v25 = enrichment(
+                snapshotId, "weekly-interpretation-v25", "Итог v25"
+        );
+        PersistedWeeklyReviewAiEnrichment v24 = enrichment(
+                snapshotId, "weekly-interpretation-v24", "Итог v24"
+        );
+        WeeklyReviewAiEnrichmentStore enrichments =
+                mock(WeeklyReviewAiEnrichmentStore.class);
+        when(enrichments.findPublishedCandidates(snapshotId, NOW))
+                .thenReturn(List.of(v25, v24));
+        WeeklyReviewAiEnricher enricher = mock(WeeklyReviewAiEnricher.class);
+        when(enricher.applyIfCompatible(
+                base, v25.validationResult(), v25.publishedAt(),
+                v25.promptVersion(), v25.contentSchemaVersion()
+        )).thenReturn(Optional.empty());
+        when(enricher.applyIfCompatible(
+                base, v24.validationResult(), v24.publishedAt(),
+                v24.promptVersion(), v24.contentSchemaVersion()
+        )).thenReturn(Optional.of(enriched));
+
+        WeeklyReviewService service = new WeeklyReviewService(
+                stores, mock(WeeklyReviewFactsSource.class), snapshots,
+                new WeeklyReviewAiReadSupport(
+                        enrichments, enricher,
+                        mock(WeeklyReviewAiStateResolver.class),
+                        WeeklyReviewAiTestProperties.properties(
+                                true, false, false
+                        )
+                ),
+                Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+
+        assertThat(service.current(storeId)).containsSame(enriched);
+        verify(enricher).applyIfCompatible(
+                base, v24.validationResult(), v24.publishedAt(),
+                v24.promptVersion(), v24.contentSchemaVersion()
+        );
     }
 
     @Test
@@ -164,8 +223,8 @@ class WeeklyReviewServiceTest {
                 )));
         WeeklyReviewAiEnrichmentStore enrichments =
                 mock(WeeklyReviewAiEnrichmentStore.class);
-        when(enrichments.findPublished(snapshotId, NOW))
-                .thenReturn(Optional.of(enrichment(snapshotId)));
+        when(enrichments.findPublishedCandidates(snapshotId, NOW))
+                .thenReturn(List.of(enrichment(snapshotId)));
 
         WeeklyReviewAiStateResolver stateResolver =
                 mock(WeeklyReviewAiStateResolver.class);
@@ -188,14 +247,24 @@ class WeeklyReviewServiceTest {
         );
 
         assertThat(service.current(storeId)).containsSame(base);
-        verify(enrichments, never()).findPublished(snapshotId, NOW);
+        verify(enrichments, never()).findPublishedCandidates(snapshotId, NOW);
     }
 
     private PersistedWeeklyReviewAiEnrichment enrichment(UUID snapshotId) {
+        return enrichment(
+                snapshotId, "weekly-interpretation-v23", "Итог недели"
+        );
+    }
+
+    private PersistedWeeklyReviewAiEnrichment enrichment(
+            UUID snapshotId,
+            String promptVersion,
+            String summaryText
+    ) {
         WeeklyReviewAiContent content = new WeeklyReviewAiContent(
                 4,
                 new WeeklyReviewAiContent.Summary(
-                        "Итог недели",
+                        summaryText,
                         List.of("STORE.NET_REVENUE")
                 ),
                 List.of(),
@@ -204,7 +273,7 @@ class WeeklyReviewServiceTest {
         return new PersistedWeeklyReviewAiEnrichment(
                 UUID.randomUUID(),
                 snapshotId,
-                "weekly-interpretation-v23",
+                promptVersion,
                 4,
                 "b".repeat(64),
                 content,

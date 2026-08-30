@@ -9,11 +9,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
 
-/** Minimal store-only payload allowed to leave the backend boundary. */
+/** Bounded store-only atoms and choices allowed to leave the backend boundary. */
 public record WeeklyReviewAiInput(
         int contractVersion,
         String promptVersion,
         int contentSchemaVersion,
+        String reportState,
         SummarySource summary,
         List<FactorSource> factors,
         List<ActionSource> actions,
@@ -22,11 +23,13 @@ public record WeeklyReviewAiInput(
 
     public WeeklyReviewAiInput {
         require(contractVersion == WeeklyReviewAiContract.INPUT_SCHEMA_VERSION,
-                "contractVersion must be 3");
+                "contractVersion must be 4");
         require(WeeklyReviewAiContract.PROMPT_VERSION.equals(promptVersion),
-                "promptVersion must be weekly-interpretation-v24");
+                "promptVersion must be weekly-interpretation-v25");
         require(contentSchemaVersion == WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 "contentSchemaVersion must be 4");
+        require("READY".equals(reportState) || "PARTIAL".equals(reportState),
+                "reportState must be READY or PARTIAL");
         requireNonNull(summary, "summary");
         factors = limited(factors, "factors", 3);
         actions = limited(actions, "actions", 3);
@@ -34,58 +37,62 @@ public record WeeklyReviewAiInput(
         requireUnique(factors, FactorSource::factorId, "factorId");
         requireUnique(actions, ActionSource::actionId, "actionId");
         requireUnique(evidence, EvidenceSource::evidenceRef, "evidenceRef");
+        Set<String> factorIds = new HashSet<>();
+        factors.forEach(value -> factorIds.add(value.factorId()));
+        require(factorIds.containsAll(summary.allowedFocusFactorIds()),
+                "summary focus factors must exist in factors");
     }
 
     public record SummarySource(
-            String outcomeText,
             String outcomeEffect,
-            List<String> allowedNarratives,
-            List<String> evidenceRefs,
-            List<String> allowedNumericLiterals
+            List<String> allowedSelectors,
+            List<String> allowedFocusFactorIds,
+            List<String> evidenceRefs
     ) {
 
         public SummarySource {
-            requireText(outcomeText, "outcomeText");
-            require("POSITIVE".equals(outcomeEffect)
-                            || "NEGATIVE".equals(outcomeEffect)
-                            || "NEUTRAL".equals(outcomeEffect)
-                            || "MIXED".equals(outcomeEffect),
-                    "outcomeEffect must be POSITIVE, NEGATIVE, NEUTRAL or MIXED");
-            allowedNarratives = strings(
-                    limited(allowedNarratives, "summary.allowedNarratives", 4),
-                    "summary.allowedNarratives"
+            requireEffect(outcomeEffect, true);
+            allowedSelectors = nonEmptyStrings(
+                    limited(allowedSelectors, "summary.allowedSelectors", 4),
+                    "summary.allowedSelectors"
             );
-            require(!allowedNarratives.isEmpty(),
-                    "summary.allowedNarratives must not be empty");
+            allowedFocusFactorIds = strings(
+                    limited(
+                            allowedFocusFactorIds,
+                            "summary.allowedFocusFactorIds",
+                            3
+                    ),
+                    "summary.allowedFocusFactorIds"
+            );
             evidenceRefs = references(evidenceRefs, "summary.evidenceRefs");
-            allowedNumericLiterals = strings(
-                    allowedNumericLiterals, "summary.allowedNumericLiterals"
-            );
         }
     }
 
     public record FactorSource(
             String factorId,
+            String kind,
             String title,
-            String detail,
-            String managementMeaning,
+            String direction,
             String effect,
             boolean causalLanguageAllowed,
-            List<String> evidenceRefs,
-            List<String> allowedNumericLiterals
+            List<String> allowedSelectors,
+            List<String> evidenceRefs
     ) {
 
         public FactorSource {
             requireText(factorId, "factorId");
+            requireText(kind, "factor.kind");
             requireText(title, "factor.title");
-            requireText(detail, "factor.detail");
-            requireText(managementMeaning, "factor.managementMeaning");
-            require("POSITIVE".equals(effect) || "NEGATIVE".equals(effect),
-                    "factor.effect must be POSITIVE or NEGATIVE");
-            evidenceRefs = references(evidenceRefs, "factor.evidenceRefs");
-            allowedNumericLiterals = strings(
-                    allowedNumericLiterals, "factor.allowedNumericLiterals"
+            require("UP".equals(direction) || "DOWN".equals(direction)
+                            || "FLAT".equals(direction)
+                            || "UNKNOWN".equals(direction),
+                    "factor.direction is invalid");
+            requireEffect(effect, false);
+            allowedSelectors = nonEmptyStrings(
+                    limited(allowedSelectors, "factor.allowedSelectors", 2),
+                    "factor.allowedSelectors"
             );
+            evidenceRefs = references(evidenceRefs, "factor.evidenceRefs");
         }
     }
 
@@ -93,8 +100,7 @@ public record WeeklyReviewAiInput(
             String actionId,
             String title,
             String check,
-            List<String> evidenceRefs,
-            List<String> allowedNumericLiterals
+            List<String> evidenceRefs
     ) {
 
         public ActionSource {
@@ -102,9 +108,6 @@ public record WeeklyReviewAiInput(
             requireText(title, "action.title");
             requireText(check, "action.check");
             evidenceRefs = references(evidenceRefs, "action.evidenceRefs");
-            allowedNumericLiterals = strings(
-                    allowedNumericLiterals, "action.allowedNumericLiterals"
-            );
         }
     }
 
@@ -125,7 +128,24 @@ public record WeeklyReviewAiInput(
         }
     }
 
+    private static void requireEffect(String effect, boolean summary) {
+        boolean common = "POSITIVE".equals(effect)
+                || "NEGATIVE".equals(effect);
+        require(common || summary && ("NEUTRAL".equals(effect)
+                        || "MIXED".equals(effect)),
+                "effect is invalid");
+    }
+
     private static List<String> references(
+            List<String> values,
+            String fieldName
+    ) {
+        List<String> result = nonEmptyStrings(values, fieldName);
+        require(result.size() <= 10, fieldName + " exceeds ten items");
+        return result;
+    }
+
+    private static List<String> nonEmptyStrings(
             List<String> values,
             String fieldName
     ) {

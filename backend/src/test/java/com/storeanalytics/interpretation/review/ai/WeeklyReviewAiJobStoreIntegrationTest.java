@@ -1,5 +1,6 @@
 package com.storeanalytics.interpretation.review.ai;
 
+
 import static com.storeanalytics.interpretation.review.WeeklyReviewTestPayload.snapshotPayload;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -11,7 +12,6 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,11 +20,13 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @SpringBootTest
+@Transactional
 @Testcontainers(disabledWithoutDocker = true)
 class WeeklyReviewAiJobStoreIntegrationTest {
 
@@ -123,6 +125,31 @@ class WeeklyReviewAiJobStoreIntegrationTest {
     }
 
     @Test
+    void retiresSupersededJobOnlyAfterItsDeadline() {
+        Instant createdAt = NOW.minus(Duration.ofDays(2));
+        UUID snapshotId = addSnapshot(
+                addStore("AI superseded deadline"),
+                LocalDate.of(2026, 8, 10),
+                1
+        );
+        UUID legacyJobId = addLegacyJob(snapshotId, createdAt);
+
+        store.claimNext("v25-worker", Duration.ofMinutes(4), NOW);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM weekly_review_ai_jobs WHERE id = ?",
+                String.class,
+                legacyJobId
+        )).isEqualTo("FAILED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT last_error_code FROM weekly_review_ai_jobs "
+                        + "WHERE id = ?",
+                String.class,
+                legacyJobId
+        )).isEqualTo("JOB_CONTRACT_SUPERSEDED");
+    }
+
+    @Test
     void retriesSemanticFailureThenFinalizesImmutableSuccess() {
         UUID snapshotId = addSnapshot(
                 addStore("AI retry"), LocalDate.of(2026, 8, 17), 1
@@ -161,7 +188,7 @@ class WeeklyReviewAiJobStoreIntegrationTest {
         WeeklyReviewAiJob retry = store.findById(pending.id()).orElseThrow();
         assertThat(retry.status()).isEqualTo(WeeklyReviewAiJobStatus.RETRY_WAIT);
         assertThat(retry.attemptCount()).isOne();
-        assertThat(retry.lastValidationCodes()).contains("UNAPPROVED_NUMBER");
+        assertThat(retry.lastValidationCodes()).contains("SUMMARY_SELECTOR_NOT_ALLOWED");
         WeeklyReviewAiJob secondClaim = store.claimNext(
                 "worker-2", Duration.ofMinutes(4), NOW.plusSeconds(31)
         ).orElseThrow();
@@ -199,6 +226,69 @@ class WeeklyReviewAiJobStoreIntegrationTest {
                 firstAttempt.id()
         )).isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("Final weekly review AI attempts are immutable");
+    }
+
+    @Test
+    void supersededRunningJobWaitsForLeaseThenClosesAttempt() {
+        Instant createdAt = NOW.minus(Duration.ofDays(2));
+        UUID snapshotId = addSnapshot(
+                addStore("AI superseded running"),
+                LocalDate.of(2026, 8, 10),
+                1
+        );
+        UUID legacyJobId = addLegacyJob(snapshotId, createdAt);
+        UUID attemptId = UUID.randomUUID();
+        Instant liveLease = NOW.plus(Duration.ofMinutes(2));
+        jdbcTemplate.update(
+                "UPDATE weekly_review_ai_jobs SET status = 'RUNNING', "
+                        + "attempt_count = 1, lease_owner = 'legacy', "
+                        + "lease_until = ? WHERE id = ?",
+                java.sql.Timestamp.from(liveLease),
+                legacyJobId
+        );
+        jdbcTemplate.update(
+                """
+                INSERT INTO weekly_review_ai_attempts (
+                    id, job_id, attempt_number, status, request_hash,
+                    input_hash, input_payload, estimated_cost, started_at
+                ) VALUES (?, ?, 1, 'STARTED', ?, ?, '{}'::jsonb, ?, ?)
+                """,
+                attemptId,
+                legacyJobId,
+                "a".repeat(64),
+                "b".repeat(64),
+                new BigDecimal("3.00"),
+                java.sql.Timestamp.from(createdAt)
+        );
+
+        store.claimNext("v25-before-expiry", Duration.ofMinutes(4), NOW);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM weekly_review_ai_jobs WHERE id = ?",
+                String.class, legacyJobId
+        )).isEqualTo("RUNNING");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM weekly_review_ai_attempts WHERE id = ?",
+                String.class, attemptId
+        )).isEqualTo("STARTED");
+
+        store.claimNext(
+                "v25-after-expiry", Duration.ofMinutes(4),
+                liveLease.plusSeconds(1)
+        );
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM weekly_review_ai_jobs WHERE id = ?",
+                String.class, legacyJobId
+        )).isEqualTo("FAILED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM weekly_review_ai_attempts WHERE id = ?",
+                String.class, attemptId
+        )).isEqualTo("FAILED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT provider_outcome FROM weekly_review_ai_attempts "
+                        + "WHERE id = ?",
+                String.class, attemptId
+        )).isEqualTo("UNKNOWN");
     }
 
     @Test
@@ -298,38 +388,16 @@ class WeeklyReviewAiJobStoreIntegrationTest {
     }
 
     private WeeklyReviewAiInput input() {
-        return new WeeklyReviewAiInput(
-                WeeklyReviewAiContract.INPUT_SCHEMA_VERSION,
-                WeeklyReviewAiContract.PROMPT_VERSION,
-                4,
-                new WeeklyReviewAiInput.SummarySource(
-                        "Чистая выручка выросла.",
-                        "POSITIVE",
-                        List.of("Чистая выручка выросла."),
-                        List.of("STORE.NET_REVENUE"),
-                        List.of()
-                ),
-                List.of(),
-                List.of(),
-                List.of(new WeeklyReviewAiInput.EvidenceSource(
-                        "STORE.NET_REVENUE", "Чистая выручка", "RUB",
-                        "1000", "900"
-                ))
-        );
+        return WeeklyReviewAiTestFixtures.minimalInput("POSITIVE");
     }
 
     private String response(String text) {
-        return """
-                {
-                  "schemaVersion": 4,
-                  "summary": {
-                    "text": "%s",
-                    "evidenceRefs": ["STORE.NET_REVENUE"]
-                  },
-                  "factorExplanations": [],
-                  "actionWordings": []
-                }
-                """.formatted(text);
+        if (text.contains("12%")) {
+            return WeeklyReviewAiTestFixtures.outcomeSelection().replace(
+                    "SUMMARY_OUTCOME", "SUMMARY_RISK"
+            );
+        }
+        return WeeklyReviewAiTestFixtures.outcomeSelection();
     }
 
     private UUID addStore(String name) {

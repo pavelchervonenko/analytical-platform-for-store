@@ -13,7 +13,10 @@ import com.storeanalytics.interpretation.review.WeeklyReviewResponse.ReportState
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.SummaryBlock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 
 /**
@@ -82,6 +85,21 @@ public final class WeeklyReviewAiEnricher {
         );
     }
 
+    public Optional<WeeklyReviewResponse> applyIfCompatible(
+            WeeklyReviewResponse response,
+            WeeklyReviewAiValidationResult validation,
+            Instant publishedAt,
+            String promptVersion,
+            int contentSchemaVersion
+    ) {
+        WeeklyReviewResponse source = requireNonNull(response, "response");
+        WeeklyReviewResponse applied = apply(
+                source, validation, publishedAt,
+                promptVersion, contentSchemaVersion
+        );
+        return applied == source ? Optional.empty() : Optional.of(applied);
+    }
+
     private boolean matches(
             WeeklyReviewResponse response,
             WeeklyReviewAiContent content,
@@ -92,8 +110,9 @@ public final class WeeklyReviewAiEnricher {
                 || response.summary().outcome() == null
                 || content.schemaVersion()
                         != WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
-                || !response.summary().outcome().evidenceRefs()
-                        .equals(content.summary().evidenceRefs())
+                || !summaryEvidenceMatches(
+                        response, content, promptVersion
+                )
                 || response.factors().size()
                         != content.factorExplanations().size()
                 || response.actions().size() != content.actionWordings().size()) {
@@ -125,6 +144,28 @@ public final class WeeklyReviewAiEnricher {
         return true;
     }
 
+    private boolean summaryEvidenceMatches(
+            WeeklyReviewResponse response,
+            WeeklyReviewAiContent content,
+            String promptVersion
+    ) {
+        List<String> source = response.summary().outcome().evidenceRefs();
+        List<String> actual = content.summary().evidenceRefs();
+        if (!WeeklyReviewAiContract.PROMPT_VERSION.equals(promptVersion)) {
+            return source.equals(actual);
+        }
+        if (actual.size() < source.size()
+                || !actual.subList(0, source.size()).equals(source)
+                || new LinkedHashSet<>(actual).size() != actual.size()) {
+            return false;
+        }
+        Set<String> allowed = new LinkedHashSet<>(source);
+        response.factors().forEach(
+                factor -> allowed.addAll(factor.evidenceRefs())
+        );
+        return allowed.containsAll(actual);
+    }
+
     private SummaryBlock summary(
             SummaryBlock source,
             WeeklyReviewAiContent.Summary wording
@@ -137,7 +178,7 @@ public final class WeeklyReviewAiEnricher {
                         outcome.itemId(),
                         wording.text(),
                         outcome.effect(),
-                        outcome.evidenceRefs()
+                        wording.evidenceRefs()
                 ),
                 source.positive(),
                 source.risk(),

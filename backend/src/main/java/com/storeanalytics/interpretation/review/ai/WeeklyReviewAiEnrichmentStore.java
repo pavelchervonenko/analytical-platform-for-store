@@ -7,15 +7,22 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class WeeklyReviewAiEnrichmentStore {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(
+            WeeklyReviewAiEnrichmentStore.class
+    );
 
     private static final String LOCK_SNAPSHOT_SQL = """
             SELECT id
@@ -127,33 +134,35 @@ public class WeeklyReviewAiEnrichmentStore {
             UUID snapshotId,
             Instant asOf
     ) {
+        return findPublishedCandidates(snapshotId, asOf).stream().findFirst();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PersistedWeeklyReviewAiEnrichment> findPublishedCandidates(
+            UUID snapshotId,
+            Instant asOf
+    ) {
         UUID snapshot = requireNonNull(snapshotId, "snapshotId");
         Instant publishedAsOf = requireNonNull(asOf, "asOf");
-        Optional<PersistedWeeklyReviewAiEnrichment> active =
+        List<PersistedWeeklyReviewAiEnrichment> result = new ArrayList<>();
+        for (String promptVersion
+                : WeeklyReviewAiContract.readablePromptVersions()) {
+            try {
                 findPublishedInternal(
                         snapshot,
-                        WeeklyReviewAiContract.PROMPT_VERSION,
+                        promptVersion,
                         WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                         publishedAsOf
+                ).ifPresent(result::add);
+            } catch (IllegalArgumentException | IllegalStateException exception) {
+                LOGGER.error(
+                        "Ignoring invalid weekly review AI enrichment "
+                                + "for snapshot {} and prompt {}",
+                        snapshot, promptVersion, exception
                 );
-        if (active.isPresent()) {
-            return active;
+            }
         }
-        Optional<PersistedWeeklyReviewAiEnrichment> previous =
-                findPublishedInternal(
-                        snapshot,
-                        WeeklyReviewAiContract.PREVIOUS_PROMPT_VERSION,
-                        WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
-                        publishedAsOf
-                );
-        return previous.isPresent()
-                ? previous
-                : findPublishedInternal(
-                        snapshot,
-                        WeeklyReviewAiContract.LEGACY_PROMPT_VERSION,
-                        WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
-                        publishedAsOf
-                );
+        return List.copyOf(result);
     }
 
     private Optional<PersistedWeeklyReviewAiEnrichment> findPublishedInternal(

@@ -31,7 +31,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.SerializationFeature;
 
-/** Test-runtime-only, explicit-budget v24 semantic shadow runner. */
+/** Test-runtime-only, explicit-budget v25 semantic shadow runner. */
 public final class WeeklyReviewAiShadowRunner {
 
     static final String MODE_PLAN = "plan";
@@ -210,14 +210,44 @@ public final class WeeklyReviewAiShadowRunner {
                 value.prepared().request().inputJson()
         );
         writeNew(
-                directory.resolve(value.caseId() + ".json"),
+                directory.resolve(value.caseId() + ".provider.json"),
                 receipt.responseBody()
+        );
+        String reviewContent = validation.semanticValidated()
+                ? validation.canonicalContent()
+                : receipt.responseBody();
+        writeNew(
+                directory.resolve(value.caseId() + ".json"),
+                reviewContent
         );
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("corpusVersion", WeeklyReviewAiEvaluationCorpus.VERSION);
         metadata.put("caseId", value.caseId());
         metadata.put("requestHash", value.prepared().requestHash());
         metadata.put("inputHash", value.prepared().inputHash());
+        WeeklyReviewAiContentCodec hashCodec =
+                new WeeklyReviewAiContentCodec();
+        metadata.put(
+                "providerResponseHash",
+                hashCodec.hash(receipt.responseBody())
+        );
+        metadata.put(
+                "reviewContentHash",
+                hashCodec.hash(reviewContent)
+        );
+        metadata.put("promptVersion", WeeklyReviewAiContract.PROMPT_VERSION);
+        metadata.put(
+                "inputSchemaVersion",
+                WeeklyReviewAiContract.INPUT_SCHEMA_VERSION
+        );
+        metadata.put(
+                "selectionSchemaVersion",
+                WeeklyReviewAiContract.SELECTION_SCHEMA_VERSION
+        );
+        metadata.put(
+                "contentSchemaVersion",
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
+        );
         metadata.put("providerRequestId", receipt.providerRequestId());
         metadata.put("resolvedModel", receipt.resolvedModel());
         metadata.put("inputTokens", receipt.inputTokens());
@@ -226,6 +256,12 @@ public final class WeeklyReviewAiShadowRunner {
         metadata.put("costCurrency", receipt.costCurrency());
         metadata.put("validationOutcome", validation.outcome().name());
         metadata.put("semanticValidated", validation.semanticValidated());
+        metadata.put(
+                "reviewContentKind",
+                validation.semanticValidated()
+                        ? "RENDERED_SCHEMA4"
+                        : "REJECTED_PROVIDER_RESPONSE"
+        );
         metadata.put("violations", validation.violations());
         try {
             writeNew(

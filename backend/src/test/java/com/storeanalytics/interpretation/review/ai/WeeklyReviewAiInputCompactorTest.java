@@ -30,7 +30,7 @@ class WeeklyReviewAiInputCompactorTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
-    void emitsOnlySelectedStoreWordingAndReferencedEvidence() throws Exception {
+    void emitsOnlyStoreFactsSelectorsAndReferencedEvidence() throws Exception {
         WeeklyReviewResponse response = response(ReportState.READY, "STORE");
 
         WeeklyReviewAiInput result = compactor.compact(response);
@@ -40,33 +40,29 @@ class WeeklyReviewAiInputCompactorTest {
                 .validate(json)).isEmpty();
         assertThat(result.promptVersion())
                 .isEqualTo(WeeklyReviewAiContract.PROMPT_VERSION);
-        assertThat(result.summary().outcomeText())
-                .isEqualTo("Чистая выручка — 1000 ₽ (+11,1%)");
+        assertThat(result.reportState()).isEqualTo("READY");
         assertThat(result.summary().outcomeEffect()).isEqualTo("POSITIVE");
-        assertThat(result.summary().allowedNarratives()).containsExactly(
-                "Неделя сильнее предыдущей: Чистая выручка — 1000 ₽ (+11,1%)",
-                "Неделя оказалась сильнее периода сравнения: Чистая выручка — 1000 ₽ (+11,1%)"
-        );
+        assertThat(result.summary().allowedSelectors()).containsExactly("SUMMARY_RISK");
+        assertThat(result.summary().allowedFocusFactorIds())
+                .containsExactly("factor:return_revenue");
         assertThat(result.summary().evidenceRefs())
                 .containsExactly("STORE.NET_REVENUE");
-        assertThat(result.summary().allowedNumericLiterals())
-                .containsExactly("1000", "+11,1", "1000.00", "900.00");
         assertThat(result.factors()).singleElement().satisfies(factor -> {
             assertThat(factor.factorId()).isEqualTo("factor:return_revenue");
+            assertThat(factor.kind()).isEqualTo("RETURN_CHANGE");
+            assertThat(factor.direction()).isEqualTo("UP");
+            assertThat(factor.effect()).isEqualTo("NEGATIVE");
             assertThat(factor.causalLanguageAllowed()).isTrue();
-            assertThat(factor.managementMeaning()).isEqualTo(
-                    "Возвраты уменьшили результат продаж сильнее, "
-                            + "чем в периоде сравнения."
+            assertThat(factor.allowedSelectors()).containsExactly(
+                    "FACTOR_RISK",
+                    "FACTOR_CONTROL"
             );
-            assertThat(factor.allowedNumericLiterals())
-                    .containsExactly("100", "50", "+100,0", "100.00", "50.00");
         });
         assertThat(result.actions()).singleElement().satisfies(action -> {
-            assertThat(action.title()).isEqualTo("Проанализировать рост возвратов");
+            assertThat(action.title())
+                    .isEqualTo("Проанализировать рост возвратов");
             assertThat(action.actionId())
                     .isEqualTo("action:restore:return_revenue");
-            assertThat(action.allowedNumericLiterals())
-                    .containsExactly("50", "100.00", "50.00");
         });
         assertThat(result.evidence())
                 .extracting(WeeklyReviewAiInput.EvidenceSource::evidenceRef)
@@ -81,17 +77,10 @@ class WeeklyReviewAiInputCompactorTest {
                         "snapshotPublicId",
                         "monthlyPlan",
                         "period",
-                        "STORE.UNUSED"
-                );
-        assertThat(List.of(WeeklyReviewAiInput.SummarySource.class
-                .getRecordComponents()))
-                .extracting(component -> component.getName())
-                .containsExactly(
+                        "STORE.UNUSED",
                         "outcomeText",
-                        "outcomeEffect",
-                        "allowedNarratives",
-                        "evidenceRefs",
-                        "allowedNumericLiterals"
+                        "managementMeaning",
+                        "allowedNarratives"
                 );
     }
 
@@ -112,7 +101,7 @@ class WeeklyReviewAiInputCompactorTest {
     }
 
     @Test
-    void emitsBackendOwnedManagementMeaningForStructureAndAttachFactors() {
+    void emitsBoundedKindsDirectionsAndFramingChoices() {
         WeeklyReviewResponse response = response(ReportState.READY, "STORE");
         Factor structure = factor(
                 "factor:structure", "STRUCTURE_CHANGE", Direction.DOWN
@@ -125,23 +114,30 @@ class WeeklyReviewAiInputCompactorTest {
         WeeklyReviewAiInput result = compactor.compact(response);
 
         assertThat(result.factors())
-                .extracting(WeeklyReviewAiInput.FactorSource::managementMeaning)
+                .extracting(
+                        WeeklyReviewAiInput.FactorSource::kind,
+                        WeeklyReviewAiInput.FactorSource::direction
+                )
                 .containsExactly(
-                        "Направление принесло меньше выручки, "
-                                + "чем в периоде сравнения.",
-                        "Товары или услуги этой группы чаще сопровождали "
-                                + "базовые продажи, чем в периоде сравнения."
+                        org.assertj.core.groups.Tuple.tuple(
+                                "STRUCTURE_CHANGE", "DOWN"
+                        ),
+                        org.assertj.core.groups.Tuple.tuple(
+                                "ATTACH_CHANGE", "UP"
+                        )
                 );
+        assertThat(result.summary().allowedSelectors()).containsExactly("SUMMARY_STRENGTH");
     }
 
     @Test
-    void inputTypeHasNoPersonTeamOrPlanFields() {
+    void inputTypeHasNoPersonTeamPlanOrPeriodFields() {
         assertThat(List.of(WeeklyReviewAiInput.class.getRecordComponents()))
                 .extracting(component -> component.getName())
                 .containsExactly(
                         "contractVersion",
                         "promptVersion",
                         "contentSchemaVersion",
+                        "reportState",
                         "summary",
                         "factors",
                         "actions",
@@ -176,13 +172,7 @@ class WeeklyReviewAiInputCompactorTest {
                 "Чистая выручка — 1000 ₽ (+11,1%)",
                 List.of("STORE.NET_REVENUE")
         );
-        NarrativeItem risk = narrative(
-                "Сумма возвратов выросла",
-                List.of("STORE.RETURN_REVENUE")
-        );
         when(summary.outcome()).thenReturn(outcome);
-        when(summary.positive()).thenReturn(null);
-        when(summary.risk()).thenReturn(risk);
 
         Factor factor = mock(Factor.class);
         when(factor.factorId()).thenReturn("factor:return_revenue");
@@ -191,7 +181,6 @@ class WeeklyReviewAiInputCompactorTest {
         when(factorComparison.direction()).thenReturn(Direction.UP);
         when(factor.comparison()).thenReturn(factorComparison);
         when(factor.title()).thenReturn("Сумма возвратов выросла");
-        when(factor.detail()).thenReturn("Возвраты: 100 ₽ против 50 ₽ (+100,0%)");
         when(factor.effect()).thenReturn(Effect.NEGATIVE);
         when(factor.contributionAmount()).thenReturn(new BigDecimal("-50.00"));
         when(factor.evidenceRefs()).thenReturn(List.of("STORE.RETURN_REVENUE"));
@@ -200,7 +189,6 @@ class WeeklyReviewAiInputCompactorTest {
         when(action.actionId()).thenReturn("action:restore:return_revenue");
         when(action.scope()).thenReturn("STORE");
         when(action.title()).thenReturn("Проанализировать рост возвратов");
-        when(action.metricCode()).thenReturn("RETURN_REVENUE");
         when(action.check()).thenReturn("Сравнить следующую неделю с 50 ₽");
         when(action.evidenceRefs()).thenReturn(List.of("STORE.RETURN_REVENUE"));
 
@@ -215,7 +203,7 @@ class WeeklyReviewAiInputCompactorTest {
         when(response.summary()).thenReturn(summary);
         when(response.factors()).thenReturn(List.of(factor));
         when(response.actions()).thenReturn(List.of(action));
-        List<Evidence> evidence = List.of(
+        List<Evidence> selectedEvidence = List.of(
                 evidence(
                         "STORE.NET_REVENUE",
                         evidenceScope,
@@ -238,7 +226,7 @@ class WeeklyReviewAiInputCompactorTest {
                         BigDecimal.ZERO
                 )
         );
-        when(response.evidence()).thenReturn(evidence);
+        when(response.evidence()).thenReturn(selectedEvidence);
         return response;
     }
 
@@ -250,7 +238,6 @@ class WeeklyReviewAiInputCompactorTest {
         when(factor.kind()).thenReturn(kind);
         when(factor.comparison()).thenReturn(comparison);
         when(factor.title()).thenReturn("Изменение показателя");
-        when(factor.detail()).thenReturn("Изменение относительно сравнения");
         when(factor.effect()).thenReturn(Effect.POSITIVE);
         when(factor.evidenceRefs()).thenReturn(List.of("STORE.RETURN_REVENUE"));
         return factor;

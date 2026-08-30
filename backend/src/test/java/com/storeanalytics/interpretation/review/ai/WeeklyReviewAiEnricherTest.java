@@ -106,6 +106,65 @@ class WeeklyReviewAiEnricherTest {
     }
 
     @Test
+    void appliesV25SummaryEvidenceFromSelectedFactor() {
+        WeeklyReviewResponse base = report();
+        WeeklyReviewAiContent selectedFactorContent =
+                new WeeklyReviewAiContent(
+                        4,
+                        new WeeklyReviewAiContent.Summary(
+                                "Неделя сильнее, но возвраты требуют внимания.",
+                                List.of(
+                                        "STORE.NET_REVENUE",
+                                        "STORE.RETURN_REVENUE"
+                                )
+                        ),
+                        content().factorExplanations(),
+                        content().actionWordings()
+                );
+
+        WeeklyReviewResponse result = enricher.apply(
+                base,
+                WeeklyReviewAiValidationResult.semanticallyValid(
+                        selectedFactorContent, "{}"
+                ),
+                PUBLISHED_AT
+        );
+
+        assertThat(result).isNotSameAs(base);
+        assertThat(result.summary().outcome().evidenceRefs())
+                .containsExactly(
+                        "STORE.NET_REVENUE",
+                        "STORE.RETURN_REVENUE"
+                );
+    }
+
+    @Test
+    void rejectsV25SummaryEvidenceOutsideSourceFactors() {
+        WeeklyReviewResponse base = report();
+        WeeklyReviewAiContent unknownEvidenceContent =
+                new WeeklyReviewAiContent(
+                        4,
+                        new WeeklyReviewAiContent.Summary(
+                                "Неделя сильнее.",
+                                List.of(
+                                        "STORE.NET_REVENUE",
+                                        "STORE.UNKNOWN"
+                                )
+                        ),
+                        content().factorExplanations(),
+                        content().actionWordings()
+                );
+
+        assertThat(enricher.apply(
+                base,
+                WeeklyReviewAiValidationResult.semanticallyValid(
+                        unknownEvidenceContent, "{}"
+                ),
+                PUBLISHED_AT
+        )).isSameAs(base);
+    }
+
+    @Test
     void rejectsChangedActionTitleForActivePrompt() {
         WeeklyReviewResponse base = report();
 
@@ -151,7 +210,7 @@ class WeeklyReviewAiEnricherTest {
         )).isSameAs(base);
     }
 
-    private WeeklyReviewResponse report() {
+    static WeeklyReviewResponse report() {
         NarrativeItem outcome = new NarrativeItem(
                 "summary:outcome",
                 "Чистая выручка выросла.",

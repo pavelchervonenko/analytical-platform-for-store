@@ -107,7 +107,7 @@ tasks.register<JavaExec>("llmEvalShadow") {
 
 tasks.register<JavaExec>("weeklyReviewAiShadow") {
     group = "verification"
-    description = "Plans or executes the isolated v24/schema4 YandexGPT shadow corpus."
+    description = "Plans or executes the isolated v25/schema4 YandexGPT shadow corpus."
     dependsOn("testClasses")
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set(

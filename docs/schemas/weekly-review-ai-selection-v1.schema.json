@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://store-analytics.local/schemas/weekly-review-ai-selection-v1.schema.json",
+  "title": "WeeklyReviewAiSelection v1",
+  "description": "Selector-only editorial plan returned by the provider.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "selectionSchemaVersion",
+    "summary",
+    "factorSelections"
+  ],
+  "properties": {
+    "selectionSchemaVersion": {"const": 1},
+    "summary": {"$ref": "#/$defs/summarySelection"},
+    "factorSelections": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/factorSelection"},
+      "maxItems": 3
+    }
+  },
+  "$defs": {
+    "objectId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9:._-]+$"
+    },
+    "nullableObjectId": {
+      "anyOf": [
+        {"$ref": "#/$defs/objectId"},
+        {"type": "null"}
+      ]
+    },
+    "summarySelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selector",
+        "primaryFactorId",
+        "secondaryFactorId"
+      ],
+      "properties": {
+        "selector": {
+          "enum": [
+            "SUMMARY_OUTCOME",
+            "SUMMARY_STRENGTH",
+            "SUMMARY_RISK",
+            "SUMMARY_BALANCED"
+          ]
+        },
+        "primaryFactorId": {"$ref": "#/$defs/nullableObjectId"},
+        "secondaryFactorId": {"$ref": "#/$defs/nullableObjectId"}
+      }
+    },
+    "factorSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["factorId", "selector"],
+      "properties": {
+        "factorId": {"$ref": "#/$defs/objectId"},
+        "selector": {
+          "enum": [
+            "FACTOR_SIGNAL",
+            "FACTOR_STRENGTH",
+            "FACTOR_RISK",
+            "FACTOR_CONTROL"
+          ]
+        }
+      }
+    }
+  }
+}
