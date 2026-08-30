@@ -17,7 +17,7 @@ Worker исполняет только active `weekly-interpretation-v25/schema4
 1. Checkstyle, полный backend regression, OpenAPI compatibility, security/release/supply-chain.
 2. Полный frontend test, ESLint и production build.
 3. Offline corpus `weekly-review-ai-eval-v6` и blind-review unit tests.
-4. Один отдельно разрешённый paid case в оставшемся бюджете 4,860 ₽.
+4. Один отдельно разрешённый paid case в пределах общего бюджета 20 ₽.
 5. Semantic validation и blind review финального `RENDERED_SCHEMA4` без hard-gate нарушений.
 6. Независимое code/release review без P0/P1.
 7. Default-off deploy и один ручной store canary.
@@ -27,8 +27,10 @@ Worker исполняет только active `weekly-interpretation-v25/schema4
 - пункты 1–3 — PASS: backend 1072 теста, frontend 175 тестов, Checkstyle, OpenAPI, security,
   release-safety, supply-chain, offline corpus и blind-review tooling зелёные;
 - пункт 6 — PASS: независимое финальное review не нашло P0/P1/P2;
-- пункты 4–5 — WAIT: платный `balanced-strength-risk` ещё не разрешён и не выполнен;
-- пункт 7 — WAIT: deploy и production-canary запрещены до успешных пунктов 4–5.
+- пункты 4–5 — PASS: один `balanced-strength-risk` стоил 0,876 ₽, semantic violations — 0,
+  blind review — 4,5/5, решение `CANDIDATE_ELIGIBLE_FOR_CANARY`;
+- пункт 7 — WAIT: deploy не выполнялся; candidate должен быть развёрнут default-off и проверен
+  на одном ручном store canary.
 
 ## Deploy до canary
 

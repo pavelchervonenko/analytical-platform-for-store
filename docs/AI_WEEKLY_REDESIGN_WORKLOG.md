@@ -1,7 +1,7 @@
 # Редизайн страницы «ИИ-разбор»: план и рабочий журнал
 
 Дата начала: 2026-08-26
-Статус: этап 6 в работе; v24 отклонён по управленческой полезности, v25 full local gate и независимое review пройдены, paid gate и production-canary ожидаются
+Статус: этап 6 в работе; v24 отклонён, v25 local/paid gates и независимые review пройдены, default-off production-canary ожидается
 Production baseline: release `v0.1.0-pilot.26`; v22/schema4 canary с v21/schema3 fallback
 
 Этот документ является основной точкой продолжения редизайна страницы «ИИ-разбор». Он хранит
@@ -719,6 +719,10 @@ Gradle supply-chain — PASS, 449 компонентов и 840 артефакт
 максимум 12,432800 ₽ для четырёх case и 3,296800 ₽ для `balanced-strength-risk`. Manifest v6
 фиксирует SHA-256 prompt, трёх schemas, renderer, corpus, fixtures, shadow runner и review script;
 blind packet принимает только `RENDERED_SCHEMA4`. Независимое финальное review: P0/P1/P2 не
-найдено. Paid v25 case и production-canary ещё не выполнены. Из общего лимита 20 ₽ использовано
-15,140 ₽, остаток 4,860 ₽; новый вызов возможен только после отдельного явного разрешения на
-конкретный обезличенный case и hard cap.
+найдено. Затем отдельно разрешён и выполнен один обезличенный `balanced-strength-risk`: hard cap
+3,296800 ₽, actual 0,876 ₽, 996 input/99 output tokens, semantic `VALID`, 0 violations.
+Integrity-checked blind review: 4,5/5, minimum dimension 3/5, forbidden/critical findings — 0;
+решение `CANDIDATE_ELIGIBLE_FOR_CANARY`. Неблокирующее замечание — factor explanations частично
+повторяют summary и дают ограниченный дополнительный смысл. Всего из лимита 20 ₽ использовано
+16,016 ₽, остаток 3,984 ₽. Временные API key/env копии удалены локально и на production; deploy
+и production-canary не выполнялись.

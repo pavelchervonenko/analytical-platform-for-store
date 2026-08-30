@@ -1,7 +1,7 @@
 # Weekly review v25/schema4 — управленческая калибровка
 
 Дата: 2026-08-30
-Статус: полный локальный gate и независимое code review пройдены; paid calibration и production-canary не выполнены
+Статус: полный local/paid gate и независимые review пройдены; candidate допущен к canary, production-canary не выполнен
 
 ## Причина v25
 
@@ -45,11 +45,27 @@ Summary selector теперь ограничен составом факторо
   shadow runner и review script; итоговый blind packet принимает только `RENDERED_SCHEMA4`;
 - независимое финальное code/release review: P0/P1/P2 не найдено.
 
+## Paid acceptance
+
+Отдельно разрешён один обезличенный case `balanced-strength-risk` с hard cap 3,296800 ₽.
+Выполнен ровно один provider call:
+
+- фактическая стоимость — 0,876 ₽; 996 input и 99 output tokens;
+- structural/semantic validation — `VALID`, 0 violations;
+- модель выбрала `SUMMARY_BALANCED`, strength для accessory attach-rate и risk для возвратов;
+- итоговый `RENDERED_SCHEMA4` прошёл integrity-checked blind review;
+- blind average — 4,5/5, minimum dimension — 3/5, forbidden/critical findings — 0;
+- решение — `CANDIDATE_ELIGIBLE_FOR_CANARY`.
+
+Reviewer отметил один неблокирующий недостаток: factor explanations безопасны, но довольно общие и
+частично повторяют summary. Временные локальная и production-копии API key/env удалены после
+finalize; исходный production secret не изменялся.
+
 ## Платный бюджет
 
-Общий разрешённый бюджет — 20 ₽. Использовано 15,140 ₽: v23 — 14,104 ₽, один v24 case —
-1,036 ₽. Остаток — 4,860 ₽. Любой v25 вызов требует отдельного явного разрешения на конкретный
-обезличенный case и hard cap не выше остатка. До такого разрешения разрешён только network-free
-`plan`.
+Общий разрешённый бюджет — 20 ₽. Использовано 16,016 ₽: v23 — 14,104 ₽, один v24 case —
+1,036 ₽, один v25 case — 0,876 ₽. Остаток — 3,984 ₽. Дополнительные paid calls не требуются;
+любой новый вызов всё равно потребует отдельного явного разрешения и нового hard cap.
 
-До успешного paid semantic gate и blind review v25 не допускается к production-canary.
+V25 допущен к default-off production-canary, но это решение само по себе не выполняет deploy,
+не включает planner/worker flags и не публикует enrichment.
