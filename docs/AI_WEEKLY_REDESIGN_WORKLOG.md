@@ -1,7 +1,7 @@
 # Редизайн страницы «ИИ-разбор»: план и рабочий журнал
 
 Дата начала: 2026-08-26
-Статус: этап 6 в работе; v24 targeted/offline gate пройдены, paid/full gate и production-canary ожидаются
+Статус: этап 6 в работе; v24 отклонён по управленческой полезности, v25 full local gate и независимое review пройдены, paid gate и production-canary ожидаются
 Production baseline: release `v0.1.0-pilot.26`; v22/schema4 canary с v21/schema3 fallback
 
 Этот документ является основной точкой продолжения редизайна страницы «ИИ-разбор». Он хранит
@@ -692,3 +692,33 @@ Targeted contract/semantic/compactor tests, 41-case offline corpus и Checkstyle
 Один paid `positive-growth` case прошёл semantic validation и стоил 1,036 ₽. Independent blind review не нашёл hard-gate нарушений и дал среднюю оценку 4,4/5, но `manager usefulness` — только 2/5: summary и factor почти дословно повторяли backend input. V24 закрыт со статусом REJECT, дополнительные paid calls и production-canary остановлены. Следующая итерация должна быть отдельной immutable prompt/input/corpus version и добавлять управленческий синтез без ослабления factual boundary.
 
 Clock-rollback защита расширена на terminal transitions `ReportBackfillJob`; отдельные regression tests покрывают SUCCESS, FAILED и CANCELLED.
+
+
+### 2026-08-30 — этап 6 — v25 selector contract и backend renderer
+
+V24 оставлен immutable со статусом REJECT: paid response прошёл factual hard gates, но blind review
+оценил управленческую полезность только в 2/5 из-за повторения заранее подготовленного текста.
+
+Активный локальный candidate переведён на `weekly-interpretation-v25`, provider input
+`weekly-review-ai-input-v4` и provider output `weekly-review-ai-selection-v1`. Модель больше не
+пишет пользовательский текст: она выбирает только allowlisted summary/factor selectors и factor
+IDs. Structural/semantic validator проверяет exact set/order/effect, после чего versioned backend
+renderer формирует неизменный публичный `schema4`. Raw selector хранится только в attempt audit;
+в enrichment и blind packet попадает финальный rendered text. Read fallback расширен до
+`v25 → v24 → v23 → v22`; миграций БД нет.
+
+Summary guard не позволяет скрыть известный фактор: без factors разрешён только outcome, при одном
+знаке — strength или risk, при одновременных positive/negative — только balanced. PARTIAL явно
+маркирует ограниченную уверенность; причинная формулировка возвратов допускается только при
+подтверждённом contribution.
+
+Локальные результаты: полный backend regression — 1072 теста, 0 failures/errors/skipped;
+weekly-review AI package — 85 тестов; blind-review tooling — 9 тестов; Checkstyle, security,
+release-safety, OpenAPI compatibility и frontend 41 files/175 tests, ESLint/production build — PASS.
+Gradle supply-chain — PASS, 449 компонентов и 840 артефактов. Network-free shadow plan подтвердил
+максимум 12,432800 ₽ для четырёх case и 3,296800 ₽ для `balanced-strength-risk`. Manifest v6
+фиксирует SHA-256 prompt, трёх schemas, renderer, corpus, fixtures, shadow runner и review script;
+blind packet принимает только `RENDERED_SCHEMA4`. Независимое финальное review: P0/P1/P2 не
+найдено. Paid v25 case и production-canary ещё не выполнены. Из общего лимита 20 ₽ использовано
+15,140 ₽, остаток 4,860 ₽; новый вызов возможен только после отдельного явного разрешения на
+конкретный обезличенный case и hard cap.

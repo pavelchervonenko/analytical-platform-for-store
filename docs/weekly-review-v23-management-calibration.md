@@ -1,7 +1,7 @@
 # Weekly review v23/schema4 — управленческая калибровка
 
 Дата: 2026-08-29
-Статус: историческая immutable v23-калибровка; superseded локальным v24 candidate, production-canary не выполнялся
+Статус: историческая immutable v23-калибровка; superseded: v24 отклонён, активный локальный candidate — v25; production-canary не выполнялся
 
 ## Причина новой версии
 

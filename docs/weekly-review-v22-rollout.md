@@ -1,10 +1,10 @@
 # Weekly review v22/schema4 — production rollout
 
 Дата: 2026-08-29
-Статус: исторический runbook immutable v22; активный rollout описан в `weekly-review-v24-rollout.md`
+Статус: исторический runbook immutable v22; активный candidate описан в `weekly-review-v25-rollout.md`
 
 > Этот документ применяется только к неизменяемому `weekly-interpretation-v22`. Указание
-> не повторять paid shadow относится только к v22 и не распространяется на v23/v24.
+> не повторять paid shadow относится только к v22 и не распространяется на v23/v24/v25.
 
 ## 1. Первый deploy без активации
 

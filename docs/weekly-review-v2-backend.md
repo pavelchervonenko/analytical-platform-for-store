@@ -1,7 +1,7 @@
 # Weekly review v2 — backend implementation
 
-Дата: 2026-08-29
-Статус: этапы 3–6 реализованы локально; semantic gate пройден, production rollout не выполнялся
+Дата: 2026-08-30
+Статус: этапы 3–6 реализованы локально; v25 local gate пройден, paid/full gate и production rollout не выполнялись
 
 ## Версии
 
@@ -12,8 +12,9 @@
 | Metrics policy | `weekly-metrics-v4` |
 | Snapshot policy | `weekly-snapshot-v7` |
 | Quality policy | `weekly-quality-v4` |
-| AI prompt | `weekly-interpretation-v24` |
-| AI provider input | `weekly-review-ai-input-v3` |
+| AI prompt | `weekly-interpretation-v25` |
+| AI provider input | `weekly-review-ai-input-v4` |
+| AI provider output | `weekly-review-ai-selection-v1` |
 | AI schema | `4` |
 
 Номера `v4/v7/v4` выбраны после проверки production baseline: в старом контуре уже используются
@@ -108,7 +109,7 @@ endpoint.
 Миграция `V46__add_weekly_review_ai_enrichments.sql` не изменяет V45 payload. Она хранит только
 семантически проверенные формулировки для exact `snapshot_id`:
 
-- AI может заменить только `summary.outcome.text` и `Factor.detail`; в v23/v24 `Action.title` и `Action.check` остаются backend-owned, legacy v22 fallback сохраняет прежний контракт;
+- AI может заменить только `summary.outcome.text` и `Factor.detail`; в v23/v24/v25 `Action.title` и `Action.check` остаются backend-owned, legacy v22 fallback сохраняет прежний контракт;
 - `summary.positive/risk`, facts, periods, targets, checks, team/employees, limitations, evidence и
   provenance остаются из V45;
 - structural-valid без semantic marker не применяется и не сохраняется;

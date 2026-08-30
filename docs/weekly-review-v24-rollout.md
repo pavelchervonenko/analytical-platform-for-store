@@ -1,7 +1,7 @@
 # Weekly review v24/input-v3/schema4 — production rollout
 
 Дата: 2026-08-29
-Статус: локальный regression gate пройден; paid calibration и production-canary ещё не выполнены
+Статус: исторический immutable v24 candidate — REJECT по управленческой полезности; production-canary не выполнялся
 
 ## 1. Граница релиза
 

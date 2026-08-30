@@ -1,7 +1,7 @@
 # Weekly review v23/input-v2/schema4 — production rollout
 
 Дата: 2026-08-29
-Статус: исторический immutable v23 runbook; активный candidate описан в `weekly-review-v24-rollout.md`
+Статус: исторический immutable v23 runbook; активный candidate описан в `weekly-review-v25-rollout.md`
 
 ## 1. Граница релиза
 
