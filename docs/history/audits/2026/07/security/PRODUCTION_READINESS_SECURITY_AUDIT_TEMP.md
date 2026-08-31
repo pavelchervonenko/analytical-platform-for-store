@@ -1,3 +1,25 @@
+---
+doc_schema: 1
+doc_type: evidence
+status: historical
+owner: security
+audience:
+  - developer
+  - operator
+snapshot_date: 2026-08-31
+verdict: PASS_WITH_LIMITS
+verdict_scope: "Preserved July 2026 audit evidence; commands and runtime claims require current verification."
+source_of_truth:
+  - "docs/security/baseline.md"
+  - "docs/security/threat-model-and-risk-register.md"
+  - "docs/runbooks/production-deployment.md"
+original_content_sha256: 40f8fba7bda71d682f2f630fd0443629327b644f3d4bc84b2bc422191d12dfd6
+required_reviewers:
+  - information-architecture
+---
+
+> Historical evidence preserved during documentation reform. Current replacements: `docs/security/baseline.md`, `docs/security/threat-model-and-risk-register.md`, `docs/runbooks/production-deployment.md`.
+
 # Временный аудит production-ready и безопасности
 
 Дата ревизии: 2026-07-25

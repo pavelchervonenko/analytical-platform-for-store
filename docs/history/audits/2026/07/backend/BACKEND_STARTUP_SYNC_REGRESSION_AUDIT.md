@@ -1,3 +1,25 @@
+---
+doc_schema: 1
+doc_type: evidence
+status: historical
+owner: backend
+audience:
+  - developer
+  - operator
+snapshot_date: 2026-08-31
+verdict: PASS_WITH_LIMITS
+verdict_scope: "Preserved July 2026 audit evidence; commands and runtime claims require current verification."
+source_of_truth:
+  - "docs/current/architecture/application.md"
+  - "docs/current/integrations/livesklad/synchronization.md"
+  - "docs/current/architecture/migrations.md"
+original_content_sha256: bf7631aeea26bc6b70d023fa6107a5c093f1c7737e0b33c5d7d91ca8eb398bfa
+required_reviewers:
+  - information-architecture
+---
+
+> Historical evidence preserved during documentation reform. Current replacements: `docs/current/architecture/application.md`, `docs/current/integrations/livesklad/synchronization.md`, `docs/current/architecture/migrations.md`.
+
 # Проверка запуска, синхронизации и связанных backend-регрессий
 
 Статус документа: handoff для независимого технического аудита

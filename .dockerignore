@@ -16,8 +16,6 @@
 **/test-results
 **/playwright-report
 **/.DS_Store
-BACKEND_STARTUP_SYNC_REGRESSION_AUDIT*.md
-PRODUCTION_READINESS_SECURITY_AUDIT_TEMP.md
 docs/history
 docs/archive
 docker/local-integration

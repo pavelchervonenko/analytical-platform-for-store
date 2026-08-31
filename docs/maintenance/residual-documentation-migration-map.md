@@ -1,7 +1,7 @@
 ---
 doc_schema: 1
 doc_type: working
-status: draft
+status: closed
 owner: project
 audience:
   - developer
@@ -33,3 +33,9 @@ exit_target: archive
 - Старые пути остаются tombstone с отдельным reviewer sign-off.
 - `.dockerignore` исключает `docs/history` и `docs/archive`, поэтому historical evidence не
   расширяет backend Docker build context после переноса.
+
+## Итог
+
+Перенос завершён 2026-08-31 и независимо подтверждён в
+`docs/history/audits/2026/08/residual-documentation-migration-signoff.md`: 3/3 rename,
+3/3 исходных SHA-256 и полное совпадение тел после удаления metadata/banner.
