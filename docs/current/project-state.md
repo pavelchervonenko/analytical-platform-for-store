@@ -59,6 +59,11 @@ worker. Automatic snapshot planning and automatic AI planning were disabled. The
 contract in code is `weekly-interpretation-v25/schema4`; the first manual canary passed for one
 store. That result does not establish automatic rollout for every store.
 
+On 2026-08-31, one deterministic snapshot for the completed week `2026-08-24..2026-08-30`
+was generated for each active store. Both snapshots are `PARTIAL` and return through the new
+weekly-review read path. No AI job was created. See the
+[current-week verification record](../history/canaries/2026/08/weekly-review-current-week-deterministic-snapshots.md).
+
 The legacy weekly insight remains a compatibility fallback in both backend and frontend. It must
 not be removed until the fallback and its Telegram dependencies are deliberately retired.
 
