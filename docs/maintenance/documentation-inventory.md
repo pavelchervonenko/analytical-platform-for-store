@@ -24,7 +24,7 @@ superseded_by: null
 
 # Инвентаризация документации
 
-Статус: этап 1 завершен; реестр готов к использованию в следующих этапах.
+Статус: реформа завершена; реестр является действующим машинно-проверяемым каталогом.
 
 Дата снимка: 2026-08-31.
 
@@ -46,15 +46,16 @@ superseded_by: null
 [`documentation-inventory.tsv`](documentation-inventory.tsv). TSV выбран, чтобы последующие
 проверки полноты могли выполняться автоматически без разбора свободного Markdown.
 
-## Текущее состояние после этапа 10
+## Текущее состояние после финальной приёмки
 
-- Реестр содержит 382 строки: 272 tracked-документа и 110 постоянных tombstone.
-- В `docs/` находится 258 физических файлов, включая 238 Markdown-документов.
+- Реестр содержит 390 строк: 277 tracked-документов и 113 постоянных tombstone.
+- В `docs/` находится 266 физических файлов, включая 246 Markdown-документов.
 - В корне `docs/` остался только навигационный `README.md`.
-- History содержит 39 evidence и один README; archive — 69 superseded-материалов и один README.
+- History содержит 46 evidence и один README; archive — 69 superseded-материалов и один README.
 - Все 43 versioned prompt/schema/example защищены `runtime-keep` и immutable content diff.
 - Strict inventory/metadata/link/anchor/orphan/backup/tombstone gate проходит с 0 предупреждений;
   adversarial unit suite содержит 25 тестов.
+- Незавершённых migration actions и допустимых baseline warnings нет.
 
 ## Исторический снимок этапов 1–3
 

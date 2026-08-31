@@ -1,7 +1,7 @@
 ---
 doc_schema: 1
 doc_type: working
-status: draft
+status: closed
 owner: project
 audience:
   - developer
@@ -17,9 +17,10 @@ exit_target: archive
 
 # Реформа документации Store Analytics
 
-Статус: этапы 1–10 завершены; выполняется финальная приёмка этапа 11.
+Статус: все 11 этапов завершены; итоговая приёмка зафиксирована immutable evidence.
 
 Дата начала: 2026-08-31.
+Дата завершения: 2026-08-31.
 
 ## Цель
 
@@ -181,3 +182,19 @@ docs/
 - [x] Inventory, metadata, links, anchors, orphan, backup и tombstone gates проверяются offline.
 - [x] Strict documentation check включён в обычный CI и release workflow.
 - [x] Transitional warning baseline очищен; допустимых предупреждений — 0.
+
+### Этап 11
+
+- [x] Приёмка воспроизведена в отдельном detached checkout без зависимости от рабочей копии.
+- [x] Два независимых reviewer-а проверили информационную архитектуру и
+  operations/security/product/AI границы.
+- [x] Все найденные P2 закрыты: сводка inventory синхронизирована, migration map закрыта, прямой
+  paid AI execute обозначен NO-GO, Prometheus rules обозначены repository examples.
+- [x] Unit suite документационного guard содержит 25 тестов; strict current и полный диапазон
+  реформы проходят с 0 предупреждений.
+- [x] Итог и границы проверки сохранены в
+  [финальном audit-evidence](../history/audits/2026/08/documentation-reform-final-audit.md).
+
+Полные backend/frontend suites в финальной документационной приёмке не повторялись: локальная
+среда содержит Java 11 и Node 20 вместо требуемых проектом версий. В реформе не менялись application
+source, versioned prompts или schemas; это ограничение явно сохранено в итоговом evidence.

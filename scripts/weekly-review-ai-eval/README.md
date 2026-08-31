@@ -17,31 +17,20 @@ Plan использует четыре обезличенных input: итог 
 существенного изменения. Сеть и деньги в режиме `plan` не используются. Команда собирает
 production request, проверяет provider preflight и печатает SHA-256 и максимальную стоимость.
 
-## Платный semantic shadow
+## Платный semantic shadow: NO-GO
 
-Каждый платный вызов требует отдельного явного разрешения на конкретный case, обезличенный payload
-и максимальную стоимость. Нельзя переносить старый cap или автоматически выполнять следующий
-case. Датированный результат и расходы сохранены в
+Прямой execute сейчас запрещён. Runner принимает API key только через environment, а plan не
+материализует exact outbound payload для privacy-проверки. Поэтому README намеренно не содержит
+исполняемой paid-команды. Не вводить API key через `export` и не восстанавливать команду по
+историческому evidence.
+
+Разблокирующие условия, модель авторизации и безопасный secret-file wrapper определены только в
+[`AI evaluation runbook`](../../docs/runbooks/ai-evaluation.md). До выполнения всех его gates
+разрешены лишь offline plan и работа с уже созданными обезличенными artifacts. Датированный
+результат прежнего отдельно разрешённого вызова сохранён как история, а не как инструкция:
 [`weekly-review-ai-v25-paid-evaluation.md`](../../docs/history/audits/2026/08/ai-evaluations/weekly-review-ai-v25-paid-evaluation.md).
 
-```bash
-export WEEKLY_REVIEW_AI_EVAL_MODE=execute
-export YANDEX_AI_FOLDER_ID='<folder>'
-export YANDEX_AI_MODEL_URI='gpt://<folder>/<versioned-model>'
-export YANDEX_AI_API_KEY='<temporary-key>'
-export WEEKLY_REVIEW_AI_EVAL_MAX_PAID_CALLS=1
-export WEEKLY_REVIEW_AI_EVAL_CASE_OFFSET=<approved-case-offset>
-export WEEKLY_REVIEW_AI_EVAL_MAX_COST_RUB=<approved-call-cap>
-export WEEKLY_REVIEW_AI_EVAL_OUTPUT_DIR='build/weekly-review-ai-eval/<new-run>'
-export CONFIRM_WEEKLY_REVIEW_AI_SHADOW='CALL_WEEKLY_REVIEW_AI_SHADOW'
-./gradlew :backend:weeklyReviewAiShadow
-```
-
-Runner запрещает `/latest`, нулевые цены, повторное использование каталога, путь вне
-`build/weekly-review-ai-eval`, более одного разрешённого вызова и превышение hard cap. API key и
-ответы provider не добавляются в git.
-
-Для каждого case сохраняются:
+После будущего разрешённого run для каждого case должны сохраняться:
 
 - `*.provider.json` — исходный selector-ответ модели, только для audit;
 - `*.json` — итоговый текст `schema4`, сформированный backend;
