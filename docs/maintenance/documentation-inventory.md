@@ -46,7 +46,17 @@ superseded_by: null
 [`documentation-inventory.tsv`](documentation-inventory.tsv). TSV выбран, чтобы последующие
 проверки полноты могли выполняться автоматически без разбора свободного Markdown.
 
-## Снимок
+## Текущее состояние после этапа 10
+
+- Реестр содержит 382 строки: 272 tracked-документа и 110 постоянных tombstone.
+- В `docs/` находится 258 физических файлов, включая 238 Markdown-документов.
+- В корне `docs/` остался только навигационный `README.md`.
+- History содержит 39 evidence и один README; archive — 69 superseded-материалов и один README.
+- Все 43 versioned prompt/schema/example защищены `runtime-keep` и immutable content diff.
+- Strict inventory/metadata/link/anchor/orphan/backup/tombstone gate проходит с 0 предупреждений;
+  adversarial unit suite содержит 25 тестов.
+
+## Исторический снимок этапов 1–3
 
 - исходный каталог `docs/` содержал 154 физических файла;
 - 149 из них являлись отслеживаемыми документационными или runtime-артефактами;
@@ -54,12 +64,12 @@ superseded_by: null
 - 111 файлов расположены непосредственно в корне `docs/`;
 - `docs/prompts/` содержит 25 версионированных prompt;
 - `docs/schemas/` содержит 18 JSON Schema и примеров;
-- этап 1 добавил три файла в `docs/maintenance/`, поэтому текущий реестр охватывает 157 файлов в
+- этап 1 добавил три файла в `docs/maintenance/`, поэтому реестр того этапа охватывал 157 файлов в
   `docs/` и 13 documentation-like файлов вне `docs/`, всего 170 строк без заголовка.
-- этап 2 добавляет policy, ownership и семь template-файлов; после их фиксации реестр будет
-  охватывать 166 файлов в `docs/` и 13 файлов вне `docs/`, всего 179 строк без заголовка.
+- этап 2 добавил policy, ownership и семь template-файлов; после их фиксации реестр охватывал
+  166 файлов в `docs/` и 13 файлов вне `docs/`, всего 179 строк без заголовка.
 - CI baseline и этап 3 добавили warning allowlist, канонический project-state и immutable release
-  evidence. Текущий реестр охватывает 169 файлов в `docs/` и 13 файлов вне `docs/`, всего 182
+  evidence. Реестр этапа 3 охватывал 169 файлов в `docs/` и 13 файлов вне `docs/`, всего 182
   строки без заголовка: 177 tracked и 5 ignored.
 
 ## Поля реестра

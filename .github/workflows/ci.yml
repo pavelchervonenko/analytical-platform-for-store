@@ -32,7 +32,7 @@ jobs:
       - name: Verify documentation baseline
         env:
           DOCUMENTATION_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD^' }}
-        run: python3 scripts/check-documentation.py
+        run: python3 scripts/check-documentation.py --strict
 
   backend:
     name: Backend checks

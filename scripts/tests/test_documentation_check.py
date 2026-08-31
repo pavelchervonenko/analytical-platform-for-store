@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "check-documentation.py"
@@ -111,15 +115,312 @@ status: current
         CHECK.check_base_inventory(current, base, result)
         self.assertIn("runtime artifact protection was weakened", result.errors[0])
 
+    def test_allows_existing_tombstone_to_remain(self) -> None:
+        result = CHECK.Result()
+        base = [
+            {
+                "path": "docs/obsolete.md",
+                "action": "removed",
+                "tracking": "removed",
+            }
+        ]
+        current = {
+            "docs/obsolete.md": {
+                "path": "docs/obsolete.md",
+                "action": "removed",
+                "tracking": "removed",
+            }
+        }
+        CHECK.check_base_inventory(current, base, result)
+        self.assertEqual(result.errors, [])
+
+    def test_allows_delete_candidate_from_intermediate_commit(self) -> None:
+        result = CHECK.Result()
+        base = [
+            {
+                "path": "docs/obsolete.md",
+                "action": "archive",
+                "tracking": "tracked",
+            }
+        ]
+        current = {
+            "docs/obsolete.md": {
+                "path": "docs/obsolete.md",
+                "action": "removed",
+                "tracking": "removed",
+            }
+        }
+        CHECK.check_base_inventory(
+            current, base, result, {"docs/obsolete.md"}
+        )
+        self.assertEqual(result.errors, [])
+
+    def test_removal_requires_immediately_preceding_candidate(self) -> None:
+        result = CHECK.Result()
+        states = [
+            (
+                "base",
+                [
+                    {
+                        "path": "docs/obsolete.md",
+                        "action": "archive",
+                        "tracking": "tracked",
+                    }
+                ],
+            ),
+            (
+                "removed",
+                [
+                    {
+                        "path": "docs/obsolete.md",
+                        "action": "removed",
+                        "tracking": "removed",
+                    }
+                ],
+            ),
+            (
+                "late-candidate",
+                [
+                    {
+                        "path": "docs/obsolete.md",
+                        "action": "delete-candidate",
+                        "tracking": "tracked",
+                    }
+                ],
+            ),
+        ]
+        validated = CHECK.validate_removal_transitions(states, result)
+        self.assertEqual(validated, set())
+        self.assertTrue(any("immediately preceding" in error for error in result.errors))
+        self.assertTrue(any("resurrected" in error for error in result.errors))
+
+    def test_accepts_candidate_immediately_before_removal(self) -> None:
+        result = CHECK.Result()
+        states = [
+            (
+                "candidate",
+                [
+                    {
+                        "path": "docs/obsolete.md",
+                        "action": "delete-candidate",
+                        "tracking": "tracked",
+                        "verification": (
+                            "Record unique fragments and require reviewer sign-off"
+                        ),
+                    }
+                ],
+            ),
+            (
+                "removed",
+                [
+                    {
+                        "path": "docs/obsolete.md",
+                        "action": "removed",
+                        "tracking": "removed",
+                    }
+                ],
+            ),
+        ]
+        self.assertEqual(
+            CHECK.validate_removal_transitions(states, result),
+            {"docs/obsolete.md"},
+        )
+        self.assertEqual(result.errors, [])
+
+    def test_rejects_candidate_with_fake_gate_before_removal(self) -> None:
+        result = CHECK.Result()
+        states = [
+            (
+                "candidate",
+                [
+                    {
+                        "path": "docs/obsolete.md",
+                        "action": "delete-candidate",
+                        "tracking": "tracked",
+                        "verification": "looks safe",
+                    }
+                ],
+            ),
+            (
+                "removed",
+                [
+                    {
+                        "path": "docs/obsolete.md",
+                        "action": "removed",
+                        "tracking": "removed",
+                    }
+                ],
+            ),
+        ]
+        self.assertEqual(CHECK.validate_removal_transitions(states, result), set())
+        self.assertTrue(any("immediately preceding" in error for error in result.errors))
+
+    def test_merge_removal_requires_every_nonremoved_parent_to_be_candidate(self) -> None:
+        candidate = [
+            {
+                "path": "docs/obsolete.md",
+                "action": "delete-candidate",
+                "tracking": "tracked",
+                "verification": "Record unique fragments and reviewer sign-off",
+            }
+        ]
+        ordinary = [
+            {
+                "path": "docs/obsolete.md",
+                "action": "archive",
+                "tracking": "tracked",
+                "verification": "not approved",
+            }
+        ]
+        removed = [
+            {
+                "path": "docs/obsolete.md",
+                "action": "removed",
+                "tracking": "removed",
+            }
+        ]
+        result = CHECK.Result()
+        self.assertEqual(
+            CHECK.validate_removal_edge(
+                "candidate-parent", candidate, "merge", removed, result
+            ),
+            {"docs/obsolete.md"},
+        )
+        self.assertEqual(
+            CHECK.validate_removal_edge(
+                "ordinary-parent", ordinary, "merge", removed, result
+            ),
+            set(),
+        )
+        self.assertTrue(any("ordinary-parent" in error for error in result.errors))
+
+    def test_full_history_enumerates_treesame_merge_for_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repository = Path(directory)
+            subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repository, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "docs-test@example.invalid"],
+                cwd=repository,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Docs Test"],
+                cwd=repository,
+                check=True,
+            )
+            inventory = repository / "docs/maintenance/documentation-inventory.tsv"
+            inventory.parent.mkdir(parents=True)
+            inventory.write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=repository, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=repository, check=True)
+            base = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+            ).strip()
+            subprocess.run(["git", "switch", "-qc", "removed"], cwd=repository, check=True)
+            inventory.write_text("removed\n", encoding="utf-8")
+            subprocess.run(["git", "commit", "-qam", "remove"], cwd=repository, check=True)
+            subprocess.run(["git", "switch", "-q", "main"], cwd=repository, check=True)
+            (repository / "unrelated.txt").write_text("main\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=repository, check=True)
+            subprocess.run(["git", "commit", "-qm", "main work"], cwd=repository, check=True)
+            subprocess.run(
+                ["git", "merge", "--no-ff", "-qm", "merge", "removed"],
+                cwd=repository,
+                check=True,
+            )
+            merge = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+            ).strip()
+            revisions = subprocess.check_output(
+                [
+                    "git",
+                    "rev-list",
+                    "--full-history",
+                    "--topo-order",
+                    "--reverse",
+                    f"{base}..HEAD",
+                    "--",
+                    "docs/maintenance/documentation-inventory.tsv",
+                ],
+                cwd=repository,
+                text=True,
+            ).splitlines()
+            self.assertIn(merge, revisions)
+
+    def test_rejects_runtime_artifact_content_change(self) -> None:
+        result = CHECK.Result()
+        rows = [
+            {
+                "path": "docs/prompts/published.md",
+                "action": "runtime-keep",
+                "tracking": "tracked",
+            }
+        ]
+        with mock.patch.object(
+            CHECK.subprocess, "run", return_value=SimpleNamespace(returncode=1)
+        ):
+            CHECK.check_runtime_artifact_content(rows, "base", result)
+        self.assertIn("changed in place", result.errors[0])
+
     def test_rejects_tombstone_with_fake_evidence(self) -> None:
         result = CHECK.Result()
         row = {
             "path": "docs/obsolete.md",
-            "verification": "fragment-map=N/A;reviewer-sign-off=N/A",
+            "verification": (
+                "fragment-map=docs/missing-map.md;"
+                "reviewer-sign-off=docs/missing-signoff.md"
+            ),
         }
         CHECK.check_tombstone_evidence(row, set(), result)
         self.assertEqual(len(result.errors), 2)
         self.assertTrue(all("not a tracked file" in error for error in result.errors))
+
+    def test_rejects_same_file_for_both_tombstone_evidence_roles(self) -> None:
+        result = CHECK.Result()
+        row = {
+            "path": "docs/obsolete.md",
+            "verification": (
+                "fragment-map=docs/evidence.md;"
+                "reviewer-sign-off=docs/evidence.md"
+            ),
+        }
+        CHECK.check_tombstone_evidence(row, set(), result)
+        self.assertTrue(any("separate fragment-map" in error for error in result.errors))
+
+    def test_rejects_canonical_alias_for_both_evidence_roles(self) -> None:
+        result = CHECK.Result()
+        row = {
+            "path": "docs/obsolete.md",
+            "verification": (
+                "fragment-map=docs/audit/signoff.md;"
+                "reviewer-sign-off=docs/audit/../audit/signoff.md"
+            ),
+        }
+        CHECK.check_tombstone_evidence(row, set(), result)
+        self.assertTrue(any("separate fragment-map" in error for error in result.errors))
+
+    def test_fragment_map_requires_exact_lifecycle_pair(self) -> None:
+        reviewers = {"required_reviewers": ["information-architecture"]}
+        self.assertTrue(
+            CHECK.is_reviewed_fragment_map_metadata(
+                {"doc_type": "current", "status": "current", **reviewers}
+            )
+        )
+        self.assertTrue(
+            CHECK.is_reviewed_fragment_map_metadata(
+                {"doc_type": "working", "status": "closed", **reviewers}
+            )
+        )
+        self.assertFalse(
+            CHECK.is_reviewed_fragment_map_metadata(
+                {"doc_type": "current", "status": "closed", **reviewers}
+            )
+        )
+        self.assertFalse(
+            CHECK.is_reviewed_fragment_map_metadata(
+                {"doc_type": "working", "status": "current", **reviewers}
+            )
+        )
 
     def test_rejects_unsafe_current_production_runbook(self) -> None:
         metadata = CHECK.parse_frontmatter(

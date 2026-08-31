@@ -141,6 +141,201 @@ def load_base_inventory(base_ref: str, result: Result) -> list[dict[str, str]]:
     return parse_inventory(completed.stdout, f"inventory@{base_ref}", result)
 
 
+def has_safe_delete_candidate_gate(row: dict[str, str]) -> bool:
+    verification = row.get("verification", "").lower()
+    fragment_gate = (
+        "backup-fragment-map" in verification
+        or "record unique fragments" in verification
+    )
+    return fragment_gate and "reviewer sign-off" in verification
+
+
+def validate_removal_edge(
+    previous_label: str,
+    previous_rows: list[dict[str, str]],
+    current_label: str,
+    current_rows: list[dict[str, str]],
+    result: Result,
+) -> set[str]:
+    validated: set[str] = set()
+    previous = {row["path"]: row for row in previous_rows}
+    current = {row["path"]: row for row in current_rows}
+    for path in sorted(previous.keys() | current.keys()):
+        before = previous.get(path)
+        after = current.get(path)
+        if before is not None and before.get("tracking") == "removed":
+            if after is None or after.get("tracking") != "removed":
+                result.error(
+                    f"inventory tombstone was resurrected between "
+                    f"{previous_label} and {current_label}: {path}"
+                )
+            continue
+        if after is None or after.get("tracking") != "removed":
+            continue
+        if (
+            before is None
+            or before.get("action") != "delete-candidate"
+            or before.get("tracking") not in {"tracked", "ignored"}
+            or not has_safe_delete_candidate_gate(before)
+        ):
+            result.error(
+                f"inventory removal lacks immediately preceding delete-candidate "
+                f"between {previous_label} and {current_label}: {path}"
+            )
+            continue
+        validated.add(path)
+    return validated
+
+
+def validate_removal_transitions(
+    states: list[tuple[str, list[dict[str, str]]]], result: Result
+) -> set[str]:
+    validated: set[str] = set()
+    for (previous_label, previous_rows), (current_label, current_rows) in zip(
+        states, states[1:]
+    ):
+        validated.update(
+            validate_removal_edge(
+                previous_label,
+                previous_rows,
+                current_label,
+                current_rows,
+                result,
+            )
+        )
+    return validated
+
+
+def load_validated_removal_history(
+    base_ref: str,
+    base_rows: list[dict[str, str]],
+    current_rows: list[dict[str, str]],
+    result: Result,
+) -> set[str]:
+    completed = subprocess.run(
+        [
+            "git",
+            "rev-list",
+            "--full-history",
+            "--topo-order",
+            "--reverse",
+            f"{base_ref}..HEAD",
+            "--",
+            "docs/maintenance/documentation-inventory.tsv",
+        ],
+        cwd=PROJECT_ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if completed.returncode != 0:
+        result.error(f"cannot inspect inventory history from {base_ref!r}")
+        return set()
+    cache: dict[str, list[dict[str, str]]] = {base_ref: base_rows}
+
+    def inventory_at(revision: str) -> list[dict[str, str]]:
+        cached = cache.get(revision)
+        if cached is not None:
+            return cached
+        snapshot = subprocess.run(
+            [
+                "git",
+                "show",
+                f"{revision}:docs/maintenance/documentation-inventory.tsv",
+            ],
+            cwd=PROJECT_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if snapshot.returncode != 0:
+            result.error(f"cannot read inventory at {revision}")
+            return []
+        history_result = Result()
+        history_rows = parse_inventory(
+            snapshot.stdout, f"inventory@{revision}", history_result
+        )
+        result.errors.extend(history_result.errors)
+        cache[revision] = history_rows
+        return history_rows
+
+    validated: set[str] = set()
+    for revision in completed.stdout.splitlines():
+        child_rows = inventory_at(revision)
+        parent_result = subprocess.run(
+            ["git", "rev-list", "--parents", "-n", "1", revision],
+            cwd=PROJECT_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if parent_result.returncode != 0:
+            result.error(f"cannot inspect parents for inventory commit {revision}")
+            continue
+        parents = parent_result.stdout.split()[1:]
+        for parent in parents:
+            parent_rows = inventory_at(parent)
+            edge_validated = validate_removal_edge(
+                parent, parent_rows, revision, child_rows, result
+            )
+            parent_by_path = {row["path"]: row for row in parent_rows}
+            for path in set(edge_validated):
+                if parent_by_path[path].get("tracking") != "tracked":
+                    continue
+                exists = subprocess.run(
+                    ["git", "cat-file", "-e", f"{parent}:{path}"],
+                    cwd=PROJECT_ROOT,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                if exists.returncode != 0:
+                    result.error(
+                        f"delete-candidate predecessor is not tracked at "
+                        f"{parent}: {path}"
+                    )
+                    edge_validated.discard(path)
+            validated.update(edge_validated)
+    head_rows = inventory_at("HEAD")
+    if current_rows != head_rows:
+        edge_validated = validate_removal_edge(
+            "HEAD", head_rows, "WORKTREE", current_rows, result
+        )
+        head_by_path = {row["path"]: row for row in head_rows}
+        for path in set(edge_validated):
+            if head_by_path[path].get("tracking") != "tracked":
+                continue
+            exists = subprocess.run(
+                ["git", "cat-file", "-e", f"HEAD:{path}"],
+                cwd=PROJECT_ROOT,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if exists.returncode != 0:
+                result.error(
+                    f"delete-candidate predecessor is not tracked at "
+                    f"HEAD: {path}"
+                )
+                edge_validated.discard(path)
+        validated.update(edge_validated)
+    return validated
+
+
+def check_runtime_artifact_content(
+    base_rows: list[dict[str, str]], base_ref: str, result: Result
+) -> None:
+    for row in base_rows:
+        if row["action"] != "runtime-keep" or row.get("tracking") != "tracked":
+            continue
+        completed = subprocess.run(
+            ["git", "diff", "--quiet", base_ref, "--", row["path"]],
+            cwd=PROJECT_ROOT,
+        )
+        if completed.returncode == 1:
+            result.error(f"published runtime artifact changed in place: {row['path']}")
+        elif completed.returncode != 0:
+            result.error(f"cannot compare runtime artifact: {row['path']}")
+
+
 def discovered_documentation(
     rows: list[dict[str, str]], tracked: set[str]
 ) -> set[str]:
@@ -159,7 +354,10 @@ def discovered_documentation(
 
 
 def check_inventory(
-    rows: list[dict[str, str]], base_rows: list[dict[str, str]], result: Result
+    rows: list[dict[str, str]],
+    base_rows: list[dict[str, str]],
+    validated_removals: set[str],
+    result: Result,
 ) -> None:
     tracked = git_lines("ls-files")
     ignored = git_lines("ls-files", "--others", "--ignored", "--exclude-standard")
@@ -191,21 +389,20 @@ def check_inventory(
             if row["action"] != "runtime-keep":
                 result.error(f"runtime artifact is not protected: {path}")
         if row["action"] == "delete-candidate":
-            verification = row["verification"].lower()
-            fragment_gate = (
-                "backup-fragment-map" in verification
-                or "record unique fragments" in verification
-            )
-            if not fragment_gate or "reviewer sign-off" not in verification:
+            if not has_safe_delete_candidate_gate(row):
                 result.error(f"unsafe delete candidate gate: {path}")
-    check_base_inventory(current_by_path, base_rows, result)
+    check_base_inventory(
+        current_by_path, base_rows, result, validated_removals
+    )
 
 
 def check_base_inventory(
     current_by_path: dict[str, dict[str, str]],
     base_rows: list[dict[str, str]],
     result: Result,
+    validated_removals: set[str] | None = None,
 ) -> None:
+    safe_removals = validated_removals or set()
     base_by_path = {row["path"]: row for row in base_rows}
     for base_row in base_rows:
         path = base_row["path"]
@@ -222,8 +419,20 @@ def check_base_inventory(
         base = base_by_path.get(path)
         if base is None:
             result.error(f"inventory tombstone has no tracked predecessor: {path}")
-        elif base["action"] != "delete-candidate":
+        elif base.get("tracking") == "removed":
+            continue
+        elif path not in safe_removals:
             result.error(f"inventory removal skipped delete-candidate stage: {path}")
+
+
+def is_reviewed_fragment_map_metadata(metadata: dict[str, object] | None) -> bool:
+    if metadata is None:
+        return False
+    lifecycle = (metadata.get("doc_type"), metadata.get("status"))
+    return (
+        lifecycle in {("current", "current"), ("working", "closed")}
+        and bool(metadata.get("required_reviewers"))
+    )
 
 
 def check_tombstone_evidence(
@@ -236,6 +445,15 @@ def check_tombstone_evidence(
             row["verification"],
         )
     )
+    fragment_reference = references.get("fragment-map", "").strip()
+    reviewer_reference = references.get("reviewer-sign-off", "").strip()
+    fragment_candidate = (PROJECT_ROOT / fragment_reference).resolve()
+    reviewer_candidate = (PROJECT_ROOT / reviewer_reference).resolve()
+    if fragment_reference and reviewer_reference and fragment_candidate == reviewer_candidate:
+        result.error(
+            f"inventory tombstone must use separate fragment-map and "
+            f"reviewer-sign-off evidence: {path}"
+        )
     for key in ("fragment-map", "reviewer-sign-off"):
         raw_reference = references.get(key, "").strip()
         if not raw_reference:
@@ -267,6 +485,15 @@ def check_tombstone_evidence(
                 or not metadata.get("required_reviewers")
             ):
                 result.error(f"inventory tombstone reviewer sign-off is not PASS evidence: {path}")
+        elif key == "fragment-map":
+            try:
+                metadata = parse_frontmatter(content)
+            except ValueError:
+                metadata = None
+            if not is_reviewed_fragment_map_metadata(metadata):
+                result.error(
+                    f"inventory tombstone fragment-map is not a reviewed map: {path}"
+                )
 
 
 def parse_scalar(value: str) -> object:
@@ -712,8 +939,12 @@ def main() -> None:
     result = Result()
     rows = load_inventory(result)
     base_rows = load_base_inventory(arguments.base_ref, result)
+    validated_removals = load_validated_removal_history(
+        arguments.base_ref, base_rows, rows, result
+    )
+    check_runtime_artifact_content(base_rows, arguments.base_ref, result)
     if rows:
-        check_inventory(rows, base_rows, result)
+        check_inventory(rows, base_rows, validated_removals, result)
     check_metadata(result)
     check_links(arguments.strict, result)
     check_backup_files(arguments.strict, result)

@@ -17,7 +17,7 @@ exit_target: archive
 
 # Реформа документации Store Analytics
 
-Статус: доменные этапы 4–7 завершены; выполняется этап 8.
+Статус: этапы 1–10 завершены; выполняется финальная приёмка этапа 11.
 
 Дата начала: 2026-08-31.
 
@@ -161,3 +161,23 @@ docs/
 - [x] Описаны immutable prompts/schemas, YandexGPT boundary, validation и paid evaluation gates.
 - [x] Telegram weekly/daily контуры, отсутствие schema4 bridge и poison-event риск зафиксированы.
 - [x] Privacy/retention gaps не выданы за закрытые controls.
+
+### Этап 8
+
+- [x] Для 105 корневых документов зафиксирована полная source/destination/replacement-карта.
+- [x] 36 evidence-документов перенесены в history, 69 superseded-материалов — в archive.
+- [x] Пять ignored `.orig` удалены только после fragment map и независимого PASS.
+- [x] Старые пути сохранены tombstone-записями; перенос прошёл SHA/link/metadata review без P1/P2.
+
+### Этап 9
+
+- [x] Подтверждено, что `docs/prompts/` и `docs/schemas/` являются runtime-артефактами.
+- [x] Физический перенос отклонён как не дающий пользы и создающий риск поломки runtime paths.
+- [x] Опубликованные версии защищены inventory action `runtime-keep` и CI-проверкой.
+
+### Этап 10
+
+- [x] Documentation impact закреплён в `AGENTS.md` и PR checklist.
+- [x] Inventory, metadata, links, anchors, orphan, backup и tombstone gates проверяются offline.
+- [x] Strict documentation check включён в обычный CI и release workflow.
+- [x] Transitional warning baseline очищен; допустимых предупреждений — 0.

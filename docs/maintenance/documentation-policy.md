@@ -332,7 +332,7 @@ Git является механизмом истории. `.orig`, `.bak`, `.rej
 
 ## Применение проверок
 
-CI-защита вводится поэтапно:
+CI-защита введена поэтапно:
 
 1. проверки запускаются в warning-режиме на существующем baseline;
 2. baseline очищается и документируется;
@@ -344,7 +344,11 @@ CI-защита вводится поэтапно:
 Текущая реализация — `scripts/check-documentation.py`, его unit tests и job `documentation` в
 `.github/workflows/ci.yml`. Проверка сравнивает реестр с базовой Git-ревизией: строка удалённого
 файла сохраняется как tombstone, runtime-artifact удалить нельзя, а обычное удаление возможно
-только после отдельной ревизии с `action=delete-candidate`, tracked fragment map и tracked
-PASS-evidence независимого reviewer-а. Переходный warning baseline является allowlist: новые
-предупреждения блокируют CI, а отсутствие локального ignored `.orig` в чистом checkout ошибкой не
-является. На этапе 8 allowlist удаляется вместе с backup-файлами и включается `--strict`.
+только когда непосредственно предшествующее состояние было `action=delete-candidate`, tracked
+fragment map и отдельный tracked PASS-evidence независимого reviewer-а. Published
+`runtime-keep`-файл нельзя изменять на месте: новая версия создаётся новым путём. Обычный CI и
+release workflow работают с `--strict`; release дополнительно проверяет весь Git-диапазон от
+предыдущего тега и принадлежность commit ветке `main`. Если предыдущий тег старше совместимого
+inventory schema, release-base безопасно сдвигается только до первого commit с точным текущим
+заголовком inventory. Warning baseline сохранён как пустой zero-warning sentinel: разрешённых
+предупреждений нет.

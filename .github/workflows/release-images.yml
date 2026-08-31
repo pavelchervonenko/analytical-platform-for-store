@@ -23,7 +23,31 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Verify release documentation
+        run: |
+          git fetch origin main --tags
+          git merge-base --is-ancestor "${GITHUB_SHA}" origin/main
+          release_base="$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)"
+          inventory_path="docs/maintenance/documentation-inventory.tsv"
+          expected_header="$(printf 'path\ttracking\tkind\towner\tmigration_status\taction\ttarget\tverification')"
+          actual_header="$(git show "${release_base}:${inventory_path}" 2>/dev/null | sed -n '1p' || true)"
+          if [ "${actual_header}" != "${expected_header}" ]; then
+            previous_base="${release_base}"
+            release_base=""
+            while read -r revision; do
+              actual_header="$(git show "${revision}:${inventory_path}" 2>/dev/null | sed -n '1p' || true)"
+              if [ "${actual_header}" = "${expected_header}" ]; then
+                release_base="${revision}"
+                break
+              fi
+            done < <(git log --reverse --format=%H "${previous_base}..HEAD" -- "${inventory_path}")
+          fi
+          test -n "${release_base}"
+          python3 -m unittest scripts/tests/test_documentation_check.py
+          python3 scripts/check-documentation.py --strict --base-ref "${release_base}"
 
       - name: Set up Java
         uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
