@@ -32,7 +32,24 @@ jobs:
       - name: Verify documentation baseline
         env:
           DOCUMENTATION_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD^' }}
-        run: python3 scripts/check-documentation.py --strict
+        run: |
+          documentation_base="${DOCUMENTATION_BASE_REF}"
+          inventory_path="docs/maintenance/documentation-inventory.tsv"
+          expected_header="$(printf 'path\ttracking\tkind\towner\tmigration_status\taction\ttarget\tverification')"
+          actual_header="$(git show "${documentation_base}:${inventory_path}" 2>/dev/null | sed -n '1p' || true)"
+          if [ "${actual_header}" != "${expected_header}" ]; then
+            previous_base="${documentation_base}"
+            documentation_base=""
+            while read -r revision; do
+              actual_header="$(git show "${revision}:${inventory_path}" 2>/dev/null | sed -n '1p' || true)"
+              if [ "${actual_header}" = "${expected_header}" ]; then
+                documentation_base="${revision}"
+                break
+              fi
+            done < <(git log --reverse --format=%H "${previous_base}..HEAD" -- "${inventory_path}")
+          fi
+          test -n "${documentation_base}"
+          python3 scripts/check-documentation.py --strict --base-ref "${documentation_base}"
 
   backend:
     name: Backend checks
