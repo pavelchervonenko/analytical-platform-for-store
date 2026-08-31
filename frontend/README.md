@@ -3,10 +3,6 @@
 Production SPA for the closed manager cabinet. The static prototype remains in `prototype/` as a
 visual reference and is not imported by this application.
 
-Current verification on 2026-08-24: `38` Vitest files / `143` tests, ESLint, generated-contract
-check and production build pass. The current un-deployed candidate has local desktop/tablet/mobile
-visual evidence for `/overview`, `/plan` and `/insights`.
-
 ## Stack
 
 - React, Vite and strict TypeScript;

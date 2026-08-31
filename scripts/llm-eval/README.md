@@ -6,14 +6,9 @@ bounded privacy-reduced candidate `weekly-interpretation-v21` / schema 3
 Dry-run не обращается к YandexGPT, production, публикации или Telegram. Платный режим доступен
 только через явную confirmation-фразу и два бюджетных лимита.
 
-Актуальный результат на 2026-08-21:
-
-- v21: 26/26 automatic pass, 0 violations;
-- v21: 26/26 blinded manual pass, средняя оценка 4,8/5;
-- решение: `CANDIDATE_ELIGIBLE_FOR_CANARY`;
-- production default по-прежнему v4/schema 2.
-
-Подробный handoff:
+Датированные результаты v21 сохранены в
+[`llm-eval-v21-final.md`](../../docs/history/audits/2026/08/ai-evaluations/llm-eval-v21-final.md)
+и canary handoff
 [`AI_INTERPRETATION_V21_WEEKLY_CANARY_2026-08-17.md`](../../docs/history/canaries/2026/08/AI_INTERPRETATION_V21_WEEKLY_CANARY_2026-08-17.md).
 
 ## Состав
@@ -154,24 +149,6 @@ baseline по ручным и автоматическим метрикам.
 
 `CANDIDATE_ELIGIBLE_FOR_CANARY` разрешает только отдельный canary одного периода. Он не включает
 смену default prompt, publication, Telegram fanout или production deployment.
-
-## Финальный сохранённый прогон v21
-
-Локальные ignored-артефакты:
-
-```text
-build/llm-eval/v4-v21-full-20260819/responses/
-build/llm-eval/v4-v21-full-20260819/automatic-report-final.json
-build/llm-eval/v4-v21-full-20260819/review-final/
-build/llm-eval/v4-v21-full-20260819/FINAL-v21-schema3-decision.json
-build/llm-eval/v4-v21-full-20260819/FINAL-v21-schema3-decision.md
-```
-
-Файлы `blinded-decision-final.*` относятся к более ранней неуспешной ручной оценке и не являются
-источником финального решения.
-
-Итог: v21 26/26 automatic, 26/26 manual, 0 violations, 0 missing/forbidden/critical findings.
-V4 сохранил 110 automatic violations и 11/26 manual pass как контрольный baseline.
 
 ## Добавление сценария
 

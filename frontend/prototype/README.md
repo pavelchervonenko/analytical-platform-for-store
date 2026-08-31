@@ -1,10 +1,13 @@
 # Store Analytics HTML prototype
 
 Static, dependency-free prototype for validating the cabinet information architecture,
-
-Status on 2026-07-23: this remains a visual reference only. Implemented backend screens and
-actions are documented in `docs/history/handoffs/2026/08/FRONTEND_HANDOFF.md` and `docs/archive/legacy-contracts/frontend-actions.md`.
 responsive behavior and visual language before the React application is started.
+
+This remains a visual reference only. The implemented UI contract is
+[docs/current/frontend/README.md](../../docs/current/frontend/README.md); historical implementation
+context is preserved in
+[FRONTEND_HANDOFF.md](../../docs/history/handoffs/2026/08/FRONTEND_HANDOFF.md) and
+[frontend-actions.md](../../docs/archive/legacy-contracts/frontend-actions.md).
 
 Run it from the repository root:
 
