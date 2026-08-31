@@ -81,6 +81,7 @@ superseded_by: null
 - [Зарплата](product/payroll.md)
 - [Отчёты](product/reports.md)
 - [Качество данных](product/data-quality.md)
+- [Ежедневная сводка](product/daily-store-pulse.md)
 
 ## Frontend
 

@@ -52,6 +52,7 @@ superseded_by: null
 | [Зарплата](payroll.md) | Фонд, ставки, распределение и readiness |
 | [Отчёты](reports.md) | Snapshot, месячный/годовой состав |
 | [Качество данных](data-quality.md) | ERROR/WARNING, `null` и remediation gaps |
+| [Ежедневная сводка](daily-store-pulse.md) | Детерминированный daily pulse и coverage gaps |
 
 ## Иерархия источников
 

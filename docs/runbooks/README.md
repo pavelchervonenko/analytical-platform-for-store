@@ -59,3 +59,7 @@ production write/migration/recovery процедуры ниже остаются
 - [AI evaluation](ai-evaluation.md)
 - [Telegram](telegram.md)
 - [Daily store pulse](daily-store-pulse.md)
+
+## Frontend
+
+- [Frontend acceptance](frontend-acceptance.md) — draft, только local/test до безопасного credential wrapper
