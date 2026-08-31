@@ -56,7 +56,7 @@ async function installFixtureApi(page: Page) {
       startedAt: null,
       nextAttemptAt: null
     },
-    openQualityIssueCount: 0,
+    openQualityIssueCount: 28,
     lastError: null,
     lastErrorAt: null,
     checkedAt: "2026-08-27T04:35:00Z"
@@ -112,6 +112,13 @@ async function installFixtureApi(page: Page) {
         netQuantity: Math.round(620 * factor),
         sharePercent: 4.5
       },
+      salesGroups: [
+        { groupCode: "DEVICES", groupName: "Техника", metrics: categoryMetric(48_772_000 * factor, 600 * factor, 40_910_000 * factor) },
+        { groupCode: "PHONES", groupName: "Телефоны", metrics: categoryMetric(43_150_000 * factor, 510 * factor, 36_410_000 * factor) },
+        { groupCode: "ADDITIONAL_REVENUE", groupName: "Дополнительная выручка", metrics: categoryMetric(6_028_000 * factor, 1_640 * factor, 4_790_000 * factor) },
+        { groupCode: "ACCESSORY", groupName: "Аксессуары", metrics: categoryMetric(3_562_000 * factor, 1_020 * factor, 2_930_000 * factor) },
+        { groupCode: "SERVICE", groupName: "Услуги", metrics: categoryMetric(2_466_000 * factor, 620 * factor, 1_860_000 * factor) }
+      ],
       dataQuality: {
         ...metricQuality,
         unmappedItemCount: 0,
@@ -490,10 +497,23 @@ test.describe("local frontend visual review", () => {
         ).toHaveCount(0);
       }
       if (new URL(route, "http://local.test").pathname === "/overview") {
+        await expect(page.getByText("Замечаний по данным: 28")).toHaveCount(0);
+        await expect(page.getByRole("heading", {
+          name: "Структура продаж — только продавцы"
+        })).toBeVisible();
+        await expect(page.getByRole("heading", {
+          name: "План месяца — только продавцы"
+        })).toBeVisible();
         const storeScope = page.getByRole("button", { name: "Весь магазин" });
         await storeScope.click();
         await expect(storeScope).toHaveAttribute("aria-pressed", "true");
         await page.waitForLoadState("networkidle");
+        await expect(page.getByRole("heading", {
+          name: "Структура продаж — весь магазин"
+        })).toBeVisible();
+        await expect(page.getByRole("heading", {
+          name: "План месяца — весь магазин"
+        })).toBeVisible();
         await page.locator(".overview-summary").screenshot({
           path: resolve(screenshotDirectory, screenshotName(route) + "-store-scope.png"),
           animations: "disabled"

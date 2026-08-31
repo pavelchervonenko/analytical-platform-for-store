@@ -328,6 +328,7 @@ class StorePlanProgressServiceTest {
                 commercial(accessoryAmount.add(serviceAmount), netRevenue),
                 commercial(accessoryAmount, netRevenue),
                 commercial(serviceAmount, netRevenue),
+                List.of(),
                 new OverviewMetricsDataQuality(
                         true,
                         10,

@@ -69,6 +69,12 @@ public class OverviewMetricsService {
         CommercialGroups sellerGroups = employeeGroups(employeeCategories.employees().stream()
                 .filter(EmployeeCategoryKpiEmployee::rankingEligible)
                 .toList());
+        List<CategoryKpiGroup> sellerSalesGroups = aggregateEmployeeSalesGroups(
+                storeCategories.groups(),
+                employeeCategories.employees().stream()
+                        .filter(EmployeeCategoryKpiEmployee::rankingEligible)
+                        .toList()
+        );
         reconcileGroups("full employee category KPI", storeGroups, fullEmployeeGroups);
         reconcileAdditional("store", storeGroups);
         reconcileAdditional("sellers", sellerGroups);
@@ -79,12 +85,16 @@ public class OverviewMetricsService {
                 ? storeAggregate : sellerEmployee;
         CommercialGroups selectedGroups = validatedScope == OverviewMetricScope.STORE
                 ? storeGroups : sellerGroups;
+        List<CategoryKpiGroup> selectedSalesGroups =
+                validatedScope == OverviewMetricScope.STORE
+                        ? storeCategories.groups() : sellerSalesGroups;
         return result(
                 validatedStoreId,
                 validatedPeriod,
                 validatedScope,
                 selected,
                 selectedGroups,
+                selectedSalesGroups,
                 store.dataQuality()
         );
     }
@@ -95,6 +105,7 @@ public class OverviewMetricsService {
             OverviewMetricScope scope,
             Aggregate aggregate,
             CommercialGroups groups,
+            List<CategoryKpiGroup> salesGroups,
             StoreKpiDataQuality storeDataQuality
     ) {
         BigDecimal revenue = money(aggregate.netRevenue());
@@ -118,6 +129,7 @@ public class OverviewMetricsService {
                 commercial(groups.additional(), revenue),
                 commercial(groups.accessory(), revenue),
                 commercial(groups.service(), revenue),
+                salesGroups,
                 new OverviewMetricsDataQuality(
                         aggregate.completeCostData(),
                         aggregate.includedItemCount(),
@@ -127,6 +139,69 @@ public class OverviewMetricsService {
                         storeDataQuality.periodOpenConsistencyIssueCount(),
                         storeDataQuality.storeOpenQualityIssueCount(),
                         true
+                )
+        );
+    }
+
+    private List<CategoryKpiGroup> aggregateEmployeeSalesGroups(
+            List<CategoryKpiGroup> referenceGroups,
+            Collection<EmployeeCategoryKpiEmployee> employees
+    ) {
+        return referenceGroups.stream()
+                .map(reference -> new CategoryKpiGroup(
+                        reference.groupCode(),
+                        reference.groupName(),
+                        aggregateEmployeeGroupMetrics(employees.stream()
+                                .map(employee -> employeeGroup(
+                                        employee.groups(), reference.groupCode()
+                                ).metrics())
+                                .toList())
+                ))
+                .toList();
+    }
+
+    private CategoryKpiMetrics aggregateEmployeeGroupMetrics(
+            List<EmployeeCategoryKpiMetrics> metrics
+    ) {
+        BigDecimal revenue = money(sum(
+                metrics, EmployeeCategoryKpiMetrics::netRevenue
+        ));
+        BigDecimal netQuantity = quantity(sum(
+                metrics, EmployeeCategoryKpiMetrics::netQuantity
+        ));
+        boolean completeCostData = metrics.stream()
+                .allMatch(metric -> metric.dataQuality().completeCostData());
+        BigDecimal cost = completeCostData
+                ? money(sum(metrics, metric -> Objects.requireNonNull(metric.costAmount())))
+                : null;
+        BigDecimal grossProfit = cost == null
+                ? null : money(revenue.subtract(cost));
+        BigDecimal averageGrossProfitPerUnit = grossProfit == null
+                || netQuantity.signum() <= 0
+                ? null
+                : grossProfit.divide(netQuantity, MONEY_SCALE, RoundingMode.HALF_UP);
+        BigDecimal marginPercent = grossProfit == null || revenue.signum() == 0
+                ? null
+                : grossProfit.multiply(BigDecimal.valueOf(100))
+                        .divide(revenue, PERCENT_SCALE, RoundingMode.HALF_UP);
+        return new CategoryKpiMetrics(
+                revenue,
+                netQuantity,
+                cost,
+                grossProfit,
+                averageGrossProfitPerUnit,
+                marginPercent,
+                new CategoryKpiDataQuality(
+                        completeCostData,
+                        metrics.stream().mapToLong(
+                                metric -> metric.dataQuality().includedItemCount()
+                        ).sum(),
+                        metrics.stream().mapToLong(
+                                metric -> metric.dataQuality().missingCostItemCount()
+                        ).sum(),
+                        metrics.stream().mapToLong(
+                                metric -> metric.dataQuality().unexpectedZeroCostItemCount()
+                        ).sum()
                 )
         );
     }

@@ -179,7 +179,6 @@ export function OverviewPage() {
             <strong>{freshnessLabels[status.status] ?? "Статус неизвестен"}</strong>
             <p>{status.dataThroughDate ? `По ${formatDate(status.dataThroughDate)}` : "Дата покрытия неизвестна"}{status.lagDays ? `, отставание ${status.lagDays} дн.` : ""}</p>
           </div>
-          {status.openQualityIssueCount > 0 && <span className="freshness-banner__issues"><AlertCircle size={16} />{status.openQualityIssueCount}</span>}
           {status.synchronization.active && <span className="freshness-banner__sync"><RefreshCw size={15} />Обновление</span>}
           {status.status !== "CURRENT" && quality && !quality.readyForDecisions && <a className="freshness-banner__action" href="#quality-details">Проверить <ArrowRight size={15} /></a>}
         </section>
@@ -203,12 +202,12 @@ export function OverviewPage() {
 
       <div className="overview-grid">
         <section className="panel groups-panel">
-          <div className="panel__heading"><h2>Структура продаж · весь магазин</h2></div>
-          <SalesStructure groups={categories?.groups ?? []} />
+          <div className="panel__heading"><h2>Структура продаж — {metricScope === "SELLERS" ? "только продавцы" : "весь магазин"}</h2></div>
+          <SalesStructure groups={overviewMetrics?.salesGroups ?? []} />
         </section>
 
         <section className="panel plan-panel">
-          <div className="panel__heading"><h2>План месяца · {metricScope === "SELLERS" ? "только продавцы" : "весь магазин"}</h2>{plan && <span>{plan.achievedDirectionCount} из {plan.directions.length}</span>}</div>
+          <div className="panel__heading"><h2>План месяца — {metricScope === "SELLERS" ? "только продавцы" : "весь магазин"}</h2>{plan && <span>{plan.achievedDirectionCount} из {plan.directions.length}</span>}</div>
           {!plan ? (
             <div className="panel-empty"><Target size={24} /><strong>План не задан</strong><p>Задайте цели на месяц.</p></div>
           ) : (

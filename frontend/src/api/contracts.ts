@@ -203,6 +203,29 @@ export type StoreKpi = z.infer<typeof storeKpiSchema>;
 
 export const overviewMetricScopeSchema = z.enum(["SELLERS", "STORE"]);
 
+const categoryDataQualitySchema = z.object({
+  completeCostData: z.boolean(),
+  includedItemCount: z.number().int().nonnegative(),
+  missingCostItemCount: z.number().int().nonnegative(),
+  unexpectedZeroCostItemCount: z.number().int().nonnegative()
+});
+
+const categoryMetricsSchema = z.object({
+  netRevenue: z.number(),
+  netQuantity: z.number(),
+  costAmount: z.number().nullable(),
+  grossProfit: z.number().nullable(),
+  averageGrossProfitPerUnit: z.number().nullable(),
+  marginPercent: z.number().nullable(),
+  dataQuality: categoryDataQualitySchema
+});
+
+const categoryGroupSchema = z.object({
+  groupCode: z.string(),
+  groupName: z.string(),
+  metrics: categoryMetricsSchema
+});
+
 const overviewCommercialMetricSchema = z.object({
   netRevenue: z.number(),
   netQuantity: z.number(),
@@ -223,6 +246,7 @@ export const overviewMetricsSchema = z.object({
   additional: overviewCommercialMetricSchema,
   accessory: overviewCommercialMetricSchema,
   service: overviewCommercialMetricSchema,
+  salesGroups: z.array(categoryGroupSchema),
   dataQuality: z.object({
     completeCostData: z.boolean(),
     includedItemCount: z.number().int().nonnegative(),
@@ -273,29 +297,6 @@ export const employeeKpiSchema = z.object({
 
 export type EmployeeKpiEntry = z.infer<typeof employeeKpiEntrySchema>;
 export type EmployeeKpi = z.infer<typeof employeeKpiSchema>;
-
-const categoryDataQualitySchema = z.object({
-  completeCostData: z.boolean(),
-  includedItemCount: z.number().int().nonnegative(),
-  missingCostItemCount: z.number().int().nonnegative(),
-  unexpectedZeroCostItemCount: z.number().int().nonnegative()
-});
-
-const categoryMetricsSchema = z.object({
-  netRevenue: z.number(),
-  netQuantity: z.number(),
-  costAmount: z.number().nullable(),
-  grossProfit: z.number().nullable(),
-  averageGrossProfitPerUnit: z.number().nullable(),
-  marginPercent: z.number().nullable(),
-  dataQuality: categoryDataQualitySchema
-});
-
-const categoryGroupSchema = z.object({
-  groupCode: z.string(),
-  groupName: z.string(),
-  metrics: categoryMetricsSchema
-});
 
 const categoryEntrySchema = z.object({
   categoryCode: z.string(),

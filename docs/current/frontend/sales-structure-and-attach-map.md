@@ -31,7 +31,7 @@ superseded_by: null
 
 # Структура продаж и карта допродаж
 
-Структура из `/kpi/categories` относится к selected period и store cohort:
+Структура из `/overview-metrics?scope=` относится к selected period и выбранному overview scope:
 
 ```text
 Техника                 Дополнительная выручка
@@ -40,7 +40,8 @@ superseded_by: null
 ```
 
 Родитель — итог/подытог, ребёнок — «В том числе»; layout не должен выглядеть как независимые
-слагаемые.
+слагаемые. `SELLERS` включает только `rankingEligible` сотрудников, `STORE` — весь магазин;
+переключатель общий с верхними метриками и планом.
 
 Attach-map использует `/kpi/attach-rates` для store benchmark и `/employee-ratings` для roster.
 Residual = store facts минус показанный roster; это «вне рейтинга / без сотрудника», не сотрудник.

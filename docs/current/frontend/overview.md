@@ -36,6 +36,7 @@ superseded_by: null
 | Freshness | `/data-status` | Latest coverage | Store | Date nullable | «Данные по…»/причина |
 | Revenue/GP/margin | `/overview-metrics` | Selected | SELLERS by default / STORE | GP/margin nullable | Selected period |
 | Accessories/services/additional | `/overview-metrics` | Selected | Same selected scope | Share nullable | Selected period |
+| Sales structure | `/overview-metrics` | Selected | Same selected scope | GP/margin nullable | Selected period + scope |
 | Plan | `/performance-plans/{month}/progress?scope=` | Month..asOf | Same selected scope | No plan state | «План месяца» |
 | Team | `/kpi/employees` + `/employee-ratings` | Selected | Overview roster | Score/rank nullable | «Основные продавцы» |
 | Attach map | `/kpi/attach-rates` + rating | Selected | Store + roster | Rate/base nullable | Empty-state reason |
@@ -48,8 +49,8 @@ superseded_by: null
 
 В month mode карточки могут показывать план этого же месяца и scope. В week/custom тёмный блок
 показывает только selected-period amount, quantity и share; month gap/target остаются в отдельном
-блоке «План месяца». «Структура продаж» и attach-map намеренно остаются STORE и имеют явную
-подпись. `null` GP/margin не показывается как zero.
+блоке «План месяца». «Структура продаж» использует тот же выбранный scope, а attach-map
+намеренно остаётся STORE и имеет явную подпись. `null` GP/margin не показывается как zero.
 
 `overview-metrics-v1` сверяет STORE с полной employee-проекцией, а также инварианты
 `Допы = Аксессуары + Услуги` и одинаковую выручку seller cohort между employee KPI и category KPI.

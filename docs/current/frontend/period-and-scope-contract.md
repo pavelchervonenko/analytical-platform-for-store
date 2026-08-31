@@ -35,6 +35,7 @@ superseded_by: null
 | Потребитель | Endpoint | Период | Cohort | Null/partial | Подпись |
 |---|---|---|---|---|---|
 | Overview facts | `/overview-metrics?scope=` | selected start..end | SELLERS default / STORE | GP/margin/share nullable | Выбранный диапазон |
+| Sales structure | `/overview-metrics?scope=` | selected start..end | Selected overview scope | GP/margin nullable | Выбранный диапазон + scope |
 | Store/category details | `/kpi/categories` | selected start..end | Store | GP/margin nullable | «Весь магазин» |
 | Attach | `/kpi/attach-rates` | selected | Store | Rate nullable без базы | Выбранный диапазон |
 | Employee KPI/rating | `/kpi/employees`, `/employee-ratings` | selected | Full / roster | Rank nullable | Диапазон + cohort |

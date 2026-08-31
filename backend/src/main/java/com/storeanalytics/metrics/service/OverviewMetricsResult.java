@@ -3,6 +3,7 @@ package com.storeanalytics.metrics.service;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public record OverviewMetricsResult(
@@ -19,6 +20,7 @@ public record OverviewMetricsResult(
         OverviewCommercialMetric additional,
         OverviewCommercialMetric accessory,
         OverviewCommercialMetric service,
+        List<CategoryKpiGroup> salesGroups,
         OverviewMetricsDataQuality dataQuality
 ) {
 }

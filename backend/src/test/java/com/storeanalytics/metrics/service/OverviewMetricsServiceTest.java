@@ -63,6 +63,8 @@ class OverviewMetricsServiceTest {
         assertThat(result.additional().sharePercent()).isEqualByComparingTo("15.00");
         assertThat(result.accessory().sharePercent()).isEqualByComparingTo("10.00");
         assertThat(result.service().sharePercent()).isEqualByComparingTo("5.00");
+        assertThat(group(result.salesGroups(), "ACCESSORY").metrics().netRevenue())
+                .isEqualByComparingTo("100.00");
         assertThat(result.dataQuality().includedItemCount()).isEqualTo(2);
         assertThat(result.dataQuality().reconciliationPassed()).isTrue();
     }
@@ -77,6 +79,8 @@ class OverviewMetricsServiceTest {
 
         assertThat(result.netRevenue()).isEqualByComparingTo("1500.00");
         assertThat(result.additional().netRevenue()).isEqualByComparingTo("225.00");
+        assertThat(group(result.salesGroups(), "ACCESSORY").metrics().netRevenue())
+                .isEqualByComparingTo("150.00");
         assertThat(result.dataQuality().includedItemCount()).isEqualTo(4);
     }
 
@@ -292,6 +296,13 @@ class OverviewMetricsServiceTest {
 
     private EmployeeKpiDataQuality employeeQuality(long itemCount) {
         return new EmployeeKpiDataQuality(true, itemCount, 0, 0, 0);
+    }
+
+    private CategoryKpiGroup group(List<CategoryKpiGroup> groups, String code) {
+        return groups.stream()
+                .filter(group -> code.equals(group.groupCode()))
+                .findFirst()
+                .orElseThrow();
     }
 
     private BigDecimal amount(String value) {

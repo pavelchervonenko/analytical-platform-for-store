@@ -182,8 +182,7 @@ svg { flex: 0 0 auto; }
 .freshness-banner > div { min-width: 0; }
 .freshness-banner strong, .decision-banner strong { font-size: 15px; }
 .freshness-banner p, .decision-banner p { margin: 4px 0 0; color: var(--text-muted); font-size: 13px; line-height: 1.45; }
-.freshness-banner__issues, .freshness-banner__sync { display: flex; align-items: center; gap: 6px; margin-left: auto; padding: 7px 10px; border-radius: 10px; color: var(--text-muted); background: var(--surface-muted); font-size: 13px; font-weight: 700; }
-.freshness-banner__sync { margin-left: 0; }
+.freshness-banner__sync { display: flex; align-items: center; gap: 6px; margin-left: auto; padding: 7px 10px; border-radius: 10px; color: var(--text-muted); background: var(--surface-muted); font-size: 13px; font-weight: 700; }
 .freshness-banner__sync svg { animation: spin 2s linear infinite; }
 .freshness-banner__action { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; color: var(--primary); font-size: 13px; font-weight: 750; text-decoration: none; white-space: nowrap; }
 .decision-banner { border-color: #ead7b8; background: #fbf6e9; }
@@ -340,7 +339,6 @@ td:first-child small { margin-top: 4px; color: var(--text-faint); font-size: 11p
   .page-heading { align-items: flex-start; flex-direction: column; }
   .page-heading__period { justify-items: start; }
   .freshness-banner { align-items: flex-start; flex-wrap: wrap; }
-  .freshness-banner__issues { margin-left: 51px; }
   .freshness-banner__sync { margin-left: 0; }
   .decision-banner { align-items: flex-start; }
   .decision-banner a { display: none; }
@@ -356,7 +354,6 @@ td:first-child small { margin-top: 4px; color: var(--text-faint); font-size: 11p
   .metric-grid { grid-template-columns: 1fr; gap: 10px; }
   .metric-card--featured, .metric-grid .metric-card:last-child { grid-column: auto; }
   .metric-card { min-height: 160px; }
-  .freshness-banner__issues { margin-left: 0; }
   .panel__heading { flex-direction: column; }
   .panel__heading > span { text-align: left; }
   .group-row { grid-template-columns: 40px minmax(0, 1fr); }

@@ -65,6 +65,13 @@ const overviewMetrics: OverviewMetrics = {
     netQuantity: 5,
     sharePercent: 7.5
   },
+  salesGroups: [
+    group("PHONES", 90000, 2),
+    group("DEVICES", 100000, 3),
+    group("ACCESSORY", 12000, 8),
+    group("SERVICE", 7500, 5),
+    group("ADDITIONAL_REVENUE", 19500, 13)
+  ],
   dataQuality: {
     completeCostData: true,
     includedItemCount: 10,

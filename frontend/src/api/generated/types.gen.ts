@@ -1557,6 +1557,7 @@ export type OverviewMetricsResult = {
     additional?: OverviewCommercialMetric;
     accessory?: OverviewCommercialMetric;
     service?: OverviewCommercialMetric;
+    salesGroups?: Array<CategoryKpiGroup>;
     dataQuality?: OverviewMetricsDataQuality;
 };
 
@@ -1708,13 +1709,8 @@ export type JsonNode = {
     float?: boolean;
     container?: boolean;
     number?: boolean;
-    bigInteger?: boolean;
-    /**
-     * @deprecated
-     */
-    textual?: boolean;
-    floatingPointNumber?: boolean;
     missingNode?: boolean;
+    floatingPointNumber?: boolean;
     valueNode?: boolean;
     nodeType?: 'ARRAY' | 'BINARY' | 'BOOLEAN' | 'MISSING' | 'NULL' | 'NUMBER' | 'OBJECT' | 'POJO' | 'STRING';
     object?: boolean;
@@ -1725,6 +1721,11 @@ export type JsonNode = {
     long?: boolean;
     double?: boolean;
     bigDecimal?: boolean;
+    bigInteger?: boolean;
+    /**
+     * @deprecated
+     */
+    textual?: boolean;
     boolean?: boolean;
     binary?: boolean;
     embeddedValue?: boolean;

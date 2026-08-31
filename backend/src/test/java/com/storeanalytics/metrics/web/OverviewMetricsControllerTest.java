@@ -16,6 +16,7 @@ import com.storeanalytics.metrics.service.OverviewMetricsService;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -112,6 +113,7 @@ class OverviewMetricsControllerTest {
                         BigDecimal.ONE,
                         new BigDecimal("5.00")
                 ),
+                List.of(),
                 new OverviewMetricsDataQuality(true, 2, 0, 0, 0, 0, 0, true)
         );
     }
