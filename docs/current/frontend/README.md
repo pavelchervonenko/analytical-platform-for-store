@@ -11,6 +11,8 @@ requirement_sources:
   - docs/current/product/README.md
 implementation_sources:
   - frontend/src
+  - frontend/src/main.tsx
+  - frontend/src/styles.css
 verification_sources:
   - frontend/src/api/consumerContract.test.ts
   - frontend/src/dashboard/OverviewPage.test.tsx
@@ -44,3 +46,10 @@ Frontend не подменяет `null` нулём, явно называет у
 смешивает периоды в одной карточке. Текущие исключения: Overview period mix
 ([ADR-0002](../../decisions/ADR-0002-overview-period-scope.md)) и employee return attribution
 ([ADR-0001](../../decisions/ADR-0001-return-employee-attribution.md)).
+
+## Базовая типографика
+
+Интерфейс использует локально поставляемый `Inter Variable` с кириллицей. Базовая шкала ограничена
+размерами 12 px для вторичной информации, 14 px для основного текста, 16 px для заголовков разделов,
+24 px для заголовков страниц и 28 px для крупных показателей. Основные веса — 400, 500 и 600;
+компоненты не должны подключать отдельные UI-шрифты или вводить локальную шкалу без обоснования.

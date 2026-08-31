@@ -80,7 +80,7 @@ describe("weekly insight presentation", () => {
 
   it("explains why an insufficient employee cannot receive a detailed analysis", () => {
     expect(employeeAnalysisHelp("INSUFFICIENT"))
-      .toContain("подтверждённых смен");
+      .toContain("подтвержденных смен");
     expect(employeeAnalysisHelp("LIMITED"))
       .toContain("пониженную уверенность");
   });

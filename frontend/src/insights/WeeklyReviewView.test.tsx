@@ -61,11 +61,12 @@ describe("WeeklyReviewView", () => {
     expect(await screen.findByText("17–23 августа 2026", {
       selector: ".weekly-review-header__period strong"
     })).toBeInTheDocument();
+    expect(screen.getByText("Расчет по данным")).toBeInTheDocument();
     expect(screen.getByText("17–23 августа 2026", {
       selector: ".weekly-review-section-heading small"
     })).toBeInTheDocument();
-    const managerSummary = "По сравнению с предыдущей полной неделей чистая выручка выросла, "
-      + "валовая прибыль выросла, а маржа осталась на прежнем уровне. "
+    const managerSummary = "Чистая выручка и валовая прибыль выросли, "
+      + "а маржа осталась на прежнем уровне. "
       + "Рост возвратов уменьшил чистую выручку на 50\u00a0₽.";
     expect(screen.getByRole("heading", { name: managerSummary })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Следующие шаги" })).toBeInTheDocument();
@@ -89,19 +90,28 @@ describe("WeeklyReviewView", () => {
     expect(within(summary).queryByText(review.summary.risk!.text)).not.toBeInTheDocument();
   });
 
-  it("keeps employee details separate and collapsed until requested", async () => {
-    renderReview(makeWeeklyReview());
+  it("shows one employee detail and switches it from the compact roster", async () => {
+    const { container } = renderReview(makeWeeklyReview());
 
-    const employeeName = await screen.findByText("Анна");
-    const employeeCard = employeeName.closest("details");
-    expect(employeeCard).not.toHaveAttribute("open");
-
-    fireEvent.click(employeeCard!.querySelector("summary")!);
-
-    expect(employeeCard).toHaveAttribute("open");
-    expect(within(employeeCard!).getByRole("heading", { name: "Динамика" }))
+    await screen.findAllByText("Анна");
+    const employeeDetail = container.querySelector<HTMLElement>(
+      ".weekly-review-employee-detail"
+    )!;
+    expect(within(employeeDetail).getByRole("heading", { name: "Анна" }))
       .toBeInTheDocument();
-    expect(within(employeeCard!).getAllByText("Чистая выручка вырос")).toHaveLength(1);
+    expect(within(employeeDetail).getByRole("heading", { name: "Динамика" }))
+      .toBeInTheDocument();
+    expect(within(employeeDetail).getByRole("heading", { name: "Сравнение с командой" }))
+      .toBeInTheDocument();
+    expect(employeeDetail.querySelectorAll(".weekly-review-employee__summary-metric"))
+      .toHaveLength(1);
+    expect(employeeDetail.querySelectorAll(".weekly-review-employee__metrics > article"))
+      .toHaveLength(3);
+    expect(within(employeeDetail).getAllByText("Чистая выручка вырос")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /Вера/u }));
+    expect(within(employeeDetail).getByRole("heading", { name: "Вера" }))
+      .toBeInTheDocument();
   });
 
   it("opens formula, evidence and sales structure without losing their context", async () => {
@@ -143,11 +153,11 @@ describe("WeeklyReviewView", () => {
     ];
     const { container } = renderReview(review);
 
-    await screen.findByText("Анна");
-    expect(container.querySelectorAll(".weekly-review-employee")).toHaveLength(8);
+    await screen.findAllByText("Анна");
+    expect(container.querySelectorAll(".weekly-review-employee-selector")).toHaveLength(8);
 
     await user.click(screen.getByRole("button", { name: "Показать всех — 9" }));
-    expect(container.querySelectorAll(".weekly-review-employee")).toHaveLength(9);
+    expect(container.querySelectorAll(".weekly-review-employee-selector")).toHaveLength(9);
     expect(screen.getByRole("button", { name: "Показать меньше" })).toBeInTheDocument();
   });
 
@@ -185,6 +195,8 @@ describe("WeeklyReviewView", () => {
     renderReview(review);
 
     await screen.findByRole("heading", { name: review.summary.outcome!.text });
+    expect(screen.getByText("Дополнено ИИ")).toBeInTheDocument();
+    expect(screen.queryByText("Расчет по данным")).not.toBeInTheDocument();
     const summary = document.querySelector<HTMLElement>(".weekly-review-summary")!;
     expect(within(summary).queryByText(review.summary.positive!.text)).not.toBeInTheDocument();
     expect(within(summary).queryByText(review.summary.risk!.text)).not.toBeInTheDocument();
@@ -230,7 +242,7 @@ describe("WeeklyReviewView", () => {
   it("shows PREPARING as progress rather than a data failure", async () => {
     const review = makeWeeklyReview();
     review.reportState = "PREPARING";
-    review.qualitySummary.message = "Собираем результаты завершённой недели.";
+    review.qualitySummary.message = "Собираем результаты завершенной недели.";
     renderReview(review);
 
     expect(await screen.findByRole("heading", { name: "Разбор формируется" }))
@@ -286,7 +298,7 @@ describe("WeeklyReviewView", () => {
     renderView(<div>Предыдущий недельный разбор</div>);
 
     expect(await screen.findByText("Предыдущий недельный разбор")).toBeInTheDocument();
-    expect(screen.queryByText("Разбор ещё не сформирован")).not.toBeInTheDocument();
+    expect(screen.queryByText("Разбор еще не сформирован")).not.toBeInTheDocument();
   });
 
   it("keeps the previous weekly view when the v22 endpoint fails", async () => {

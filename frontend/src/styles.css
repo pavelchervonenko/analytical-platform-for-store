@@ -1,5 +1,5 @@
 :root {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Segoe UI", sans-serif;
+  font-family: "Inter Variable", Inter, system-ui, sans-serif;
   color: #1d1d1f;
   background: #f5f5f7;
   font-synthesis: none;
@@ -23,6 +23,15 @@
   --warning-soft: #fff7e6;
   --success: #18794e;
   --success-soft: #edf8f2;
+  --font-ui: "Inter Variable", Inter, system-ui, sans-serif;
+  --type-secondary: 12px;
+  --type-body: 14px;
+  --type-section: 16px;
+  --type-page: 24px;
+  --type-metric: 28px;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
   --sidebar-width: 248px;
   --topbar-height: 78px;
   --shadow-sm: none;
@@ -582,9 +591,9 @@ td:first-child small { margin-top: 4px; color: var(--text-faint); font-size: 11p
   .panel { padding: 16px; border-radius: 18px; }
 }
 /* Apple-inspired production refresh: quiet content, glass only for application chrome. */
-body { font-size: 17px; line-height: 1.47; }
+body { font-family: var(--font-ui); font-size: var(--type-body); font-weight: var(--weight-regular); line-height: 1.5; }
 :focus-visible { outline: 2px solid var(--primary-hover); outline-offset: 3px; }
-.eyebrow { color: var(--text-faint); font-size: 12px; font-weight: 600; letter-spacing: .08em; }
+.eyebrow { color: var(--text-faint); font-size: var(--type-secondary); font-weight: var(--weight-medium); letter-spacing: 0; text-transform: none; }
 .button { border-radius: 999px; font-weight: 600; }
 .button:active { transform: scale(.97); }
 .button--ghost { color: var(--primary); background: transparent; box-shadow: inset 0 0 0 1px var(--primary); }
@@ -626,7 +635,7 @@ body { font-size: 17px; line-height: 1.47; }
 
 .page-content { width: min(100%, 1440px); padding: 30px 48px 80px; }
 .page-heading { align-items: flex-end; margin-bottom: 28px; }
-.page-heading h1 { font-size: clamp(36px, 3vw, 48px); font-weight: 600; letter-spacing: -.025em; }
+.page-heading h1 { font-size: var(--type-page); font-weight: var(--weight-semibold); letter-spacing: -.02em; }
 .page-heading > div:first-child > p:last-child { margin-top: 8px; font-size: 15px; }
 .page-heading__period small { font-size: 12px; }
 .page-heading__period strong { font-size: 14px; font-weight: 600; }
@@ -637,7 +646,7 @@ body { font-size: 17px; line-height: 1.47; }
   background: var(--surface);
   box-shadow: none;
 }
-.panel__heading h2 { font-size: 21px; font-weight: 600; letter-spacing: -.015em; }
+.panel__heading h2 { font-size: var(--type-section); font-weight: var(--weight-semibold); letter-spacing: -.01em; }
 .auth-intro { background: #1d1d1f; }
 .auth-intro::after { display: none; }
 .auth-card { border-radius: 18px; box-shadow: none; }
@@ -833,7 +842,7 @@ body { font-size: 17px; line-height: 1.47; }
 @media (max-width: 480px) {
   .page-content { padding: 18px 12px 48px; }
   .page-heading { margin-bottom: 22px; }
-  .page-heading h1 { font-size: 34px; }
+  .page-heading h1 { font-size: var(--type-page); }
   .overview-summary { border-radius: 14px; }
   .overview-summary__primary { padding: 30px 22px; }
   .overview-summary__primary > strong { font-size: 40px; }

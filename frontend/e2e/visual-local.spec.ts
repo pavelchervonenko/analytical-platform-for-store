@@ -227,9 +227,18 @@ test.describe("local frontend visual review", () => {
           await page.keyboard.press("Enter");
           await expect(details).not.toHaveAttribute("open", "");
         }
-        const firstEmployee = page.locator(".insight-employee").first();
-        await firstEmployee.locator(":scope > summary").click();
-        await expect(firstEmployee).toHaveAttribute("open", "");
+        const employeeSelectors = page.locator(".weekly-review-employee-selector");
+        const firstEmployee = employeeSelectors.first();
+        await expect(firstEmployee).toHaveAttribute("aria-pressed", "true");
+        if (await employeeSelectors.count() > 1) {
+          const secondEmployee = employeeSelectors.nth(1);
+          await secondEmployee.click();
+          await expect(secondEmployee).toHaveAttribute("aria-pressed", "true");
+          await expect(firstEmployee).toHaveAttribute("aria-pressed", "false");
+          await firstEmployee.click();
+          await expect(firstEmployee).toHaveAttribute("aria-pressed", "true");
+        }
+        await expect(page.locator(".weekly-review-employee-detail")).toBeVisible();
       }
 
       const periodSelector = page.getByRole("button", { name: "Выбрать период" });

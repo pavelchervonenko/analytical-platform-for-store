@@ -2,12 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
-  BarChart3,
   CheckCircle2,
   ChevronDown,
   RefreshCw,
-  Target,
-  Users
+  Sparkles
 } from "lucide-react";
 import { getWeeklyReview, queryKeys } from "../api/queries";
 import type {
@@ -34,7 +32,6 @@ import {
   type ReviewTone
 } from "./weekly-review-presentation";
 import "./weekly-review.css";
-import "./weekly-review-polish.css";
 
 type EvidenceIndex = ReadonlyMap<string, WeeklyReviewEvidence>;
 type BlockState = WeeklyReview["summary"]["state"];
@@ -133,6 +130,8 @@ function EvidenceDisclosure({
 }
 
 function ReviewHeader({ review }: { review: WeeklyReview }) {
+  const aiEnhanced = review.summary.generatedBy === "AI_ENHANCED"
+    && review.aiEnhancement.state === "READY";
   const stateClass = review.reportState === "READY"
     ? "weekly-review-state--ready"
     : review.reportState === "PARTIAL"
@@ -145,7 +144,7 @@ function ReviewHeader({ review }: { review: WeeklyReview }) {
     <header className="weekly-review-header">
       <div className="weekly-review-header__period">
         <div>
-          <span>Завершённая неделя:</span>
+          <span>Завершенная неделя:</span>
           <strong>{review.period.currentLabel}</strong>
         </div>
         <div>
@@ -154,14 +153,20 @@ function ReviewHeader({ review }: { review: WeeklyReview }) {
         </div>
       </div>
       <div className="weekly-review-header__meta">
-        <span className={`weekly-review-state ${stateClass}`} role="status">
-          {review.reportState === "READY"
-            ? <CheckCircle2 aria-hidden="true" />
-            : review.reportState === "PREPARING"
-              ? <RefreshCw aria-hidden="true" />
-              : <AlertTriangle aria-hidden="true" />}
-          {reviewStateLabel(review.reportState)}
-        </span>
+        <div className="weekly-review-header__status-row">
+          <span className="weekly-review-source">
+            {aiEnhanced && <Sparkles aria-hidden="true" />}
+            {aiEnhanced ? "Дополнено ИИ" : "Расчет по данным"}
+          </span>
+          <span className={`weekly-review-state ${stateClass}`} role="status">
+            {review.reportState === "READY"
+              ? <CheckCircle2 aria-hidden="true" />
+              : review.reportState === "PREPARING"
+                ? <RefreshCw aria-hidden="true" />
+                : <AlertTriangle aria-hidden="true" />}
+            {reviewStateLabel(review.reportState)}
+          </span>
+        </div>
         <small>Обновлено {formatCalculatedAt(review.provenance.calculatedAt)}</small>
       </div>
     </header>
@@ -227,12 +232,34 @@ function summaryText(text: string): string {
   return text.trim().replace(/\s+₽/gu, "\u00a0₽");
 }
 
-function resultClause(metric: WeeklyReviewMetric | undefined, label: string): string | null {
+type ResultMovement = {
+  label: string;
+  direction: WeeklyReviewMetric["direction"];
+};
+
+function resultMovement(
+  metric: WeeklyReviewMetric | undefined,
+  label: string
+): ResultMovement | null {
   if (!metric || metric.current == null || metric.metricState === "UNAVAILABLE") return null;
-  if (metric.direction === "UP") return `${label} выросла`;
-  if (metric.direction === "DOWN") return `${label} снизилась`;
-  if (metric.direction === "FLAT") return `${label} осталась на прежнем уровне`;
-  return `${label} рассчитана`;
+  return { label, direction: metric.direction };
+}
+
+function joinSubjects(subjects: readonly string[]): string {
+  if (subjects.length <= 1) return subjects[0] ?? "";
+  return `${subjects.slice(0, -1).join(", ")} и ${subjects.at(-1)}`;
+}
+
+function movementClause(direction: ResultMovement["direction"], subjects: readonly string[]) {
+  const plural = subjects.length > 1;
+  const movement = direction === "UP"
+    ? plural ? "выросли" : "выросла"
+    : direction === "DOWN"
+      ? plural ? "снизились" : "снизилась"
+      : direction === "FLAT"
+        ? plural ? "остались на прежнем уровне" : "осталась на прежнем уровне"
+        : plural ? "рассчитаны" : "рассчитана";
+  return `${joinSubjects(subjects)} ${movement}`;
 }
 
 function joinClauses(clauses: readonly string[]): string {
@@ -242,13 +269,21 @@ function joinClauses(clauses: readonly string[]): string {
 
 function deterministicSummaryLead(review: WeeklyReview): string {
   const result = (code: string) => review.results.find((metric) => metric.code === code);
-  const clauses = [
-    resultClause(result("NET_REVENUE"), "чистая выручка"),
-    resultClause(result("GROSS_PROFIT"), "валовая прибыль"),
-    resultClause(result("MARGIN_PERCENT"), "маржа")
-  ].filter((clause): clause is string => clause !== null);
-  if (clauses.length === 0) return "Итог рассчитан по доступным данным завершённой недели.";
-  const outcome = `По сравнению с предыдущей полной неделей ${joinClauses(clauses)}.`;
+  const movements = [
+    resultMovement(result("NET_REVENUE"), "чистая выручка"),
+    resultMovement(result("GROSS_PROFIT"), "валовая прибыль"),
+    resultMovement(result("MARGIN_PERCENT"), "маржа")
+  ].filter((movement): movement is ResultMovement => movement !== null);
+  if (movements.length === 0) return "Итог рассчитан по доступным данным завершенной недели.";
+  const groupedMovements = new Map<ResultMovement["direction"], string[]>();
+  movements.forEach(({ label, direction }) => {
+    groupedMovements.set(direction, [...(groupedMovements.get(direction) ?? []), label]);
+  });
+  const clauses = Array.from(groupedMovements, ([direction, subjects]) => (
+    movementClause(direction, subjects)
+  ));
+  const comparison = joinClauses(clauses);
+  const outcome = `${comparison.charAt(0).toUpperCase()}${comparison.slice(1)}.`;
   const provenRisk = review.factors.find((factor) => (
     factor.effect === "NEGATIVE"
     && factor.contributionAmount != null
@@ -328,6 +363,17 @@ function SummarySection({
                 evidenceRefs={outcome.evidenceRefs}
                 evidenceByRef={evidenceByRef}
               />
+              {primaryAction && (
+                <div className="weekly-review-summary__focus">
+                  <span>Что сделать</span>
+                  <strong>{primaryAction.title}</strong>
+                  <small>{actionTargetText(primaryAction)}</small>
+                  <EvidenceDisclosure
+                    evidenceRefs={primaryAction.evidenceRefs}
+                    evidenceByRef={evidenceByRef}
+                  />
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -336,7 +382,7 @@ function SummarySection({
             </>
           )}
         </div>
-        {(positive || risk || primaryAction) && (
+        {(positive || risk) && (
           <div className="weekly-review-summary__signals">
             {positive && (
               <SummarySignal
@@ -355,16 +401,6 @@ function SummarySection({
                 detail={factorContext(riskFactor)}
                 tone="negative"
                 evidenceRefs={risk.evidenceRefs}
-                evidenceByRef={evidenceByRef}
-              />
-            )}
-            {primaryAction && (
-              <SummarySignal
-                label="Что сделать"
-                text={primaryAction.title}
-                detail="Приоритет на следующую полную неделю"
-                tone="neutral"
-                evidenceRefs={primaryAction.evidenceRefs}
                 evidenceByRef={evidenceByRef}
               />
             )}
@@ -428,7 +464,6 @@ function ResultsSection({ review }: { review: WeeklyReview }) {
     <section className="weekly-review-results" aria-labelledby="weekly-review-results-title">
       <SectionHeading
         id="weekly-review-results-title"
-        icon={<BarChart3 />}
         title="Результаты недели"
         meta={review.period.currentLabel}
       />
@@ -444,18 +479,15 @@ function ResultsSection({ review }: { review: WeeklyReview }) {
 
 function SectionHeading({
   id,
-  icon,
   title,
   meta
 }: {
   id: string;
-  icon: ReactNode;
   title: string;
   meta?: string;
 }) {
   return (
     <div className="weekly-review-section-heading">
-      <span aria-hidden="true">{icon}</span>
       <h2 id={id}>{title}</h2>
       {meta && <small>{meta}</small>}
     </div>
@@ -532,7 +564,6 @@ function ChangesAndActions({
       <section aria-labelledby="weekly-review-factors-title">
         <SectionHeading
           id="weekly-review-factors-title"
-          icon={<BarChart3 />}
           title="Основные изменения"
         />
         {review.factors.length > 0 ? (
@@ -552,7 +583,6 @@ function ChangesAndActions({
       <section aria-labelledby="weekly-review-actions-title">
         <SectionHeading
           id="weekly-review-actions-title"
-          icon={<Target />}
           title="Следующие шаги"
         />
         {review.actions.length > 0 ? (
@@ -680,7 +710,6 @@ function TeamSection({
     <section className="weekly-review-team" aria-labelledby="weekly-review-team-title">
       <SectionHeading
         id="weekly-review-team-title"
-        icon={<Users />}
         title="Команда"
         meta={team.state === "READY" ? "Общая картина" : undefined}
       />
@@ -730,15 +759,9 @@ function TeamSection({
   );
 }
 
-function EmployeeMetric({
-  metric,
-  prominent = false
-}: {
-  metric: WeeklyReviewMetric;
-  prominent?: boolean;
-}) {
+function EmployeeMetric({ metric }: { metric: WeeklyReviewMetric }) {
   return (
-    <article className={prominent ? "weekly-review-employee-metric--prominent" : undefined}>
+    <article>
       <span>{metric.label}</span>
       <strong>{formatValue(metric.current, metric.unit)}</strong>
       <small className={`weekly-review-tone weekly-review-tone--${metricTone(metric)}`}>
@@ -779,74 +802,68 @@ function EmployeeDetails({
     && !ownObservationIds.has(employee.attention.observationId)
     ? employee.attention
     : null;
+  const observations = [
+    ...employee.ownDynamics,
+    ...(strength ? [strength] : []),
+    ...(attention ? [attention] : [])
+  ].filter((item, index, items) => (
+    items.findIndex((candidate) => candidate.observationId === item.observationId) === index
+  ));
   return (
     <div className="weekly-review-employee__body">
       <div className="weekly-review-employee__metrics">
         <EmployeeMetric metric={metrics.completedSales} />
-        <EmployeeMetric metric={metrics.netRevenue} prominent />
         <EmployeeMetric metric={metrics.additionalShare} />
         <EmployeeMetric metric={metrics.revenuePerHour} />
       </div>
 
-      <section className="weekly-review-employee__section">
-        <h4>Динамика</h4>
-        {employee.ownDynamics.length > 0 ? (
-          <div className="weekly-review-employee__observations">
-            {employee.ownDynamics.map((observation) => (
-              <ObservationCard
-                observation={observation}
-                evidenceByRef={evidenceByRef}
-                key={observation.observationId}
-              />
-            ))}
-          </div>
-        ) : (
-          <p className="weekly-review-section-empty">Значимых изменений нет.</p>
-        )}
-      </section>
-
-      {employee.peerComparison && (
-        <section className="weekly-review-peer">
-          <div>
-            <span>Чистая выручка сотрудника</span>
-            <strong>
-              {formatValue(
-                employee.peerComparison.employeeValue,
-                metrics.netRevenue.unit
-              )}
-            </strong>
-          </div>
-          <div>
-            <span>Медиана магазина</span>
-            <strong>
-              {formatValue(
-                employee.peerComparison.benchmarkValue,
-                metrics.netRevenue.unit
-              )}
-            </strong>
-          </div>
-          <small>
-            В сравнении: {employee.peerComparison.eligibleCount} сотрудников
-          </small>
+      <div className="weekly-review-employee__analysis">
+        <section className="weekly-review-employee__section">
+          <h4>Динамика</h4>
+          {observations.length > 0 ? (
+            <div className="weekly-review-employee__observations">
+              {observations.map((observation) => (
+                <ObservationCard
+                  observation={observation}
+                  evidenceByRef={evidenceByRef}
+                  key={observation.observationId}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="weekly-review-section-empty">Значимых изменений нет.</p>
+          )}
         </section>
-      )}
 
-      {(strength || attention) && (
-        <div className="weekly-review-employee__observations">
-          {strength && (
-            <ObservationCard
-              observation={strength}
-              evidenceByRef={evidenceByRef}
-            />
-          )}
-          {attention && (
-            <ObservationCard
-              observation={attention}
-              evidenceByRef={evidenceByRef}
-            />
-          )}
-        </div>
-      )}
+        {employee.peerComparison && (
+          <section className="weekly-review-employee__section weekly-review-employee__section--peer">
+            <h4>Сравнение с командой</h4>
+            <div className="weekly-review-peer">
+              <div>
+                <span>Сотрудник</span>
+                <strong>
+                  {formatValue(
+                    employee.peerComparison.employeeValue,
+                    metrics.netRevenue.unit
+                  )}
+                </strong>
+              </div>
+              <div>
+                <span>Медиана магазина</span>
+                <strong>
+                  {formatValue(
+                    employee.peerComparison.benchmarkValue,
+                    metrics.netRevenue.unit
+                  )}
+                </strong>
+              </div>
+              <small>
+                В сравнении: {employee.peerComparison.eligibleCount} сотрудников
+              </small>
+            </div>
+          </section>
+        )}
+      </div>
 
       {employee.action && <EmployeeAction action={employee.action} />}
 
@@ -861,7 +878,38 @@ function EmployeeDetails({
   );
 }
 
-function EmployeeCard({
+function EmployeeSelector({
+  employee,
+  selected,
+  onSelect
+}: {
+  employee: WeeklyReviewEmployee;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const revenue = employee.metrics.netRevenue;
+  return (
+    <button
+      aria-pressed={selected}
+      className="weekly-review-employee-selector"
+      onClick={onSelect}
+      type="button"
+    >
+      <span className="weekly-review-employee__avatar" aria-hidden="true">
+        {initials(employee.displayName)}
+      </span>
+      <span className="weekly-review-employee__identity">
+        <strong>{employee.displayName}</strong>
+        <small>{formatValue(revenue.current, revenue.unit)}</small>
+      </span>
+      <em className={`weekly-review-tone weekly-review-tone--${metricTone(revenue)}`}>
+        {metricComparisonText(revenue)}
+      </em>
+    </button>
+  );
+}
+
+function EmployeeDetail({
   employee,
   evidenceByRef
 }: {
@@ -869,21 +917,22 @@ function EmployeeCard({
   evidenceByRef: EvidenceIndex;
 }) {
   const revenue = employee.metrics.netRevenue;
-  const additional = employee.metrics.additionalShare;
   return (
-    <details className="weekly-review-employee insight-employee">
-      <summary>
-        <span className="weekly-review-employee__avatar" aria-hidden="true">
-          {initials(employee.displayName)}
-        </span>
-        <span className="weekly-review-employee__identity">
-          <strong>{employee.displayName}</strong>
-          <small>
-            {employee.participatesInBenchmark
-              ? "Участвует в сравнении"
-              : "Вне сравнения команды"}
-          </small>
-        </span>
+    <article className="weekly-review-employee-detail insight-employee">
+      <header className="weekly-review-employee-detail__header">
+        <div>
+          <span className="weekly-review-employee__avatar" aria-hidden="true">
+            {initials(employee.displayName)}
+          </span>
+          <span className="weekly-review-employee__identity">
+            <h3>{employee.displayName}</h3>
+            <small>
+              {employee.participatesInBenchmark
+                ? "Участвует в сравнении"
+                : "Вне сравнения команды"}
+            </small>
+          </span>
+        </div>
         <span className="weekly-review-employee__summary-metric">
           <small>Чистая выручка</small>
           <strong>{formatValue(revenue.current, revenue.unit)}</strong>
@@ -891,14 +940,9 @@ function EmployeeCard({
             {metricComparisonText(revenue)}
           </em>
         </span>
-        <span className="weekly-review-employee__summary-metric">
-          <small>Доля допродаж</small>
-          <strong>{formatValue(additional.current, additional.unit)}</strong>
-        </span>
-        <ChevronDown className="weekly-review-employee__chevron" aria-hidden="true" />
-      </summary>
+      </header>
       <EmployeeDetails employee={employee} evidenceByRef={evidenceByRef} />
-    </details>
+    </article>
   );
 }
 
@@ -910,26 +954,37 @@ function EmployeesSection({
   evidenceByRef: EvidenceIndex;
 }) {
   const [showAll, setShowAll] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(
+    review.employees[0]?.employeePublicId ?? null
+  );
   const visible = showAll
     ? review.employees
     : review.employees.slice(0, EMPLOYEE_PREVIEW_LIMIT);
+  const selectedEmployee = visible.find(
+    (employee) => employee.employeePublicId === selectedEmployeeId
+  ) ?? visible[0] ?? null;
   return (
     <section className="weekly-review-employees" aria-labelledby="weekly-review-employees-title">
       <SectionHeading
         id="weekly-review-employees-title"
-        icon={<Users />}
         title="Сотрудники"
         meta={String(review.employees.length)}
       />
       {visible.length > 0 ? (
-        <div className="weekly-review-employee-list">
-          {visible.map((employee) => (
-          <EmployeeCard
-            employee={employee}
-            evidenceByRef={evidenceByRef}
-            key={employee.employeePublicId}
-          />
-          ))}
+        <div className="weekly-review-employee-workspace">
+          <div className="weekly-review-employee-list" aria-label="Выбор сотрудника">
+            {visible.map((employee) => (
+              <EmployeeSelector
+                employee={employee}
+                key={employee.employeePublicId}
+                onSelect={() => setSelectedEmployeeId(employee.employeePublicId)}
+                selected={employee.employeePublicId === selectedEmployee?.employeePublicId}
+              />
+            ))}
+          </div>
+          {selectedEmployee && (
+            <EmployeeDetail employee={selectedEmployee} evidenceByRef={evidenceByRef} />
+          )}
         </div>
       ) : (
         <p className="weekly-review-section-empty">Нет сотрудников с продажами за эту неделю.</p>
@@ -994,8 +1049,8 @@ function EmptyReview({ onRetry }: { onRetry: () => void }) {
   return (
     <section className="weekly-review-empty" aria-live="polite">
       <span><RefreshCw aria-hidden="true" /></span>
-      <h2>Разбор ещё не сформирован</h2>
-      <p>Он появится после расчёта последней завершённой недели.</p>
+      <h2>Разбор еще не сформирован</h2>
+      <p>Он появится после расчета последней завершенной недели.</p>
       <button type="button" onClick={onRetry}>Проверить снова</button>
     </section>
   );
@@ -1077,7 +1132,7 @@ export function WeeklyReviewView({
 
   const review = query.data;
   return (
-    <article className="weekly-review" aria-label="Разбор завершённой недели">
+    <article className="weekly-review" aria-label="Разбор завершенной недели">
       <ReviewHeader review={review} />
       {review.reportState === "BLOCKED" && <BlockedReview review={review} />}
       {review.reportState === "PREPARING" && <PreparingReview review={review} />}

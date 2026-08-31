@@ -60,7 +60,7 @@ vi.mock("@tanstack/react-query", () => ({
           insight: {
             analysisStatus: "INSUFFICIENT",
             headline: {
-              text: "Сотрудник обслужил определённое количество клиентов.",
+              text: "Сотрудник обслужил определенное количество клиентов.",
               evidenceRefs: ["EV004"]
             },
             workloadContext: {
@@ -135,7 +135,7 @@ vi.mock("@tanstack/react-query", () => ({
           available: false
         }, {
           evidenceCode: "EV004",
-          label: "Завершённые продажи",
+          label: "Завершенные продажи",
           formattedValue: "7",
           previousFormattedValue: "5",
           absoluteDeltaFormatted: "+2",
@@ -176,7 +176,7 @@ describe("weekly insight evidence rendering", () => {
     expect(screen.getByText("Итоги недели")).toBeInTheDocument();
     expect(screen.getByText("Что требует внимания")).toBeInTheDocument();
     expect(screen.getByText(
-      "Возможная причина — её нужно проверить по дополнительным данным."
+      "Возможная причина — ее нужно проверить по дополнительным данным."
     )).toBeInTheDocument();
     expect(screen.getByText("Основание гипотезы")).toBeInTheDocument();
     expect(
@@ -194,7 +194,7 @@ describe("weekly insight evidence rendering", () => {
     render(<WeeklyInsightView storeId="store-1" />);
 
     expect(screen.queryByText(
-      "Сотрудник обслужил определённое количество клиентов."
+      "Сотрудник обслужил определенное количество клиентов."
     )).not.toBeInTheDocument();
     expect(screen.queryByText(
       "Нагрузка сотрудников описана одинаково."
@@ -221,7 +221,7 @@ describe("weekly insight evidence rendering", () => {
     expect(primaryList?.querySelectorAll(
       ".insight-employees__item--mobile-hidden"
     )).toHaveLength(2);
-    const moreButton = screen.getByText("Ещё 2 сотрудника")
+    const moreButton = screen.getByText("Еще 2 сотрудника")
       .closest("button") as HTMLButtonElement;
     expect(moreButton).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(moreButton);
@@ -232,7 +232,7 @@ describe("weekly insight evidence rendering", () => {
       .closest("button");
     expect(collapseButton).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText(
-      "Для 5 из 5 сотрудников пока недостаточно данных для надёжного персонального разбора."
+      "Для 5 из 5 сотрудников пока недостаточно данных для надежного персонального разбора."
     )).toBeInTheDocument();
     expect(screen.getByText("5 сотрудников")).toBeInTheDocument();
     expect(document.querySelectorAll(

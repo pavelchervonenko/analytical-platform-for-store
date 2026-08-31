@@ -107,7 +107,7 @@ function InsightMeta({ insight }: { insight: WeeklyInsight }) {
         <strong>
           {formatDate(insight.period.periodStart)} — {formatDate(insight.period.periodEnd)}
         </strong>
-        <span>Последняя завершённая неделя</span>
+        <span>Последняя завершенная неделя</span>
       </div>
       <div className="insight-meta__details">
         {insight.publishedAt && (
@@ -169,7 +169,7 @@ function employeeSummaryFallback(status: string): string {
   if (status === "LIMITED") {
     return "Разбор ограничен доступными показателями";
   }
-  return "Показатели сотрудника за завершённую неделю";
+  return "Показатели сотрудника за завершенную неделю";
 }
 
 function hasNonZeroValue(value: string): boolean {
@@ -938,7 +938,7 @@ function ReadyInsight({ insight }: { insight: ReadyWeeklyInsight }) {
           </p>
           {limitedEmployeeCount > 0 && (
             <p className="insight-employees__status-summary">
-              Для {limitedEmployeeCount} из {employees.length} сотрудников пока недостаточно данных для надёжного персонального разбора.
+              Для {limitedEmployeeCount} из {employees.length} сотрудников пока недостаточно данных для надежного персонального разбора.
             </p>
           )}
           <div className="insight-employees__list">
@@ -974,7 +974,7 @@ function ReadyInsight({ insight }: { insight: ReadyWeeklyInsight }) {
               <span>
                 {showAllEmployees
                   ? "Скрыть остальных"
-                  : `Ещё ${formatEmployeeCount(remainingEmployees.length)}`}
+                  : `Еще ${formatEmployeeCount(remainingEmployees.length)}`}
               </span>
               <ChevronDown aria-hidden="true" />
             </button>

@@ -12,6 +12,9 @@ requirement_sources:
   - docs/archive/legacy-contracts/AI_WEEKLY_REDESIGN_STAGE2_CONTRACT.md
   - docs/archive/legacy-contracts/weekly-review-ai-management-rubric.md
 implementation_sources:
+  - frontend/src/insights/InsightsPreviewPage.tsx
+  - frontend/src/insights/WeeklyReviewView.tsx
+  - frontend/src/insights/weekly-review.css
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewService.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiContract.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiInputCompactor.java
@@ -134,6 +137,30 @@ deterministic response с состоянием AI: `DISABLED`, `PREPARING`, `DEL
 Frontend показывает legacy weekly insight только когда новый endpoint вернул `404`/`null` или
 завершился ошибкой. Это compatibility fallback всего weekly-review, а не fallback отдельного AI
 слоя.
+
+### Presentation contract
+
+Страница сохраняет manager-first порядок: главный вывод и приоритет недели, ключевые результаты,
+изменения и действия, затем структура продаж, команда, сотрудники и ограничения. Evidence остаётся
+доступным по раскрытию рядом с соответствующим выводом, но не конкурирует с управленческим уровнем.
+
+Frontend показывает `Дополнено ИИ` только когда опубликованный summary действительно имеет
+`generatedBy=AI_ENHANCED` и `aiEnhancement.state=READY`. Во всех остальных состояниях интерфейс
+показывает `Расчет по данным`; отсутствие AI enrichment не маскирует детерминированный отчёт как
+ошибку и не меняет порядок бизнес-блоков.
+
+Пользовательский текст раздела использует только букву `е` в спорных написаниях, включая состояния,
+подписи и резервный legacy-экран.
+
+На desktop блок сотрудников использует master–detail: компактный список с одним главным показателем
+слева и единая область выбранного сотрудника справа. Дополнительные метрики, динамика и сравнение с
+командой образуют один плоский аналитический уровень; вложенные карточки и одновременное раскрытие
+нескольких сотрудников не создают конкурирующую визуальную иерархию.
+
+На tablet и mobile список сотрудников становится горизонтальным селектором над выбранным
+сотрудником. На mobile ключевые результаты остаются сеткой 2×2, статистика команды — строкой из трех
+показателей, а сигналы недели объединяются в один контейнер. Страница не создает горизонтальный
+overflow и сохраняет доступные области нажатия.
 
 ## Telegram boundary
 
