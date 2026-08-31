@@ -6,7 +6,7 @@ owner: project
 audience:
   - developer
   - operator
-last_verified: 2026-08-30
+last_verified: 2026-08-31
 requirement_sources:
   - docs/maintenance/documentation-policy.md
 implementation_sources:
@@ -14,9 +14,9 @@ implementation_sources:
   - deploy/env.production.example
   - backend/src/main/resources/application.yml
 verification_sources:
-  - docs/history/releases/2026/08/v0.1.0-pilot.27-production-verification.md
+  - docs/history/releases/2026/08/v0.1.0-pilot.28-production-verification.md
 runtime_evidence:
-  - docs/history/releases/2026/08/v0.1.0-pilot.27-production-verification.md
+  - docs/history/releases/2026/08/v0.1.0-pilot.28-production-verification.md
 required_reviewers:
   - information-architecture
   - operations
@@ -34,23 +34,23 @@ superseded_by: null
 
 This is the only repository page allowed to summarize the currently verified production release.
 It records an observation, not a live dashboard. Dynamic values below were last observed on
-**2026-08-30** and must be refreshed from sanitized read-only production evidence after every
+**2026-08-31** and must be refreshed from sanitized read-only production evidence after every
 deployment, schema change, relevant flag change or topology change.
 
 ## Verified production snapshot
 
 | Item | Last verified value |
 |---|---|
-| Release | `v0.1.0-pilot.27` |
-| Commit | `ea90ec81c3c33729e86d515e937bd9d82c39e636` |
+| Release | `v0.1.0-pilot.28` |
+| Commit | `f130e0931f746d822e387292149bd57de4d5493e` |
 | Flyway schema | `48` |
 | Topology | `web`, `backend-api`, `backend-worker` |
 | Service health | all three containers healthy at verification time |
-| Backend image | `sha256:ca73220219b27c1aa0b738dedfb19b4d6c3caf2086bb5f146ce214b6769c6feb` |
-| Web image | `sha256:1953f68c53755a0390ffe79233ce6fae7b7deea21c96fa3a3e51b050766b595c` |
+| Backend image | `sha256:275db7f435dfeeb7db499200ee4c63cc14bce73b9e2772173185e10f3449a89f` |
+| Web image | `sha256:7e362208a01d98656300662c714e796e0a5197292c865356b8238c5532f2b82d` |
 
 Full provenance and limits are in the
-[production verification record](../history/releases/2026/08/v0.1.0-pilot.27-production-verification.md).
+[production verification record](../history/releases/2026/08/v0.1.0-pilot.28-production-verification.md).
 
 ## Weekly review
 
@@ -71,6 +71,11 @@ recorded in [the 2026-08-24 release/reconciliation record](../history/releases/2
 That completed operation does not prove that every future or historical discrepancy is absent.
 Future confidence depends on synchronization coverage, webhook processing, source quality and
 period-specific reconciliation.
+
+Release `v0.1.0-pilot.28` assigns newly synchronized or deliberately reprocessed returns to the
+employee of the original sale. It did not run a historical return reprocessing operation. Returns
+whose original sale is not loaded therefore remain unresolved until the missing source periods are
+loaded and a separately approved, scoped reprocessing operation is performed.
 
 ## Known operational limits
 
