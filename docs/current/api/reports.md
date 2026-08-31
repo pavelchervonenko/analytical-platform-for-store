@@ -8,7 +8,7 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/reports.md
+  - docs/archive/legacy-contracts/reports.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/report
   - contracts/openapi/current.json
@@ -25,7 +25,7 @@ review_triggers:
   - report-finalization-change
   - payroll-finalization-change
 supersedes:
-  - docs/reports.md
+  - docs/archive/legacy-contracts/reports.md
 superseded_by: null
 ---
 

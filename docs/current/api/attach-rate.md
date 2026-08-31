@@ -8,7 +8,7 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/attach-rate-api.md
+  - docs/archive/legacy-contracts/attach-rate-api.md
 implementation_sources:
   - backend/src/main/resources/db/migration/V38__attach_rate_units_methodology.sql
   - backend/src/main/java/com/storeanalytics/metrics/service/AttachRateService.java
@@ -26,7 +26,7 @@ review_triggers:
   - attach-rate-category-change
   - return-employee-attribution-change
 supersedes:
-  - docs/attach-rate-api.md
+  - docs/archive/legacy-contracts/attach-rate-api.md
 superseded_by: null
 ---
 

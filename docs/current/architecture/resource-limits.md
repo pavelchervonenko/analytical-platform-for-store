@@ -8,7 +8,7 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/resource-limits.md
+  - docs/archive/legacy-contracts/resource-limits.md
 implementation_sources:
   - backend/src/main/resources/application.yml
   - backend/src/main/java/com/storeanalytics/common/config/ResourceLimitsProperties.java

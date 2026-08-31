@@ -8,7 +8,7 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/store-directory-api.md
+  - docs/archive/legacy-contracts/store-directory-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/store/web/StoreDirectoryController.java
   - backend/src/main/java/com/storeanalytics/store/service/StoreDirectoryService.java
@@ -22,7 +22,7 @@ review_triggers:
   - store-directory-change
   - store-access-change
 supersedes:
-  - docs/store-directory-api.md
+  - docs/archive/legacy-contracts/store-directory-api.md
 superseded_by: null
 ---
 

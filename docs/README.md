@@ -23,7 +23,7 @@ production-состояние хранится только в [current/project-
 - `evidence` — неизменяемый снимок на дату проверки.
 - `archive` — только исторический контекст.
 
-Versioned [prompts](prompts/) и [JSON schemas](schemas/) остаются runtime-артефактами на стабильных
+Versioned [prompts](prompts) и [JSON schemas](schemas) остаются runtime-артефактами на стабильных
 путях. Их нельзя переписывать или перемещать как обычный текст.
 
 ## Поддержка

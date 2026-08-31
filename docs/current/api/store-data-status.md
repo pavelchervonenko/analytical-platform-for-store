@@ -8,7 +8,7 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/store-data-status-api.md
+  - docs/archive/legacy-contracts/store-data-status-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/store/service/StoreDataStatusService.java
   - backend/src/main/java/com/storeanalytics/store/service/StoreDataStatusView.java
@@ -26,7 +26,7 @@ review_triggers:
   - sync-phase-change
   - data-status-dto-change
 supersedes:
-  - docs/store-data-status-api.md
+  - docs/archive/legacy-contracts/store-data-status-api.md
 superseded_by: null
 ---
 

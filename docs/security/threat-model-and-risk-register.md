@@ -8,8 +8,8 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/security-hardening.md
-  - docs/deployment-and-operations.md
+  - docs/archive/legacy-contracts/security-hardening.md
+  - docs/archive/legacy-contracts/deployment-and-operations.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/common/config/SecurityConfig.java
   - deploy/compose.production.yml

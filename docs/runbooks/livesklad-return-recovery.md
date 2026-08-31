@@ -35,7 +35,7 @@ review_triggers:
   - return-normalization-change
   - production-recovery
 supersedes:
-  - docs/validated-return-recovery-runbook.md
+  - docs/archive/legacy-contracts/validated-return-recovery-runbook.md
 superseded_by: null
 ---
 

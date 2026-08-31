@@ -8,7 +8,7 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/livesklad-webhook-receiver.md
+  - docs/archive/legacy-contracts/livesklad-webhook-receiver.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/integration/livesklad/webhook
   - backend/src/main/resources/db/migration/V39.1__add_livesklad_webhook_inbox.sql
@@ -29,7 +29,7 @@ review_triggers:
   - webhook-secret-change
   - webhook-retention-change
 supersedes:
-  - docs/livesklad-webhook-receiver.md
+  - docs/archive/legacy-contracts/livesklad-webhook-receiver.md
 superseded_by: null
 ---
 

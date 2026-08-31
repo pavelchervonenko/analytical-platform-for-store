@@ -1,0 +1,119 @@
+---
+doc_schema: 1
+doc_type: archive
+status: archived
+owner: product
+audience:
+  - developer
+archived_at: 2026-08-31
+superseded_by:
+  - "docs/current/api/product-category-import.md"
+original_content_sha256: 48f6692d51b7a58c822d9df88f76322fa742fcd3f876f846329d2f59465b7c3a
+required_reviewers:
+  - information-architecture
+---
+
+> Archived legacy material preserved for provenance. Current replacements: `docs/current/api/product-category-import.md`.
+
+# Product category import API
+
+Status: implemented ADMIN-only integration endpoint, revalidated on 2026-08-04. It is an
+administrative bootstrap action, not a manager-facing upload screen; see `docs/frontend-actions.md`.
+
+The initial customer-approved product classification is imported through:
+
+```text
+POST /api/integration-connections/{connectionKey}/product-category-imports
+Content-Type: application/json
+```
+
+The prepared payload is `outputs/category-review-approved/product-category-assignments-v3.json`.
+Its active rule version is `customer-approved-2026-08-14-v3`; `validFrom` is
+`2025-12-31T22:00:00Z`, which is `2026-01-01 00:00` in the reporting time zone
+`Europe/Kaliningrad`. Import the classification before the historical sales backfill so each sale
+item captures the approved category snapshot during normalization.
+
+Example request body:
+
+```json
+{
+  "validFrom": "2025-12-31T22:00:00Z",
+  "ruleVersion": "customer-approved-2026-07-20-v1",
+  "changeReason": "Initial customer-approved classification",
+  "assignments": [
+    {
+      "externalProductId": "4310",
+      "productName": "Cable",
+      "categoryCode": "CHARGER_CABLE",
+      "conditionType": "NOT_APPLICABLE"
+    }
+  ]
+}
+```
+
+Successful response:
+
+```json
+{
+  "requested": 1,
+  "productsCreated": 1,
+  "assignmentsCreated": 1,
+  "assignmentsUnchanged": 0
+}
+```
+
+Behavior and invariants:
+
+- the connection must exist, be active, and use `LIVESKLAD`;
+- category codes must exist and be active;
+- `UNMAPPED` is represented by no assignment and cannot be imported explicitly;
+- duplicate `externalProductId` values in one request are rejected;
+- missing products are created as minimal LiveSklad identities and enriched by later sales sync;
+- the entire batch runs in one transaction;
+- repeating the same import is idempotent;
+- an existing different category history causes a conflict and rolls back the whole batch;
+- category snapshots already stored on sale items are never rewritten by this import.
+
+
+## Bootstrap safety and recovery
+
+The admin screen accepts the complete approved artifact as a JSON file, validates it locally and
+fills the effective date, rule version and change reason from its metadata.
+
+Before a backfill, frontend reads GET /api/sync/jobs/backfill-readiness with periodStart. A ready
+response requires at least one approved assignment effective at the reporting-zone start of that
+date. The response also contains effective and total assignment counts, product count and the
+number of active sale items already normalized as UNMAPPED.
+
+Manual backfill returns 409 SYNC_CLASSIFICATION_REQUIRED when readiness is false. The scheduled
+incremental enqueuer skips creation and writes a warning. This is a bootstrap safety barrier. After bootstrap, classification uses two
+ordered layers:
+an effective customer-approved assignment by exact LiveSklad product identity first, then the
+versioned high-confidence rule set `livesklad-product-rules-v6`. A rule result is stored directly in
+the sale or return snapshot with its rule version. Ambiguous names are never forced into a fallback
+category and remain visible as `UNMAPPED` for review.
+
+Rule `v6` narrowly recognizes LiveSklad iPhone names with a missing leading `i` only when the name
+contains a supported model suffix such as `Phone 15 Pro Max`. A generic `Phone 15` phrase is not
+enough to classify a product, which keeps unrelated accessories and free-form names in `UNMAPPED`.
+
+If facts were synchronized before an approved rule release, ordinary assignment import still does
+not silently rewrite historical snapshots. A reviewed one-time reconciliation may update only an
+explicit allowlist of product external IDs and only when the observed active `UNMAPPED` item count
+and the complete distinct-ID set exactly match the approved dry-run. Any mismatch or unresolved
+product rolls back the transaction. The feature is disabled by default and must be disabled again
+immediately after the accepted run. This avoids a provider reload and does not change sales, return,
+quantity or monetary facts; only category/condition snapshots and their matching open data-quality
+issues change. Direct SQL reclassification remains an unapproved operational path. The one-time V32
+migration remains a reviewed repair of the erroneous initial CARE mapping, not a general interface.
+
+Every release that changes `ProductAutoClassificationRuleEngine.RULE_VERSION` must include a dry-run
+against the current active `UNMAPPED` facts. Any newly resolvable facts must be covered by the exact
+external-product-ID allowlist and expected item count in the one-time reconciliation settings. The
+release preflight rejects an enabled reconciliation without both values and also rejects stale scope
+values when reconciliation is disabled. After the worker reports the accepted counts, verify that the
+corresponding `UNMAPPED_PRODUCT` issues are resolved, then disable reconciliation and clear both scope
+values. New sales, orders and unlinked returns are classified by the current rules during persistence;
+the reviewed reconciliation is only for snapshots created before a rule or approved assignment existed.
+
+The endpoint is authenticated and CSRF-protected by the common Spring Security configuration.

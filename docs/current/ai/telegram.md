@@ -9,7 +9,7 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/llm-notifications-design.md
+  - docs/archive/legacy-contracts/llm-notifications-design.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/integration/telegram/web/TelegramWebhookAuthenticationFilter.java
   - backend/src/main/java/com/storeanalytics/notification/linking/TelegramWebhookService.java

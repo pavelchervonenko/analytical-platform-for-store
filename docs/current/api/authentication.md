@@ -8,7 +8,7 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/authentication-api.md
+  - docs/archive/legacy-contracts/authentication-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/auth
   - backend/src/main/java/com/storeanalytics/common/security
@@ -25,7 +25,7 @@ review_triggers:
   - session-change
   - authorization-change
 supersedes:
-  - docs/authentication-api.md
+  - docs/archive/legacy-contracts/authentication-api.md
 superseded_by: null
 ---
 

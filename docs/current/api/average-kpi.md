@@ -8,7 +8,7 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/average-kpi-api.md
+  - docs/archive/legacy-contracts/average-kpi-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics/service/AverageKpiService.java
   - backend/src/main/java/com/storeanalytics/metrics/repository/AverageKpiRepository.java
@@ -25,7 +25,7 @@ review_triggers:
   - average-kpi-change
   - comparison-period-change
 supersedes:
-  - docs/average-kpi-api.md
+  - docs/archive/legacy-contracts/average-kpi-api.md
 superseded_by: null
 ---
 

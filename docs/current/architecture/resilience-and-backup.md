@@ -8,8 +8,8 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/deployment-and-operations.md
-  - docs/data-retention.md
+  - docs/archive/legacy-contracts/deployment-and-operations.md
+  - docs/archive/legacy-contracts/data-retention.md
 implementation_sources:
   - deploy/bin/backup-postgres.sh
   - deploy/backup.env.example

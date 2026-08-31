@@ -8,7 +8,7 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/architecture.md
+  - docs/archive/legacy-contracts/architecture.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics
   - backend/src/main/resources/application.yml
@@ -25,7 +25,7 @@ review_triggers:
   - runtime-role-change
   - scheduler-change
 supersedes:
-  - docs/architecture.md
+  - docs/archive/legacy-contracts/architecture.md
 superseded_by: null
 ---
 

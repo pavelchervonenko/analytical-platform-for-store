@@ -8,8 +8,8 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/employee-rating-api.md
-  - docs/analytics-business-rules-draft.md
+  - docs/archive/legacy-contracts/employee-rating-api.md
+  - docs/archive/discoveries/analytics-business-rules-draft.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics/repository/EmployeeKpiRepository.java
   - backend/src/main/java/com/storeanalytics/performance/service/EmployeeRatingService.java

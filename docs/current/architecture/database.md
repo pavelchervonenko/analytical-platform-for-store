@@ -8,7 +8,7 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/database-design.md
+  - docs/archive/legacy-contracts/database-design.md
 implementation_sources:
   - backend/src/main/resources/db/migration
   - backend/src/main/java/com/storeanalytics
@@ -26,7 +26,7 @@ review_triggers:
   - persistence-model-change
   - retention-change
 supersedes:
-  - docs/database-design.md
+  - docs/archive/legacy-contracts/database-design.md
 superseded_by: null
 ---
 

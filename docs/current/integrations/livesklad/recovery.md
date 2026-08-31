@@ -8,8 +8,8 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/validated-return-recovery-runbook.md
-  - docs/RELEASE_CANDIDATE_2026-08-24.md
+  - docs/archive/legacy-contracts/validated-return-recovery-runbook.md
+  - docs/history/releases/2026/08/RELEASE_CANDIDATE_2026-08-24.md
 implementation_sources:
   - backend/src/main/resources/db/migration/V44__add_validated_return_recovery.sql
   - backend/src/main/java/com/storeanalytics/integration/livesklad/webhook/LiveSkladReturnRecoveryService.java

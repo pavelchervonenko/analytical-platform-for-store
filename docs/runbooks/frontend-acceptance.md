@@ -25,7 +25,7 @@ verification_evidence:
   - level: static
     scope: local checks, visual review and credential boundaries extracted from historical acceptance
     verified_at: 2026-08-31
-    evidence: docs/FRONTEND_ACCEPTANCE.md
+    evidence: docs/history/audits/2026/08/FRONTEND_ACCEPTANCE.md
 required_reviewers:
   - frontend
   - product

@@ -8,7 +8,7 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/CUSTOMER_KPI_FORMULA_AUDIT_2026-08-13.md
+  - docs/history/audits/2026/08/CUSTOMER_KPI_FORMULA_AUDIT_2026-08-13.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/sync/service/SalesSyncPersistence.java
   - backend/src/main/java/com/storeanalytics/sync/service/ReturnSyncPersistence.java

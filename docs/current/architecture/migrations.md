@@ -8,7 +8,7 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/database-design.md
+  - docs/archive/legacy-contracts/database-design.md
   - docs/maintenance/documentation-policy.md
 implementation_sources:
   - backend/src/main/resources/db/migration

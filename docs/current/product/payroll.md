@@ -8,8 +8,8 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/payroll-api.md
-  - docs/payroll-classification-review.md
+  - docs/archive/legacy-contracts/payroll-api.md
+  - docs/history/audits/2026/08/payroll-classification-review.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/salary/service/PayrollComputationEngine.java
   - backend/src/main/java/com/storeanalytics/salary/service/PayrollCalculationService.java

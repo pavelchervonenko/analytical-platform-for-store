@@ -9,8 +9,8 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/AI_WEEKLY_REDESIGN_STAGE2_CONTRACT.md
-  - docs/weekly-review-ai-management-rubric.md
+  - docs/archive/legacy-contracts/AI_WEEKLY_REDESIGN_STAGE2_CONTRACT.md
+  - docs/archive/legacy-contracts/weekly-review-ai-management-rubric.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewService.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiContract.java

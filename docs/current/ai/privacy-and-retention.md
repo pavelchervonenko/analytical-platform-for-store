@@ -9,7 +9,7 @@ audience:
 last_verified: 2026-08-31
 requirement_sources:
   - docs/maintenance/documentation-policy.md
-  - docs/data-retention.md
+  - docs/archive/legacy-contracts/data-retention.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiInputCompactor.java
   - backend/src/main/java/com/storeanalytics/interpretation/generation/LlmProviderInputCompactor.java

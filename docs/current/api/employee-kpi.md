@@ -8,7 +8,7 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/employee-kpi-api.md
+  - docs/archive/legacy-contracts/employee-kpi-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics/service/EmployeeKpiService.java
   - backend/src/main/java/com/storeanalytics/metrics/repository/EmployeeKpiRepository.java
@@ -27,7 +27,7 @@ review_triggers:
   - return-employee-attribution-change
   - employee-scope-change
 supersedes:
-  - docs/employee-kpi-api.md
+  - docs/archive/legacy-contracts/employee-kpi-api.md
 superseded_by: null
 ---
 

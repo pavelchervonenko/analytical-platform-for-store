@@ -6,7 +6,7 @@
 эксплуатация, отказоустойчивость и сценарии злоупотребления.
 
 Нормативный источник решений по инфраструктуре и эксплуатации —
-`docs/deployment-and-operations.md`, прежде всего разделы 21–29. Настоящий аудит не предлагает
+`docs/archive/legacy-contracts/deployment-and-operations.md`, прежде всего разделы 21–29. Настоящий аудит не предлагает
 альтернативную схему деплоя: он показывает, какие части выбранной схемы уже реализованы, какие ещё
 нужно реализовать и каким доказательством закрывается каждый риск. При расхождении приоритет имеет
 поддерживаемый документ в `docs/`.
@@ -583,7 +583,7 @@ Email, client IP, user и audit target уходят только как domain-s
 `BREAK_GLASS_USER_IDS` задаёт только UUID аварийных аккаунтов. Каждый их успешный login создаёт
 `BREAK_GLASS_LOGIN_SUCCEEDED` в immutable audit, bounded counter и pseudonymous WARN event.
 Сценарии lost admin, compromised admin и будущей потери MFA factors описаны в
-`docs/bootstrap-and-break-glass.md`.
+`docs/archive/legacy-contracts/bootstrap-and-break-glass.md`.
 
 Осталось в deployment: one-time config-tree mounts, физическое удаление/rotation bootstrap files,
 alert routing/rehearsal и подготовленный customer-owned break-glass credential. Application MFA
@@ -733,13 +733,13 @@ understated length не обходят границу. Переполнение 
 Остаток P2-06 является deployment/staging acceptance gate: выполнить сценарий на
 production-подобной кардинальности одновременно с реальным sync job, подобрать API/worker pool
 значения относительно лимита PostgreSQL и приложить k6/Prometheus/PostgreSQL evidence. Локальный
-пустой database run не считается таким доказательством. Детали — `docs/resource-limits.md`.
+пустой database run не считается таким доказательством. Детали — `docs/archive/legacy-contracts/resource-limits.md`.
 
 ### P2-07. Retention и privacy
 
 Статус backend-среза на 2026-07-27: завершён. LiveSklad raw больше не сохраняется целиком:
 entity-specific closed allowlist применяется до byte limit, SHA-256 и persistence. Инвентарь
-разрешённых полей и их назначение зафиксированы в `docs/data-retention.md`; неизвестные поля
+разрешённых полей и их назначение зафиксированы в `docs/archive/legacy-contracts/data-retention.md`; неизвестные поля
 рекурсивно отбрасываются, а неожиданная структура разрешённого поля отклоняется без вывода
 значения. Hash/dedup относится именно к сохраняемой проекции.
 

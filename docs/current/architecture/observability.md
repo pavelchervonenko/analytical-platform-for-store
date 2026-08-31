@@ -8,7 +8,7 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/observability.md
+  - docs/archive/legacy-contracts/observability.md
 implementation_sources:
   - backend/src/main/resources/application.yml
   - backend/src/main/java/com/storeanalytics/common/observability

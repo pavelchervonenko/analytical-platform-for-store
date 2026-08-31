@@ -4,7 +4,7 @@
 Исходный аудит: `BACKEND_STARTUP_SYNC_REGRESSION_AUDIT.md`
 Область: backend, sync jobs, LiveSklad, OpenAPI, runtime reproducibility
 
-Тематические документы в `docs/` актуализированы; `docs/llm-notifications-design.md` не изменялся. `.env` не открывался. Существующие незакоммиченные изменения не откатывались.
+Тематические документы в `docs/` актуализированы; `docs/archive/legacy-contracts/llm-notifications-design.md` не изменялся. `.env` не открывался. Существующие незакоммиченные изменения не откатывались.
 
 ## Результат
 

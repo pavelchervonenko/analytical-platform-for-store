@@ -8,7 +8,7 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/livesklad-api-docs.md
+  - docs/archive/legacy-contracts/livesklad-api-docs.md
 implementation_sources:
   - scripts/livesklad-discovery
   - backend/src/main/java/com/storeanalytics/integration/livesklad/client
@@ -24,7 +24,7 @@ review_triggers:
   - livesklad-client-change
   - fixture-change
 supersedes:
-  - docs/livesklad-api-docs.md
+  - docs/archive/legacy-contracts/livesklad-api-docs.md
 superseded_by: null
 ---
 

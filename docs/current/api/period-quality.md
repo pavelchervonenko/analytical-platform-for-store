@@ -8,7 +8,7 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/period-quality-api.md
+  - docs/archive/legacy-contracts/period-quality-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/quality/service/StorePeriodQualityService.java
   - backend/src/main/java/com/storeanalytics/quality/web/StorePeriodQualityController.java
@@ -25,7 +25,7 @@ review_triggers:
   - readiness-change
   - quality-severity-change
 supersedes:
-  - docs/period-quality-api.md
+  - docs/archive/legacy-contracts/period-quality-api.md
 superseded_by: null
 ---
 

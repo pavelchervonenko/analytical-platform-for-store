@@ -8,8 +8,8 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/analytics-business-rules-draft.md
-  - docs/CUSTOMER_KPI_FORMULA_AUDIT_2026-08-13.md
+  - docs/archive/discoveries/analytics-business-rules-draft.md
+  - docs/history/audits/2026/08/CUSTOMER_KPI_FORMULA_AUDIT_2026-08-13.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics
   - backend/src/main/java/com/storeanalytics/performance

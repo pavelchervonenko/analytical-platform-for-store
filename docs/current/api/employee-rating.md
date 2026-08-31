@@ -8,7 +8,7 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/employee-rating-api.md
+  - docs/archive/legacy-contracts/employee-rating-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/performance/service/EmployeeRatingService.java
   - backend/src/main/java/com/storeanalytics/performance/service/EmployeeRatingFinalizationService.java
@@ -27,7 +27,7 @@ review_triggers:
   - rating-roster-change
   - return-employee-attribution-change
 supersedes:
-  - docs/employee-rating-api.md
+  - docs/archive/legacy-contracts/employee-rating-api.md
 superseded_by: null
 ---
 

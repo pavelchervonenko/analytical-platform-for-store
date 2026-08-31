@@ -8,7 +8,7 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/store-kpi-api.md
+  - docs/archive/legacy-contracts/store-kpi-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics/service/StoreKpiService.java
   - backend/src/main/java/com/storeanalytics/metrics/repository/StoreKpiRepository.java
@@ -26,7 +26,7 @@ review_triggers:
   - return-sign-change
   - cost-quality-change
 supersedes:
-  - docs/store-kpi-api.md
+  - docs/archive/legacy-contracts/store-kpi-api.md
 superseded_by: null
 ---
 

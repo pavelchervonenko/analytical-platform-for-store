@@ -8,8 +8,8 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/security-hardening.md
-  - docs/bootstrap-and-break-glass.md
+  - docs/archive/legacy-contracts/security-hardening.md
+  - docs/archive/legacy-contracts/bootstrap-and-break-glass.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/auth
   - backend/src/main/java/com/storeanalytics/common/config/SecurityConfig.java

@@ -8,8 +8,8 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/audit-log.md
-  - docs/observability.md
+  - docs/archive/legacy-contracts/audit-log.md
+  - docs/archive/legacy-contracts/observability.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/audit
   - backend/src/main/java/com/storeanalytics/common/observability/SiemAuditEvent.java

@@ -8,8 +8,8 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/attach-rate-api.md
-  - docs/analytics-business-rules-draft.md
+  - docs/archive/legacy-contracts/attach-rate-api.md
+  - docs/archive/discoveries/analytics-business-rules-draft.md
 implementation_sources:
   - backend/src/main/resources/db/migration/V38__attach_rate_units_methodology.sql
   - backend/src/main/java/com/storeanalytics/metrics/service/AttachRateService.java

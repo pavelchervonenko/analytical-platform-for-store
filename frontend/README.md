@@ -122,7 +122,7 @@ E2E_MUTATING=true E2E_ADMIN_EMAIL=... E2E_ADMIN_PASSWORD=... npx playwright test
 ```
 
 Exact scope, latest results, intentional skips and known risks are recorded in
-`docs/FRONTEND_ACCEPTANCE.md`.
+`docs/history/audits/2026/08/FRONTEND_ACCEPTANCE.md`.
 
 Failure artifacts contain screenshots and traces but no video. Treat them as access-controlled CI
 artifacts because rendered business data can be sensitive.

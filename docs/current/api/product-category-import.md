@@ -8,7 +8,7 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/product-category-import-api.md
+  - docs/archive/legacy-contracts/product-category-import-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/product/service/ProductCategoryImportService.java
   - backend/src/main/java/com/storeanalytics/product/web/ProductCategoryImportController.java
@@ -25,7 +25,7 @@ review_triggers:
   - category-code-change
   - integration-connection-change
 supersedes:
-  - docs/product-category-import-api.md
+  - docs/archive/legacy-contracts/product-category-import-api.md
 superseded_by: null
 ---
 

@@ -8,7 +8,7 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/supply-chain-security.md
+  - docs/archive/legacy-contracts/supply-chain-security.md
 implementation_sources:
   - .github/workflows/ci.yml
   - .github/workflows/release-images.yml

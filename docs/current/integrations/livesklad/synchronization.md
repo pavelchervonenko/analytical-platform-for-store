@@ -8,7 +8,7 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/synchronization-api.md
+  - docs/archive/legacy-contracts/synchronization-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/sync
   - backend/src/main/resources/application.yml
@@ -28,7 +28,7 @@ review_triggers:
   - retry-policy-change
   - livesklad-client-change
 supersedes:
-  - docs/synchronization-api.md
+  - docs/archive/legacy-contracts/synchronization-api.md
 superseded_by: null
 ---
 

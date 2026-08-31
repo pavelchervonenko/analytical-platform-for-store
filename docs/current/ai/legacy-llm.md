@@ -8,8 +8,8 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/llm-notifications-design.md
-  - docs/llm-interpretation-publication.md
+  - docs/archive/legacy-contracts/llm-notifications-design.md
+  - docs/archive/legacy-contracts/llm-interpretation-publication.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/interpretation/contract/LlmContractResources.java
   - backend/src/main/java/com/storeanalytics/interpretation/generation/LlmAnalysisJobWorker.java

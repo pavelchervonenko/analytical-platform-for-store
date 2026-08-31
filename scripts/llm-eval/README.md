@@ -14,7 +14,7 @@ Dry-run не обращается к YandexGPT, production, публикации
 - production default по-прежнему v4/schema 2.
 
 Подробный handoff:
-[`AI_INTERPRETATION_V21_WEEKLY_CANARY_2026-08-17.md`](../../docs/AI_INTERPRETATION_V21_WEEKLY_CANARY_2026-08-17.md).
+[`AI_INTERPRETATION_V21_WEEKLY_CANARY_2026-08-17.md`](../../docs/history/canaries/2026/08/AI_INTERPRETATION_V21_WEEKLY_CANARY_2026-08-17.md).
 
 ## Состав
 

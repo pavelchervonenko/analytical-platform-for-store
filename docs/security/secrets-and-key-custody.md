@@ -8,8 +8,8 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/security-hardening.md
-  - docs/deployment-and-operations.md
+  - docs/archive/legacy-contracts/security-hardening.md
+  - docs/archive/legacy-contracts/deployment-and-operations.md
 implementation_sources:
   - deploy/compose.production.yml
   - deploy/env.production.example

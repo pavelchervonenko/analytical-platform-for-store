@@ -8,7 +8,7 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/error-handling.md
+  - docs/archive/legacy-contracts/error-handling.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/common/web
   - backend/src/main/java/com/storeanalytics/common/exception
@@ -26,7 +26,7 @@ review_triggers:
   - security-writer-change
   - request-filter-change
 supersedes:
-  - docs/error-handling.md
+  - docs/archive/legacy-contracts/error-handling.md
 superseded_by: null
 ---
 

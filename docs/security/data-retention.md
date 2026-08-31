@@ -8,7 +8,7 @@ audience:
   - operator
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/data-retention.md
+  - docs/archive/legacy-contracts/data-retention.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/common/config/DataRetentionProperties.java
   - backend/src/main/java/com/storeanalytics/maintenance

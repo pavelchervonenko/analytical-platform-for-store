@@ -66,7 +66,7 @@ not be removed until the fallback and its Telegram dependencies are deliberately
 
 The validated recovery of the eight known July sale returns is **completed — do not rerun**.
 Post-recovery July reconciliation matched the supplied CRM totals for both stores. The evidence is
-recorded in [the 2026-08-24 release/reconciliation record](../RELEASE_CANDIDATE_2026-08-24.md#production-preflight-от-2026-08-25).
+recorded in [the 2026-08-24 release/reconciliation record](../history/releases/2026/08/RELEASE_CANDIDATE_2026-08-24.md#production-preflight-от-2026-08-25).
 
 That completed operation does not prove that every future or historical discrepancy is absent.
 Future confidence depends on synchronization coverage, webhook processing, source quality and

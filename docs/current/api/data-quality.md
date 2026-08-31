@@ -8,7 +8,7 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/data-quality-api.md
+  - docs/archive/legacy-contracts/data-quality-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/quality/service/DataQualityService.java
   - backend/src/main/java/com/storeanalytics/quality/web/DataQualityController.java
@@ -25,7 +25,7 @@ review_triggers:
   - recommended-action-change
   - freshness-rule-change
 supersedes:
-  - docs/data-quality-api.md
+  - docs/archive/legacy-contracts/data-quality-api.md
 superseded_by: null
 ---
 

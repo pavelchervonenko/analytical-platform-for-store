@@ -8,7 +8,7 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/payroll-api.md
+  - docs/archive/legacy-contracts/payroll-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/salary
   - contracts/openapi/current.json
@@ -26,7 +26,7 @@ review_triggers:
   - payroll-state-change
   - payroll-classification-change
 supersedes:
-  - docs/payroll-api.md
+  - docs/archive/legacy-contracts/payroll-api.md
 superseded_by: null
 ---
 

@@ -1,7 +1,7 @@
 ---
 doc_schema: 1
 doc_type: working
-status: draft
+status: closed
 owner: project
 audience:
   - developer
@@ -146,3 +146,10 @@ exit_target: archive
 source/verification metadata и repository scripts. Точный список формируется поиском по 105 исходным
 путям из этой таблицы; перенос не принимается, пока строгая проверка ссылок и повторный поиск не
 возвращают ноль старых ссылок вне tombstone-строк inventory, этой карты и reviewer sign-off.
+
+## Итог
+
+Перенос завершён 2026-08-31 и независимо проверен в
+`docs/history/audits/2026/08/documentation-archive-signoff.md`: 105/105 путей перенесены,
+коллизий и недопустимых изменений содержания нет, локальные ссылки проходят строгую проверку.
+Versioned runtime-артефакты не перемещались.

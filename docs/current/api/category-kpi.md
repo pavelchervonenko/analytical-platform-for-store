@@ -8,7 +8,7 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/category-kpi-api.md
+  - docs/archive/legacy-contracts/category-kpi-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics/service/CategoryKpiService.java
   - backend/src/main/java/com/storeanalytics/metrics/repository/CategoryKpiRepository.java
@@ -26,7 +26,7 @@ review_triggers:
   - analytics-category-change
   - group-definition-change
 supersedes:
-  - docs/category-kpi-api.md
+  - docs/archive/legacy-contracts/category-kpi-api.md
 superseded_by: null
 ---
 

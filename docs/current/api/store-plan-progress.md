@@ -8,7 +8,7 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/store-plan-progress-api.md
+  - docs/archive/legacy-contracts/store-plan-progress-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/performance/service/StorePlanProgressService.java
   - backend/src/main/java/com/storeanalytics/performance/web/StorePlanProgressController.java
@@ -26,7 +26,7 @@ review_triggers:
   - period-scope-change
   - plan-dto-change
 supersedes:
-  - docs/store-plan-progress-api.md
+  - docs/archive/legacy-contracts/store-plan-progress-api.md
 superseded_by: null
 ---
 

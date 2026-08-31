@@ -8,7 +8,7 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/employee-category-kpi-api.md
+  - docs/archive/legacy-contracts/employee-category-kpi-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics/service/EmployeeCategoryKpiService.java
   - backend/src/main/java/com/storeanalytics/metrics/repository/EmployeeCategoryKpiRepository.java
@@ -25,7 +25,7 @@ review_triggers:
   - employee-category-kpi-change
   - return-employee-attribution-change
 supersedes:
-  - docs/employee-category-kpi-api.md
+  - docs/archive/legacy-contracts/employee-category-kpi-api.md
 superseded_by: null
 ---
 

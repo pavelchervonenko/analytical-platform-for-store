@@ -8,8 +8,8 @@ audience:
   - manager
 last_verified: 2026-08-31
 requirement_sources:
-  - docs/analytics-business-rules-draft.md
-  - docs/payroll-classification-review.md
+  - docs/archive/discoveries/analytics-business-rules-draft.md
+  - docs/history/audits/2026/08/payroll-classification-review.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/product/model/AnalyticsCategory.java
   - backend/src/main/java/com/storeanalytics/product/service/ProductClassificationResolver.java
