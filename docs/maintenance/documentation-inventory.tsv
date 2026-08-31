@@ -24,6 +24,7 @@ docs/RELEASE_CANDIDATE_2026-08-24.md	tracked	release-recovery-record	operations	
 docs/pilot-rollout-status.md	tracked	status-snapshot	operations	stale	history	docs/history/releases/2026/08/	Must not remain a current production source
 docs/maintenance/documentation-reform-plan.md	tracked	maintenance-plan	project	working-active	keep	docs/maintenance/documentation-reform-plan.md	Update only at phase checkpoints and archive after the reform closes
 docs/maintenance/documentation-warning-baseline.txt	tracked	verification-baseline	project	transitional	keep	docs/maintenance/documentation-warning-baseline.txt	New warnings must be allowlisted explicitly; remove obsolete allowlist entries during stage 8 strict-mode cleanup
+docs/maintenance/backup-fragment-map.md	tracked	backup-fragment-map	project	current	keep	docs/maintenance/backup-fragment-map.md	Keep with deletion sign-off evidence and tombstones after backup artifacts are removed
 docs/maintenance/documentation-inventory.md	tracked	inventory-guide	project	current	keep	docs/maintenance/documentation-inventory.md	Keep synchronized with the TSV registry
 docs/maintenance/documentation-inventory.tsv	tracked	inventory-registry	project	current	keep	docs/maintenance/documentation-inventory.tsv	Completeness check must compare this column with filesystem scope
 docs/maintenance/documentation-policy.md	tracked	documentation-policy	project	current	keep	docs/maintenance/documentation-policy.md	Verify lifecycle metadata and source-of-truth rules at every structural change
@@ -181,3 +182,91 @@ docs/schemas/weekly-review-ai-input-v2.schema.json	tracked	runtime-schema	ai	run
 docs/schemas/weekly-review-ai-input-v3.schema.json	tracked	runtime-schema	ai	runtime-versioned	runtime-keep	docs/schemas/weekly-review-ai-input-v3.schema.json	Immutable packaged artifact; verify references before any move
 docs/schemas/weekly-review-ai-input-v4.schema.json	tracked	runtime-schema	ai	runtime-versioned	runtime-keep	docs/schemas/weekly-review-ai-input-v4.schema.json	Active packaged schema; verify manifest hash before any move
 docs/schemas/weekly-review-ai-selection-v1.schema.json	tracked	runtime-schema	ai	runtime-versioned	runtime-keep	docs/schemas/weekly-review-ai-selection-v1.schema.json	Active packaged schema; verify manifest hash before any move
+docs/current/README.md	tracked	domain-index	project	current	keep	docs/current/README.md	Keep navigation complete and synchronized with canonical documents
+docs/current/ai/README.md	tracked	domain-index	ai	current	keep	docs/current/ai/README.md	Keep navigation complete and synchronized with canonical documents
+docs/current/ai/legacy-llm.md	tracked	current-contract	ai	current	keep	docs/current/ai/legacy-llm.md	Review implementation and verification sources in the same behavior change
+docs/current/ai/privacy-and-retention.md	tracked	current-contract	ai	current	keep	docs/current/ai/privacy-and-retention.md	Review implementation and verification sources in the same behavior change
+docs/current/ai/providers/yandexgpt.md	tracked	current-contract	ai	current	keep	docs/current/ai/providers/yandexgpt.md	Review implementation and verification sources in the same behavior change
+docs/current/ai/runtime-artifacts.md	tracked	current-contract	ai	current	keep	docs/current/ai/runtime-artifacts.md	Review implementation and verification sources in the same behavior change
+docs/current/ai/telegram.md	tracked	current-contract	ai	current	keep	docs/current/ai/telegram.md	Review implementation and verification sources in the same behavior change
+docs/current/ai/weekly-review.md	tracked	current-contract	ai	current	keep	docs/current/ai/weekly-review.md	Review implementation and verification sources in the same behavior change
+docs/current/api/README.md	tracked	domain-index	backend	current	keep	docs/current/api/README.md	Keep navigation complete and synchronized with canonical documents
+docs/current/api/attach-rate.md	tracked	current-contract	backend	current	keep	docs/current/api/attach-rate.md	Review implementation and verification sources in the same behavior change
+docs/current/api/authentication.md	tracked	current-contract	backend	current	keep	docs/current/api/authentication.md	Review implementation and verification sources in the same behavior change
+docs/current/api/average-kpi.md	tracked	current-contract	backend	current	keep	docs/current/api/average-kpi.md	Review implementation and verification sources in the same behavior change
+docs/current/api/category-kpi.md	tracked	current-contract	backend	current	keep	docs/current/api/category-kpi.md	Review implementation and verification sources in the same behavior change
+docs/current/api/data-quality.md	tracked	current-contract	backend	current	keep	docs/current/api/data-quality.md	Review implementation and verification sources in the same behavior change
+docs/current/api/employee-category-kpi.md	tracked	current-contract	backend	current	keep	docs/current/api/employee-category-kpi.md	Review implementation and verification sources in the same behavior change
+docs/current/api/employee-kpi.md	tracked	current-contract	backend	current	keep	docs/current/api/employee-kpi.md	Review implementation and verification sources in the same behavior change
+docs/current/api/employee-rating.md	tracked	current-contract	backend	current	keep	docs/current/api/employee-rating.md	Review implementation and verification sources in the same behavior change
+docs/current/api/payroll.md	tracked	current-contract	backend	current	keep	docs/current/api/payroll.md	Review implementation and verification sources in the same behavior change
+docs/current/api/period-quality.md	tracked	current-contract	backend	current	keep	docs/current/api/period-quality.md	Review implementation and verification sources in the same behavior change
+docs/current/api/product-category-import.md	tracked	current-contract	backend	current	keep	docs/current/api/product-category-import.md	Review implementation and verification sources in the same behavior change
+docs/current/api/reports.md	tracked	current-contract	backend	current	keep	docs/current/api/reports.md	Review implementation and verification sources in the same behavior change
+docs/current/api/store-data-status.md	tracked	current-contract	backend	current	keep	docs/current/api/store-data-status.md	Review implementation and verification sources in the same behavior change
+docs/current/api/store-directory.md	tracked	current-contract	backend	current	keep	docs/current/api/store-directory.md	Review implementation and verification sources in the same behavior change
+docs/current/api/store-kpi.md	tracked	current-contract	backend	current	keep	docs/current/api/store-kpi.md	Review implementation and verification sources in the same behavior change
+docs/current/api/store-plan-progress.md	tracked	current-contract	backend	current	keep	docs/current/api/store-plan-progress.md	Review implementation and verification sources in the same behavior change
+docs/current/architecture/application.md	tracked	current-contract	backend	current	keep	docs/current/architecture/application.md	Review implementation and verification sources in the same behavior change
+docs/current/architecture/audit-and-telemetry.md	tracked	current-contract	security	current	keep	docs/current/architecture/audit-and-telemetry.md	Review implementation and verification sources in the same behavior change
+docs/current/architecture/database.md	tracked	current-contract	backend	current	keep	docs/current/architecture/database.md	Review implementation and verification sources in the same behavior change
+docs/current/architecture/error-handling.md	tracked	current-contract	backend	current	keep	docs/current/architecture/error-handling.md	Review implementation and verification sources in the same behavior change
+docs/current/architecture/migrations.md	tracked	current-contract	backend	current	keep	docs/current/architecture/migrations.md	Review implementation and verification sources in the same behavior change
+docs/current/architecture/observability.md	tracked	current-contract	operations	current	keep	docs/current/architecture/observability.md	Review implementation and verification sources in the same behavior change
+docs/current/architecture/resilience-and-backup.md	tracked	current-contract	operations	current	keep	docs/current/architecture/resilience-and-backup.md	Review implementation and verification sources in the same behavior change
+docs/current/architecture/resource-limits.md	tracked	current-contract	operations	current	keep	docs/current/architecture/resource-limits.md	Review implementation and verification sources in the same behavior change
+docs/current/frontend/README.md	tracked	domain-index	frontend	current	keep	docs/current/frontend/README.md	Keep navigation complete and synchronized with canonical documents
+docs/current/frontend/data-quality-actions.md	tracked	current-contract	frontend	current	keep	docs/current/frontend/data-quality-actions.md	Review implementation and verification sources in the same behavior change
+docs/current/frontend/employees.md	tracked	current-contract	frontend	current	keep	docs/current/frontend/employees.md	Review implementation and verification sources in the same behavior change
+docs/current/frontend/overview.md	tracked	current-contract	frontend	current	keep	docs/current/frontend/overview.md	Review implementation and verification sources in the same behavior change
+docs/current/frontend/payroll-and-reports.md	tracked	current-contract	frontend	current	keep	docs/current/frontend/payroll-and-reports.md	Review implementation and verification sources in the same behavior change
+docs/current/frontend/period-and-scope-contract.md	tracked	current-contract	frontend	current	keep	docs/current/frontend/period-and-scope-contract.md	Review implementation and verification sources in the same behavior change
+docs/current/frontend/plan-and-shifts.md	tracked	current-contract	frontend	current	keep	docs/current/frontend/plan-and-shifts.md	Review implementation and verification sources in the same behavior change
+docs/current/frontend/sales-structure-and-attach-map.md	tracked	current-contract	frontend	current	keep	docs/current/frontend/sales-structure-and-attach-map.md	Review implementation and verification sources in the same behavior change
+docs/current/frontend/transport-contracts.md	tracked	current-contract	frontend	current	keep	docs/current/frontend/transport-contracts.md	Review implementation and verification sources in the same behavior change
+docs/current/integrations/livesklad/observed-api.md	tracked	current-contract	integrations	current	keep	docs/current/integrations/livesklad/observed-api.md	Review implementation and verification sources in the same behavior change
+docs/current/integrations/livesklad/recovery.md	tracked	current-contract	integrations	current	keep	docs/current/integrations/livesklad/recovery.md	Review implementation and verification sources in the same behavior change
+docs/current/integrations/livesklad/synchronization.md	tracked	current-contract	integrations	current	keep	docs/current/integrations/livesklad/synchronization.md	Review implementation and verification sources in the same behavior change
+docs/current/integrations/livesklad/webhooks.md	tracked	current-contract	integrations	current	keep	docs/current/integrations/livesklad/webhooks.md	Review implementation and verification sources in the same behavior change
+docs/current/product/README.md	tracked	domain-index	product	current	keep	docs/current/product/README.md	Keep navigation complete and synchronized with canonical documents
+docs/current/product/attach-rate.md	tracked	current-contract	product	current	keep	docs/current/product/attach-rate.md	Review implementation and verification sources in the same behavior change
+docs/current/product/business-metrics.md	tracked	current-contract	product	current	keep	docs/current/product/business-metrics.md	Review implementation and verification sources in the same behavior change
+docs/current/product/classification.md	tracked	current-contract	product	current	keep	docs/current/product/classification.md	Review implementation and verification sources in the same behavior change
+docs/current/product/data-quality.md	tracked	current-contract	product	current	keep	docs/current/product/data-quality.md	Review implementation and verification sources in the same behavior change
+docs/current/product/employees-and-rating.md	tracked	current-contract	product	current	keep	docs/current/product/employees-and-rating.md	Review implementation and verification sources in the same behavior change
+docs/current/product/payroll.md	tracked	current-contract	product	current	keep	docs/current/product/payroll.md	Review implementation and verification sources in the same behavior change
+docs/current/product/periods.md	tracked	current-contract	product	current	keep	docs/current/product/periods.md	Review implementation and verification sources in the same behavior change
+docs/current/product/plans-and-shifts.md	tracked	current-contract	product	current	keep	docs/current/product/plans-and-shifts.md	Review implementation and verification sources in the same behavior change
+docs/current/product/reports.md	tracked	current-contract	product	current	keep	docs/current/product/reports.md	Review implementation and verification sources in the same behavior change
+docs/current/product/sales-and-returns.md	tracked	current-contract	product	current	keep	docs/current/product/sales-and-returns.md	Review implementation and verification sources in the same behavior change
+docs/decisions/ADR-0001-return-employee-attribution.md	tracked	architecture-decision	product	proposed	keep	docs/decisions/ADR-0001-return-employee-attribution.md	Do not treat proposed decision as implemented until acceptance gates pass
+docs/decisions/ADR-0002-overview-period-scope.md	tracked	architecture-decision	product	proposed	keep	docs/decisions/ADR-0002-overview-period-scope.md	Do not treat proposed decision as implemented until acceptance gates pass
+docs/decisions/README.md	tracked	domain-index	project	current	keep	docs/decisions/README.md	Keep navigation complete and synchronized with canonical documents
+docs/runbooks/README.md	tracked	domain-index	operations	current	keep	docs/runbooks/README.md	Keep navigation complete and synchronized with canonical documents
+docs/runbooks/access-and-break-glass.md	tracked	runbook	security	draft	keep	docs/runbooks/access-and-break-glass.md	Rehearse required levels before changing draft to current
+docs/runbooks/ai-evaluation.md	tracked	runbook	ai	draft	keep	docs/runbooks/ai-evaluation.md	Rehearse required levels before changing draft to current
+docs/runbooks/alert-response.md	tracked	runbook	operations	draft	keep	docs/runbooks/alert-response.md	Rehearse required levels before changing draft to current
+docs/runbooks/application-rollback.md	tracked	runbook	operations	draft	keep	docs/runbooks/application-rollback.md	Rehearse required levels before changing draft to current
+docs/runbooks/backup-restore-and-dr.md	tracked	runbook	operations	draft	keep	docs/runbooks/backup-restore-and-dr.md	Rehearse required levels before changing draft to current
+docs/runbooks/daily-store-pulse.md	tracked	runbook	ai	draft	keep	docs/runbooks/daily-store-pulse.md	Rehearse required levels before changing draft to current
+docs/runbooks/database-acl-repair.md	tracked	runbook	operations	draft	keep	docs/runbooks/database-acl-repair.md	Rehearse required levels before changing draft to current
+docs/runbooks/host-rebuild.md	tracked	runbook	operations	draft	keep	docs/runbooks/host-rebuild.md	Rehearse required levels before changing draft to current
+docs/runbooks/incident-response.md	tracked	runbook	operations	draft	keep	docs/runbooks/incident-response.md	Rehearse required levels before changing draft to current
+docs/runbooks/legacy-llm.md	tracked	runbook	ai	draft	keep	docs/runbooks/legacy-llm.md	Rehearse required levels before changing draft to current
+docs/runbooks/livesklad-return-recovery.md	tracked	runbook	integrations	draft	keep	docs/runbooks/livesklad-return-recovery.md	Rehearse required levels before changing draft to current
+docs/runbooks/livesklad-webhooks.md	tracked	runbook	integrations	draft	keep	docs/runbooks/livesklad-webhooks.md	Rehearse required levels before changing draft to current
+docs/runbooks/migration-failure-and-forward-fix.md	tracked	runbook	operations	draft	keep	docs/runbooks/migration-failure-and-forward-fix.md	Rehearse required levels before changing draft to current
+docs/runbooks/production-deployment.md	tracked	runbook	operations	draft	keep	docs/runbooks/production-deployment.md	Rehearse required levels before changing draft to current
+docs/runbooks/retention-rollout.md	tracked	runbook	security	draft	keep	docs/runbooks/retention-rollout.md	Rehearse required levels before changing draft to current
+docs/runbooks/secret-rotation.md	tracked	runbook	security	draft	keep	docs/runbooks/secret-rotation.md	Rehearse required levels before changing draft to current
+docs/runbooks/telegram.md	tracked	runbook	ai	draft	keep	docs/runbooks/telegram.md	Rehearse required levels before changing draft to current
+docs/runbooks/weekly-review-ai.md	tracked	runbook	ai	draft	keep	docs/runbooks/weekly-review-ai.md	Rehearse required levels before changing draft to current
+docs/security/README.md	tracked	domain-index	security	current	keep	docs/security/README.md	Keep navigation complete and synchronized with canonical documents
+docs/security/authentication-and-access.md	tracked	current-contract	security	current	keep	docs/security/authentication-and-access.md	Review implementation and verification sources in the same behavior change
+docs/security/baseline.md	tracked	current-contract	security	current	keep	docs/security/baseline.md	Review implementation and verification sources in the same behavior change
+docs/security/data-retention.md	tracked	current-contract	security	current	keep	docs/security/data-retention.md	Review implementation and verification sources in the same behavior change
+docs/security/secrets-and-key-custody.md	tracked	current-contract	security	current	keep	docs/security/secrets-and-key-custody.md	Review implementation and verification sources in the same behavior change
+docs/security/supply-chain.md	tracked	current-contract	security	current	keep	docs/security/supply-chain.md	Review implementation and verification sources in the same behavior change
+docs/security/threat-model-and-risk-register.md	tracked	current-contract	security	current	keep	docs/security/threat-model-and-risk-register.md	Review implementation and verification sources in the same behavior change
+docs/history/README.md	tracked	domain-index	project	current	keep	docs/history/README.md	Keep evidence navigation and non-current warning synchronized
+docs/archive/README.md	tracked	domain-index	project	current	keep	docs/archive/README.md	Keep archive warning and migration-map navigation synchronized

@@ -17,7 +17,7 @@ exit_target: archive
 
 # Реформа документации Store Analytics
 
-Статус: этап 3 завершён; выполняются доменные этапы 4–7.
+Статус: доменные этапы 4–7 завершены; выполняется этап 8.
 
 Дата начала: 2026-08-31.
 
@@ -131,3 +131,33 @@ docs/
 - [x] Опасные июльские recovery-инструкции помечены `completed — do not rerun`.
 - [x] Корневые точки входа переведены на новый project-state.
 - [x] Выполнен независимый review этапа; P0/P1 закрыты, format check повторён.
+
+### Этап 4
+
+- [x] Созданы канонические контракты resilience, observability, resources и audit/telemetry.
+- [x] Создан security baseline, threat model и реестр остаточных рисков.
+- [x] Deploy, rollback, migration recovery, backup/DR, incidents, access и secrets отделены в
+  runbooks с явными stop-условиями.
+- [x] Неотрепетированные production-write/recovery процедуры оставлены в статусе `draft`.
+
+### Этап 5
+
+- [x] Архитектура приложения, БД, миграций и ошибок сверена с кодом и тестами.
+- [x] OpenAPI отделён от семантических API-контрактов; gaps v10 зафиксированы.
+- [x] Описаны LiveSklad API observations, sync, webhook, recovery и provider uncertainty.
+- [x] Июльское восстановление обозначено завершённым и запрещённым к повторному запуску.
+
+### Этап 6
+
+- [x] Формулы, периоды, классификация, attach-rate, payroll, отчёты и data quality сведены в
+  продуктовые контракты.
+- [x] Frontend-контракты связывают endpoint, период, cohort, `null` и пользовательскую подпись.
+- [x] Расхождение employee return attribution и mixed-period Overview оформлены proposed ADR,
+  а не скрыты как реализованное поведение.
+
+### Этап 7
+
+- [x] Weekly Review v25/schema4 отделён от legacy schema1–3 и deterministic fallback.
+- [x] Описаны immutable prompts/schemas, YandexGPT boundary, validation и paid evaluation gates.
+- [x] Telegram weekly/daily контуры, отсутствие schema4 bridge и poison-event риск зафиксированы.
+- [x] Privacy/retention gaps не выданы за закрытые controls.
