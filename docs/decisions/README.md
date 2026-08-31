@@ -26,7 +26,8 @@ superseded_by: null
 
 # Architecture Decision Records
 
-- [ADR-0001: атрибуция возврата сотруднику](ADR-0001-return-employee-attribution.md) — proposed.
-- [ADR-0002: единый период показателей главной](ADR-0002-overview-period-scope.md) — proposed.
+- [ADR-0001: атрибуция возврата сотруднику исходной продажи](ADR-0001-return-employee-attribution.md) — accepted, implemented.
+- [ADR-0002: период и cohort показателей главной](ADR-0002-overview-period-scope.md) — accepted, implemented.
 
-`proposed` описывает расхождение и рекомендуемый путь, но не меняет действующее поведение.
+Оба решения приняты 2026-08-31. Переход `implementation_status` в `verified` требует выполнения
+указанных внутри integration/visual gates.

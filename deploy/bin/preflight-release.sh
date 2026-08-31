@@ -24,7 +24,11 @@ for command_name in docker awk stat; do
     || die "missing command: ${command_name}"
 done
 
+docker buildx version >/dev/null 2>&1 \
+  || die 'docker buildx is required for remote image provenance checks'
+
 release_validate_env_file "${RELEASE_ENV}" || exit 1
+release_verify_remote_image_provenance "${RELEASE_ENV}" || exit 1
 docker compose --env-file "${RELEASE_ENV}" -f "${COMPOSE_FILE}" \
   --profile tools config --quiet
 

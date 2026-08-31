@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import tools.jackson.databind.json.JsonMapper;
 import com.storeanalytics.common.web.ApiExceptionHandler;
+import com.storeanalytics.metrics.service.OverviewMetricScope;
 import com.storeanalytics.performance.service.StorePerformancePlanView;
 import com.storeanalytics.performance.service.StorePlanCriterionType;
 import com.storeanalytics.performance.service.StorePlanDirectionCode;
@@ -53,7 +54,9 @@ class StorePlanProgressControllerTest {
         UUID storeId = UUID.randomUUID();
         YearMonth month = YearMonth.of(2026, 7);
         LocalDate asOf = LocalDate.of(2026, 7, 20);
-        when(progressService.calculate(storeId, month, asOf)).thenReturn(view(storeId, asOf));
+        when(progressService.calculate(
+                storeId, month, asOf, OverviewMetricScope.STORE
+        )).thenReturn(view(storeId, asOf));
 
         mockMvc.perform(get(
                         "/api/stores/{storeId}/performance-plans/{month}/progress",
@@ -61,14 +64,38 @@ class StorePlanProgressControllerTest {
                         "2026-07"
                 ).queryParam("asOf", "2026-07-20"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.formulaVersion").value("store-plan-progress-v2"))
+                .andExpect(jsonPath("$.formulaVersion").value("store-plan-progress-v3"))
                 .andExpect(jsonPath("$.asOfDate").value("2026-07-20"))
                 .andExpect(jsonPath("$.directions[0].code").value("REVENUE"))
                 .andExpect(jsonPath("$.directions[0].criterionType").value("AMOUNT"))
                 .andExpect(jsonPath("$.directions[0].status").value("ON_TRACK"))
                 .andExpect(jsonPath("$.dataQuality.completeThroughAsOf").value(true));
 
-        verify(progressService).calculate(storeId, month, asOf);
+        verify(progressService).calculate(
+                storeId, month, asOf, OverviewMetricScope.STORE
+        );
+    }
+
+    @Test
+    void forwardsExplicitSellerScope() throws Exception {
+        UUID storeId = UUID.randomUUID();
+        YearMonth month = YearMonth.of(2026, 7);
+        LocalDate asOf = LocalDate.of(2026, 7, 20);
+        when(progressService.calculate(
+                storeId, month, asOf, OverviewMetricScope.SELLERS
+        )).thenReturn(view(storeId, asOf));
+
+        mockMvc.perform(get(
+                        "/api/stores/{storeId}/performance-plans/{month}/progress",
+                        storeId,
+                        "2026-07"
+                ).queryParam("asOf", "2026-07-20")
+                .queryParam("scope", "SELLERS"))
+                .andExpect(status().isOk());
+
+        verify(progressService).calculate(
+                storeId, month, asOf, OverviewMetricScope.SELLERS
+        );
     }
 
     @Test
@@ -123,7 +150,7 @@ class StorePlanProgressControllerTest {
                 31,
                 20,
                 11,
-                "store-plan-progress-v2",
+                "store-plan-progress-v3",
                 plan,
                 new StorePlanProgressDataQuality(
                         StoreDataFreshnessStatus.CURRENT,

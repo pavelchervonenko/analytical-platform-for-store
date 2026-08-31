@@ -4,15 +4,12 @@ import static com.storeanalytics.common.time.ReportingCutoffPolicy.clampToComple
 import static com.storeanalytics.common.validation.ModelValidation.requireNonNull;
 
 import com.storeanalytics.common.exception.InvalidRequestException;
-import com.storeanalytics.metrics.service.CategoryKpiEntry;
-import com.storeanalytics.metrics.service.CategoryKpiResult;
-import com.storeanalytics.metrics.service.CategoryKpiService;
+import com.storeanalytics.metrics.service.OverviewMetricScope;
+import com.storeanalytics.metrics.service.OverviewMetricsResult;
+import com.storeanalytics.metrics.service.OverviewMetricsService;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
-import com.storeanalytics.metrics.service.StoreKpiResult;
-import com.storeanalytics.metrics.service.StoreKpiService;
 import com.storeanalytics.performance.repository.StorePlanDailyActual;
 import com.storeanalytics.performance.repository.StorePlanDailyActualRepository;
-import com.storeanalytics.product.model.AnalyticsCategoryKind;
 import com.storeanalytics.store.service.StoreDataStatusService;
 import com.storeanalytics.store.service.StoreDataStatusView;
 import java.math.BigDecimal;
@@ -25,37 +22,33 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.function.Predicate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class StorePlanProgressService {
 
-    static final String FORMULA_VERSION = "store-plan-progress-v2";
+    static final String FORMULA_VERSION = "store-plan-progress-v3";
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
     private static final int MONEY_SCALE = 2;
     private static final int PERCENT_SCALE = 2;
     private static final int CALCULATION_SCALE = 8;
 
     private final StorePerformancePlanService planService;
-    private final StoreKpiService storeKpiService;
-    private final CategoryKpiService categoryKpiService;
+    private final OverviewMetricsService overviewMetricsService;
     private final StorePlanDailyActualRepository dailyActualRepository;
     private final StoreDataStatusService dataStatusService;
     private final Clock clock;
 
     public StorePlanProgressService(
             StorePerformancePlanService planService,
-            StoreKpiService storeKpiService,
-            CategoryKpiService categoryKpiService,
+            OverviewMetricsService overviewMetricsService,
             StorePlanDailyActualRepository dailyActualRepository,
             StoreDataStatusService dataStatusService,
             Clock clock
     ) {
         this.planService = planService;
-        this.storeKpiService = storeKpiService;
-        this.categoryKpiService = categoryKpiService;
+        this.overviewMetricsService = overviewMetricsService;
         this.dailyActualRepository = dailyActualRepository;
         this.dataStatusService = dataStatusService;
         this.clock = clock;
@@ -67,10 +60,20 @@ public class StorePlanProgressService {
             YearMonth month,
             LocalDate asOfDate
     ) {
+        return find(storeId, month, asOfDate, OverviewMetricScope.STORE);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Optional<StorePlanProgressView> find(
+            UUID storeId,
+            YearMonth month,
+            LocalDate asOfDate,
+            OverviewMetricScope scope
+    ) {
         if (planService.find(storeId, month).isEmpty()) {
             return java.util.Optional.empty();
         }
-        return java.util.Optional.of(calculate(storeId, month, asOfDate));
+        return java.util.Optional.of(calculate(storeId, month, asOfDate, scope));
     }
 
     @Transactional(readOnly = true)
@@ -79,8 +82,19 @@ public class StorePlanProgressService {
             YearMonth month,
             LocalDate asOfDate
     ) {
+        return calculate(storeId, month, asOfDate, OverviewMetricScope.STORE);
+    }
+
+    @Transactional(readOnly = true)
+    public StorePlanProgressView calculate(
+            UUID storeId,
+            YearMonth month,
+            LocalDate asOfDate,
+            OverviewMetricScope scope
+    ) {
         UUID validatedStoreId = requireNonNull(storeId, "storeId");
         YearMonth validatedMonth = requireNonNull(month, "month");
+        OverviewMetricScope validatedScope = requireNonNull(scope, "scope");
         LocalDate requestedAsOf = requireAsOf(validatedMonth, asOfDate);
         StoreDataStatusView dataStatus = dataStatusService.get(validatedStoreId);
         LocalDate asOf = clampToCompletedDay(
@@ -93,26 +107,23 @@ public class StorePlanProgressService {
         StoreKpiPeriod period = new StoreKpiPeriod(start, asOf);
 
         StorePerformancePlanView plan = planService.get(validatedStoreId, validatedMonth);
-        StoreKpiResult storeKpi = storeKpiService.calculate(validatedStoreId, period);
-        CategoryKpiResult categoryKpi = categoryKpiService.calculate(validatedStoreId, period);
+        OverviewMetricsResult metrics = overviewMetricsService.calculate(
+                validatedStoreId,
+                period,
+                validatedScope
+        );
         List<StorePlanDailyActual> dailyActuals =
-                dailyActualRepository.aggregate(validatedStoreId, start, asOf);
+                dailyActualRepository.aggregate(
+                        validatedStoreId,
+                        start,
+                        asOf,
+                        validatedScope
+                );
 
-        BigDecimal revenue = money(storeKpi.netRevenue());
-        BigDecimal accessories = categoryAmount(
-                categoryKpi,
-                entry -> entry.categoryKind() == AnalyticsCategoryKind.ACCESSORY
-        );
-        BigDecimal services = categoryAmount(
-                categoryKpi,
-                entry -> entry.categoryKind() == AnalyticsCategoryKind.SERVICE
-                        || entry.categoryKind() == AnalyticsCategoryKind.WARRANTY
-                        || entry.categoryKind() == AnalyticsCategoryKind.PROTECTION
-        );
-        BigDecimal additional = categoryAmount(
-                categoryKpi,
-                CategoryKpiEntry::countsAsAdditionalRevenue
-        );
+        BigDecimal revenue = money(metrics.netRevenue());
+        BigDecimal accessories = money(metrics.accessory().netRevenue());
+        BigDecimal services = money(metrics.service().netRevenue());
+        BigDecimal additional = money(metrics.additional().netRevenue());
 
         int totalDays = validatedMonth.lengthOfMonth();
         int elapsedDays = asOf.getDayOfMonth();
@@ -172,9 +183,9 @@ public class StorePlanProgressService {
                 dataStatus.dataThroughDate(),
                 dataStatus.dataThroughDate() != null
                         && !dataStatus.dataThroughDate().isBefore(asOf),
-                storeKpi.dataQuality().unmappedItemCount() == 0,
-                storeKpi.dataQuality().unmappedItemCount(),
-                storeKpi.dataQuality().periodOpenConsistencyIssueCount()
+                metrics.dataQuality().unmappedItemCount() == 0,
+                metrics.dataQuality().unmappedItemCount(),
+                metrics.dataQuality().periodOpenConsistencyIssueCount()
         );
         return new StorePlanProgressView(
                 validatedStoreId,
@@ -202,16 +213,6 @@ public class StorePlanProgressService {
             throw new InvalidRequestException("asOf must be inside the requested month");
         }
         return validated;
-    }
-
-    private BigDecimal categoryAmount(
-            CategoryKpiResult result,
-            Predicate<CategoryKpiEntry> membership
-    ) {
-        return money(result.categories().stream()
-                .filter(membership)
-                .map(entry -> entry.metrics().netRevenue())
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
     }
 
     private List<StorePlanDailyTargetView> dailyTargets(

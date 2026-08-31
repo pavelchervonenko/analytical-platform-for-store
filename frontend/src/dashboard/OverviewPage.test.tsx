@@ -1,13 +1,14 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type {
   AttachRate,
   CategoryKpi,
   EmployeeKpi,
   EmployeeRatingEntry,
   EmployeeRatingResult,
-  StoreKpi
+  OverviewMetrics,
+  PlanProgress
 } from "../api/contracts";
 import { AttachRateMatrix, EmployeePerformanceSection, ManagementSummary } from "./OverviewManagementSections";
 import { formatOverviewPeriodLabel, SalesStructure } from "./OverviewPage";
@@ -38,16 +39,32 @@ function group(groupCode: string, netRevenue: number, netQuantity: number): Cate
   };
 }
 
-const storeKpi: StoreKpi = {
+const overviewMetrics: OverviewMetrics = {
   storeId,
   periodStart: "2026-08-01",
   periodEnd: "2026-08-08",
-  formulaVersion: "store-kpi-v1",
+  scope: "SELLERS",
+  formulaVersion: "overview-metrics-v1",
   netRevenue: 100000,
   netQuantity: 10,
   costAmount: 60000,
   grossProfit: 40000,
   marginPercent: 40,
+  additional: {
+    netRevenue: 19500,
+    netQuantity: 13,
+    sharePercent: 19.5
+  },
+  accessory: {
+    netRevenue: 12000,
+    netQuantity: 8,
+    sharePercent: 12
+  },
+  service: {
+    netRevenue: 7500,
+    netQuantity: 5,
+    sharePercent: 7.5
+  },
   dataQuality: {
     completeCostData: true,
     includedItemCount: 10,
@@ -55,21 +72,9 @@ const storeKpi: StoreKpi = {
     missingCostItemCount: 0,
     unexpectedZeroCostItemCount: 0,
     periodOpenConsistencyIssueCount: 0,
-    storeOpenQualityIssueCount: 0
+    storeOpenQualityIssueCount: 0,
+    reconciliationPassed: true
   }
-};
-
-const categories: CategoryKpi = {
-  storeId,
-  periodStart: "2026-08-01",
-  periodEnd: "2026-08-08",
-  formulaVersion: "category-kpi-v1",
-  groups: [
-    group("ACCESSORY", 12000, 8),
-    group("SERVICE", 7500, 5),
-    group("ADDITIONAL_REVENUE", 19500, 13)
-  ],
-  categories: []
 };
 
 function employee(
@@ -266,7 +271,15 @@ describe("management overview", () => {
   });
 
   it("shows the customer-facing commercial metrics without average receipt", () => {
-    render(<ManagementSummary kpi={storeKpi} categories={categories} plan={null} />);
+    render(
+      <ManagementSummary
+        metrics={overviewMetrics}
+        plan={null}
+        scope="SELLERS"
+        onScopeChange={() => undefined}
+        showMonthlyPlan
+      />
+    );
 
     expect(screen.getByText("Чистая выручка")).toBeInTheDocument();
     expect(screen.getByText("Валовая прибыль")).toBeInTheDocument();
@@ -275,6 +288,53 @@ describe("management overview", () => {
     expect(screen.getByText("Услуги")).toBeInTheDocument();
     expect(screen.getByText("19,5%")).toBeInTheDocument();
     expect(screen.queryByText("Средний чек")).not.toBeInTheDocument();
+  });
+
+  it("keeps selected-period facts separate from the monthly plan layer", () => {
+    const plan = {
+      directions: [{
+        code: "ADDITIONAL",
+        actualAmount: 9500,
+        targetAmount: 10500,
+        actualSharePercent: 9.5,
+        targetSharePercent: 10.5,
+        shareGapPercentagePoints: -1,
+        criterionCompletionPercent: 90
+      }]
+    } as PlanProgress;
+
+    render(
+      <ManagementSummary
+        metrics={overviewMetrics}
+        plan={plan}
+        scope="SELLERS"
+        onScopeChange={() => undefined}
+        showMonthlyPlan={false}
+      />
+    );
+
+    expect(screen.getByText("19,5%")).toBeInTheDocument();
+    expect(screen.queryByText("9,5%")).not.toBeInTheDocument();
+    expect(screen.queryByText("План 10,5%")).not.toBeInTheDocument();
+    expect(screen.queryByText(/к плану/u)).not.toBeInTheDocument();
+  });
+
+  it("switches between sellers and the whole store inside the summary block", () => {
+    const onScopeChange = vi.fn();
+    render(
+      <ManagementSummary
+        metrics={overviewMetrics}
+        plan={null}
+        scope="SELLERS"
+        onScopeChange={onScopeChange}
+        showMonthlyPlan
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "Только продавцы" }))
+      .toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Весь магазин" }));
+    expect(onScopeChange).toHaveBeenCalledWith("STORE");
   });
 
   it("renders overlapping sales groups as parent totals and nested composition", () => {

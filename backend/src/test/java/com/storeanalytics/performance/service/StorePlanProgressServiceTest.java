@@ -3,21 +3,18 @@ package com.storeanalytics.performance.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.storeanalytics.common.exception.InvalidRequestException;
-import com.storeanalytics.metrics.service.CategoryKpiDataQuality;
-import com.storeanalytics.metrics.service.CategoryKpiEntry;
-import com.storeanalytics.metrics.service.CategoryKpiMetrics;
-import com.storeanalytics.metrics.service.CategoryKpiResult;
-import com.storeanalytics.metrics.service.CategoryKpiService;
-import com.storeanalytics.metrics.service.StoreKpiDataQuality;
+import com.storeanalytics.metrics.service.OverviewCommercialMetric;
+import com.storeanalytics.metrics.service.OverviewMetricScope;
+import com.storeanalytics.metrics.service.OverviewMetricsDataQuality;
+import com.storeanalytics.metrics.service.OverviewMetricsResult;
+import com.storeanalytics.metrics.service.OverviewMetricsService;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
-import com.storeanalytics.metrics.service.StoreKpiResult;
 import com.storeanalytics.performance.repository.StorePlanDailyActual;
 import com.storeanalytics.performance.repository.StorePlanDailyActualRepository;
-import com.storeanalytics.metrics.service.StoreKpiService;
-import com.storeanalytics.product.model.AnalyticsCategoryKind;
 import com.storeanalytics.store.service.StoreDataFreshnessStatus;
 import com.storeanalytics.store.service.StoreDataStatusService;
 import com.storeanalytics.store.service.StoreDataStatusView;
@@ -38,8 +35,7 @@ class StorePlanProgressServiceTest {
     private static final Instant NOW = Instant.parse("2026-07-23T10:00:00Z");
 
     private StorePerformancePlanService planService;
-    private StoreKpiService storeKpiService;
-    private CategoryKpiService categoryKpiService;
+    private OverviewMetricsService overviewMetricsService;
     private StoreDataStatusService dataStatusService;
     private StorePlanDailyActualRepository dailyActualRepository;
     private StorePlanProgressService service;
@@ -47,14 +43,12 @@ class StorePlanProgressServiceTest {
     @BeforeEach
     void setUp() {
         planService = mock(StorePerformancePlanService.class);
-        storeKpiService = mock(StoreKpiService.class);
-        categoryKpiService = mock(CategoryKpiService.class);
+        overviewMetricsService = mock(OverviewMetricsService.class);
         dailyActualRepository = mock(StorePlanDailyActualRepository.class);
         dataStatusService = mock(StoreDataStatusService.class);
         service = new StorePlanProgressService(
                 planService,
-                storeKpiService,
-                categoryKpiService,
+                overviewMetricsService,
                 dailyActualRepository,
                 dataStatusService,
                 Clock.fixed(NOW, ZoneOffset.UTC)
@@ -68,19 +62,17 @@ class StorePlanProgressServiceTest {
         LocalDate asOf = LocalDate.of(2026, 7, 20);
         StoreKpiPeriod period = new StoreKpiPeriod(month.atDay(1), asOf);
         when(planService.get(storeId, month)).thenReturn(plan(storeId));
-        when(storeKpiService.calculate(storeId, period)).thenReturn(storeKpi(
-                storeId, period, "15840000.00", 2
-        ));
-        when(categoryKpiService.calculate(storeId, period)).thenReturn(categoryKpi(
-                storeId,
-                period,
-                category("ACCESSORIES", AnalyticsCategoryKind.ACCESSORY, "520000.00", true),
-                category("SERVICES", AnalyticsCategoryKind.SERVICE, "270000.00", true)
+        when(overviewMetricsService.calculate(
+                storeId, period, OverviewMetricScope.STORE
+        )).thenReturn(overviewMetrics(
+                storeId, period, "15840000.00", "520000.00", "270000.00", 2
         ));
         when(dataStatusService.get(storeId)).thenReturn(dataStatus(
                 storeId, asOf, StoreDataFreshnessStatus.CURRENT, 1
         ));
-        when(dailyActualRepository.aggregate(storeId, month.atDay(1), asOf))
+        when(dailyActualRepository.aggregate(
+                storeId, month.atDay(1), asOf, OverviewMetricScope.STORE
+        ))
                 .thenReturn(List.of(new StorePlanDailyActual(
                         asOf,
                         new BigDecimal("15840000.00"),
@@ -159,18 +151,17 @@ class StorePlanProgressServiceTest {
         LocalDate asOf = LocalDate.of(2026, 7, 10);
         StoreKpiPeriod period = new StoreKpiPeriod(month.atDay(1), asOf);
         when(planService.get(storeId, month)).thenReturn(plan(storeId));
-        when(storeKpiService.calculate(storeId, period)).thenReturn(storeKpi(
-                storeId, period, "1000.00", 0
-        ));
-        when(categoryKpiService.calculate(storeId, period)).thenReturn(categoryKpi(
-                storeId,
-                period,
-                category("ACCESSORIES", AnalyticsCategoryKind.ACCESSORY, "100.00", true)
+        when(overviewMetricsService.calculate(
+                storeId, period, OverviewMetricScope.STORE
+        )).thenReturn(overviewMetrics(
+                storeId, period, "1000.00", "100.00", "0.00", 0
         ));
         when(dataStatusService.get(storeId)).thenReturn(dataStatus(
                 storeId, asOf, StoreDataFreshnessStatus.CURRENT, 0
         ));
-        when(dailyActualRepository.aggregate(storeId, month.atDay(1), asOf))
+        when(dailyActualRepository.aggregate(
+                storeId, month.atDay(1), asOf, OverviewMetricScope.STORE
+        ))
                 .thenReturn(List.of(new StorePlanDailyActual(
                         asOf,
                         new BigDecimal("1000.00"),
@@ -196,11 +187,10 @@ class StorePlanProgressServiceTest {
         LocalDate asOf = month.atEndOfMonth();
         StoreKpiPeriod period = new StoreKpiPeriod(month.atDay(1), asOf);
         when(planService.get(storeId, month)).thenReturn(plan(storeId));
-        when(storeKpiService.calculate(storeId, period)).thenReturn(storeKpi(
-                storeId, period, "0.00", 0
-        ));
-        when(categoryKpiService.calculate(storeId, period)).thenReturn(categoryKpi(
-                storeId, period
+        when(overviewMetricsService.calculate(
+                storeId, period, OverviewMetricScope.STORE
+        )).thenReturn(overviewMetrics(
+                storeId, period, "0.00", "0.00", "0.00", 0
         ));
         when(dataStatusService.get(storeId)).thenReturn(dataStatus(
                 storeId, asOf, StoreDataFreshnessStatus.CURRENT, 0
@@ -230,11 +220,10 @@ class StorePlanProgressServiceTest {
         when(dataStatusService.get(storeId)).thenReturn(dataStatus(
                 storeId, completedThrough, StoreDataFreshnessStatus.CURRENT, 0
         ));
-        when(storeKpiService.calculate(storeId, completedPeriod)).thenReturn(storeKpi(
-                storeId, completedPeriod, "100.00", 0
-        ));
-        when(categoryKpiService.calculate(storeId, completedPeriod)).thenReturn(categoryKpi(
-                storeId, completedPeriod
+        when(overviewMetricsService.calculate(
+                storeId, completedPeriod, OverviewMetricScope.STORE
+        )).thenReturn(overviewMetrics(
+                storeId, completedPeriod, "100.00", "0.00", "0.00", 0
         ));
 
         StorePlanProgressView result = service.calculate(storeId, month, requestedAsOf);
@@ -252,6 +241,41 @@ class StorePlanProgressServiceTest {
                 LocalDate.of(2026, 8, 1)
         )).isInstanceOf(InvalidRequestException.class)
                 .hasMessage("asOf must be inside the requested month");
+    }
+
+    @Test
+    void appliesTheSamePlanToTheRequestedSellerScope() {
+        UUID storeId = UUID.randomUUID();
+        YearMonth month = YearMonth.of(2026, 7);
+        LocalDate asOf = LocalDate.of(2026, 7, 20);
+        StoreKpiPeriod period = new StoreKpiPeriod(month.atDay(1), asOf);
+        when(planService.get(storeId, month)).thenReturn(plan(storeId));
+        when(dataStatusService.get(storeId)).thenReturn(dataStatus(
+                storeId, asOf, StoreDataFreshnessStatus.CURRENT, 0
+        ));
+        when(overviewMetricsService.calculate(
+                storeId, period, OverviewMetricScope.SELLERS
+        )).thenReturn(overviewMetrics(
+                storeId, period, "700.00", "70.00", "35.00", 0
+        ));
+        when(dailyActualRepository.aggregate(
+                storeId, month.atDay(1), asOf, OverviewMetricScope.SELLERS
+        )).thenReturn(List.of());
+
+        StorePlanProgressView result = service.calculate(
+                storeId, month, asOf, OverviewMetricScope.SELLERS
+        );
+
+        assertThat(direction(result, StorePlanDirectionCode.REVENUE).actualAmount())
+                .isEqualByComparingTo("700.00");
+        assertThat(direction(result, StorePlanDirectionCode.ADDITIONAL).actualAmount())
+                .isEqualByComparingTo("105.00");
+        verify(overviewMetricsService).calculate(
+                storeId, period, OverviewMetricScope.SELLERS
+        );
+        verify(dailyActualRepository).aggregate(
+                storeId, month.atDay(1), asOf, OverviewMetricScope.SELLERS
+        );
     }
 
     private StorePlanDirectionView direction(
@@ -279,66 +303,53 @@ class StorePlanProgressServiceTest {
         );
     }
 
-    private StoreKpiResult storeKpi(
+    private OverviewMetricsResult overviewMetrics(
             UUID storeId,
             StoreKpiPeriod period,
             String revenue,
+            String accessories,
+            String services,
             long unmapped
     ) {
-        return new StoreKpiResult(
+        BigDecimal netRevenue = new BigDecimal(revenue);
+        BigDecimal accessoryAmount = new BigDecimal(accessories);
+        BigDecimal serviceAmount = new BigDecimal(services);
+        return new OverviewMetricsResult(
                 storeId,
                 period.start(),
                 period.end(),
-                "store-kpi-v1",
-                new BigDecimal(revenue),
+                OverviewMetricScope.STORE,
+                "overview-metrics-v1",
+                netRevenue,
                 BigDecimal.ZERO,
                 BigDecimal.ZERO,
-                new BigDecimal(revenue),
+                netRevenue,
                 null,
-                new StoreKpiDataQuality(true, 10, unmapped, 0, 0, 3, 0)
-        );
-    }
-
-    private CategoryKpiResult categoryKpi(
-            UUID storeId,
-            StoreKpiPeriod period,
-            CategoryKpiEntry... categories
-    ) {
-        return new CategoryKpiResult(
-                storeId,
-                period.start(),
-                period.end(),
-                "category-kpi-v3",
-                List.of(),
-                List.of(categories)
-        );
-    }
-
-    private CategoryKpiEntry category(
-            String code,
-            AnalyticsCategoryKind kind,
-            String revenue,
-            boolean additional
-    ) {
-        return new CategoryKpiEntry(
-                code,
-                code,
-                kind,
-                null,
-                true,
-                false,
-                false,
-                additional,
-                new CategoryKpiMetrics(
-                        new BigDecimal(revenue),
-                        BigDecimal.ZERO,
-                        BigDecimal.ZERO,
-                        new BigDecimal(revenue),
-                        null,
-                        null,
-                        new CategoryKpiDataQuality(true, 1, 0, 0)
+                commercial(accessoryAmount.add(serviceAmount), netRevenue),
+                commercial(accessoryAmount, netRevenue),
+                commercial(serviceAmount, netRevenue),
+                new OverviewMetricsDataQuality(
+                        true,
+                        10,
+                        unmapped,
+                        0,
+                        0,
+                        3,
+                        0,
+                        true
                 )
         );
+    }
+
+    private OverviewCommercialMetric commercial(
+            BigDecimal amount,
+            BigDecimal revenue
+    ) {
+        BigDecimal share = revenue.signum() == 0
+                ? null
+                : amount.multiply(BigDecimal.valueOf(100))
+                        .divide(revenue, 2, java.math.RoundingMode.HALF_UP);
+        return new OverviewCommercialMetric(amount, BigDecimal.ZERO, share);
     }
 
     private StoreDataStatusView dataStatus(

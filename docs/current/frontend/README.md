@@ -43,9 +43,9 @@ superseded_by: null
 - [Transport](transport-contracts.md)
 
 Frontend не подменяет `null` нулём, явно называет узкий cohort, не складывает вложенные группы и не
-смешивает периоды в одной карточке. Текущие исключения: Overview period mix
-([ADR-0002](../../decisions/ADR-0002-overview-period-scope.md)) и employee return attribution
-([ADR-0001](../../decisions/ADR-0001-return-employee-attribution.md)).
+смешивает периоды в одной карточке. Решения по Overview period scope и employee return attribution
+закреплены в [ADR-0002](../../decisions/ADR-0002-overview-period-scope.md) и
+[ADR-0001](../../decisions/ADR-0001-return-employee-attribution.md).
 
 ## Базовая типографика
 

@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { OverviewPage } from "../dashboard/OverviewPage";
 import { InsightsPreviewPage } from "./InsightsPreviewPage";
@@ -32,7 +33,11 @@ vi.mock("./WeeklyReviewView", () => ({
 
 describe("AI insight placement", () => {
   it("does not render the weekly AI interpretation on the overview", () => {
-    render(<OverviewPage />);
+    render(
+      <MemoryRouter>
+        <OverviewPage />
+      </MemoryRouter>
+    );
 
     expect(screen.queryByTestId("weekly-review-view")).not.toBeInTheDocument();
   });

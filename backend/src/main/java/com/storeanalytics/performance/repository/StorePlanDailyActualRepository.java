@@ -1,5 +1,6 @@
 package com.storeanalytics.performance.repository;
 
+import com.storeanalytics.metrics.service.OverviewMetricScope;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,19 @@ public class StorePlanDailyActualRepository {
               AND NOT document.is_deleted
               AND NOT item.is_deleted
               AND category.code <> 'EXCLUDE'
+              AND (
+                  :scope = 'STORE'
+                  OR EXISTS (
+                      SELECT 1
+                      FROM employee_store_assignments assignment
+                      JOIN employees employee ON employee.id = assignment.employee_id
+                      WHERE assignment.store_id = document.store_id
+                        AND assignment.employee_id = document.employee_id
+                        AND assignment.is_active
+                        AND assignment.participates_in_ranking
+                        AND employee.is_active
+                  )
+              )
             GROUP BY document.business_date
             ORDER BY document.business_date
             """;
@@ -52,12 +66,22 @@ public class StorePlanDailyActualRepository {
             LocalDate periodStart,
             LocalDate periodEnd
     ) {
+        return aggregate(storeId, periodStart, periodEnd, OverviewMetricScope.STORE);
+    }
+
+    public List<StorePlanDailyActual> aggregate(
+            UUID storeId,
+            LocalDate periodStart,
+            LocalDate periodEnd,
+            OverviewMetricScope scope
+    ) {
         return jdbcTemplate.query(
                 DAILY_ACTUAL_QUERY,
                 Map.of(
                         "storeId", storeId,
                         "periodStart", periodStart,
-                        "periodEnd", periodEnd
+                        "periodEnd", periodEnd,
+                        "scope", scope.name()
                 ),
                 (resultSet, rowNumber) -> new StorePlanDailyActual(
                         resultSet.getObject("business_date", LocalDate.class),

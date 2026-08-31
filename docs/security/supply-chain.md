@@ -38,8 +38,8 @@ superseded_by: null
 
 ## Назначение и границы
 
-Документ различает реализованную dependency/build integrity и ещё не enforced artifact provenance.
-Публикация digest сама по себе не доказывает, что deploy связан с reviewed tag/commit.
+Документ различает dependency/build integrity, проверяемую связь image с commit и ещё не
+реализованную cryptographic provenance builder-а.
 
 ## Действующий контракт
 
@@ -48,9 +48,12 @@ superseded_by: null
 - Frontend устанавливается через `npm ci` по lockfile; build запускает contracts, lint, tests и
   production build.
 - Release workflow повторно выполняет backend/frontend checks, строит images и публикует GHCR
-  references по digest.
-- Production release metadata предполагает `repository@sha256`, но server preflight пока не
-  валидирует полную связь image digest, release tag и commit.
+  references по digest. Оба final image содержат OCI label
+  `org.opencontainers.image.revision=<GITHUB_SHA>`.
+- Production release env требует один `RELEASE_COMMIT`, immutable backend/web references и
+  отдельные совпадающие digest-поля.
+- Server preflight сверяет remote OCI revisions до остановки приложения, а deploy повторяет
+  проверку локально после pull и до Flyway.
 
 ## Инварианты
 
@@ -63,14 +66,13 @@ superseded_by: null
 
 - SBOM, vulnerability scan threshold, provenance/attestation и image signature не являются
   обязательными release/deploy gates.
-- Server-side signature/provenance verification перед migration отсутствует.
 - Docker base images закреплены version tags, а не digests; `--pull` может изменить базовый слой.
-- Protected tag/branch и связь release ID с commit находятся вне репозитория и не доказаны.
+- OCI revision label доказывает build input, но не заменяет signature/attestation builder identity.
 
 ## Проверка
 
-CI и supply-chain tests проверяют wrapper/checksums/locks и безопасный build path. Полный gate
-требует SBOM, scan, signed provenance и server-side verification exact artifact перед deploy.
+CI и supply-chain tests проверяют wrapper/checksums/locks, OCI revision и exact artifact checks.
+Следующий уровень требует SBOM, scan и signed provenance.
 
 ## Триггеры пересмотра
 

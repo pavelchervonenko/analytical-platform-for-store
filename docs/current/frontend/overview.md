@@ -11,6 +11,7 @@ requirement_sources:
   - docs/current/product/business-metrics.md
   - docs/current/product/plans-and-shifts.md
 implementation_sources:
+  - backend/src/main/java/com/storeanalytics/metrics/service/OverviewMetricsService.java
   - frontend/src/dashboard/OverviewPage.tsx
   - frontend/src/dashboard/OverviewManagementSections.tsx
   - frontend/src/api/queries.ts
@@ -33,16 +34,23 @@ superseded_by: null
 | Блок | Источник | Период | Cohort | Null/partial | Label |
 |---|---|---|---|---|---|
 | Freshness | `/data-status` | Latest coverage | Store | Date nullable | «Данные по…»/причина |
-| Revenue/GP/margin | `/kpi` | Selected | Store | GP/margin nullable | Selected period |
-| Accessories/services/additional | `/kpi/categories` | Selected | Store | Group can be absent | Selected period |
-| Plan | `/performance-plans/{month}/progress` | Month..asOf | Store | No plan state | «План месяца» |
+| Revenue/GP/margin | `/overview-metrics` | Selected | SELLERS by default / STORE | GP/margin nullable | Selected period |
+| Accessories/services/additional | `/overview-metrics` | Selected | Same selected scope | Share nullable | Selected period |
+| Plan | `/performance-plans/{month}/progress?scope=` | Month..asOf | Same selected scope | No plan state | «План месяца» |
 | Team | `/kpi/employees` + `/employee-ratings` | Selected | Overview roster | Score/rank nullable | «Основные продавцы» |
 | Attach map | `/kpi/attach-rates` + rating | Selected | Store + roster | Rate/base nullable | Empty-state reason |
 | Quality | `/period-quality/{month}` | Month..asOf | Store | Warning/error | Готовность данных |
 
-«Чистая выручка», «Допы», «Аксессуары», «Услуги» — store totals, включая вне рейтинга и без
-сотрудника. Team — subtotal roster и не равен магазину. `null` GP/margin не показывается как zero.
+Переключатель находится слева сверху внутри тёмного блока. `SELLERS` («Только продавцы») — режим
+по умолчанию; `STORE` («Весь магазин») включает сотрудников вне рейтинга и факты без сотрудника.
+Выбор хранится в query-параметре `overviewScope`. Продавец определяется backend-признаком
+`rankingEligible`: активный сотрудник, активное назначение и «Участвует в рейтинге».
 
-`ManagementSummary` сейчас предпочитает month plan share при selected-period amount; week/custom
-карточка внутренне несогласована. Целевой UX — ADR-0002. UI показывает проценты с одним знаком, но
-не должен пересчитывать achievement по округлённой строке.
+В month mode карточки могут показывать план этого же месяца и scope. В week/custom тёмный блок
+показывает только selected-period amount, quantity и share; month gap/target остаются в отдельном
+блоке «План месяца». «Структура продаж» и attach-map намеренно остаются STORE и имеют явную
+подпись. `null` GP/margin не показывается как zero.
+
+`overview-metrics-v1` сверяет STORE с полной employee-проекцией, а также инварианты
+`Допы = Аксессуары + Услуги` и одинаковую выручку seller cohort между employee KPI и category KPI.
+При расхождении backend не отдаёт частично согласованный результат.

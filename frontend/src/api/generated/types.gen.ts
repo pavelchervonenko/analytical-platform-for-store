@@ -1526,6 +1526,40 @@ export type PayrollRevisionComparisonView = {
     dayChanges?: Array<PayrollDayRevisionChange>;
 };
 
+export type OverviewCommercialMetric = {
+    netRevenue?: number;
+    netQuantity?: number;
+    sharePercent?: number;
+};
+
+export type OverviewMetricsDataQuality = {
+    completeCostData?: boolean;
+    includedItemCount?: number;
+    unmappedItemCount?: number;
+    missingCostItemCount?: number;
+    unexpectedZeroCostItemCount?: number;
+    periodOpenConsistencyIssueCount?: number;
+    storeOpenQualityIssueCount?: number;
+    reconciliationPassed?: boolean;
+};
+
+export type OverviewMetricsResult = {
+    storeId?: string;
+    periodStart?: string;
+    periodEnd?: string;
+    scope?: 'SELLERS' | 'STORE';
+    formulaVersion?: string;
+    netRevenue?: number;
+    netQuantity?: number;
+    costAmount?: number;
+    grossProfit?: number;
+    marginPercent?: number;
+    additional?: OverviewCommercialMetric;
+    accessory?: OverviewCommercialMetric;
+    service?: OverviewCommercialMetric;
+    dataQuality?: OverviewMetricsDataQuality;
+};
+
 export type EmployeeKpiDataQuality = {
     completeCostData?: boolean;
     includedItemCount?: number;
@@ -1674,8 +1708,13 @@ export type JsonNode = {
     float?: boolean;
     container?: boolean;
     number?: boolean;
-    missingNode?: boolean;
+    bigInteger?: boolean;
+    /**
+     * @deprecated
+     */
+    textual?: boolean;
     floatingPointNumber?: boolean;
+    missingNode?: boolean;
     valueNode?: boolean;
     nodeType?: 'ARRAY' | 'BINARY' | 'BOOLEAN' | 'MISSING' | 'NULL' | 'NUMBER' | 'OBJECT' | 'POJO' | 'STRING';
     object?: boolean;
@@ -1686,11 +1725,6 @@ export type JsonNode = {
     long?: boolean;
     double?: boolean;
     bigDecimal?: boolean;
-    bigInteger?: boolean;
-    /**
-     * @deprecated
-     */
-    textual?: boolean;
     boolean?: boolean;
     binary?: boolean;
     embeddedValue?: boolean;
@@ -3045,6 +3079,7 @@ export type Get4Data = {
     };
     query: {
         asOf: string;
+        scope?: 'SELLERS' | 'STORE';
     };
     url: '/api/stores/{storeId}/performance-plans/{month}/progress';
 };
@@ -3175,6 +3210,28 @@ export type CompareResponses = {
 };
 
 export type CompareResponse = CompareResponses[keyof CompareResponses];
+
+export type Get6Data = {
+    body?: never;
+    path: {
+        storeId: string;
+    };
+    query: {
+        periodStart: string;
+        periodEnd: string;
+        scope?: 'SELLERS' | 'STORE';
+    };
+    url: '/api/stores/{storeId}/overview-metrics';
+};
+
+export type Get6Responses = {
+    /**
+     * OK
+     */
+    200: OverviewMetricsResult;
+};
+
+export type Get6Response = Get6Responses[keyof Get6Responses];
 
 export type GetStoreKpiData = {
     body?: never;
@@ -3325,7 +3382,7 @@ export type List3Responses = {
 
 export type List3Response = List3Responses[keyof List3Responses];
 
-export type Get6Data = {
+export type Get7Data = {
     body?: never;
     path: {
         storeId: string;
@@ -3335,14 +3392,14 @@ export type Get6Data = {
     url: '/api/stores/{storeId}/interpretations/weekly/{interpretationId}';
 };
 
-export type Get6Responses = {
+export type Get7Responses = {
     /**
      * OK
      */
     200: WeeklyInterpretationDetailView;
 };
 
-export type Get6Response = Get6Responses[keyof Get6Responses];
+export type Get7Response = Get7Responses[keyof Get7Responses];
 
 export type Latest1Data = {
     body?: never;
@@ -3424,7 +3481,7 @@ export type CardResponses = {
 
 export type CardResponse = CardResponses[keyof CardResponses];
 
-export type Get7Data = {
+export type Get8Data = {
     body?: never;
     path: {
         storeId: string;
@@ -3436,14 +3493,14 @@ export type Get7Data = {
     url: '/api/stores/{storeId}/employee-ratings';
 };
 
-export type Get7Responses = {
+export type Get8Responses = {
     /**
      * OK
      */
     200: EmployeeRatingResult;
 };
 
-export type Get7Response = Get7Responses[keyof Get7Responses];
+export type Get8Response = Get8Responses[keyof Get8Responses];
 
 export type FindAll2Data = {
     body?: never;
@@ -3463,7 +3520,7 @@ export type FindAll2Responses = {
 
 export type FindAll2Response = FindAll2Responses[keyof FindAll2Responses];
 
-export type Get8Data = {
+export type Get9Data = {
     body?: never;
     path: {
         storeId: string;
@@ -3472,16 +3529,16 @@ export type Get8Data = {
     url: '/api/stores/{storeId}/data-status';
 };
 
-export type Get8Responses = {
+export type Get9Responses = {
     /**
      * OK
      */
     200: StoreDataStatusView;
 };
 
-export type Get8Response = Get8Responses[keyof Get8Responses];
+export type Get9Response = Get9Responses[keyof Get9Responses];
 
-export type Get9Data = {
+export type Get10Data = {
     body?: never;
     path: {
         storeId: string;
@@ -3490,30 +3547,30 @@ export type Get9Data = {
     url: '/api/stores/{storeId}/data-quality';
 };
 
-export type Get9Responses = {
+export type Get10Responses = {
     /**
      * OK
      */
     200: StoreDataQualityView;
 };
 
-export type Get9Response = Get9Responses[keyof Get9Responses];
+export type Get10Response = Get10Responses[keyof Get10Responses];
 
-export type Get10Data = {
+export type Get11Data = {
     body?: never;
     path?: never;
     query?: never;
     url: '/api/notifications/channels/telegram';
 };
 
-export type Get10Responses = {
+export type Get11Responses = {
     /**
      * OK
      */
     200: TelegramChannelView;
 };
 
-export type Get10Response = Get10Responses[keyof Get10Responses];
+export type Get11Response = Get11Responses[keyof Get11Responses];
 
 export type OverviewData = {
     body?: never;
@@ -3617,7 +3674,7 @@ export type GetBackfillResponses = {
 
 export type GetBackfillResponse = GetBackfillResponses[keyof GetBackfillResponses];
 
-export type Get11Data = {
+export type Get12Data = {
     body?: never;
     path?: never;
     query?: {
@@ -3626,16 +3683,16 @@ export type Get11Data = {
     url: '/api/admin/notifications/telegram/deliveries';
 };
 
-export type Get11Responses = {
+export type Get12Responses = {
     /**
      * OK
      */
     200: TelegramDeliveryOperationsView;
 };
 
-export type Get11Response = Get11Responses[keyof Get11Responses];
+export type Get12Response = Get12Responses[keyof Get12Responses];
 
-export type Get12Data = {
+export type Get13Data = {
     body?: never;
     path?: never;
     query?: {
@@ -3644,16 +3701,16 @@ export type Get12Data = {
     url: '/api/admin/llm/operations';
 };
 
-export type Get12Responses = {
+export type Get13Responses = {
     /**
      * OK
      */
     200: LlmOperationsView;
 };
 
-export type Get12Response = Get12Responses[keyof Get12Responses];
+export type Get13Response = Get13Responses[keyof Get13Responses];
 
-export type Get13Data = {
+export type Get14Data = {
     body?: never;
     path: {
         recoveryId: string;
@@ -3662,14 +3719,14 @@ export type Get13Data = {
     url: '/api/admin/integrations/livesklad/returns/recoveries/{recoveryId}';
 };
 
-export type Get13Responses = {
+export type Get14Responses = {
     /**
      * OK
      */
     200: LiveSkladReturnRecoveryView;
 };
 
-export type Get13Response = Get13Responses[keyof Get13Responses];
+export type Get14Response = Get14Responses[keyof Get14Responses];
 
 export type RevokeSessionData = {
     body?: never;

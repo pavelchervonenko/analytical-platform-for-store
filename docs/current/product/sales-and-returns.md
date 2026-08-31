@@ -37,21 +37,18 @@ superseded_by: null
 
 ## Атрибуция сотруднику
 
-Реализация использует сотрудника исходной продажи; `ReturnSyncIntegrationTest` передаёт отличный
-`return-processor`, но employee directory его не разрешает, а cash/original employee остаётся
-`employee-1`. Сценария с двумя разными успешно разрешёнными сотрудниками нет, поэтому precedence
-не защищён полноценным regression test.
-Методика заказчика требует сотрудника строки/документа возврата.
+Финансовая атрибуция возврата всегда следует исходной продаже:
 
-- Store/category totals не меняются.
-- Employee revenue, GP, mix, rating и employee attach-rate могут быть распределены неверно.
-- Employee-level показатели периода с возвратами не полностью авторитетны до решения и сверки.
-- Full employee reconciliation доказывает арифметику, но не правильного ответственного.
-- В normalized document хранится один `employee_id`; processing employee возврата остаётся только
-  в retained raw source. Для проверяемой смены правила нужен отдельный normalized provenance.
+- linked return получает `employee_id` исходного SALE;
+- processing employee возврата не используется как fallback, даже если успешно разрешён;
+- orphan return без найденного SALE сохраняется с `employee_id = null` и входит в «Не назначен»;
+- после появления оригинала повторная синхронизация связывает возврат и назначает исходного
+  продавца.
 
-Целевое предложение и миграционные gates — в
-[ADR-0001](../../decisions/ADR-0001-return-employee-attribution.md), статус `proposed`.
+`ReturnSyncIntegrationTest` использует двух разных разрешённых сотрудников и проверяет как
+приоритет исходного продавца, так и отсутствие fallback у orphan return. Store/category signed
+totals от атрибуции не меняются; employee KPI, rating и attach уменьшаются у продавца продажи.
+Правило принято в [ADR-0001](../../decisions/ADR-0001-return-employee-attribution.md).
 
 Нулевая оплата не доказывает отсутствие возврата: авторитетны signed items. Missing cost возврата
 делает cost/GP/margin неполными; неожиданный ноль остаётся quality gap.

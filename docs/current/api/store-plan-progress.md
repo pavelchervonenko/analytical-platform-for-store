@@ -32,8 +32,13 @@ superseded_by: null
 
 # Store Plan Progress API
 
-`GET /api/stores/{storeId}/performance-plans/{yyyy-MM}/progress?asOf=YYYY-MM-DD` всегда считает
-month-to-`asOf`. Это не произвольный выбранный range и не значение только одного дня.
+`GET /api/stores/{storeId}/performance-plans/{yyyy-MM}/progress?asOf=YYYY-MM-DD&scope=SELLERS|STORE`
+всегда считает month-to-`asOf`. Это не произвольный выбранный range и не значение только одного
+дня. Transport default `STORE` сохраняет совместимость прежних потребителей.
+
+План в базе один. `SELLERS` применяет его к факту `rankingEligible`, `STORE` — ко всему магазину.
+Revenue, direction amount, daily actuals, share, forecast и target amount внутри одного response
+всегда используют один scope.
 
 Для направления доли:
 
@@ -52,7 +57,5 @@ coverage и classification completeness; frontend отображает backend-o
 факта — monthly revenue target/число дней. Остаток направления рассчитывается от projected month
 revenue и детерминированно распределяется по будущим дням.
 
-Известная UI-интеграционная граница: если рядом показывать category amount за week/custom period и
-plan share из этого endpoint, под одной подписью смешиваются разные периоды. Клиент обязан явно
-показывать month-to-date scope либо запрашивать согласованный контракт; frontend-пересчёт не
-устраняет расхождение.
+Overview передаёт scope явно и показывает month target/gap в верхних карточках только в month mode.
+Для week/custom этот endpoint остаётся отдельным блоком «План месяца».

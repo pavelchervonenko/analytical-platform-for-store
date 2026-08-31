@@ -15,10 +15,12 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics/service/StoreKpiService.java
   - backend/src/main/java/com/storeanalytics/metrics/service/CategoryKpiService.java
   - backend/src/main/java/com/storeanalytics/metrics/repository/EmployeeKpiRepository.java
+  - backend/src/main/java/com/storeanalytics/metrics/service/OverviewMetricsService.java
 verification_sources:
   - backend/src/test/java/com/storeanalytics/metrics/repository/StoreKpiIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/metrics/repository/CategoryKpiIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/metrics/repository/EmployeeKpiIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/metrics/service/OverviewMetricsServiceTest.java
 runtime_evidence: []
 required_reviewers:
   - product
@@ -90,6 +92,16 @@ AdditionalShare = employee additional revenue / employee net revenue * 100%
 При нулевом знаменателе доля недоступна. Поведение при отрицательной employee revenue различается
 между отдельными проекциями и остаётся открытым gap.
 
+Для главной страницы доступны два scope:
+
+- `SELLERS` — только `rankingEligible` (`employee.is_active`, активное назначение и
+  `participates_in_ranking`);
+- `STORE` — полный store total, включая сотрудников вне рейтинга и «Не назначен».
+
+В обоих режимах числитель и знаменатель берутся из одного периода и cohort. Один результат
+контролирует равенства полного employee total и store total, seller revenue между двумя
+employee-проекциями и `Допы = Аксессуары + Услуги`. Несовпадение завершает расчёт ошибкой.
+
 ## Средние и округление
 
 ```text
@@ -103,11 +115,9 @@ Change = (current raw - previous raw) / previous raw * 100%
 decimal до двух знаков, UI показывает часть процентов с одним; двойное presentation-округление
 может дать отличие `0,1 п. п.` от правила одного финального округления.
 
-## Расхождения
-
-Возврат сейчас относится к сотруднику исходной продажи, а методика заказчика требует сотрудника
-возврата. Store/category totals не меняются; employee KPI/rating/attach могут измениться. См.
+Возврат относится к сотруднику исходной продажи. Обработчик возврата не получает финансовый факт;
+до появления исходной продажи orphan return остаётся в «Не назначен». Правило принято в
 [ADR-0001](../../decisions/ADR-0001-return-employee-attribution.md).
 
-`Допы = Аксессуары + Услуги` подтверждено integration-тестом, но отдельного runtime quality gate
-нет. Также требуется продуктово подтвердить исключение `EXCLUDE` из «всей чистой выручки».
+`EXCLUDE` по-прежнему не входит в «всю чистую выручку» аналитической системы; изменение этого
+правила требует отдельного продуктового решения.

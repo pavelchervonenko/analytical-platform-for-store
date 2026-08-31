@@ -2,14 +2,14 @@ import { AlertCircle, ArrowRight, ChevronDown, TrendingUp, Users } from "lucide-
 import { Link, useLocation } from "react-router";
 import type {
   AttachRate,
-  CategoryKpi,
   EmployeeAttachRatingEntry,
   EmployeeKpi,
   EmployeeRatingEntry,
   EmployeeRatingResult,
+  OverviewMetricScope,
+  OverviewMetrics,
   PlanDirection,
-  PlanProgress,
-  StoreKpi
+  PlanProgress
 } from "../api/contracts";
 import { attachRateLabels } from "../employees/rating-ui";
 import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
@@ -35,15 +35,6 @@ function findDirection(plan: PlanProgress | null | undefined, code: string): Pla
   return plan?.directions.find((direction) => direction.code === code) ?? null;
 }
 
-function findGroup(categories: CategoryKpi | undefined, code: string) {
-  return categories?.groups.find((group) => group.groupCode === code);
-}
-
-function share(amount: number | undefined, revenue: number | undefined): number | null {
-  if (amount == null || revenue == null || revenue === 0) return null;
-  return amount * 100 / revenue;
-}
-
 function deltaTone(value: number | null | undefined): string {
   if (value == null || value === 0) return "neutral";
   return value > 0 ? "positive" : "negative";
@@ -63,33 +54,33 @@ function signedMoney(value: number | null | undefined): string {
 
 function CommercialMetric({
   label,
-  amount,
-  quantity,
-  revenue,
-  direction
+  metric,
+  direction,
+  showPlan
 }: {
   label: string;
-  amount: number | undefined;
-  quantity: number | undefined;
-  revenue: number | undefined;
+  metric: OverviewMetrics["additional"] | undefined;
   direction: PlanDirection | null;
+  showPlan: boolean;
 }) {
-  const actualAmount = amount ?? direction?.actualAmount;
-  const actualShare = direction?.actualSharePercent ?? share(actualAmount, revenue);
-  const gapPoints = direction?.shareGapPercentagePoints;
-  const gapAmount = direction ? direction.actualAmount - direction.targetAmount : null;
-  const completion = direction?.criterionCompletionPercent;
+  const gapPoints = showPlan ? direction?.shareGapPercentagePoints : null;
+  const gapAmount = showPlan && direction
+    ? direction.actualAmount - direction.targetAmount
+    : null;
+  const completion = showPlan ? direction?.criterionCompletionPercent : null;
 
   return (
     <article className="overview-summary__metric overview-summary__metric--commercial">
       <span>{label}</span>
-      <strong>{formatPercent(actualShare)}</strong>
-      <small>{formatMoney(actualAmount)}, {formatNumber(quantity)} ед.</small>
-      <span className={`delta delta--${deltaTone(gapPoints)}`}>{signedPoints(gapPoints)}</span>
-      <div className="overview-summary__metric-plan">
-        <span>{direction ? `План ${formatPercent(direction.targetSharePercent)}` : "План не задан"}</span>
-        <strong>{direction ? `${signedMoney(gapAmount)} к плану` : "—"}</strong>
-      </div>
+      <strong>{formatPercent(metric?.sharePercent)}</strong>
+      <small>{formatMoney(metric?.netRevenue)}, {formatNumber(metric?.netQuantity)} ед.</small>
+      {showPlan && <span className={`delta delta--${deltaTone(gapPoints)}`}>{signedPoints(gapPoints)}</span>}
+      {showPlan && (
+        <div className="overview-summary__metric-plan">
+          <span>{direction ? `План ${formatPercent(direction.targetSharePercent)}` : "План не задан"}</span>
+          <strong>{direction ? `${signedMoney(gapAmount)} к плану` : "—"}</strong>
+        </div>
+      )}
       {completion != null && (
         <progress
           className="progress overview-summary__progress"
@@ -102,32 +93,63 @@ function CommercialMetric({
   );
 }
 
-export function ManagementSummary({
-  kpi,
-  categories,
-  plan
+function MetricScopeToggle({
+  scope,
+  onChange
 }: {
-  kpi: StoreKpi | undefined;
-  categories: CategoryKpi | undefined;
+  scope: OverviewMetricScope;
+  onChange: (scope: OverviewMetricScope) => void;
+}) {
+  return (
+    <div className="overview-summary__scope" role="group" aria-label="Состав главных показателей">
+      <button
+        type="button"
+        aria-pressed={scope === "SELLERS"}
+        onClick={() => onChange("SELLERS")}
+      >
+        Только продавцы
+      </button>
+      <button
+        type="button"
+        aria-pressed={scope === "STORE"}
+        onClick={() => onChange("STORE")}
+      >
+        Весь магазин
+      </button>
+    </div>
+  );
+}
+
+export function ManagementSummary({
+  metrics,
+  plan,
+  scope,
+  onScopeChange,
+  showMonthlyPlan
+}: {
+  metrics: OverviewMetrics | undefined;
   plan: PlanProgress | null | undefined;
+  scope: OverviewMetricScope;
+  onScopeChange: (scope: OverviewMetricScope) => void;
+  showMonthlyPlan: boolean;
 }) {
   const revenueDirection = findDirection(plan, "REVENUE");
   const accessoryDirection = findDirection(plan, "ACCESSORY");
   const serviceDirection = findDirection(plan, "SERVICE");
   const additionalDirection = findDirection(plan, "ADDITIONAL");
-  const accessory = findGroup(categories, "ACCESSORY");
-  const service = findGroup(categories, "SERVICE");
-  const additional = findGroup(categories, "ADDITIONAL_REVENUE");
-  const revenueCompletion = revenueDirection?.criterionCompletionPercent;
+  const revenueCompletion = showMonthlyPlan
+    ? revenueDirection?.criterionCompletionPercent
+    : null;
 
   return (
     <section className="overview-summary" aria-label="Главные показатели">
+      <MetricScopeToggle scope={scope} onChange={onScopeChange} />
       <article className="overview-summary__primary">
         <span>Чистая выручка</span>
-        <strong>{formatMoney(kpi?.netRevenue)}</strong>
+        <strong>{formatMoney(metrics?.netRevenue)}</strong>
         <div>
-          <span>{formatNumber(kpi?.netQuantity)} ед.</span>
-          <span>{revenueDirection ? `План месяца ${formatCompactMoney(revenueDirection.targetAmount)}` : "План месяца не задан"}</span>
+          <span>{formatNumber(metrics?.netQuantity)} ед.</span>
+          {showMonthlyPlan && <span>{revenueDirection ? `План месяца ${formatCompactMoney(revenueDirection.targetAmount)}` : "План месяца не задан"}</span>}
         </div>
         {revenueCompletion != null && (
           <div className="overview-summary__revenue-plan">
@@ -144,30 +166,27 @@ export function ManagementSummary({
       <div className="overview-summary__metrics">
         <article className="overview-summary__metric">
           <span>Валовая прибыль</span>
-          <strong>{formatMoney(kpi?.grossProfit)}</strong>
-          <small>Маржа {formatPercent(kpi?.marginPercent)}</small>
-          {!kpi?.dataQuality.completeCostData && <span className="quality-warning"><AlertCircle size={14} />Данные неполные</span>}
+          <strong>{formatMoney(metrics?.grossProfit)}</strong>
+          <small>Маржа {formatPercent(metrics?.marginPercent)}</small>
+          {metrics && !metrics.dataQuality.completeCostData && <span className="quality-warning"><AlertCircle size={14} />Данные неполные</span>}
         </article>
         <CommercialMetric
           label="Допы"
-          amount={additional?.metrics.netRevenue}
-          quantity={additional?.metrics.netQuantity}
-          revenue={kpi?.netRevenue}
+          metric={metrics?.additional}
           direction={additionalDirection}
+          showPlan={showMonthlyPlan}
         />
         <CommercialMetric
           label="Аксессуары"
-          amount={accessory?.metrics.netRevenue}
-          quantity={accessory?.metrics.netQuantity}
-          revenue={kpi?.netRevenue}
+          metric={metrics?.accessory}
           direction={accessoryDirection}
+          showPlan={showMonthlyPlan}
         />
         <CommercialMetric
           label="Услуги"
-          amount={service?.metrics.netRevenue}
-          quantity={service?.metrics.netQuantity}
-          revenue={kpi?.netRevenue}
+          metric={metrics?.service}
           direction={serviceDirection}
+          showPlan={showMonthlyPlan}
         />
       </div>
     </section>

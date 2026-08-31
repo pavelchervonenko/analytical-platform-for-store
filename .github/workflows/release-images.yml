@@ -87,13 +87,31 @@ jobs:
           backend="ghcr.io/${owner}/store-analytics-backend:${GITHUB_SHA}"
           web="ghcr.io/${owner}/store-analytics-web:${GITHUB_SHA}"
 
-          docker build --pull --file backend/Dockerfile --tag "${backend}" .
-          docker build --pull --file frontend/Dockerfile --tag "${web}" .
+          docker build --pull --build-arg SOURCE_COMMIT="${GITHUB_SHA}" \
+            --file backend/Dockerfile --tag "${backend}" .
+          docker build --pull --build-arg SOURCE_COMMIT="${GITHUB_SHA}" \
+            --file frontend/Dockerfile --tag "${web}" .
+          backend_revision="$(docker image inspect \
+            --format='{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+            "${backend}")"
+          web_revision="$(docker image inspect \
+            --format='{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+            "${web}")"
+          test "${backend_revision}" = "${GITHUB_SHA}"
+          test "${web_revision}" = "${GITHUB_SHA}"
+
           docker push "${backend}"
           docker push "${web}"
 
           backend_digest="$(docker inspect --format='{{index .RepoDigests 0}}' "${backend}")"
           web_digest="$(docker inspect --format='{{index .RepoDigests 0}}' "${web}")"
+          backend_remote_revision="$(docker buildx imagetools inspect "${backend_digest}" \
+            --format '{{ index .Image.Config.Labels "org.opencontainers.image.revision" }}')"
+          web_remote_revision="$(docker buildx imagetools inspect "${web_digest}" \
+            --format '{{ index .Image.Config.Labels "org.opencontainers.image.revision" }}')"
+          test "${backend_remote_revision}" = "${GITHUB_SHA}"
+          test "${web_remote_revision}" = "${GITHUB_SHA}"
+
           {
             printf 'backend=%s\n' "${backend_digest}"
             printf 'web=%s\n' "${web_digest}"

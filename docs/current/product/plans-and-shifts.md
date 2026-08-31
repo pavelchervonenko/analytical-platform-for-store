@@ -12,6 +12,7 @@ requirement_sources:
   - docs/archive/discoveries/analytics-business-rules-draft.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/performance/service/StorePlanProgressService.java
+  - backend/src/main/java/com/storeanalytics/metrics/service/OverviewMetricsService.java
   - backend/src/main/java/com/storeanalytics/performance/model/StorePlanTargets.java
   - frontend/src/plan-schedule/PlanSchedulePage.tsx
 verification_sources:
@@ -32,7 +33,9 @@ superseded_by: null
 
 # Планы и смены
 
-План — месячный контракт магазина. Факт считается от первого числа до включительной `asOf`.
+План — один месячный контракт. Факт считается от первого числа до включительной `asOf`, но cohort
+задаётся параметром `scope`: `SELLERS` применяет тот же план только к продавцам рейтинга, `STORE` —
+ко всему магазину. Отдельных значений плана для двух режимов нет.
 
 ## Выручка
 
@@ -57,7 +60,8 @@ ShareGap = ActualShare - target share
 ```
 
 При неположительной выручке доля недоступна. `TargetAmountToDate` — ориентир относительно уже
-полученной выручки, не отдельный месячный денежный план. Модель пока не валидирует
+полученной выручки, не отдельный месячный денежный план. Расчёт факта контролирует
+`actual additional = actual accessory + actual service`. Модель плана пока не валидирует
 `additionalShareTarget = accessoryShareTarget + serviceShareTarget`.
 
 ## Будущие дни
@@ -78,5 +82,6 @@ future target меняется после синхронизации.
 фонд делится поровну между сотрудниками смены: часы используются для учёта/эффективности, но не как
 вес фонда. День фонда без смен снижает readiness.
 
-На главной план остаётся месячным даже при week/custom. Смешение с выбранным периодом описано в
+На главной план остаётся месячным даже при week/custom. В week/custom он показывается отдельным
+блоком и не подменяет selected-period share; решение закреплено в
 [ADR-0002](../../decisions/ADR-0002-overview-period-scope.md).

@@ -46,8 +46,8 @@ age, владельца customer vault или факт успешной рота
   Secret values не должны находиться в release env, Git, image layers или command line.
 - Preflight требует regular non-symlink, readable, non-empty root-owned files mode `0600`; webhook
   secrets дополнительно проверяются как 32–256 URL-safe characters.
-- PostgreSQL runtime/migrator, LiveSklad, webhook, Yandex, Telegram, telemetry, Prometheus и bootstrap
-  credentials разделены по назначению.
+- PostgreSQL runtime/migrator/backup, LiveSklad, webhook, Yandex, Telegram, telemetry, Prometheus и
+  bootstrap credentials разделены по назначению.
 - `provision-release-secrets.sh` создаёт только два LiveSklad webhook secrets атомарно и сохраняет
   уже существующие; он не является общим secret manager.
 - Backup passphrase и object-storage credentials используют отдельный backup environment.

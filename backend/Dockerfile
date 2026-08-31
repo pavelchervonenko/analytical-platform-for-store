@@ -17,6 +17,9 @@ FROM build AS test
 RUN --mount=type=cache,target=/root/.gradle ./gradlew :backend:test -x operatorScriptSecurityTest --no-daemon --console=plain
 
 FROM eclipse-temurin:21-jre-alpine-3.23
+ARG SOURCE_COMMIT
+LABEL org.opencontainers.image.revision="${SOURCE_COMMIT}"
+
 WORKDIR /app
 
 RUN apk add --no-cache su-exec \

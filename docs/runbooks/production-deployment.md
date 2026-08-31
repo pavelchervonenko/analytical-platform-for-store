@@ -45,11 +45,11 @@ superseded_by: null
 Развернуть exact immutable backend/web images через штатный deploy path. Процедура включает Flyway
 migration и не является разрешением на запуск без свежего backup/restore evidence и change owner.
 
-**Текущий authorization status: NO-GO для production write.** Репозиторный preflight пока не
-закрывает три обязательных gate: совместимость работающего runtime с target schema на время
-migration, exact-target ACL repair и доказуемую связь release env → digest → commit. До исправления
-кода deploy path разделы ниже являются проектом безопасной процедуры и read-only checklist, а не
-разрешением запускать `deploy.sh`.
+**Статус deploy-path: CONDITIONAL GO после release-specific gates.** Три прежних P1-gap закрыты:
+API/worker quiesce до Flyway, exact-target ACL repair из reviewed release env и проверяемая связь
+`release env → immutable digest → OCI revision → commit`. Это не является общей авторизацией:
+production write остаётся NO-GO, пока конкретный релиз не прошёл CI, GHCR publication, backup и
+production-read-only preflight и владелец не подтвердил показанный exact release plan.
 
 ## Влияние и требуемая авторизация
 
@@ -59,16 +59,13 @@ migration, exact-target ACL repair и доказуемую связь release en
 
 ## Предусловия
 
-- Reviewed tag/commit, CI, exact `repository@sha256` coordinates и schema compatibility matrix.
-- Current API/worker runtime явно поддерживает target schema во время Flyway. Если его
-  `RUNTIME_SCHEMA_MAX_VERSION` ниже target, штатный `deploy.sh` запускать нельзя: старый runtime
-  остаётся работающим во время migration.
+- Reviewed tag/commit находится на approved branch, CI зелёный.
+- Backend/web заданы как exact `ghcr.io/...@sha256:<64 hex>`; оба OCI revision равны
+  `RELEASE_COMMIT`, а digest-поля совпадают с image references.
 - Fresh backup checkpoint с доказанной возможностью restore; отсутствие активной migration/recovery.
 - Release env — root-owned regular file `0600`; секреты provisioned отдельно.
-- ACL repair получает тот же exact DB target и роли из проверенного release/config, без
-  infrastructure defaults.
-- Backend digest внутри image, release metadata и `BACKEND_IMAGE` доказуемо относятся к одному
-  reviewed commit.
+- Exact DB cert host/hostaddr/port/name/schema и runtime/migrator/backup roles заданы в release env.
+- Recorded source schema входит в migration range, packaged target совпадает с `SCHEMA_VERSION`.
 - Назначены observer, rollback/forward-fix owner и окно наблюдения.
 
 ## Критерии остановки
@@ -76,12 +73,11 @@ migration, exact-target ACL repair и доказуемую связь release en
 - Target host/database/release не совпал с change record.
 - `database-schema-version` отсутствует, нечисловой или равен `MIGRATION_IN_PROGRESS`.
 - Live Flyway history содержит failed migration или расходится с state-файлом.
-- Current running runtime не поддерживает target schema, а deploy path не останавливает writers до
-  migration.
-- ACL repair использует hardcoded/default DB target или роли, не сверенные с change record.
-- Backup/restore, image provenance, Compose config или required secrets не подтверждены.
-- Preflight не проверил owner/mode release env, immutable image references и соответствие
-  `BACKEND_IMAGE_DIGEST` фактическому `BACKEND_IMAGE`.
+- Deploy bundle не содержит quiesce worker/API до `MIGRATION_IN_PROGRESS` и Flyway.
+- ACL repair не получает exact reviewed release env или target/roles расходятся с change record.
+- Backup/restore, remote/local image provenance, Compose config или required secrets не подтверждены.
+- Preflight не проверил owner/mode release env, оба immutable image reference/digest и обе OCI
+  revision относительно `RELEASE_COMMIT`.
 - В очередях выполняется конфликтующая recovery/backfill, которую change owner не разрешил.
 
 ## Preflight
@@ -97,18 +93,18 @@ sudo systemctl show store-analytics-backup.timer store-analytics-backup.service 
   --property=ActiveState,Result,LastTriggerUSec --no-pager
 ```
 
-Эти команды не закрывают gate автоматически. Reviewer отдельно сверяет:
+Preflight fail-closed проверяет release env, required secret files, exact DB target, immutable
+references/digests, remote OCI revisions и Compose config. Reviewer отдельно сверяет:
 
 - owner/mode равны approved host policy;
-- backend/web references имеют форму `repository@sha256:<64 hex>`;
-- target schema не выше runtime max работающих API/worker;
-- declared backend digest равен digest в image reference и release provenance;
-- ACL script target/roles совпадают с change record без fallback defaults.
+- `RELEASE_COMMIT` равен reviewed commit/tag target;
+- backend/web digest и OCI revision совпадают с опубликованными CI coordinates;
+- source/target schema и exact DB target совпадают с change record;
+- deploy bundle содержит остановку worker, затем API до Flyway;
+- ACL script читает target/roles только из переданного release env.
 
 Read-only ролью проверить последнюю успешную Flyway version и отсутствие failed rows. Любой
-непроверяемый пункт означает stop, а не ручной обход. Compose сейчас не передаёт
-`RUNTIME_SCHEMA_MAX_VERSION` приложению, поэтому рабочей команды для проверки current runtime max
-нет; это часть NO-GO gap, а не значение, которое operator должен угадывать.
+непроверяемый пункт означает stop, а не ручной обход.
 
 ## Точный target
 
@@ -118,12 +114,15 @@ commit/tag, backend/web digests, source/target schema, release-env SHA-256 и в
 
 ## Процедура
 
-1. Зафиксировать preflight/backup evidence и повторно подтвердить exact target.
-2. Только после реализации и проверки трёх NO-GO gates запустить один раз:
+1. Зафиксировать CI/GHCR, preflight/backup evidence и повторно подтвердить exact target.
+2. Показать владельцу release ID, commit/tag, backend/web digests, source/target schema, DB target,
+   ожидаемое короткое окно недоступности и post-deploy checks.
+3. После отдельного подтверждения production write запустить ровно один раз:
    `sudo /opt/store-analytics/deploy/bin/deploy.sh /etc/store-analytics/release.env`.
-3. Не запускать второй deploy, пока первый не завершён или неизвестная точка сбоя не исследована.
-4. Проверить container image digests/health, public smoke и live Flyway version.
-5. Сравнить разрешённые feature flags и critical queue counts с change record.
+4. Скрипт проверит remote/local provenance, остановит worker и API, запустит Flyway и ACL repair,
+   затем поднимет API → worker → web и выполнит smoke.
+5. Не запускать второй deploy, пока первый не завершён или неизвестная точка сбоя не исследована.
+6. Проверить container image digests/health, public smoke, live Flyway и critical queues.
 
 ## Проверка результата
 
@@ -146,7 +145,8 @@ Application rollback не откатывает БД. `rollback.sh` допуст�
 ## Evidence и известные пробелы
 
 Сохранить timestamps, digests, release/schema identities, health, sanitized flags/queues и verdict.
-Runbook остаётся draft: preflight не проверяет image signature/provenance, а migration failure может
-оставить `MIGRATION_IN_PROGRESS` без штатного recovery tool. Кроме того, текущий deploy запускает
-Flyway при работающем старом runtime и ACL repair не выводит exact target из release env. До
-исправления этих P1 gaps production deployment по этому документу запрещён.
+Runbook остаётся draft до staging rehearsal и production-read-only evidence конкретного release.
+Оставшиеся ограничения: OCI revision не является cryptographic signature/attestation, а migration
+failure может оставить writers остановленными и `MIGRATION_IN_PROGRESS` без автоматического
+recovery. В этом состоянии сначала исследуют Flyway/containers и используют reviewed forward-fix;
+blind retry запрещён.

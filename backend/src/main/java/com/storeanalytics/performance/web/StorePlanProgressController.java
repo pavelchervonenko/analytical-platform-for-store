@@ -1,5 +1,6 @@
 package com.storeanalytics.performance.web;
 
+import com.storeanalytics.metrics.service.OverviewMetricScope;
 import com.storeanalytics.performance.service.StorePlanProgressService;
 import com.storeanalytics.performance.service.StorePlanProgressView;
 import java.time.LocalDate;
@@ -26,8 +27,9 @@ public class StorePlanProgressController {
     StorePlanProgressView get(
             @PathVariable UUID storeId,
             @PathVariable @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOf
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOf,
+            @RequestParam(defaultValue = "STORE") OverviewMetricScope scope
     ) {
-        return progressService.calculate(storeId, month, asOf);
+        return progressService.calculate(storeId, month, asOf, scope);
     }
 }

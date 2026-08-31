@@ -71,11 +71,13 @@ privileges и default ACL. Секреты и password hashes не выводит
 
 ## Процедура
 
-1. Явно передать скрипту все DB target и password/CA file variables из reviewed change record; не
-   полагаться на defaults.
-2. Запустить `repair-production-database-acls.sh` один раз.
-3. Повторить read-only ACL snapshot и сравнить только с approved least-privilege matrix.
-4. Проверить API/worker readiness и одну read/write application transaction; backup role — только
+1. Подготовить root-owned reviewed `release.env` с exact DB cert host/hostaddr/port/name/schema,
+   тремя различными ролями и абсолютными password/CA file paths.
+2. Выполнить один раз:
+   `sudo /opt/store-analytics/deploy/bin/repair-production-database-acls.sh /etc/store-analytics/release.env`.
+3. Скрипт валидирует весь release env и выводит только database/schema/role names без секретов.
+4. Повторить read-only ACL snapshot и сравнить только с approved least-privilege matrix.
+5. Проверить API/worker readiness и одну read/write application transaction; backup role — только
    SELECT, runtime — без CREATE/TRUNCATE, public — без function execute.
 
 ## Повторный запуск и конкурентность
@@ -90,6 +92,6 @@ Rollback — применить заранее снятый reviewed ACL snapsho
 
 ## Evidence и известные пробелы
 
-Сохранить before/after ACL matrix, target/release/schema и functional checks. Скрипт содержит
-infrastructure-specific defaults и не читает target из проверенного release env; до исправления и
-staging rehearsal runbook остаётся draft.
+Сохранить before/after ACL matrix, target/release/schema и functional checks. Скрипт не содержит
+infrastructure/role defaults и принимает ровно один release env. Runbook остаётся draft до staging
+rehearsal и production-read-only ACL evidence.

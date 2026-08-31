@@ -40,7 +40,7 @@ async function installFixtureApi(page: Page) {
   }]));
   await page.route("**/api/stores/*/data-status", async (route) => json(route, {
     storeId: visualStoreId,
-    status: "READY",
+    status: "CURRENT",
     expectedThroughDate: "2026-08-26",
     dataThroughDate: "2026-08-26",
     salesDataThroughDate: "2026-08-26",
@@ -60,6 +60,228 @@ async function installFixtureApi(page: Page) {
     lastError: null,
     lastErrorAt: null,
     checkedAt: "2026-08-27T04:35:00Z"
+  }));
+  const periodStart = "2026-08-01";
+  const periodEnd = "2026-08-31";
+  const metricQuality = {
+    completeCostData: true,
+    includedItemCount: 24,
+    missingCostItemCount: 0,
+    unexpectedZeroCostItemCount: 0
+  };
+  const categoryMetric = (netRevenue: number, netQuantity: number, costAmount: number) => ({
+    netRevenue,
+    netQuantity,
+    costAmount,
+    grossProfit: netRevenue - costAmount,
+    averageGrossProfitPerUnit: netQuantity > 0
+      ? (netRevenue - costAmount) / netQuantity
+      : null,
+    marginPercent: netRevenue > 0 ? (netRevenue - costAmount) * 100 / netRevenue : null,
+    dataQuality: metricQuality
+  });
+  await page.route("**/api/stores/*/overview-metrics?*", async (route) => {
+    const scope = new URL(route.request().url()).searchParams.get("scope") === "STORE"
+      ? "STORE"
+      : "SELLERS";
+    const factor = scope === "STORE" ? 1.12 : 1;
+    const netRevenue = 54_800_000 * factor;
+    await json(route, {
+      storeId: visualStoreId,
+      periodStart,
+      periodEnd,
+      scope,
+      formulaVersion: "overview-metrics-v1",
+      netRevenue,
+      netQuantity: Math.round(2_240 * factor),
+      costAmount: 45_700_000 * factor,
+      grossProfit: 9_100_000 * factor,
+      marginPercent: 16.61,
+      additional: {
+        netRevenue: 6_028_000 * factor,
+        netQuantity: Math.round(1_640 * factor),
+        sharePercent: 11
+      },
+      accessory: {
+        netRevenue: 3_562_000 * factor,
+        netQuantity: Math.round(1_020 * factor),
+        sharePercent: 6.5
+      },
+      service: {
+        netRevenue: 2_466_000 * factor,
+        netQuantity: Math.round(620 * factor),
+        sharePercent: 4.5
+      },
+      dataQuality: {
+        ...metricQuality,
+        unmappedItemCount: 0,
+        periodOpenConsistencyIssueCount: 0,
+        storeOpenQualityIssueCount: 0,
+        reconciliationPassed: true
+      }
+    });
+  });
+  await page.route("**/api/stores/*/kpi/categories?*", async (route) => json(route, {
+    storeId: visualStoreId,
+    periodStart,
+    periodEnd,
+    formulaVersion: "category-kpi-v1",
+    groups: [
+      { groupCode: "DEVICES", groupName: "Техника", metrics: categoryMetric(48_772_000, 600, 40_910_000) },
+      { groupCode: "PHONES", groupName: "Телефоны", metrics: categoryMetric(43_150_000, 510, 36_410_000) },
+      { groupCode: "ADDITIONAL_REVENUE", groupName: "Дополнительная выручка", metrics: categoryMetric(6_028_000, 1_640, 4_790_000) },
+      { groupCode: "ACCESSORY", groupName: "Аксессуары", metrics: categoryMetric(3_562_000, 1_020, 2_930_000) },
+      { groupCode: "SERVICE", groupName: "Услуги", metrics: categoryMetric(2_466_000, 620, 1_860_000) }
+    ],
+    categories: []
+  }));
+  await page.route("**/api/stores/*/performance-plans/*/progress?*", async (route) => {
+    const scope = new URL(route.request().url()).searchParams.get("scope") === "STORE"
+      ? "STORE"
+      : "SELLERS";
+    const factor = scope === "STORE" ? 1.12 : 1;
+    const revenue = 54_800_000 * factor;
+    const direction = (
+      code: string,
+      actualAmount: number,
+      targetAmount: number,
+      actualSharePercent: number | null,
+      targetSharePercent: number | null
+    ) => {
+      const criterionCompletionPercent = targetSharePercent == null
+        ? actualAmount * 100 / targetAmount
+        : (actualSharePercent ?? 0) * 100 / targetSharePercent;
+      return {
+        code,
+        criterionType: targetSharePercent == null ? "AMOUNT" : "SHARE",
+        actualAmount,
+        targetAmount,
+        amountCompletionPercent: actualAmount * 100 / targetAmount,
+        currentDailyPace: actualAmount / 27,
+        expectedAmountToDate: targetAmount * 27 / 31,
+        paceGapAmount: actualAmount - targetAmount * 27 / 31,
+        projectedAmount: actualAmount * 31 / 27,
+        projectedAmountCompletionPercent: actualAmount * 31 * 100 / (27 * targetAmount),
+        remainingAmount: Math.max(0, targetAmount - actualAmount),
+        requiredPerRemainingDay: Math.max(0, targetAmount - actualAmount) / 4,
+        actualSharePercent,
+        targetSharePercent,
+        shareGapPercentagePoints: targetSharePercent == null
+          ? null
+          : (actualSharePercent ?? 0) - targetSharePercent,
+        criterionCompletionPercent,
+        achieved: criterionCompletionPercent >= 100,
+        status: criterionCompletionPercent >= 100 ? "ACHIEVED" : "ON_TRACK"
+      };
+    };
+    const directions = [
+      direction("REVENUE", revenue, 55_000_000, null, null),
+      direction("ACCESSORY", revenue * 0.065, revenue * 0.063, 6.5, 6.3),
+      direction("SERVICE", revenue * 0.045, revenue * 0.042, 4.5, 4.2),
+      direction("ADDITIONAL", revenue * 0.11, revenue * 0.105, 11, 10.5)
+    ];
+    await json(route, {
+      storeId: visualStoreId,
+      periodStart,
+      periodEnd,
+      asOfDate: "2026-08-27",
+      totalDays: 31,
+      elapsedDays: 27,
+      remainingDays: 4,
+      formulaVersion: "store-plan-progress-v3",
+      plan: {
+        id: "10000000-0000-4000-8000-000000000010",
+        storeId: visualStoreId,
+        planMonth: "2026-08",
+        revenueTarget: 55_000_000,
+        accessoryShareTarget: 6.3,
+        serviceShareTarget: 4.2,
+        additionalShareTarget: 10.5,
+        updatedBy: "20000000-0000-4000-8000-000000000001",
+        version: 1,
+        updatedAt: "2026-08-01T06:00:00Z"
+      },
+      dataQuality: {
+        freshnessStatus: "CURRENT",
+        dataThroughDate: "2026-08-27",
+        completeThroughAsOf: true,
+        classificationComplete: true,
+        unmappedItemCount: 0,
+        openQualityIssueCount: 0
+      },
+      achievedDirectionCount: directions.filter((item) => item.achieved).length,
+      allDirectionsAchieved: directions.every((item) => item.achieved),
+      focusDirections: [],
+      directions,
+      dailyTargets: [],
+      calculatedAt: "2026-08-27T06:00:00Z"
+    });
+  });
+  await page.route("**/api/stores/*/period-quality/*?*", async (route) => json(route, {
+    storeId: visualStoreId,
+    periodMonth: "2026-08",
+    periodStart,
+    periodEnd,
+    asOfDate: "2026-08-27",
+    status: "OK",
+    readyForDecisions: true,
+    areas: [],
+    issues: [],
+    checkedAt: "2026-08-27T06:00:00Z"
+  }));
+  await page.route("**/api/stores/*/employee-ratings?*", async (route) => json(route, {
+    storeId: visualStoreId,
+    periodStart,
+    periodEnd,
+    formula: {
+      version: "rating-v1",
+      contributionWeight: 25,
+      efficiencyWeight: 25,
+      structureWeight: 25,
+      attachWeight: 25,
+      accessoryStructureWeight: 50,
+      serviceStructureWeight: 50,
+      minimumAttachDenominator: 1,
+      scoreCap: 200,
+      minimumCoveragePercent: 75
+    },
+    plan: {
+      complete: true,
+      coveragePercent: 100,
+      proratedRevenueTarget: 47_900_000,
+      accessoryShareTarget: 6.3,
+      serviceShareTarget: 4.2,
+      additionalShareTarget: 10.5,
+      actualStoreRevenue: 54_800_000,
+      revenueAchievementPercent: 114.4
+    },
+    employees: [],
+    history: {
+      status: "DRAFT",
+      snapshotId: null,
+      finalizedAt: null,
+      finalizedBy: null,
+      finalizedByName: null
+    }
+  }));
+  await page.route("**/api/stores/*/kpi/employees?*", async (route) => json(route, {
+    storeId: visualStoreId,
+    periodStart,
+    periodEnd,
+    formulaVersion: "employee-kpi-v1",
+    employees: []
+  }));
+  await page.route("**/api/stores/*/kpi/attach-rates?*", async (route) => json(route, {
+    storeId: visualStoreId,
+    periodStart,
+    periodEnd,
+    formulaVersion: "attach-rate-v1",
+    dataQuality: {
+      unmatchedNumeratorItemCount: 0,
+      ambiguousWarrantyItemCount: 0,
+      unknownDeviceConditionItemCount: 0
+    },
+    rates: []
   }));
   await page.route("**/api/stores/*/weekly-reviews/current", async (route) => {
     await json(route, makeWeeklyReview());
@@ -268,6 +490,18 @@ test.describe("local frontend visual review", () => {
         ).toHaveCount(0);
       }
       if (new URL(route, "http://local.test").pathname === "/overview") {
+        const storeScope = page.getByRole("button", { name: "Весь магазин" });
+        await storeScope.click();
+        await expect(storeScope).toHaveAttribute("aria-pressed", "true");
+        await page.waitForLoadState("networkidle");
+        await page.locator(".overview-summary").screenshot({
+          path: resolve(screenshotDirectory, screenshotName(route) + "-store-scope.png"),
+          animations: "disabled"
+        });
+        const sellerScope = page.getByRole("button", { name: "Только продавцы" });
+        await sellerScope.click();
+        await expect(sellerScope).toHaveAttribute("aria-pressed", "true");
+        await page.waitForLoadState("networkidle");
         const attachMap = page.locator(".attach-map-panel");
         if (await attachMap.count() > 0) {
           await attachMap.locator(":scope > summary").click();

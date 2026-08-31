@@ -241,8 +241,8 @@ docs/current/product/periods.md	tracked	current-contract	product	current	keep	do
 docs/current/product/plans-and-shifts.md	tracked	current-contract	product	current	keep	docs/current/product/plans-and-shifts.md	Review implementation and verification sources in the same behavior change
 docs/current/product/reports.md	tracked	current-contract	product	current	keep	docs/current/product/reports.md	Review implementation and verification sources in the same behavior change
 docs/current/product/sales-and-returns.md	tracked	current-contract	product	current	keep	docs/current/product/sales-and-returns.md	Review implementation and verification sources in the same behavior change
-docs/decisions/ADR-0001-return-employee-attribution.md	tracked	architecture-decision	product	proposed	keep	docs/decisions/ADR-0001-return-employee-attribution.md	Do not treat proposed decision as implemented until acceptance gates pass
-docs/decisions/ADR-0002-overview-period-scope.md	tracked	architecture-decision	product	proposed	keep	docs/decisions/ADR-0002-overview-period-scope.md	Do not treat proposed decision as implemented until acceptance gates pass
+docs/decisions/ADR-0001-return-employee-attribution.md	tracked	architecture-decision	product	accepted	keep	docs/decisions/ADR-0001-return-employee-attribution.md	Preserve original-sale employee attribution; promote implementation status only after integration verification
+docs/decisions/ADR-0002-overview-period-scope.md	tracked	architecture-decision	product	accepted	keep	docs/decisions/ADR-0002-overview-period-scope.md	Preserve same-period selected facts and separate monthly plan; verify desktop/tablet/mobile before promotion
 docs/decisions/README.md	tracked	domain-index	project	current	keep	docs/decisions/README.md	Keep navigation complete and synchronized with canonical documents
 docs/runbooks/README.md	tracked	domain-index	operations	current	keep	docs/runbooks/README.md	Keep navigation complete and synchronized with canonical documents
 docs/runbooks/access-and-break-glass.md	tracked	runbook	security	draft	keep	docs/runbooks/access-and-break-glass.md	Rehearse required levels before changing draft to current

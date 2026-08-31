@@ -45,6 +45,12 @@ wait_healthy() {
   done
 }
 
+service_is_running() {
+  local service="$1"
+
+  compose ps --status running --services "${service}" | grep -Fxq "${service}"
+}
+
 if [[ -f "${DATABASE_SCHEMA_FILE}" ]]; then
   database_schema="$(<"${DATABASE_SCHEMA_FILE}")"
   release_schema_allows_migration_source "${RELEASE_ENV}" "${database_schema}" \
@@ -68,12 +74,24 @@ else
   compose pull backend-api backend-worker web
 fi
 
+release_verify_local_image_provenance "${RELEASE_ENV}" \
+  || die 'pulled image provenance does not match the reviewed release'
+
 expected_schema="$(release_env_value "${RELEASE_ENV}" SCHEMA_VERSION)"
 image_schema="$(compose --profile tools run --rm --no-deps \
   --entrypoint java migrate -jar /app/app.jar --print-expected-schema-version \
   | tail -n 1)"
 [[ "${image_schema}" == "${expected_schema}" ]] \
   || die "backend image schema ${image_schema} does not match release metadata ${expected_schema}"
+
+printf 'Stopping background worker and API before database migration\n'
+compose stop -t 90 backend-worker
+compose stop -t 60 backend-api
+if service_is_running backend-worker || service_is_running backend-api; then
+  die 'backend writers are still running; database migration was not started'
+fi
+printf '%s\n' \
+  'Backend writers are quiesced; migration failure will leave them stopped for diagnosis'
 
 printf '%s\n' 'MIGRATION_IN_PROGRESS' >"${DATABASE_SCHEMA_FILE}"
 chmod 0640 "${DATABASE_SCHEMA_FILE}"
@@ -84,7 +102,7 @@ printf '%s\n' "${expected_schema}" >"${DATABASE_SCHEMA_FILE}"
 chmod 0640 "${DATABASE_SCHEMA_FILE}"
 
 printf 'Reasserting least-privilege database ACLs\n'
-"${DEPLOY_ROOT}/bin/repair-production-database-acls.sh"
+"${DEPLOY_ROOT}/bin/repair-production-database-acls.sh" "${RELEASE_ENV}"
 
 printf 'Starting backend API before background workers\n'
 compose up -d --remove-orphans backend-api

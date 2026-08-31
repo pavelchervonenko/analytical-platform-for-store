@@ -2,6 +2,7 @@ package com.storeanalytics.performance.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.storeanalytics.metrics.service.OverviewMetricScope;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -45,6 +46,8 @@ class StorePlanDailyActualRepositoryIntegrationTest {
     void cleanDatabase() {
         jdbcTemplate.update("DELETE FROM sales_document_items");
         jdbcTemplate.update("DELETE FROM sales_documents");
+        jdbcTemplate.update("DELETE FROM employee_store_assignments");
+        jdbcTemplate.update("DELETE FROM employees");
         jdbcTemplate.update("DELETE FROM products");
         jdbcTemplate.update("DELETE FROM sync_runs");
         jdbcTemplate.update("DELETE FROM stores");
@@ -92,6 +95,47 @@ class StorePlanDailyActualRepositoryIntegrationTest {
             assertThat(day.accessoryAmount()).isEqualByComparingTo("-25.00");
             assertThat(day.serviceAmount()).isEqualByComparingTo("-50.00");
         });
+    }
+
+    @Test
+    void sellerScopeIncludesOnlyActiveRankingParticipantsAndTheirReturns() {
+        TestGraph graph = createGraph();
+        UUID sellerId = addEmployee(graph, "Seller", true, true, true);
+        UUID wholesaleBuyerId = addEmployee(graph, "Wholesale", true, true, false);
+        LocalDate saleDate = LocalDate.of(2026, 8, 1);
+        UUID sellerSaleId = addDocument(
+                graph, "seller-sale", "SALE", saleDate, null, sellerId
+        );
+        addItem(graph, sellerSaleId, "CHARGER_CABLE", "100.00", false);
+        UUID wholesaleSaleId = addDocument(
+                graph, "wholesale-sale", "SALE", saleDate, null, wholesaleBuyerId
+        );
+        addItem(graph, wholesaleSaleId, "CHARGER_CABLE", "500.00", false);
+        UUID unassignedSaleId = addDocument(
+                graph, "unassigned-sale", "SALE", saleDate, null, null
+        );
+        addItem(graph, unassignedSaleId, "CHARGER_CABLE", "900.00", false);
+        LocalDate returnDate = saleDate.plusDays(1);
+        UUID sellerReturnId = addDocument(
+                graph,
+                "seller-return",
+                "RETURN",
+                returnDate,
+                sellerSaleId,
+                sellerId
+        );
+        addItem(graph, sellerReturnId, "CHARGER_CABLE", "20.00", false);
+
+        List<StorePlanDailyActual> result = repository.aggregate(
+                graph.storeId(),
+                saleDate,
+                returnDate,
+                OverviewMetricScope.SELLERS
+        );
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).revenueAmount()).isEqualByComparingTo("100.00");
+        assertThat(result.get(1).revenueAmount()).isEqualByComparingTo("-20.00");
     }
 
     private TestGraph createGraph() {
@@ -142,27 +186,80 @@ class StorePlanDailyActualRepositoryIntegrationTest {
             LocalDate businessDate,
             UUID originalDocumentId
     ) {
+        return addDocument(
+                graph,
+                externalId,
+                kind,
+                businessDate,
+                originalDocumentId,
+                null
+        );
+    }
+
+    private UUID addDocument(
+            TestGraph graph,
+            String externalId,
+            String kind,
+            LocalDate businessDate,
+            UUID originalDocumentId,
+            UUID employeeId
+    ) {
         UUID documentId = UUID.randomUUID();
         Instant occurredAt = businessDate.atStartOfDay(ZoneOffset.UTC).toInstant();
         jdbcTemplate.update(
                 """
                 INSERT INTO sales_documents (
                     id, connection_id, source_system, external_id, store_id,
-                    original_document_id, document_kind, source_document_type,
+                    original_document_id, employee_id, document_kind, source_document_type,
                     occurred_at, business_date, net_amount, last_sync_run_id
-                ) VALUES (?, ?, 'LIVESKLAD', ?, ?, ?, ?, 'sale', ?, ?, 0, ?)
+                ) VALUES (?, ?, 'LIVESKLAD', ?, ?, ?, ?, ?, 'sale', ?, ?, 0, ?)
                 """,
                 documentId,
                 graph.connectionId(),
                 externalId,
                 graph.storeId(),
                 originalDocumentId,
+                employeeId,
                 kind,
                 Timestamp.from(occurredAt),
                 businessDate,
                 graph.syncRunId()
         );
         return documentId;
+    }
+
+    private UUID addEmployee(
+            TestGraph graph,
+            String name,
+            boolean employeeActive,
+            boolean assignmentActive,
+            boolean participatesInRanking
+    ) {
+        UUID employeeId = UUID.randomUUID();
+        jdbcTemplate.update(
+                """
+                INSERT INTO employees (
+                    id, connection_id, source_system, external_id, full_name, is_active
+                ) VALUES (?, ?, 'LIVESKLAD', ?, ?, ?)
+                """,
+                employeeId,
+                graph.connectionId(),
+                "daily-plan-employee-" + employeeId,
+                name,
+                employeeActive
+        );
+        jdbcTemplate.update(
+                """
+                INSERT INTO employee_store_assignments (
+                    employee_id, store_id, is_active, participates_in_ranking
+                ) VALUES (?, ?, ?, ?)
+                """,
+                employeeId,
+                graph.storeId(),
+                assignmentActive,
+                participatesInRanking
+        );
+        return employeeId;
     }
 
     private void addItem(

@@ -1,15 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, ArrowRight, CheckCircle2, Package, RefreshCw, ShieldCheck, Smartphone, Target, TrendingUp, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
-import type { CategoryKpi } from "../api/contracts";
+import { useSearchParams } from "react-router";
+import type { CategoryKpi, OverviewMetricScope } from "../api/contracts";
 import {
   getAttachRates,
   getCategoryKpi,
   getEmployeeKpi,
   getEmployeeRating,
+  getOverviewMetrics,
   getPeriodQuality,
   getPlanProgress,
-  getStoreKpi,
   getStoreStatus,
   queryKeys
 } from "../api/queries";
@@ -122,7 +123,18 @@ function OverviewSkeleton() {
 
 export function OverviewPage() {
   const { selectedStore, month, periodMode, periodStart, periodEnd, periodLabel, asOfDate } = useWorkspace();
+  const [searchParams, setSearchParams] = useSearchParams();
   const storeId = selectedStore.id;
+  const metricScope: OverviewMetricScope = searchParams.get("overviewScope") === "STORE"
+    ? "STORE"
+    : "SELLERS";
+  const selectMetricScope = (scope: OverviewMetricScope) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("overviewScope", scope);
+      return next;
+    });
+  };
 
   const statusQuery = useQuery({
     queryKey: queryKeys.storeStatus(storeId),
@@ -130,15 +142,15 @@ export function OverviewPage() {
     refetchOnWindowFocus: true,
     refetchInterval: (query) => query.state.data?.status === "SYNCING" ? 10_000 : false
   });
-  const kpiQuery = useQuery({ queryKey: queryKeys.storeKpi(storeId, periodStart, periodEnd), queryFn: () => getStoreKpi(storeId, periodStart, periodEnd) });
+  const overviewMetricsQuery = useQuery({ queryKey: queryKeys.overviewMetrics(storeId, periodStart, periodEnd, metricScope), queryFn: () => getOverviewMetrics(storeId, periodStart, periodEnd, metricScope) });
   const categoriesQuery = useQuery({ queryKey: queryKeys.categories(storeId, periodStart, periodEnd), queryFn: () => getCategoryKpi(storeId, periodStart, periodEnd) });
-  const planQuery = useQuery({ queryKey: queryKeys.planProgress(storeId, month, asOfDate), queryFn: () => getPlanProgress(storeId, month, asOfDate) });
+  const planQuery = useQuery({ queryKey: queryKeys.planProgress(storeId, month, asOfDate, metricScope), queryFn: () => getPlanProgress(storeId, month, asOfDate, metricScope) });
   const qualityQuery = useQuery({ queryKey: queryKeys.periodQuality(storeId, month, asOfDate), queryFn: () => getPeriodQuality(storeId, month, asOfDate) });
   const attachQuery = useQuery({ queryKey: queryKeys.attachRates(storeId, periodStart, periodEnd), queryFn: () => getAttachRates(storeId, periodStart, periodEnd), staleTime: 2 * 60_000 });
 
   const employeeRatingQuery = useQuery({ queryKey: queryKeys.employeeRating(storeId, periodStart, periodEnd), queryFn: () => getEmployeeRating(storeId, periodStart, periodEnd), staleTime: 2 * 60_000 });
   const employeeKpiQuery = useQuery({ queryKey: queryKeys.employeeKpi(storeId, periodStart, periodEnd), queryFn: () => getEmployeeKpi(storeId, periodStart, periodEnd), staleTime: 2 * 60_000 });
-  const criticalQueries = [statusQuery, kpiQuery, categoriesQuery, planQuery, qualityQuery];
+  const criticalQueries = [statusQuery, overviewMetricsQuery, categoriesQuery, planQuery, qualityQuery];
   if (criticalQueries.every((query) => query.isPending)) return <OverviewSkeleton />;
 
   const criticalError = criticalQueries.find((query) => query.isError);
@@ -147,7 +159,7 @@ export function OverviewPage() {
   }
 
   const status = statusQuery.data;
-  const kpi = kpiQuery.data;
+  const overviewMetrics = overviewMetricsQuery.data;
   const categories = categoriesQuery.data;
   const plan = planQuery.data;
   const quality = qualityQuery.data;
@@ -181,16 +193,22 @@ export function OverviewPage() {
         </section>
       )}
 
-      <ManagementSummary kpi={kpi} categories={categories} plan={plan} />
+      <ManagementSummary
+        metrics={overviewMetrics}
+        plan={plan}
+        scope={metricScope}
+        onScopeChange={selectMetricScope}
+        showMonthlyPlan={periodMode === "MONTH"}
+      />
 
       <div className="overview-grid">
         <section className="panel groups-panel">
-          <div className="panel__heading"><h2>Структура продаж</h2></div>
+          <div className="panel__heading"><h2>Структура продаж · весь магазин</h2></div>
           <SalesStructure groups={categories?.groups ?? []} />
         </section>
 
         <section className="panel plan-panel">
-          <div className="panel__heading"><h2>План месяца</h2>{plan && <span>{plan.achievedDirectionCount} из {plan.directions.length}</span>}</div>
+          <div className="panel__heading"><h2>План месяца · {metricScope === "SELLERS" ? "только продавцы" : "весь магазин"}</h2>{plan && <span>{plan.achievedDirectionCount} из {plan.directions.length}</span>}</div>
           {!plan ? (
             <div className="panel-empty"><Target size={24} /><strong>План не задан</strong><p>Задайте цели на месяц.</p></div>
           ) : (

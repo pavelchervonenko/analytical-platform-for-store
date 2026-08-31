@@ -1,21 +1,22 @@
 ---
 doc_schema: 1
 doc_type: decision
-status: proposed
+status: accepted
 owner: product
 audience:
   - developer
   - manager
-decision_date: null
-implementation_status: not-started
+decision_date: 2026-08-31
+implementation_status: implemented
 decision_sources:
   - docs/current/product/periods.md
-  - frontend/src/dashboard/OverviewPage.tsx
-  - frontend/src/dashboard/OverviewManagementSections.tsx
+  - docs/current/product/plans-and-shifts.md
 implementation_sources:
+  - backend/src/main/java/com/storeanalytics/metrics/service/OverviewMetricsService.java
   - frontend/src/dashboard/OverviewPage.tsx
   - frontend/src/dashboard/OverviewManagementSections.tsx
 verification_sources:
+  - backend/src/test/java/com/storeanalytics/metrics/service/OverviewMetricsServiceTest.java
   - frontend/src/dashboard/OverviewPage.test.tsx
 required_reviewers:
   - product
@@ -25,53 +26,48 @@ supersedes: []
 superseded_by: null
 ---
 
-# ADR-0002: Единый период внутри показателей главной
+# ADR-0002: Период и cohort показателей главной
 
 ## Контекст
 
-Overview получает KPI/category/attach/employee за selected `start..end`, а plan/quality — за
-`month-01..asOf`. Commercial card показывает selected amount/quantity, но предпочитает monthly
-`actualSharePercent`, gap и target. Week/custom объединяет разные знаменатели.
+Раньше week/custom amount приходил за выбранный период, а share/gap мог браться из месячного
+плана. Кроме того, верхние карточки всегда показывали STORE, хотя заказчику нужен управленческий
+режим только по продавцам.
 
-## Предлагаемое решение
+## Решение
 
-Разделить два слоя:
+1. Amount, quantity и share верхних карточек используют один selected `start..end` и один scope.
+2. `SELLERS` («Только продавцы») — режим по умолчанию; `STORE` («Весь магазин») включается
+   переключателем внутри тёмного блока и сохраняется в URL.
+3. Месячный план остаётся одним. В `SELLERS` он применяется к факту продавцов, в `STORE` — к факту
+   всего магазина.
+4. В month mode месячный target/gap может быть рядом с фактом. В week/custom он остаётся только в
+   отдельном блоке «План месяца» и не подменяет selected share.
+5. Store structure и attach-map сохраняют STORE semantics и получают явную подпись.
 
-1. «Результаты выбранного периода»: amount, quantity и share имеют один selected диапазон и один
-   store denominator, без month plan gap.
-2. «План месяца»: target, completion, pace, forecast и remaining имеют только
-   `month-01..asOf` и явную подпись месяца/`asOf`.
+## Текущее реализованное поведение
 
-В одной карточке запрещено смешивать эти scope. Если план показывается рядом с недельным фактом,
-это отдельный визуальный блок. Frontend не определяет новое правило округлением; selected share
-приходит из backend либо вычисляется только по согласованному same-period contract и тесту.
+Backend отдаёт `overview-metrics-v1` с authoritative selected share и reconciliation controls.
+Frontend передаёт один scope и в selected metrics, и в month plan. Неизвестный/отсутствующий
+`overviewScope` трактуется как `SELLERS`; plan transport default остаётся `STORE` для совместимости
+других потребителей.
 
-## Текущее поведение
+## Условия вступления решения в силу
 
-`OverviewPage` передаёт selected KPI/categories и monthly plan в `ManagementSummary`;
-`CommercialMetric` берёт monthly share при наличии plan. Решение не реализовано. До него week/custom
-commercial cards не используются как точная оценка доли к плану.
-
-## Условия вступления в силу
-
-1. Утвердить layout двух scope.
-2. Определить authoritative selected share transport.
-3. Убрать month fields из selected-result cards, оставить их в plan block.
-4. Добавить tests day/week/month/custom, month boundaries, null/zero/negative revenue, no plan,
-   incomplete classification и timezone.
-5. Добавить query test одинакового `start/end` внутри result card.
-6. Выполнить local visual review desktop/tablet/mobile по `AGENTS.md`.
+Код и component tests реализованы. Для статуса `verified` требуется обязательный local visual
+review desktop/tablet/mobile по `AGENTS.md` и успешный полный CI.
 
 ## Альтернативы
 
-1. Только month Overview — теряется week/custom.
-2. Пропорциональный недельный plan — создаёт несуществующую методику.
-3. Tooltip поверх текущего mix — не исправляет знаменатели.
+1. Только month Overview — отклонено: теряется week/custom анализ.
+2. Пропорциональный недельный plan — отклонено: такой методики заказчик не задавал.
+3. Два разных плана для scope — отклонено: согласован один месячный план.
 
 ## Последствия и проверка
 
-Плюс — каждая цифра имеет один период. Риск — меняется layout/transport и snapshots tests. Gate:
-component/query tests и visual review всех period modes; один month mode недостаточен.
+Каждая верхняя цифра теперь имеет один период и cohort. Переключение может менять и фактические
+карточки, и месячный прогресс, но не само значение плана. Gate: backend reconciliation tests,
+frontend period/scope tests и visual review всех размеров.
 
 Связанные контракты: [periods](../current/product/periods.md),
 [frontend scope](../current/frontend/period-and-scope-contract.md),

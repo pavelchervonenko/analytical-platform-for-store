@@ -232,12 +232,13 @@ class ReturnSyncIntegrationTest {
         )).isEqualTo(NormalizationStatus.NORMALIZED.name());
         Map<String, Object> orphan = jdbcTemplate.queryForMap(
                 """
-                SELECT original_document_id, net_amount, is_deleted
+                SELECT original_document_id, employee_id, net_amount, is_deleted
                 FROM sales_documents
                 WHERE external_id = 'return-late'
                 """
         );
         assertThat(orphan.get("original_document_id")).isNull();
+        assertThat(orphan.get("employee_id")).isNull();
         assertThat(orphan.get("net_amount")).isEqualTo(money("50.00"));
         assertThat(orphan.get("is_deleted")).isEqualTo(false);
         assertThat(jdbcTemplate.queryForObject(
@@ -747,11 +748,18 @@ class ReturnSyncIntegrationTest {
     }
 
     private Map<String, List<LiveSkladEmployeePayload>> employeePayload() {
-        return Map.of("store-1", List.of(new LiveSkladEmployeePayload(
-                "employee-1",
-                "Fixture Employee",
-                raw("employee-1", "employee")
-        )));
+        return Map.of("store-1", List.of(
+                new LiveSkladEmployeePayload(
+                        "employee-1",
+                        "Fixture Employee",
+                        raw("employee-1", "employee")
+                ),
+                new LiveSkladEmployeePayload(
+                        "return-processor",
+                        "Return Processor",
+                        raw("return-processor", "employee")
+                )
+        ));
     }
 
     private LiveSkladCashItemPayload cashItem() {

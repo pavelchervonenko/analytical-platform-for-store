@@ -39,6 +39,10 @@ Backend вычисляет максимальную ожидаемую schema ve
 source-tree максимальная версия — V48; цепочка также содержит V39.1, которая сортируется между V39
 и V40. Runtime API/WORKER не мигрирует БД и должен только read-only проверить фактическую историю.
 
+Production deploy сначала проверяет immutable images и packaged schema, затем останавливает worker
+и API и только после подтверждения отсутствия работающих writers запускает Flyway. При ошибке
+migration writers остаются остановленными до диагностики; blind retry запрещён.
+
 Существенные поздние изменения:
 
 | Версия | Смысл |
@@ -57,6 +61,8 @@ source-tree максимальная версия — V48; цепочка так
 - При несовместимости требуется reviewed forward-fix или восстановление из проверенного backup,
   а не ручное редактирование `flyway_schema_history`.
 - Любая новая migration обновляет schema oracle, migration tests и release compatibility metadata.
+- ACL repair после Flyway получает тот же exact release env и не использует defaults для DB target,
+  schema или ролей.
 
 ## Что доказано
 

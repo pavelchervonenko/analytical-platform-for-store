@@ -11,6 +11,7 @@ import {
   employeeRatingSettingSchema,
   employeeRatingSettingsSchema,
   employeeShiftListSchema,
+  overviewMetricsSchema,
   workScheduleDaySchema,
   performancePlanSchema,
   periodQualitySchema,
@@ -41,6 +42,8 @@ import {
   type EmployeeRatingResult,
   type EmployeeRatingSetting,
   type EmployeeShift,
+  type OverviewMetricScope,
+  type OverviewMetrics,
   type WorkScheduleDay,
   type PerformancePlan,
   type PerformancePlanInput,
@@ -83,7 +86,8 @@ export const queryKeys = {
   categories: (storeId: string, start: string, end: string) => ["stores", storeId, "categories", start, end] as const,
   averages: (storeId: string, start: string, end: string) => ["stores", storeId, "averages", start, end] as const,
   attachRates: (storeId: string, start: string, end: string) => ["stores", storeId, "attach-rates", start, end] as const,
-  planProgress: (storeId: string, month: string, asOf: string) => ["stores", storeId, "plan-progress", month, asOf] as const,
+  overviewMetrics: (storeId: string, start: string, end: string, scope: OverviewMetricScope) => ["stores", storeId, "overview-metrics", start, end, scope] as const,
+  planProgress: (storeId: string, month: string, asOf: string, scope: OverviewMetricScope = "STORE") => ["stores", storeId, "plan-progress", month, asOf, scope] as const,
   periodQuality: (storeId: string, month: string, asOf: string) => ["stores", storeId, "period-quality", month, asOf] as const,
   employees: (storeId: string) => ["stores", storeId, "employees"] as const,
   employeeDirectory: (storeId: string, start: string, end: string) => ["stores", storeId, "employees", "directory", start, end] as const,
@@ -250,6 +254,22 @@ export function getStoreKpi(storeId: string, start: string, end: string): Promis
   return apiClient.request(`${storePath(storeId)}/kpi?${periodQuery(start, end)}`, { schema: storeKpiSchema });
 }
 
+export function getOverviewMetrics(
+  storeId: string,
+  start: string,
+  end: string,
+  scope: OverviewMetricScope = "SELLERS"
+): Promise<OverviewMetrics> {
+  const query = new URLSearchParams({
+    periodStart: start,
+    periodEnd: end,
+    scope
+  }).toString();
+  return apiClient.request(`${storePath(storeId)}/overview-metrics?${query}`, {
+    schema: overviewMetricsSchema
+  });
+}
+
 export function getEmployeeKpi(storeId: string, start: string, end: string): Promise<EmployeeKpi> {
   return apiClient.request(`${storePath(storeId)}/kpi/employees?${periodQuery(start, end)}`, { schema: employeeKpiSchema });
 }
@@ -266,8 +286,13 @@ export function getAttachRates(storeId: string, start: string, end: string): Pro
   return apiClient.request(`${storePath(storeId)}/kpi/attach-rates?${periodQuery(start, end)}`, { schema: attachRateSchema });
 }
 
-export async function getPlanProgress(storeId: string, month: string, asOf: string): Promise<PlanProgress | null> {
-  const query = new URLSearchParams({ asOf }).toString();
+export async function getPlanProgress(
+  storeId: string,
+  month: string,
+  asOf: string,
+  scope: OverviewMetricScope = "STORE"
+): Promise<PlanProgress | null> {
+  const query = new URLSearchParams({ asOf, scope }).toString();
   try {
     return await apiClient.request(`${storePath(storeId)}/performance-plans/${encodeURIComponent(month)}/progress?${query}`, {
       schema: planProgressSchema

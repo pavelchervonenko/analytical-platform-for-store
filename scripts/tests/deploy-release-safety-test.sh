@@ -25,6 +25,7 @@ secret_value='0123456789abcdef0123456789abcdef0123456789abcdef'
 for secret_name in \
   postgres-runtime-password \
   postgres-migrator-password \
+  postgres-backup-password \
   livesklad-login \
   livesklad-password \
   livesklad-sale-return-webhook-secret \
@@ -44,12 +45,26 @@ chmod 0644 "${temporary_directory}/postgresql-ca.crt"
 release_env="${temporary_directory}/release.env"
 {
   printf 'RELEASE_ID=test-release\n'
+  printf 'RELEASE_COMMIT=cccccccccccccccccccccccccccccccccccccccc\n'
+  printf 'BACKEND_IMAGE=ghcr.io/test/store-analytics-backend@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'
+  printf 'WEB_IMAGE=ghcr.io/test/store-analytics-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n'
+  printf 'BACKEND_IMAGE_DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n'
+  printf 'WEB_IMAGE_DIGEST=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n'
   printf 'SCHEMA_VERSION=42\n'
   printf 'MIGRATION_SOURCE_MIN_VERSION=39\n'
   printf 'RUNTIME_SCHEMA_MIN_VERSION=42\n'
   printf 'RUNTIME_SCHEMA_MAX_VERSION=42\n'
+  printf 'DB_CERT_HOST=database.example.test\n'
+  printf 'DB_HOST_ADDRESS=10.20.0.20\n'
+  printf 'DB_PORT=5432\n'
+  printf 'DB_NAME=store_analytics\n'
+  printf 'DB_APP_SCHEMA=app\n'
+  printf 'DB_RUNTIME_USER=store_runtime\n'
+  printf 'DB_MIGRATOR_USER=store_migrator\n'
+  printf 'DB_BACKUP_USER=store_backup_reader\n'
   printf 'POSTGRES_RUNTIME_PASSWORD_FILE=%s/postgres-runtime-password\n' "${temporary_directory}"
   printf 'POSTGRES_MIGRATOR_PASSWORD_FILE=%s/postgres-migrator-password\n' "${temporary_directory}"
+  printf 'POSTGRES_BACKUP_PASSWORD_FILE=%s/postgres-backup-password\n' "${temporary_directory}"
   printf 'LIVESKLAD_LOGIN_FILE=%s/livesklad-login\n' "${temporary_directory}"
   printf 'LIVESKLAD_PASSWORD_FILE=%s/livesklad-password\n' "${temporary_directory}"
   printf 'LIVESKLAD_SALE_RETURN_WEBHOOK_SECRET_FILE=%s/livesklad-sale-return-webhook-secret\n' "${temporary_directory}"
@@ -68,6 +83,21 @@ export RELEASE_EXPECTED_SECRET_UID
 RELEASE_EXPECTED_SECRET_UID="$(id -u)"
 release_validate_env_file "${release_env}" \
   || fail_test 'valid release fixture was rejected'
+
+invalid_release_env="${temporary_directory}/invalid-release.env"
+cp "${release_env}" "${invalid_release_env}"
+sed -i \
+  's/^WEB_IMAGE_DIGEST=.*/WEB_IMAGE_DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/' \
+  "${invalid_release_env}"
+if release_validate_release_identity "${invalid_release_env}" >/dev/null 2>&1; then
+  fail_test 'web image digest mismatch was accepted'
+fi
+cp "${release_env}" "${invalid_release_env}"
+sed -i 's/^DB_BACKUP_USER=.*/DB_BACKUP_USER=store_runtime/' \
+  "${invalid_release_env}"
+if release_validate_database_target "${invalid_release_env}" >/dev/null 2>&1; then
+  fail_test 'overlapping database roles were accepted'
+fi
 
 printf '%s\n' \
   'INTERPRETATION_GENERATION_ENABLED=true' \
@@ -180,13 +210,18 @@ deploy_script="${PROJECT_ROOT}/deploy/bin/deploy.sh"
 rollback_script="${PROJECT_ROOT}/deploy/bin/rollback.sh"
 forward_fix_script="${PROJECT_ROOT}/deploy/bin/forward-fix.sh"
 preflight_line="$(grep -n 'preflight-release.sh' "${deploy_script}" | head -1 | cut -d: -f1)"
+stop_worker_line="$(grep -n 'compose stop -t 90 backend-worker' "${deploy_script}" | cut -d: -f1)"
+stop_api_line="$(grep -n 'compose stop -t 60 backend-api' "${deploy_script}" | cut -d: -f1)"
 marker_line="$(grep -n 'MIGRATION_IN_PROGRESS' "${deploy_script}" | cut -d: -f1)"
 migration_line="$(grep -n 'Applying database migrations' "${deploy_script}" | cut -d: -f1)"
 api_line="$(grep -n 'Starting backend API before' "${deploy_script}" | cut -d: -f1)"
 worker_line="$(grep -n 'Starting background worker after API readiness' "${deploy_script}" | cut -d: -f1)"
-(( preflight_line < marker_line && marker_line < migration_line \
+(( preflight_line < stop_worker_line && stop_worker_line < stop_api_line \
+    && stop_api_line < marker_line && marker_line < migration_line \
     && migration_line < api_line && api_line < worker_line )) \
   || fail_test 'deploy safety operations are ordered incorrectly'
+grep -F 'release_verify_local_image_provenance' "${deploy_script}" >/dev/null \
+  || fail_test 'deploy does not verify pulled image provenance'
 grep -F 'release_schema_allows_migration_source' "${deploy_script}" >/dev/null \
   || fail_test 'deploy does not enforce its recorded migration source schema'
 grep -F 'release_schema_allows_runtime' "${rollback_script}" >/dev/null \
@@ -195,5 +230,15 @@ grep -F 'use forward-fix.sh' "${rollback_script}" >/dev/null \
   || fail_test 'rollback does not direct incompatible releases to forward-fix'
 grep -F 'release_schema_allows_migration_source' "${forward_fix_script}" >/dev/null \
   || fail_test 'forward-fix does not validate its source schema'
+
+acl_script="${PROJECT_ROOT}/deploy/bin/repair-production-database-acls.sh"
+grep -F 'release_validate_env_file "${RELEASE_ENV}"' "${acl_script}" >/dev/null \
+  || fail_test 'ACL repair does not validate the exact release env'
+grep -F 'DB_APP_SCHEMA' "${acl_script}" >/dev/null \
+  || fail_test 'ACL repair does not use the declared application schema'
+if grep -Eq 'managed-631415|10\.20\.0\.20|store_runtime|store_backup_reader' \
+    "${acl_script}"; then
+  fail_test 'ACL repair still contains infrastructure or role defaults'
+fi
 
 printf 'Deploy release safety tests passed.\n'

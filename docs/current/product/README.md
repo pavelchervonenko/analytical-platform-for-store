@@ -61,10 +61,9 @@ superseded_by: null
 3. Расхождение описывается явно и получает ADR.
 4. Датированный аудит не заменяет current-контракт.
 
-## Критические открытые решения
+## Принятые решения
 
-- [ADR-0001](../../decisions/ADR-0001-return-employee-attribution.md): сотрудник возврата.
-- [ADR-0002](../../decisions/ADR-0002-overview-period-scope.md): единый scope главной.
-
-До их реализации employee-level показатели с возвратами и commercial cards week/custom имеют
-оговорки, описанные в соответствующих контрактах.
+- [ADR-0001](../../decisions/ADR-0001-return-employee-attribution.md): возврат относится к
+  сотруднику исходной продажи.
+- [ADR-0002](../../decisions/ADR-0002-overview-period-scope.md): выбранный период и месячный план
+  разделены; scope главной переключается между продавцами и магазином.

@@ -395,8 +395,7 @@ public class ReturnSyncPersistence {
 
         ReturnAmounts returnAmounts = returnAmounts(detail);
         Instant sourceUpdatedAt = sourceUpdatedAt(source);
-        Employee employee = original.map(SalesDocument::getEmployee)
-                .orElseGet(() -> processingEmployee(context, detail).orElse(null));
+        Employee employee = original.map(SalesDocument::getEmployee).orElse(null);
         String discovery = context.targeted()
                 && existing.map(SalesDocument::getSourceStatus)
                         .filter(DISCOVERY_CASH::equals)
@@ -693,19 +692,6 @@ public class ReturnSyncPersistence {
             }
         }
         return changed;
-    }
-
-    private Optional<Employee> processingEmployee(
-            Context context,
-            LiveSkladReturnDetailPayload detail
-    ) {
-        return Optional.ofNullable(detail.processingEmployeeExternalId())
-                .filter(StringUtils::hasText)
-                .flatMap(externalId -> referenceRepositories.employees()
-                        .findByConnectionIdAndExternalId(
-                                context.syncRun().getConnection().getId(),
-                                externalId
-                        ));
     }
 
     private Product resolveProduct(

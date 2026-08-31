@@ -201,6 +201,43 @@ export const storeKpiSchema = z.object({
 
 export type StoreKpi = z.infer<typeof storeKpiSchema>;
 
+export const overviewMetricScopeSchema = z.enum(["SELLERS", "STORE"]);
+
+const overviewCommercialMetricSchema = z.object({
+  netRevenue: z.number(),
+  netQuantity: z.number(),
+  sharePercent: z.number().nullable()
+});
+
+export const overviewMetricsSchema = z.object({
+  storeId: z.string().uuid(),
+  periodStart: z.string(),
+  periodEnd: z.string(),
+  scope: overviewMetricScopeSchema,
+  formulaVersion: z.string(),
+  netRevenue: z.number(),
+  netQuantity: z.number(),
+  costAmount: z.number().nullable(),
+  grossProfit: z.number().nullable(),
+  marginPercent: z.number().nullable(),
+  additional: overviewCommercialMetricSchema,
+  accessory: overviewCommercialMetricSchema,
+  service: overviewCommercialMetricSchema,
+  dataQuality: z.object({
+    completeCostData: z.boolean(),
+    includedItemCount: z.number().int().nonnegative(),
+    unmappedItemCount: z.number().int().nonnegative(),
+    missingCostItemCount: z.number().int().nonnegative(),
+    unexpectedZeroCostItemCount: z.number().int().nonnegative(),
+    periodOpenConsistencyIssueCount: z.number().int().nonnegative(),
+    storeOpenQualityIssueCount: z.number().int().nonnegative(),
+    reconciliationPassed: z.literal(true)
+  })
+});
+
+export type OverviewMetricScope = z.infer<typeof overviewMetricScopeSchema>;
+export type OverviewMetrics = z.infer<typeof overviewMetricsSchema>;
+
 const employeeKpiDataQualitySchema = z.object({
   completeCostData: z.boolean(),
   includedItemCount: z.number().int().nonnegative(),

@@ -55,6 +55,14 @@ done
 if grep -Eq '^RUN[[:space:]]+gradle[[:space:]]' "${dockerfile}"; then
     fail_test 'Docker build invokes an image-provided Gradle instead of the wrapper'
 fi
+for image_dockerfile in \
+    "${PROJECT_ROOT}/backend/Dockerfile" \
+    "${PROJECT_ROOT}/frontend/Dockerfile"; do
+    grep -F 'LABEL org.opencontainers.image.revision="${SOURCE_COMMIT}"' \
+        "${image_dockerfile}" >/dev/null \
+        || fail_test "release image omits OCI source revision: ${image_dockerfile}"
+done
+
 production_compose="${PROJECT_ROOT}/docker-compose.prod.yml"
 env_example="${PROJECT_ROOT}/.env.example"
 for required_fragment in \
@@ -76,6 +84,12 @@ shared_backend_environment="$(awk '
   capture { print }
 ' "${production_deploy_compose}")"
 for required_fragment in \
+    'SPRING_FLYWAY_DEFAULT_SCHEMA: ${DB_APP_SCHEMA}' \
+    'SPRING_FLYWAY_SCHEMAS: ${DB_APP_SCHEMA}' \
+    'SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA: ${DB_APP_SCHEMA}' \
+    'RELEASE_COMMIT: ${RELEASE_COMMIT}' \
+    'RUNTIME_SCHEMA_MIN_VERSION: ${RUNTIME_SCHEMA_MIN_VERSION}' \
+    'RUNTIME_SCHEMA_MAX_VERSION: ${RUNTIME_SCHEMA_MAX_VERSION}' \
     'LLM_PROMPT_VERSION: ${LLM_PROMPT_VERSION:-weekly-interpretation-v4}' \
     'LLM_CONTENT_SCHEMA_VERSION: ${LLM_CONTENT_SCHEMA_VERSION:-2}' \
     'LLM_MAX_OUTPUT_TOKENS: ${LLM_MAX_OUTPUT_TOKENS:-8000}' \

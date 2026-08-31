@@ -34,19 +34,24 @@ superseded_by: null
 
 | Потребитель | Endpoint | Период | Cohort | Null/partial | Подпись |
 |---|---|---|---|---|---|
-| Store/category KPI | `/kpi`, `/kpi/categories` | selected start..end | Store | GP/margin nullable | Выбранный диапазон |
+| Overview facts | `/overview-metrics?scope=` | selected start..end | SELLERS default / STORE | GP/margin/share nullable | Выбранный диапазон |
+| Store/category details | `/kpi/categories` | selected start..end | Store | GP/margin nullable | «Весь магазин» |
 | Attach | `/kpi/attach-rates` | selected | Store | Rate nullable без базы | Выбранный диапазон |
 | Employee KPI/rating | `/kpi/employees`, `/employee-ratings` | selected | Full / roster | Rank nullable | Диапазон + cohort |
-| Plan | `/performance-plans/{month}/progress?asOf=` | month-01..asOf | Store | 404 = plan absent | «План месяца» |
+| Plan | `/performance-plans/{month}/progress?asOf=&scope=` | month-01..asOf | Selected overview scope | 404 = plan absent | «План месяца» + scope |
 | Quality | `/period-quality/{month}?asOf=` | month-01..asOf | Store | Issues | Месяц + asOf |
 | Payroll | `/payroll/{month}/*` | Full month | Payroll cohort | calculate/approve gates | Месяц |
 | Reports | `/reports/*` | Snapshot month/year | Snapshot cohort | Historical null | Период snapshot |
 
-## Реализованный gap
+## Граница selected period и month plan
 
-В week/custom amounts коммерческих карточек selected-period, но `actualSharePercent`, gap и target
-месячные. До [ADR-0002](../../decisions/ADR-0002-overview-period-scope.md) amount и percent могут
-иметь разные знаменатели. Month mode не доказывает корректность week/custom.
+В тёмном блоке amount, quantity и share всегда используют одинаковые `periodStart..periodEnd` и
+scope. Month target/gap показывается там только в month mode. В week/custom месячный plan остаётся
+отдельным блоком month-01..`asOf`; недельный или пропорциональный план не изобретается.
+
+Параметр `overviewScope` не меняет выбранные даты. Отсутствующее/неизвестное значение означает
+`SELLERS`; переход на `STORE` сохраняется в URL. Backend plan API сохраняет `STORE` как transport
+default для прежних потребителей, поэтому Overview всегда передаёт scope явно.
 
 Frontend использует store timezone, а часть normalization backend — fixed Kaliningrad. Другой
 timezone требует отдельного end-to-end test.

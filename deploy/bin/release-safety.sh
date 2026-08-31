@@ -54,6 +54,103 @@ release_env_value_or_default() {
   esac
 }
 
+release_validate_release_identity() {
+  local env_file="$1"
+  local release_id release_commit backend_image web_image
+  local backend_digest web_digest backend_ref_digest web_ref_digest
+
+  release_id="$(release_env_value "${env_file}" RELEASE_ID)" || return 1
+  release_commit="$(release_env_value "${env_file}" RELEASE_COMMIT)" || return 1
+  backend_image="$(release_env_value "${env_file}" BACKEND_IMAGE)" || return 1
+  web_image="$(release_env_value "${env_file}" WEB_IMAGE)" || return 1
+  backend_digest="$(release_env_value "${env_file}" BACKEND_IMAGE_DIGEST)" \
+    || return 1
+  web_digest="$(release_env_value "${env_file}" WEB_IMAGE_DIGEST)" || return 1
+
+  [[ "${release_id}" =~ ^[A-Za-z0-9._-]{7,128}$ ]] \
+    || { release_safety_fail 'RELEASE_ID is invalid'; return 1; }
+  [[ "${release_commit}" =~ ^[a-f0-9]{40}$ ]] \
+    || { release_safety_fail 'RELEASE_COMMIT must be a lowercase 40-character Git commit'; return 1; }
+  [[ "${backend_image}" =~ ^ghcr\.io/[a-z0-9][a-z0-9._-]*/store-analytics-backend@sha256:([a-f0-9]{64})$ ]] \
+    || { release_safety_fail 'BACKEND_IMAGE must be an immutable Store Analytics GHCR digest reference'; return 1; }
+  backend_ref_digest="sha256:${BASH_REMATCH[1]}"
+  [[ "${web_image}" =~ ^ghcr\.io/[a-z0-9][a-z0-9._-]*/store-analytics-web@sha256:([a-f0-9]{64})$ ]] \
+    || { release_safety_fail 'WEB_IMAGE must be an immutable Store Analytics GHCR digest reference'; return 1; }
+  web_ref_digest="sha256:${BASH_REMATCH[1]}"
+  [[ "${backend_digest}" == "${backend_ref_digest}" ]] \
+    || { release_safety_fail 'BACKEND_IMAGE_DIGEST does not match BACKEND_IMAGE'; return 1; }
+  [[ "${web_digest}" == "${web_ref_digest}" ]] \
+    || release_safety_fail 'WEB_IMAGE_DIGEST does not match WEB_IMAGE'
+}
+
+release_validate_database_target() {
+  local env_file="$1"
+  local cert_host host_address port database schema runtime_user migrator_user backup_user
+  local identifier octet
+  local -a host_octets
+
+  cert_host="$(release_env_value "${env_file}" DB_CERT_HOST)" || return 1
+  host_address="$(release_env_value "${env_file}" DB_HOST_ADDRESS)" || return 1
+  port="$(release_env_value "${env_file}" DB_PORT)" || return 1
+  database="$(release_env_value "${env_file}" DB_NAME)" || return 1
+  schema="$(release_env_value "${env_file}" DB_APP_SCHEMA)" || return 1
+  runtime_user="$(release_env_value "${env_file}" DB_RUNTIME_USER)" || return 1
+  migrator_user="$(release_env_value "${env_file}" DB_MIGRATOR_USER)" || return 1
+  backup_user="$(release_env_value "${env_file}" DB_BACKUP_USER)" || return 1
+
+  [[ "${cert_host}" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]] \
+    || { release_safety_fail 'DB_CERT_HOST is invalid'; return 1; }
+  [[ "${host_address}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] \
+    || { release_safety_fail 'DB_HOST_ADDRESS must be an explicit IPv4 address'; return 1; }
+  IFS='.' read -r -a host_octets <<<"${host_address}"
+  for octet in "${host_octets[@]}"; do
+    (( 10#${octet} <= 255 )) \
+      || { release_safety_fail 'DB_HOST_ADDRESS contains an invalid IPv4 octet'; return 1; }
+  done
+  [[ "${port}" =~ ^[0-9]+$ ]] && (( 10#${port} >= 1 && 10#${port} <= 65535 )) \
+    || { release_safety_fail 'DB_PORT must be between 1 and 65535'; return 1; }
+
+  for identifier in "${database}" "${schema}" "${runtime_user}" \
+      "${migrator_user}" "${backup_user}"; do
+    [[ "${identifier}" =~ ^[a-z_][a-z0-9_]{0,62}$ ]] \
+      || { release_safety_fail 'database, schema and role identifiers must be safe PostgreSQL identifiers'; return 1; }
+  done
+  [[ "${runtime_user}" != "${migrator_user}" \
+      && "${runtime_user}" != "${backup_user}" \
+      && "${migrator_user}" != "${backup_user}" ]] \
+    || release_safety_fail 'runtime, migrator and backup roles must be distinct'
+}
+
+release_verify_remote_image_provenance() {
+  local env_file="$1"
+  local release_commit image revision image_variable
+
+  release_commit="$(release_env_value "${env_file}" RELEASE_COMMIT)" || return 1
+  for image_variable in BACKEND_IMAGE WEB_IMAGE; do
+    image="$(release_env_value "${env_file}" "${image_variable}")" || return 1
+    revision="$(docker buildx imagetools inspect "${image}" \
+      --format '{{ index .Image.Config.Labels "org.opencontainers.image.revision" }}')" \
+      || { release_safety_fail "cannot inspect remote provenance for ${image_variable}"; return 1; }
+    [[ "${revision}" == "${release_commit}" ]] \
+      || { release_safety_fail "${image_variable} remote OCI revision does not match RELEASE_COMMIT"; return 1; }
+  done
+}
+
+release_verify_local_image_provenance() {
+  local env_file="$1"
+  local release_commit image revision image_variable
+
+  release_commit="$(release_env_value "${env_file}" RELEASE_COMMIT)" || return 1
+  for image_variable in BACKEND_IMAGE WEB_IMAGE; do
+    image="$(release_env_value "${env_file}" "${image_variable}")" || return 1
+    revision="$(docker image inspect "${image}" \
+      --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" \
+      || { release_safety_fail "cannot inspect local provenance for ${image_variable}"; return 1; }
+    [[ "${revision}" == "${release_commit}" ]] \
+      || { release_safety_fail "${image_variable} local OCI revision does not match RELEASE_COMMIT"; return 1; }
+  done
+}
+
 release_require_version() {
   local name="$1"
   local value="$2"
@@ -183,6 +280,7 @@ release_validate_secret_files() {
   local -a secret_variables=(
     POSTGRES_RUNTIME_PASSWORD_FILE
     POSTGRES_MIGRATOR_PASSWORD_FILE
+    POSTGRES_BACKUP_PASSWORD_FILE
     LIVESKLAD_LOGIN_FILE
     LIVESKLAD_PASSWORD_FILE
     YANDEX_AI_API_KEY_FILE
@@ -364,6 +462,8 @@ release_validate_env_file() {
   mode="$(stat -c '%a' "${env_file}")"
   [[ "${mode}" == '600' || "${mode}" == '400' ]] \
     || { release_safety_fail "release env must have mode 0600 or 0400"; return 1; }
+  release_validate_release_identity "${env_file}" || return 1
+  release_validate_database_target "${env_file}" || return 1
   release_validate_schema_metadata "${env_file}" || return 1
   release_validate_product_classification_reconciliation "${env_file}" \
     || return 1

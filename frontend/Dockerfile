@@ -17,6 +17,8 @@ RUN npm run contracts:check \
     && npm run build
 
 FROM caddy:2.10.2-alpine
+ARG SOURCE_COMMIT
+LABEL org.opencontainers.image.revision="${SOURCE_COMMIT}"
 
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /workspace/frontend/dist /srv
