@@ -6,7 +6,7 @@ owner: project
 audience:
   - developer
   - operator
-last_verified: 2026-08-31
+last_verified: 2026-09-01
 requirement_sources:
   - docs/maintenance/documentation-policy.md
 implementation_sources:
@@ -14,9 +14,9 @@ implementation_sources:
   - deploy/env.production.example
   - backend/src/main/resources/application.yml
 verification_sources:
-  - docs/history/releases/2026/08/v0.1.0-pilot.28-production-verification.md
+  - docs/history/releases/2026/09/v0.1.0-pilot.29-production-verification.md
 runtime_evidence:
-  - docs/history/releases/2026/08/v0.1.0-pilot.28-production-verification.md
+  - docs/history/releases/2026/09/v0.1.0-pilot.29-production-verification.md
 required_reviewers:
   - information-architecture
   - operations
@@ -34,23 +34,23 @@ superseded_by: null
 
 This is the only repository page allowed to summarize the currently verified production release.
 It records an observation, not a live dashboard. Dynamic values below were last observed on
-**2026-08-31** and must be refreshed from sanitized read-only production evidence after every
+**2026-09-01** and must be refreshed from sanitized read-only production evidence after every
 deployment, schema change, relevant flag change or topology change.
 
 ## Verified production snapshot
 
 | Item | Last verified value |
 |---|---|
-| Release | `v0.1.0-pilot.28` |
-| Commit | `f130e0931f746d822e387292149bd57de4d5493e` |
+| Release | `v0.1.0-pilot.29` |
+| Commit | `0b7d49ce4e79d319089f99c9392ceb6804f92b58` |
 | Flyway schema | `48` |
 | Topology | `web`, `backend-api`, `backend-worker` |
 | Service health | all three containers healthy at verification time |
-| Backend image | `sha256:275db7f435dfeeb7db499200ee4c63cc14bce73b9e2772173185e10f3449a89f` |
-| Web image | `sha256:7e362208a01d98656300662c714e796e0a5197292c865356b8238c5532f2b82d` |
+| Backend image | `sha256:b17f4d523fb0520ab8ea9e364b0403df5441e5ae11c8383b7fd1fc25024c3247` |
+| Web image | `sha256:e00069b40aa0eb0553ed91e8240546501c03f32bc5aabc36ee49c26bb4ec6496` |
 
 Full provenance and limits are in the
-[production verification record](../history/releases/2026/08/v0.1.0-pilot.28-production-verification.md).
+[production verification record](../history/releases/2026/09/v0.1.0-pilot.29-production-verification.md).
 
 ## Weekly review
 
