@@ -113,7 +113,10 @@ public final class WeeklyReviewTeamEmployeeProjector {
             Map<String, String> attachLabels
     ) {
         EmployeeRatingEntry identity = current != null ? current : previous;
-        if (identity == null || !identity.employeeActive() || !identity.assignmentActive()) {
+        if (identity == null
+                || !identity.employeeActive()
+                || !identity.assignmentActive()
+                || !identity.participatesInRanking()) {
             return null;
         }
         boolean hasActivity = currentSales > 0 || previousSales > 0

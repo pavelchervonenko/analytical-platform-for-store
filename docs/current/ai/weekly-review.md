@@ -7,7 +7,7 @@ audience:
   - developer
   - operator
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-02
 requirement_sources:
   - docs/archive/legacy-contracts/AI_WEEKLY_REDESIGN_STAGE2_CONTRACT.md
   - docs/archive/legacy-contracts/weekly-review-ai-management-rubric.md
@@ -77,6 +77,11 @@ GET /api/stores/{storeId}/weekly-reviews/current
 
 Snapshot формируется отдельно от AI. Отчёт остаётся доступным в детерминированном виде, если AI
 выключен, задержан, недоступен или ответ не прошёл проверку.
+
+Персональный блок сотрудников использует тот же roster продавцов, что и рейтинг: активный
+сотрудник, активное назначение и `participatesInRanking=true`. Сотрудники вне рейтинга не попадают
+ни в персональные карточки Weekly Review, ни в командный benchmark. Для появления сотрудника в
+карточках также нужна активность хотя бы в одном из двух сравниваемых недельных периодов.
 
 ## Активный контракт
 

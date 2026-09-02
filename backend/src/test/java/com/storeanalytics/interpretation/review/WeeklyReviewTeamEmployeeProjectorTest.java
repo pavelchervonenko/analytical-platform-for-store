@@ -161,6 +161,30 @@ class WeeklyReviewTeamEmployeeProjectorTest {
         assertThat(result.team().roster().activeAssignedWithActivity()).isZero();
     }
 
+    @Test
+    void excludesEmployeeOutsideRatingRosterEvenWhenTheyHaveActivity() {
+        EmployeeRatingEntry seller = employee("Анна", "700.00", 2, "16.00");
+        EmployeeRatingEntry nonParticipant = participation(
+                employee("Администратор", "900.00", 3, "24.00"),
+                false
+        );
+
+        WeeklyReviewTeamEmployeeProjector.Projection result = projector.project(
+                ratings(seller, nonParticipant),
+                ratings(copy(seller, "600.00"), copy(nonParticipant, "800.00")),
+                sales(seller, nonParticipant, 6),
+                sales(seller, nonParticipant, 6),
+                0,
+                0,
+                Map.of()
+        );
+
+        assertThat(result.employees()).extracting(EmployeeCard::displayName)
+                .containsExactly("Анна");
+        assertThat(result.team().roster().activeAssignedWithActivity()).isOne();
+        assertThat(result.team().roster().participatesInBenchmark()).isOne();
+    }
+
     private EmployeeCard card(
             WeeklyReviewTeamEmployeeProjector.Projection projection,
             String name
@@ -276,6 +300,38 @@ class WeeklyReviewTeamEmployeeProjectorTest {
                 false,
                 null,
                 List.of()
+        );
+    }
+
+    private EmployeeRatingEntry participation(
+            EmployeeRatingEntry source,
+            boolean participatesInRanking
+    ) {
+        return new EmployeeRatingEntry(
+                source.employeeId(),
+                source.displayName(),
+                source.employeeActive(),
+                source.assignmentActive(),
+                participatesInRanking,
+                source.employeeActive()
+                        && source.assignmentActive()
+                        && participatesInRanking,
+                source.shiftCount(),
+                source.workedHours(),
+                source.netRevenue(),
+                source.storeRevenueSharePercent(),
+                source.revenuePerShift(),
+                source.revenuePerHour(),
+                source.accessoryRevenue(),
+                source.accessorySharePercent(),
+                source.serviceRevenue(),
+                source.serviceSharePercent(),
+                source.additionalRevenue(),
+                source.additionalSharePercent(),
+                source.scores(),
+                source.ranked(),
+                source.rank(),
+                source.attachRates()
         );
     }
 }
