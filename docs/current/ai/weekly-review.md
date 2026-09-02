@@ -14,6 +14,7 @@ requirement_sources:
 implementation_sources:
   - frontend/src/insights/InsightsPreviewPage.tsx
   - frontend/src/insights/WeeklyReviewView.tsx
+  - frontend/src/insights/weekly-review-presentation.ts
   - frontend/src/insights/weekly-review.css
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewService.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiContract.java
@@ -24,6 +25,8 @@ implementation_sources:
   - backend/src/main/resources/db/migration/V47__add_weekly_review_ai_generation_jobs.sql
   - backend/src/main/resources/db/migration/V48__harden_weekly_review_rollout.sql
 verification_sources:
+  - frontend/src/insights/WeeklyReviewView.test.tsx
+  - frontend/src/insights/weekly-review-presentation.test.ts
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewServiceTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewResponseContractTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiSchemaContractTest.java
@@ -145,14 +148,29 @@ Frontend показывает legacy weekly insight только когда но
 
 ### Presentation contract
 
-Страница сохраняет manager-first порядок: главный вывод и приоритет недели, ключевые результаты,
-изменения и действия, затем структура продаж, команда, сотрудники и ограничения. Evidence остаётся
-доступным по раскрытию рядом с соответствующим выводом, но не конкурирует с управленческим уровнем.
+Страница сохраняет manager-first порядок: главный вывод, ключевые результаты, изменения и шаги,
+затем структура продаж, команда и сотрудники. Evidence остаётся доступным по раскрытию рядом с
+соответствующим выводом, но не конкурирует с управленческим уровнем.
 
 Frontend показывает `Дополнено ИИ` только когда опубликованный summary действительно имеет
-`generatedBy=AI_ENHANCED` и `aiEnhancement.state=READY`. Во всех остальных состояниях интерфейс
-показывает `Расчет по данным`; отсутствие AI enrichment не маскирует детерминированный отчёт как
-ошибку и не меняет порядок бизнес-блоков.
+`generatedBy=AI_ENHANCED` и `aiEnhancement.state=READY`. Для детерминированного отчёта отдельная
+подпись источника не показывается; отсутствие AI enrichment не маскирует детерминированный отчёт
+как ошибку и не меняет порядок бизнес-блоков.
+
+Карточка `Главное` занимает всю ширину и не дублирует store action или отдельный сигнал риска:
+риск остаётся в `Основных изменениях`, а действия — в соседнем разделе. `Основные изменения` и
+`Шаги на следующую неделю` используют равные колонки на широком экране. В действиях отображаются
+только названия без номера, цели и способа проверки; заголовок содержит календарный диапазон полной
+недели, следующей за отчетной.
+
+Для `PARTIAL` постоянный quality status показывается один раз в верхней панели над временем
+обновления. Локальные подписи `Данные ограничены`, inline limitations и отдельный нижний блок
+ограничений не повторяются; `INSUFFICIENT`, `NOT_APPLICABLE` и блокирующее состояние сохраняют
+явные объяснения, потому что значения в этих состояниях недоступны.
+
+Текущее значение маржи приходит из backend по формуле `grossProfit / netRevenue × 100%`.
+Изменение маржи показывается как абсолютная разница в процентных пунктах, а не как относительный
+процент между двумя значениями маржи.
 
 Пользовательский текст раздела использует только букву `е` в спорных написаниях, включая состояния,
 подписи и резервный legacy-экран.

@@ -4,7 +4,8 @@ import {
   actionTargetText,
   formatValue,
   metricComparisonText,
-  metricTone
+  metricTone,
+  nextWeekLabel
 } from "./weekly-review-presentation";
 
 describe("weekly review presentation", () => {
@@ -28,6 +29,24 @@ describe("weekly review presentation", () => {
     metric.comparisonKind = "NO_BASE";
 
     expect(metricComparisonText(metric)).toBe("Нет базы сравнения");
+  });
+
+  it("shows margin movement in percentage points", () => {
+    const margin = makeWeeklyReview().results.find((metric) => (
+      metric.code === "MARGIN_PERCENT"
+    ))!;
+    margin.current = 45;
+    margin.previous = 40;
+    margin.absoluteDelta = 5;
+    margin.changePercent = 12.5;
+    margin.direction = "UP";
+
+    expect(metricComparisonText(margin)).toBe("+5 п. п.");
+  });
+
+  it("formats the full week after the completed period", () => {
+    expect(nextWeekLabel("2026-08-23")).toBe("24–30 августа 2026");
+    expect(nextWeekLabel("2026-08-30")).toBe("31 августа — 6 сентября 2026");
   });
 
   it("renders an actionable target in plain language", () => {

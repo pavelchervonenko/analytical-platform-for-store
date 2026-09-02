@@ -291,7 +291,22 @@ async function installFixtureApi(page: Page) {
     rates: []
   }));
   await page.route("**/api/stores/*/weekly-reviews/current", async (route) => {
-    await json(route, makeWeeklyReview());
+    const review = makeWeeklyReview();
+    const templateAction = review.actions[0]!;
+    review.actions = [
+      templateAction,
+      {
+        ...templateAction,
+        actionId: "action:visual:accessory-share",
+        title: "Проверить долю аксессуаров"
+      },
+      {
+        ...templateAction,
+        actionId: "action:visual:device-growth",
+        title: "Закрепить рост техники"
+      }
+    ];
+    await json(route, review);
   });
   const sellerOneId = "30000000-0000-4000-8000-000000000001";
   const sellerTwoId = "30000000-0000-4000-8000-000000000002";
@@ -540,6 +555,20 @@ test.describe("local frontend visual review", () => {
           await expect(firstEmployee).toHaveAttribute("aria-pressed", "true");
         }
         await expect(page.locator(".weekly-review-employee-detail")).toBeVisible();
+        await expect(page.getByText("Расчет по данным", { exact: true })).toHaveCount(0);
+        await expect(page.getByText("Что сделать", { exact: true })).toHaveCount(0);
+        await expect(page.getByText("Что требует внимания", { exact: true })).toHaveCount(0);
+        await expect(page.getByText("На следующую полную неделю", { exact: true }))
+          .toHaveCount(0);
+        const actionList = page.locator(".weekly-review-action-list");
+        await expect(actionList.getByText("Цель", { exact: true })).toHaveCount(0);
+        await expect(actionList.getByText("Как проверим", { exact: true })).toHaveCount(0);
+        if (useFixtureApi) {
+          await expect(page.getByRole("heading", { name: "Шаги на следующую неделю" }))
+            .toBeVisible();
+          await expect(page.getByText("24–30 августа 2026", { exact: true })).toBeVisible();
+          await expect(actionList.locator(".weekly-review-action")).toHaveCount(3);
+        }
       }
 
       const periodSelector = page.getByRole("button", { name: "Выбрать период" });

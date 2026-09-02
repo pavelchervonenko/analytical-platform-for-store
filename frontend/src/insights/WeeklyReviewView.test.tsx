@@ -61,7 +61,10 @@ describe("WeeklyReviewView", () => {
     expect(await screen.findByText("17–23 августа 2026", {
       selector: ".weekly-review-header__period strong"
     })).toBeInTheDocument();
-    expect(screen.getByText("Расчет по данным")).toBeInTheDocument();
+    expect(screen.getByText("10–16 августа 2026", {
+      selector: ".weekly-review-header__period strong"
+    })).toBeInTheDocument();
+    expect(screen.queryByText("Расчет по данным")).not.toBeInTheDocument();
     expect(screen.getByText("17–23 августа 2026", {
       selector: ".weekly-review-section-heading small"
     })).toBeInTheDocument();
@@ -69,7 +72,11 @@ describe("WeeklyReviewView", () => {
       + "а маржа осталась на прежнем уровне. "
       + "Рост возвратов уменьшил чистую выручку на 50\u00a0₽.";
     expect(screen.getByRole("heading", { name: managerSummary })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Следующие шаги" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Шаги на следующую неделю" }))
+      .toBeInTheDocument();
+    expect(screen.getByText("24–30 августа 2026", {
+      selector: ".weekly-review-section-heading small"
+    })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Команда" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Сотрудники" })).toBeInTheDocument();
     expect(screen.queryByText(/план месяца/iu)).not.toBeInTheDocument();
@@ -79,13 +86,20 @@ describe("WeeklyReviewView", () => {
       .toBeInTheDocument();
     expect(within(summary).getByText("Связь с общим ростом пока не установлена."))
       .toBeInTheDocument();
-    expect(within(summary).getByText("Возвраты выросли")).toBeInTheDocument();
-    expect(within(summary).getByText(
-      "Это изменение напрямую уменьшило чистую выручку."
-    )).toBeInTheDocument();
-    expect(within(summary).getByText("Что сделать")).toBeInTheDocument();
-    expect(within(summary).getByText("Разобрать рост возвратов"))
-      .toBeInTheDocument();
+    expect(within(summary).queryByText("Что требует внимания")).not.toBeInTheDocument();
+    expect(within(summary).queryByText("Возвраты выросли")).not.toBeInTheDocument();
+    expect(within(summary).queryByText("Что сделать")).not.toBeInTheDocument();
+    expect(summary.querySelector(".weekly-review-summary__main")).toBeInTheDocument();
+    expect(summary.querySelectorAll(".weekly-review-signal")).toHaveLength(1);
+    const actionList = document.querySelector<HTMLElement>(".weekly-review-action-list")!;
+    expect(actionList.querySelectorAll(".weekly-review-action"))
+      .toHaveLength(review.actions.length);
+    expect(within(actionList).getByText("Разобрать рост возвратов")).toBeInTheDocument();
+    expect(within(actionList).queryByText("На следующую полную неделю"))
+      .not.toBeInTheDocument();
+    expect(within(actionList).queryByText("Цель")).not.toBeInTheDocument();
+    expect(within(actionList).queryByText("Как проверим")).not.toBeInTheDocument();
+    expect(within(actionList).queryByText("01")).not.toBeInTheDocument();
     expect(within(summary).queryByText(review.summary.positive!.text)).not.toBeInTheDocument();
     expect(within(summary).queryByText(review.summary.risk!.text)).not.toBeInTheDocument();
   });
@@ -161,27 +175,29 @@ describe("WeeklyReviewView", () => {
     expect(screen.getByRole("button", { name: "Показать меньше" })).toBeInTheDocument();
   });
 
-  it("keeps valid PARTIAL values and marks locally limited blocks", async () => {
+  it("keeps valid PARTIAL values with one quality status in the header", async () => {
     const review = partialReview();
     review.salesStructure.state = "LIMITED";
     review.team.state = "LIMITED";
     renderReview(review);
 
     expect(await screen.findByText("Есть ограничения")).toBeInTheDocument();
-    expect(screen.getByText("По возвратам доступны не все данные.")).toBeInTheDocument();
-    expect(screen.getAllByText("Данные ограничены").length).toBeGreaterThanOrEqual(3);
+    expect(screen.queryByText("По возвратам доступны не все данные.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Данные ограничены")).not.toBeInTheDocument();
+    expect(document.querySelectorAll(".weekly-review-state--limited")).toHaveLength(1);
     expect(screen.getAllByText(/1[\s\u00a0]000[\s\u00a0]₽/u).length).toBeGreaterThan(0);
   });
 
-  it("explains a block-only PARTIAL without repeating a stale quality message", async () => {
+  it("shows a block-only PARTIAL only in the header", async () => {
     const review = makeWeeklyReview();
     review.reportState = "PARTIAL";
     review.summary.state = "LIMITED";
     review.team.state = "LIMITED";
     renderReview(review);
 
-    expect(await screen.findByText("Часть разделов доступна с ограничениями."))
-      .toBeInTheDocument();
+    expect(await screen.findByText("Есть ограничения")).toBeInTheDocument();
+    expect(screen.queryByText("Часть разделов доступна с ограничениями."))
+      .not.toBeInTheDocument();
     expect(screen.queryByText("Данные готовы")).not.toBeInTheDocument();
   });
 
@@ -230,12 +246,13 @@ describe("WeeklyReviewView", () => {
     expect(screen.getByText("Нет сотрудников с продажами за эту неделю.")).toBeInTheDocument();
   });
 
-  it("shows limited metric context without hiding the value", async () => {
+  it("keeps a limited metric value without repeating the quality warning", async () => {
     const review = partialReview();
     review.results[0]!.metricState = "LIMITED";
     renderReview(review);
 
-    expect(await screen.findByText("Данные требуют проверки")).toBeInTheDocument();
+    await screen.findByText("Есть ограничения");
+    expect(screen.queryByText("Данные требуют проверки")).not.toBeInTheDocument();
     expect(screen.getAllByText(/1[\s\u00a0]000[\s\u00a0]₽/u).length).toBeGreaterThan(0);
   });
 

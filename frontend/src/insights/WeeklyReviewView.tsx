@@ -27,6 +27,7 @@ import {
   metricComparisonText,
   metricStateText,
   metricTone,
+  nextWeekLabel,
   reviewStateLabel,
   sourceLabel,
   type ReviewTone
@@ -57,12 +58,10 @@ function sameReferences(left: readonly string[], right: readonly string[]): bool
 }
 
 function BlockStateBadge({ state }: { state: BlockState }) {
-  if (state === "READY") return null;
-  const label = state === "LIMITED"
-    ? "Данные ограничены"
-    : state === "INSUFFICIENT"
-      ? "Недостаточно данных"
-      : "Не применяется";
+  if (state === "READY" || state === "LIMITED") return null;
+  const label = state === "INSUFFICIENT"
+    ? "Недостаточно данных"
+    : "Не применяется";
   return (
     <span className={`weekly-review-block-state weekly-review-block-state--${state.toLowerCase()}`}>
       {label}
@@ -149,15 +148,17 @@ function ReviewHeader({ review }: { review: WeeklyReview }) {
         </div>
         <div>
           <span>Сравнение с:</span>
-          <span>{review.period.previousLabel}</span>
+          <strong>{review.period.previousLabel}</strong>
         </div>
       </div>
       <div className="weekly-review-header__meta">
         <div className="weekly-review-header__status-row">
-          <span className="weekly-review-source">
-            {aiEnhanced && <Sparkles aria-hidden="true" />}
-            {aiEnhanced ? "Дополнено ИИ" : "Расчет по данным"}
-          </span>
+          {aiEnhanced && (
+            <span className="weekly-review-source">
+              <Sparkles aria-hidden="true" />
+              Дополнено ИИ
+            </span>
+          )}
           <span className={`weekly-review-state ${stateClass}`} role="status">
             {review.reportState === "READY"
               ? <CheckCircle2 aria-hidden="true" />
@@ -170,36 +171,6 @@ function ReviewHeader({ review }: { review: WeeklyReview }) {
         <small>Обновлено {formatCalculatedAt(review.provenance.calculatedAt)}</small>
       </div>
     </header>
-  );
-}
-
-function QualityNotice({ review }: { review: WeeklyReview }) {
-  if (review.reportState === "READY") return null;
-  const message = review.reportState === "PARTIAL"
-    && review.qualitySummary.warningCount === 0
-    ? "Часть разделов доступна с ограничениями."
-    : review.qualitySummary.message;
-  const hasDetails = review.limitations.length > 0 || review.sourceCoverage.some(
-    (source) => source.state === "PARTIAL" || source.state === "MISSING"
-  );
-  return (
-    <div
-      className={`weekly-review-quality weekly-review-quality--${review.reportState.toLowerCase()}`}
-      role={review.reportState === "BLOCKED" ? "alert" : "status"}
-    >
-      <AlertTriangle aria-hidden="true" />
-      <div>
-        <strong>{message}</strong>
-        {review.qualitySummary.affectedBlockCount > 0 && (
-          <span>
-            Ограничено разделов: {review.qualitySummary.affectedBlockCount}
-          </span>
-        )}
-      </div>
-      {hasDetails && (
-        <a href="#weekly-review-limitations">Подробнее</a>
-      )}
-    </div>
   );
 }
 
@@ -334,10 +305,7 @@ function SummarySection({
       )) ?? null
   );
   const positive = review.summary.positive;
-  const risk = review.summary.risk;
   const positiveFactor = matchingFactor(positive);
-  const riskFactor = matchingFactor(risk);
-  const primaryAction = review.actions[0] ?? null;
   const deterministicLead = outcome && review.summary.generatedBy === "DETERMINISTIC"
     ? deterministicSummaryLead(review)
     : null;
@@ -363,17 +331,6 @@ function SummarySection({
                 evidenceRefs={outcome.evidenceRefs}
                 evidenceByRef={evidenceByRef}
               />
-              {primaryAction && (
-                <div className="weekly-review-summary__focus">
-                  <span>Что сделать</span>
-                  <strong>{primaryAction.title}</strong>
-                  <small>{actionTargetText(primaryAction)}</small>
-                  <EvidenceDisclosure
-                    evidenceRefs={primaryAction.evidenceRefs}
-                    evidenceByRef={evidenceByRef}
-                  />
-                </div>
-              )}
             </>
           ) : (
             <>
@@ -382,28 +339,16 @@ function SummarySection({
             </>
           )}
         </div>
-        {(positive || risk) && (
+        {positive && (
           <div className="weekly-review-summary__signals">
-            {positive && (
-              <SummarySignal
-                label="Что улучшилось"
-                text={positiveFactor?.title ?? positive.text}
-                detail={factorContext(positiveFactor)}
-                tone="positive"
-                evidenceRefs={positive.evidenceRefs}
-                evidenceByRef={evidenceByRef}
-              />
-            )}
-            {risk && (
-              <SummarySignal
-                label="Что требует внимания"
-                text={riskFactor?.title ?? risk.text}
-                detail={factorContext(riskFactor)}
-                tone="negative"
-                evidenceRefs={risk.evidenceRefs}
-                evidenceByRef={evidenceByRef}
-              />
-            )}
+            <SummarySignal
+              label="Что улучшилось"
+              text={positiveFactor?.title ?? positive.text}
+              detail={factorContext(positiveFactor)}
+              tone="positive"
+              evidenceRefs={positive.evidenceRefs}
+              evidenceByRef={evidenceByRef}
+            />
           </div>
         )}
       </div>
@@ -528,26 +473,10 @@ function FactorCard({
   );
 }
 
-function ActionCard({ action, order }: { action: WeeklyReviewAction; order: number }) {
+function ActionCard({ action }: { action: WeeklyReviewAction }) {
   return (
     <article className="weekly-review-action">
-      <span className="weekly-review-action__order">
-        {String(order).padStart(2, "0")}
-      </span>
-      <div>
-        <h3>{action.title}</h3>
-        <p className="weekly-review-action__horizon">На следующую полную неделю</p>
-        <dl>
-          <div>
-            <dt>Цель</dt>
-            <dd>{actionTargetText(action)}</dd>
-          </div>
-          <div>
-            <dt>Как проверим</dt>
-            <dd>{action.check}</dd>
-          </div>
-        </dl>
-      </div>
+      <h3>{action.title}</h3>
     </article>
   );
 }
@@ -583,12 +512,13 @@ function ChangesAndActions({
       <section aria-labelledby="weekly-review-actions-title">
         <SectionHeading
           id="weekly-review-actions-title"
-          title="Следующие шаги"
+          title="Шаги на следующую неделю"
+          meta={nextWeekLabel(review.period.current.end)}
         />
         {review.actions.length > 0 ? (
           <div className="weekly-review-action-list">
-            {review.actions.map((action, index) => (
-              <ActionCard action={action} order={index + 1} key={action.actionId} />
+            {review.actions.map((action) => (
+              <ActionCard action={action} key={action.actionId} />
             ))}
           </div>
         ) : (
@@ -668,11 +598,6 @@ function SalesStructure({ review }: { review: WeeklyReview }) {
             </div>
           </div>
         )}
-        {block.limitations.map((limitation) => (
-          <p className="weekly-review-inline-limitation" key={limitation}>
-            {limitation}
-          </p>
-        ))}
       </div>
     </details>
   );
@@ -749,11 +674,6 @@ function TeamSection({
           Сравнение сотрудников: {team.benchmarkPolicy.label.toLocaleLowerCase("ru-RU")}
         </small>
         </>}
-        {team.limitations.map((limitation) => (
-          <p className="weekly-review-inline-limitation" key={limitation}>
-            {limitation}
-          </p>
-        ))}
       </div>
     </section>
   );
@@ -867,13 +787,6 @@ function EmployeeDetails({
 
       {employee.action && <EmployeeAction action={employee.action} />}
 
-      {employee.limitations.length > 0 && (
-        <div className="weekly-review-employee__limitations">
-          {employee.limitations.map((limitation) => (
-            <p key={limitation}>{limitation}</p>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -1084,14 +997,12 @@ function ReadyReview({ review }: { review: WeeklyReview }) {
   );
   return (
     <>
-      <QualityNotice review={review} />
       <SummarySection review={review} evidenceByRef={evidenceByRef} />
       <ResultsSection review={review} />
       <ChangesAndActions review={review} evidenceByRef={evidenceByRef} />
       <SalesStructure review={review} />
       <TeamSection review={review} evidenceByRef={evidenceByRef} />
       <EmployeesSection review={review} evidenceByRef={evidenceByRef} />
-      <LimitationsSection review={review} />
     </>
   );
 }

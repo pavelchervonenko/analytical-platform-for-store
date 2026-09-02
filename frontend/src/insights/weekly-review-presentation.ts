@@ -38,6 +38,12 @@ export function metricComparisonText(metric: WeeklyReviewMetric): string {
     return "Недостаточно данных";
   }
   if (metric.direction === "FLAT") return "Без изменений";
+  if (metric.code === "MARGIN_PERCENT" && metric.absoluteDelta != null) {
+    return signed(
+      metric.absoluteDelta,
+      `${formatNumber(Math.abs(metric.absoluteDelta))} п. п.`
+    );
+  }
   if (metric.comparisonKind === "PERCENT_AVAILABLE" && metric.changePercent != null) {
     return signed(
       metric.changePercent,
@@ -72,7 +78,6 @@ export function metricTone(metric: WeeklyReviewMetric): ReviewTone {
 }
 
 export function metricStateText(metric: WeeklyReviewMetric): string | null {
-  if (metric.metricState === "LIMITED") return "Данные требуют проверки";
   if (metric.metricState === "UNAVAILABLE") return "Значение недоступно";
   if (metric.sufficiency === "INSUFFICIENT") return "Недостаточно данных";
   return null;
@@ -123,4 +128,45 @@ export function formatCalculatedAt(value: string): string {
     hour: "2-digit",
     minute: "2-digit"
   }).format(new Date(value));
+}
+
+type DateLabelParts = {
+  day: string;
+  month: string;
+  year: string;
+};
+
+const dateLabelFormatter = new Intl.DateTimeFormat("ru-RU", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC"
+});
+
+function dateLabelParts(date: Date): DateLabelParts {
+  const parts = Object.fromEntries(
+    dateLabelFormatter.formatToParts(date).map((part) => [part.type, part.value])
+  );
+  return {
+    day: parts.day ?? "",
+    month: parts.month ?? "",
+    year: parts.year ?? ""
+  };
+}
+
+export function nextWeekLabel(periodEnd: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(periodEnd);
+  if (!match) return "";
+  const start = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 1));
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 6);
+  const startParts = dateLabelParts(start);
+  const endParts = dateLabelParts(end);
+  if (startParts.year !== endParts.year) {
+    return `${startParts.day} ${startParts.month} ${startParts.year} — ${endParts.day} ${endParts.month} ${endParts.year}`;
+  }
+  if (startParts.month !== endParts.month) {
+    return `${startParts.day} ${startParts.month} — ${endParts.day} ${endParts.month} ${endParts.year}`;
+  }
+  return `${startParts.day}–${endParts.day} ${endParts.month} ${endParts.year}`;
 }
