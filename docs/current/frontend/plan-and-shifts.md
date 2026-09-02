@@ -6,7 +6,7 @@ owner: frontend
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-02
 requirement_sources:
   - docs/current/product/plans-and-shifts.md
 implementation_sources:
@@ -17,6 +17,7 @@ implementation_sources:
 verification_sources:
   - frontend/src/plan-schedule/PlanPanel.test.tsx
   - frontend/src/plan-schedule/DailyPlanTable.test.tsx
+  - frontend/src/plan-schedule/forms.test.ts
 runtime_evidence: []
 required_reviewers:
   - frontend
@@ -40,6 +41,11 @@ superseded_by: null
 | Прошлый день | День + cumulative gap | Share nullable без revenue | «Факт за день» |
 | Будущий день | Month forecast + remaining | Нет future days | «Цель на день» |
 | Смены | Даты месяца | День без смен явный | Дата, сотрудник, часы |
+
+Roster для добавления смен содержит только активных сотрудников с активным назначением и
+`participatesInRanking=true`. Ранее сохранённая смена сотрудника, который позже вышел из roster,
+остаётся видимой внутри конкретного дня как недоступная для новых смен: пользователь должен удалить
+её явно, а интерфейс не теряет существующие данные молча.
 
 Формулы находятся в [product contract](../product/plans-and-shifts.md). Frontend не пересчитывает
 achievement по округлённой строке. «Нужно в день» должно называться остатком месячной цели, а

@@ -293,6 +293,78 @@ async function installFixtureApi(page: Page) {
   await page.route("**/api/stores/*/weekly-reviews/current", async (route) => {
     await json(route, makeWeeklyReview());
   });
+  const sellerOneId = "30000000-0000-4000-8000-000000000001";
+  const sellerTwoId = "30000000-0000-4000-8000-000000000002";
+  const excludedEmployeeId = "30000000-0000-4000-8000-000000000003";
+  const shiftDate = "2026-09-01";
+  const visualShifts = [
+    {
+      id: "40000000-0000-4000-8000-000000000001",
+      employeeId: sellerOneId,
+      employeeName: "Продавец Анна",
+      workDate: shiftDate,
+      workedHours: 11,
+      active: true,
+      version: 1
+    },
+    {
+      id: "40000000-0000-4000-8000-000000000002",
+      employeeId: sellerTwoId,
+      employeeName: "Продавец Борис",
+      workDate: shiftDate,
+      workedHours: 8,
+      active: true,
+      version: 1
+    }
+  ];
+  await page.route("**/api/stores/*/employee-rating-settings", async (route) => {
+    await json(route, [
+      {
+        employeeId: sellerOneId,
+        displayName: "Продавец Анна",
+        employeeActive: true,
+        assignmentActive: true,
+        participatesInRanking: true,
+        version: 1,
+        updatedAt: "2026-09-01T03:15:00Z"
+      },
+      {
+        employeeId: sellerTwoId,
+        displayName: "Продавец Борис",
+        employeeActive: true,
+        assignmentActive: true,
+        participatesInRanking: true,
+        version: 1,
+        updatedAt: "2026-09-01T03:15:00Z"
+      },
+      {
+        employeeId: excludedEmployeeId,
+        displayName: "Администратор магазина",
+        employeeActive: true,
+        assignmentActive: true,
+        participatesInRanking: false,
+        version: 1,
+        updatedAt: "2026-09-01T03:15:00Z"
+      }
+    ]);
+  });
+  await page.route("**/api/stores/*/work-schedule?*", async (route) => {
+    await json(route, visualShifts);
+  });
+  await page.route("**/api/stores/*/work-schedule/*", async (route) => {
+    const date = new URL(route.request().url()).pathname.split("/").at(-1);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      headers: { ETag: `"visual-work-schedule-${date}-1"` },
+      body: JSON.stringify({
+        storeId: visualStoreId,
+        workDate: date,
+        revision: 1,
+        shifts: date === shiftDate ? visualShifts : []
+      })
+    });
+  });
 }
 
 function parseRoutes(value: string): string[] {
@@ -570,6 +642,11 @@ test.describe("local frontend visual review", () => {
         const shiftEditor = page.getByRole("dialog");
         await expect(shiftEditor).toBeVisible();
         await expect(shiftEditor.getByRole("button", { name: "Закрыть редактор" })).toBeFocused();
+        if (useFixtureApi) {
+          await expect(shiftEditor.getByText("Продавец Анна", { exact: true })).toBeVisible();
+          await expect(shiftEditor.getByText("Продавец Борис", { exact: true })).toBeVisible();
+          await expect(shiftEditor.getByText("Администратор магазина", { exact: true })).toHaveCount(0);
+        }
         await shiftEditor.screenshot({
           path: resolve(screenshotDirectory, screenshotName(route) + "-shift-editor.png"),
           animations: "disabled"

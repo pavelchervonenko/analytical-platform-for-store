@@ -1,3 +1,17 @@
+export interface ShiftRosterEmployeeState {
+  employeeActive: boolean;
+  assignmentActive: boolean;
+  participatesInRanking: boolean;
+}
+
+export function isSelectableShiftSeller(
+  setting: ShiftRosterEmployeeState
+): boolean {
+  return setting.employeeActive
+    && setting.assignmentActive
+    && setting.participatesInRanking;
+}
+
 export interface PlanFormValues {
   revenueTarget: string;
   accessoryShareTarget: string;

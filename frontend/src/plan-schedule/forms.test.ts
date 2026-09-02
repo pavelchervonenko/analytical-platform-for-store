@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMonthCalendar, parseWorkedHours, validatePlanForm } from "./forms";
+import { buildMonthCalendar, isSelectableShiftSeller, parseWorkedHours, validatePlanForm } from "./forms";
 
 describe("plan and schedule forms", () => {
   it("accepts comma decimals and creates the exact plan payload", () => {
@@ -19,6 +19,13 @@ describe("plan and schedule forms", () => {
     expect(parseWorkedHours("11.00")).toBe(11);
     expect(parseWorkedHours("11.01")).toBeNull();
     expect(parseWorkedHours("6.555")).toBeNull();
+  });
+
+  it("allows only active rating participants in the shift roster", () => {
+    expect(isSelectableShiftSeller({ employeeActive: true, assignmentActive: true, participatesInRanking: true })).toBe(true);
+    expect(isSelectableShiftSeller({ employeeActive: true, assignmentActive: true, participatesInRanking: false })).toBe(false);
+    expect(isSelectableShiftSeller({ employeeActive: false, assignmentActive: true, participatesInRanking: true })).toBe(false);
+    expect(isSelectableShiftSeller({ employeeActive: true, assignmentActive: false, participatesInRanking: true })).toBe(false);
   });
 
   it("builds a Monday-first calendar without dates outside the selected month", () => {

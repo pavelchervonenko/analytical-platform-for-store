@@ -8,7 +8,7 @@ import { currentDateInTimeZone, formatDate, formatMonth } from "../shared/date";
 import { formatNumber } from "../shared/format";
 import { QueryError } from "../shared/QueryState";
 import { useWorkspace } from "../stores/WorkspaceProvider";
-import { buildMonthCalendar, parseWorkedHours } from "./forms";
+import { buildMonthCalendar, isSelectableShiftSeller, parseWorkedHours } from "./forms";
 
 const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
@@ -65,7 +65,12 @@ function ShiftDayEditor({
   }, [returnFocusRef]);
   const roster = useMemo(() => {
     const employees = new Map<string, RosterEmployee>();
-    for (const setting of settings) employees.set(setting.employeeId, { employeeId: setting.employeeId, displayName: setting.displayName, eligible: setting.employeeActive && setting.assignmentActive });
+    for (const setting of settings) {
+      if (!isSelectableShiftSeller(setting)) continue;
+      employees.set(setting.employeeId, {
+        employeeId: setting.employeeId, displayName: setting.displayName, eligible: true
+      });
+    }
     for (const shift of dayShifts) if (!employees.has(shift.employeeId)) employees.set(shift.employeeId, { employeeId: shift.employeeId, displayName: shift.employeeName, eligible: false });
     return [...employees.values()].sort((left, right) => Number(right.eligible) - Number(left.eligible) || left.displayName.localeCompare(right.displayName, "ru-RU"));
   }, [dayShifts, settings]);
@@ -146,7 +151,7 @@ function ShiftDayEditor({
       <section className="shift-editor" role="dialog" aria-modal="true" aria-labelledby="shift-editor-title" ref={dialogRef} onKeyDown={handleDialogKeyDown}>
         <header><div><p className="eyebrow">{formatMonth(month)}</p><h2 id="shift-editor-title">{dayLabel(workDate)}</h2><p>Сохранение полностью заменит состав этого дня.</p></div><button className="icon-button" type="button" onClick={requestClose} aria-label="Закрыть редактор" ref={closeButtonRef}><X /></button></header>
         <div className="shift-editor__summary"><span><UsersRound />{selectedCount} сотрудников</span><span><Clock3 />Полная смена — 11 часов</span></div>
-        {roster.length === 0 ? <div className="panel-empty"><UsersRound /><strong>Нет доступных сотрудников</strong><p>Проверьте активные назначения сотрудников в магазине.</p></div> : <div className="shift-roster">{roster.map((employee) => {
+        {roster.length === 0 ? <div className="panel-empty"><UsersRound /><strong>Нет доступных продавцов</strong><p>Включите нужных сотрудников в рейтинг магазина.</p></div> : <div className="shift-roster">{roster.map((employee) => {
           const selected = employee.employeeId in draft;
           return <article className={`${selected ? "shift-roster-row--selected" : ""} ${!employee.eligible ? "shift-roster-row--unavailable" : ""}`} key={employee.employeeId}><button className="shift-check" type="button" aria-pressed={selected} disabled={!employee.eligible && !selected} onClick={() => toggle(employee)}><span>{selected && <Check />}</span><i>{employee.displayName.slice(0, 1).toUpperCase()}</i><strong>{employee.displayName}</strong></button><label><span>Часов</span><input type="text" inputMode="decimal" value={draft[employee.employeeId] ?? ""} disabled={!selected || !employee.eligible} onChange={(event) => { setDraft((current) => ({ ...current, [employee.employeeId]: event.target.value })); setErrors((current) => ({ ...current, [employee.employeeId]: "" })); }} aria-invalid={Boolean(errors[employee.employeeId])} /></label>{selected && employee.eligible && <button className="full-shift-button" type="button" onClick={() => setDraft((current) => ({ ...current, [employee.employeeId]: "11" }))} aria-label={`Установить полную смену для ${employee.displayName}`}>11 часов</button>}{!employee.eligible && <small>Недоступен для новых смен</small>}{errors[employee.employeeId] && <p role="alert">{errors[employee.employeeId]}</p>}</article>;
         })}</div>}
@@ -185,7 +190,7 @@ export function SchedulePanel() {
   for (const shift of shifts) shiftsByDate.set(shift.workDate, [...(shiftsByDate.get(shift.workDate) ?? []), shift]);
   const scheduledDays = shiftsByDate.size;
   const totalHours = shifts.reduce((total, shift) => total + shift.workedHours, 0);
-  const activeEmployees = settingsQuery.data.filter((setting) => setting.employeeActive && setting.assignmentActive).length;
+  const availableSellers = settingsQuery.data.filter(isSelectableShiftSeller).length;
   const today = currentDateInTimeZone(selectedStore.timezone);
 
   const openDay = async (date: string, dayButton: HTMLButtonElement) => {
@@ -207,9 +212,9 @@ export function SchedulePanel() {
     <div className="schedule-panel-view">
       {openingError && <div className="form-alert" role="alert">{openingError}</div>}
       {lastSavedDate && <section className="schedule-saved-banner" role="status"><CalendarCheck2 /><span>Смены за {formatDate(lastSavedDate)} сохранены. Живой рейтинг и готовность зарплаты обновляются.</span><button type="button" onClick={() => setLastSavedDate(null)} aria-label="Скрыть уведомление"><X /></button></section>}
-      <section className="schedule-summary-grid" aria-label="Сводка смен"><article><span><CalendarCheck2 /></span><div><small>Дней со сменами</small><strong>{scheduledDays}</strong><p>из {calendar.filter(Boolean).length} дней месяца</p></div></article><article><span><UsersRound /></span><div><small>Записей смен</small><strong>{shifts.length}</strong><p>{activeEmployees} сотрудников доступны</p></div></article><article><span><Clock3 /></span><div><small>Отработано часов</small><strong>{formatNumber(totalHours)}</strong><p>По фактическим часам графика</p></div></article></section>
+      <section className="schedule-summary-grid" aria-label="Сводка смен"><article><span><CalendarCheck2 /></span><div><small>Дней со сменами</small><strong>{scheduledDays}</strong><p>из {calendar.filter(Boolean).length} дней месяца</p></div></article><article><span><UsersRound /></span><div><small>Записей смен</small><strong>{shifts.length}</strong><p>{availableSellers} продавцов доступно</p></div></article><article><span><Clock3 /></span><div><small>Отработано часов</small><strong>{formatNumber(totalHours)}</strong><p>По фактическим часам графика</p></div></article></section>
 
-      {activeEmployees === 0 && <section className="plan-quality-warning"><AlertTriangle /><div><strong>Нет доступных сотрудников</strong><p>Для создания смен нужны активные сотрудники с активным назначением в магазин.</p></div></section>}
+      {availableSellers === 0 && <section className="plan-quality-warning"><AlertTriangle /><div><strong>Нет доступных продавцов</strong><p>Для создания смен включите нужных сотрудников в рейтинг магазина.</p></div></section>}
 
       <section className="panel schedule-calendar-panel">
         <div className="panel__heading"><div><p className="eyebrow">Фактически отработанные часы</p><h2>Календарь смен</h2></div><span>Выберите день, чтобы изменить полный состав</span></div>
