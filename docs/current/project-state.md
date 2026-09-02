@@ -6,7 +6,7 @@ owner: project
 audience:
   - developer
   - operator
-last_verified: 2026-09-01
+last_verified: 2026-09-02
 requirement_sources:
   - docs/maintenance/documentation-policy.md
 implementation_sources:
@@ -14,9 +14,9 @@ implementation_sources:
   - deploy/env.production.example
   - backend/src/main/resources/application.yml
 verification_sources:
-  - docs/history/releases/2026/09/v0.1.0-pilot.29-production-verification.md
+  - docs/history/releases/2026/09/v0.1.0-pilot.30-production-verification.md
 runtime_evidence:
-  - docs/history/releases/2026/09/v0.1.0-pilot.29-production-verification.md
+  - docs/history/releases/2026/09/v0.1.0-pilot.30-production-verification.md
 required_reviewers:
   - information-architecture
   - operations
@@ -34,23 +34,23 @@ superseded_by: null
 
 This is the only repository page allowed to summarize the currently verified production release.
 It records an observation, not a live dashboard. Dynamic values below were last observed on
-**2026-09-01** and must be refreshed from sanitized read-only production evidence after every
+**2026-09-02** and must be refreshed from sanitized read-only production evidence after every
 deployment, schema change, relevant flag change or topology change.
 
 ## Verified production snapshot
 
 | Item | Last verified value |
 |---|---|
-| Release | `v0.1.0-pilot.29` |
-| Commit | `0b7d49ce4e79d319089f99c9392ceb6804f92b58` |
+| Release | `v0.1.0-pilot.30` |
+| Commit | `24c1d37affb0d48a610cd3eba33f8f8cc2241a4b` |
 | Flyway schema | `48` |
 | Topology | `web`, `backend-api`, `backend-worker` |
 | Service health | all three containers healthy at verification time |
-| Backend image | `sha256:b17f4d523fb0520ab8ea9e364b0403df5441e5ae11c8383b7fd1fc25024c3247` |
-| Web image | `sha256:e00069b40aa0eb0553ed91e8240546501c03f32bc5aabc36ee49c26bb4ec6496` |
+| Backend image | `sha256:bff646c1ff7bb35425b5d587cba15399751c6ecd936445c840a9b0c5a4e90a07` |
+| Web image | `sha256:89009ae282e593b5004716a594a9e21cc959a995b6ad5d4ba284fff1030a7ed4` |
 
 Full provenance and limits are in the
-[production verification record](../history/releases/2026/09/v0.1.0-pilot.29-production-verification.md).
+[production verification record](../history/releases/2026/09/v0.1.0-pilot.30-production-verification.md).
 
 ## Weekly review
 
@@ -66,6 +66,11 @@ weekly-review read path. No AI job was created. See the
 
 The legacy weekly insight remains a compatibility fallback in both backend and frontend. It must
 not be removed until the fallback and its Telegram dependencies are deliberately retired.
+
+Release `v0.1.0-pilot.30` aligns employee cards with the approved rating roster and streamlines the
+manager-facing presentation. It does not rewrite the persisted review for `2026-08-24..2026-08-30`.
+An owner-approved exact-target operation also enabled one newly synchronized seller assignment for
+rating participation in `МАГАЗИН`; the corresponding `МобиСфера` assignment remains excluded.
 
 ## Data and return recovery
 
