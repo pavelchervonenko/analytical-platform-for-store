@@ -6,7 +6,7 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-03
 requirement_sources:
   - docs/history/audits/2026/08/CUSTOMER_KPI_FORMULA_AUDIT_2026-08-13.md
   - docs/archive/discoveries/analytics-business-rules-draft.md

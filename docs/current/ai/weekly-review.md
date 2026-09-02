@@ -7,7 +7,7 @@ audience:
   - developer
   - operator
   - manager
-last_verified: 2026-09-02
+last_verified: 2026-09-03
 requirement_sources:
   - docs/archive/legacy-contracts/AI_WEEKLY_REDESIGN_STAGE2_CONTRACT.md
   - docs/archive/legacy-contracts/weekly-review-ai-management-rubric.md
@@ -17,6 +17,8 @@ implementation_sources:
   - frontend/src/insights/weekly-review-presentation.ts
   - frontend/src/insights/weekly-review.css
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewSnapshotStore.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewTeamEmployeeProjector.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiContract.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiInputCompactor.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiSemanticValidator.java
@@ -28,6 +30,8 @@ verification_sources:
   - frontend/src/insights/WeeklyReviewView.test.tsx
   - frontend/src/insights/weekly-review-presentation.test.ts
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewServiceTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewSnapshotStoreIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewTeamEmployeeProjectorTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewResponseContractTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiSchemaContractTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiSemanticValidatorTest.java
@@ -85,6 +89,24 @@ Snapshot формируется отдельно от AI. Отчёт остаё�
 сотрудник, активное назначение и `participatesInRanking=true`. Сотрудники вне рейтинга не попадают
 ни в персональные карточки Weekly Review, ни в командный benchmark. Для появления сотрудника в
 карточках также нужна активность хотя бы в одном из двух сравниваемых недельных периодов.
+
+### Roster и исторические snapshots
+
+Roster вычисляется во время формирования snapshot, а не при каждом открытии страницы. Активностью
+считается хотя бы одна завершённая продажа, ненулевая чистая выручка или смена в текущей либо
+предыдущей неделе. Сотрудник, добавленный после отчётной недели и не имеющий активности в обеих
+неделях, в такой отчёт не попадает даже после включения флага рейтинга.
+
+Payload snapshot, включая состав и имена сотрудников, хранится неизменяемо. Изменение назначения,
+активности или `participatesInRanking` не переписывает уже сохранённый отчёт и не фильтрует его на
+read path. Поэтому историческая revision может содержать сотрудника, который сейчас исключён из
+рейтинга, либо не содержать сотрудника, добавленного позднее.
+
+Повторная генерация той же завершённой недели создаёт следующую immutable revision только если
+содержимое изменилось; при том же content hash возвращается существующая revision. После начала
+новой недели обычная генерация нацелена уже на последнюю завершённую неделю — произвольный
+исторический период endpoint не принимает. Включён ли автоматический planner в production,
+фиксируется только в [`project-state.md`](../project-state.md).
 
 ## Активный контракт
 

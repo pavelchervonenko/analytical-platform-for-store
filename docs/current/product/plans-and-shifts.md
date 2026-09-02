@@ -6,7 +6,7 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-03
 requirement_sources:
   - docs/archive/legacy-contracts/store-plan-progress-api.md
   - docs/archive/discoveries/analytics-business-rules-draft.md
@@ -15,9 +15,12 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics/service/OverviewMetricsService.java
   - backend/src/main/java/com/storeanalytics/performance/model/StorePlanTargets.java
   - frontend/src/plan-schedule/PlanSchedulePage.tsx
+  - frontend/src/plan-schedule/SchedulePanel.tsx
+  - frontend/src/plan-schedule/forms.ts
 verification_sources:
   - backend/src/test/java/com/storeanalytics/performance/service/StorePlanProgressServiceTest.java
   - backend/src/test/java/com/storeanalytics/performance/web/StorePlanProgressControllerTest.java
+  - frontend/src/plan-schedule/forms.test.ts
 runtime_evidence: []
 required_reviewers:
   - product
@@ -78,9 +81,14 @@ future target меняется после синхронизации.
 
 ## Смены
 
-Смена содержит дату, сотрудника и часы. Для рейтинга нужна минимум одна смена. В payroll дневной
-фонд делится поровну между сотрудниками смены: часы используются для учёта/эффективности, но не как
-вес фонда. День фонда без смен снижает readiness.
+Смена содержит дату, сотрудника и часы. Для добавления новой смены интерфейс предлагает только
+активных сотрудников с активным назначением и `participatesInRanking=true`. Ранее сохранённая смена
+сотрудника, который позже перестал соответствовать roster, остаётся видимой, но недоступна для
+повторного выбора; её удаляют явным редактированием дня.
+
+Для рейтинга нужна минимум одна смена. В payroll дневной фонд делится поровну между сотрудниками
+смены: часы используются для учёта/эффективности, но не как вес фонда. День фонда без смен снижает
+readiness.
 
 На главной план остаётся месячным даже при week/custom. В week/custom он показывается отдельным
 блоком и не подменяет selected-period share; решение закреплено в

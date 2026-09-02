@@ -6,7 +6,7 @@ owner: frontend
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-03
 requirement_sources:
   - docs/current/product/periods.md
 implementation_sources:

@@ -6,7 +6,7 @@ owner: frontend
 audience:
   - developer
   - manager
-last_verified: 2026-09-02
+last_verified: 2026-09-03
 requirement_sources:
   - docs/current/product/plans-and-shifts.md
 implementation_sources:
@@ -14,6 +14,7 @@ implementation_sources:
   - frontend/src/plan-schedule/PlanPanel.tsx
   - frontend/src/plan-schedule/DailyPlanTable.tsx
   - frontend/src/plan-schedule/SchedulePanel.tsx
+  - frontend/src/plan-schedule/forms.ts
 verification_sources:
   - frontend/src/plan-schedule/PlanPanel.test.tsx
   - frontend/src/plan-schedule/DailyPlanTable.test.tsx
