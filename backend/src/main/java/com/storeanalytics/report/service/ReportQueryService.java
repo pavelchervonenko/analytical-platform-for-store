@@ -72,9 +72,9 @@ public class ReportQueryService {
                 );
         ReportSummaryView summary = summary(report, current);
         if (report.getReportType() == ReportType.MONTHLY) {
-            return new ReportDetailView(summary, codec.decodeMonthly(report), null);
+            return new ReportDetailView(summary, MonthlyReportView.from(codec.decodeMonthly(report)), null);
         }
-        return new ReportDetailView(summary, null, codec.decodeAnnual(report));
+        return new ReportDetailView(summary, null, AnnualReportView.from(codec.decodeAnnual(report)));
     }
 
     private ReportSummaryView summary(ReportSummaryProjection report) {

@@ -1015,23 +1015,6 @@ export type AnnualEmployeeTotals = {
     payableAmount?: number;
 };
 
-export type AnnualReportMonthPayload = {
-    snapshotId?: string;
-    revision?: number;
-    payloadHash?: string;
-    report?: MonthlyReportPayload;
-};
-
-export type AnnualReportPayload = {
-    schemaVersion?: number;
-    header?: ReportHeader;
-    totals?: AnnualStoreTotals;
-    categories?: Array<AnnualCategoryTotals>;
-    attachRates?: Array<AnnualAttachRateTotals>;
-    employees?: Array<AnnualEmployeeTotals>;
-    months?: Array<AnnualReportMonthPayload>;
-};
-
 export type AnnualStoreTotals = {
     monthCount?: number;
     netRevenue?: number;
@@ -1117,19 +1100,6 @@ export type CategoryKpiResult = {
     formulaVersion?: string;
     groups?: Array<CategoryKpiGroup>;
     categories?: Array<CategoryKpiEntry>;
-};
-
-export type MonthlyReportPayload = {
-    schemaVersion?: number;
-    header?: ReportHeader;
-    storeKpi?: StoreKpiResult;
-    categoryKpi?: CategoryKpiResult;
-    averageKpi?: ReportAverageKpi;
-    attachRates?: AttachRateResult;
-    planProgress?: StorePlanProgressView;
-    employeeRating?: EmployeeRatingResult;
-    payroll?: PayrollRunDetailView;
-    quality?: StorePeriodQualityView;
 };
 
 export type PeriodPayrollQualityView = {
@@ -1221,8 +1191,8 @@ export type ReportCategoryAverage = {
 
 export type ReportDetailView = {
     report?: ReportSummaryView;
-    monthly?: MonthlyReportPayload;
-    annual?: AnnualReportPayload;
+    monthly?: MonthlyReportView;
+    annual?: AnnualReportView;
 };
 
 export type ReportHeader = {
@@ -2068,6 +2038,45 @@ export type LlmOperationsView = {
     configuration?: LlmOperationsConfigurationView;
     summary?: LlmOperationsSummaryView;
     incidents?: Array<LlmJobIncidentView>;
+};
+
+export type ManagerStoreDataStatusView = {
+    storeId?: string;
+    status?: 'NOT_SYNCED' | 'CURRENT' | 'STALE' | 'SYNCING' | 'ERROR';
+    expectedThroughDate?: string;
+    dataThroughDate?: string;
+    lagDays?: number;
+    updating?: boolean;
+    checkedAt?: string;
+};
+
+export type MonthlyReportView = {
+    schemaVersion?: number;
+    header?: ReportHeader;
+    storeKpi?: StoreKpiResult;
+    categoryKpi?: CategoryKpiResult;
+    averageKpi?: ReportAverageKpi;
+    attachRates?: AttachRateResult;
+    planProgress?: StorePlanProgressView;
+    employeeRating?: EmployeeRatingResult;
+    payroll?: PayrollRunDetailView;
+};
+
+export type AnnualReportMonthView = {
+    snapshotId?: string;
+    revision?: number;
+    payloadHash?: string;
+    report?: MonthlyReportView;
+};
+
+export type AnnualReportView = {
+    schemaVersion?: number;
+    header?: ReportHeader;
+    totals?: AnnualStoreTotals;
+    categories?: Array<AnnualCategoryTotals>;
+    attachRates?: Array<AnnualAttachRateTotals>;
+    employees?: Array<AnnualEmployeeTotals>;
+    months?: Array<AnnualReportMonthView>;
 };
 
 export type GetDayData = {
@@ -3534,7 +3543,7 @@ export type Get9Responses = {
     /**
      * OK
      */
-    200: StoreDataStatusView;
+    200: ManagerStoreDataStatusView;
 };
 
 export type Get9Response = Get9Responses[keyof Get9Responses];

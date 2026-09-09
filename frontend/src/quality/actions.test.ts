@@ -20,10 +20,11 @@ describe("quality action routing", () => {
   });
 
   it("opens source issues and source synchronization instead of a no-op route", () => {
-    expect(describeQualityAction("REVIEW_DATA_ISSUES", false)).toMatchObject({
+    expect(describeQualityAction("REVIEW_DATA_ISSUES", true)).toMatchObject({
       route: "/quality",
       hash: "#quality-source-issues"
     });
+    expect(describeQualityAction("REVIEW_DATA_ISSUES", false)?.route).toBeUndefined();
     expect(describeQualityAction("REVIEW_SOURCE_DOCUMENT", true)).toMatchObject({
       route: "/admin",
       view: "sync"

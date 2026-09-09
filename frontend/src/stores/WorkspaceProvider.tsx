@@ -125,7 +125,7 @@ export function WorkspaceProvider({
   }, [month, requestedMonth, requestedStoreId, selectedStore, setSearchParams]);
 
   if (storesQuery.isPending) return <main className="workspace-state" aria-live="polite"><span className="spinner" /><p>Загружаем доступные магазины…</p></main>;
-  if (storesQuery.isError) return <main className="workspace-state"><h1>Не удалось загрузить магазины</h1><p>Проверьте соединение или доступ учетной записи.</p><button className="button button--primary" type="button" onClick={() => void storesQuery.refetch()}>Повторить</button></main>;
+  if (storesQuery.data === undefined && storesQuery.isError) return <main className="workspace-state"><h1>Не удалось загрузить магазины</h1><p>Проверьте соединение или доступ учетной записи.</p><button className="button button--primary" type="button" onClick={() => void storesQuery.refetch()}>Повторить</button></main>;
   if (!selectedStore || !month) return emptyState ?? (
     <main className="workspace-state"><h1>Нет доступных магазинов</h1>
       <p>Администратор еще не назначил вам активный магазин.</p></main>

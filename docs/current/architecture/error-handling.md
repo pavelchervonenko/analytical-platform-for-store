@@ -6,23 +6,29 @@ owner: backend
 audience:
   - developer
   - operator
-last_verified: 2026-08-31
+  - manager
+last_verified: 2026-09-09
 requirement_sources:
   - docs/archive/legacy-contracts/error-handling.md
 implementation_sources:
+  - frontend/src/shared/QueryState.tsx
   - backend/src/main/java/com/storeanalytics/common/web
   - backend/src/main/java/com/storeanalytics/common/exception
   - backend/src/main/java/com/storeanalytics/common/security
 verification_sources:
+  - frontend/src/shared/QueryState.test.tsx
   - backend/src/test/java/com/storeanalytics/common/web/ApiExceptionHandlerTest.java
   - backend/src/test/java/com/storeanalytics/common/web/CorrelationIdFilterTest.java
   - backend/src/test/java/com/storeanalytics/common/web/RequestBodyLimitMvcTest.java
 runtime_evidence: []
 required_reviewers:
   - backend-data
+  - frontend
+  - product
   - security-privacy
 review_triggers:
   - api-error-change
+  - frontend-error-presentation-change
   - security-writer-change
   - request-filter-change
 supersedes:
@@ -78,9 +84,22 @@ domain conflict: отсутствующий ETag — 428, stale ETag — 412. Pa
 correlation ID остаются в server log. Глобального преобразования всех `IllegalArgumentException`
 или `IllegalStateException` в 4xx нет, чтобы не скрывать дефекты и не публиковать внутренний текст.
 
+## Представление ошибки в интерфейсе
+
+Frontend различает три уровня. Блокирующая красная ошибка используется только когда локальный
+экран или основной источник данных невозможно показать. Ошибка вспомогательного блока остаётся
+внутри этого блока и не скрывает остальную страницу. Если фоновое обновление завершилось ошибкой,
+последние успешные данные сохраняются, а пользователь видит компактную нейтральную заметку с
+повтором запроса.
+
+`correlationId` не конкурирует с пользовательским объяснением: код обращения находится под
+раскрываемыми «Подробностями». Нормальное успешное состояние не требует отдельного баннера.
+Предупреждение показывается только для понятного бизнес-риска или действия, которое менеджер может
+выполнить; техническая диагностика качества данных принадлежит администраторскому разделу.
+
 ## Известный transport gap
 
-OpenAPI v10 пока не описывает общий `ApiError`, 401/403 responses и security schemes полностью.
+OpenAPI v11 пока не описывает общий `ApiError`, 401/403 responses и security schemes полностью.
 Фактическая защита реализована в Spring Security и тестах, но generated client не должен считать
 отсутствие этих элементов отсутствием auth/error contract. Gap должен быть закрыт изменением
 OpenAPI и consumer checks, а не копированием другого response shape в feature-документы.

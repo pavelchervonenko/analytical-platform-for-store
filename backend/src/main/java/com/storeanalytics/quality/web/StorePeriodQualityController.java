@@ -22,7 +22,7 @@ public class StorePeriodQualityController {
     }
 
     @GetMapping("/api/stores/{storeId}/period-quality/{month}")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasRole('ADMIN') and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     StorePeriodQualityView get(
             @PathVariable UUID storeId,
             @PathVariable @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,

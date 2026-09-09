@@ -28,6 +28,26 @@ async function installFixtureApi(page: Page) {
     allStores: false,
     storeIds: [visualStoreId]
   }));
+  await page.route("**/api/auth/sessions", async (route) => json(route, {
+    sessions: [{
+      sessionReference: "visual-current-session",
+      lastSeenAt: "2026-09-08T06:30:00+03:00",
+      current: true
+    }]
+  }));
+  await page.route("**/api/notifications/channels/telegram", async (route) => json(route, {
+    state: "NOT_LINKED",
+    subscriptionId: null,
+    version: null,
+    linkExpiresAt: null,
+    pendingSince: null,
+    confirmedAt: null,
+    blockedAt: null,
+    destination: null,
+    deliverySettings: null,
+    allowedActions: ["LINK"],
+    publicBotUrl: "https://t.me/store_analytics_visual_bot"
+  }));
   await page.route("**/api/stores", async (route) => json(route, [{
     id: visualStoreId,
     name: "МАГАЗИН",
@@ -46,6 +66,7 @@ async function installFixtureApi(page: Page) {
     salesDataThroughDate: "2026-08-26",
     returnsDataThroughDate: "2026-08-26",
     lagDays: 0,
+    updating: false,
     lastCompletedSyncAt: "2026-08-27T04:30:00Z",
     synchronization: {
       active: false,
@@ -142,6 +163,25 @@ async function installFixtureApi(page: Page) {
     ],
     categories: []
   }));
+  await page.route("**/api/stores/*/performance-plans/2026-09", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      headers: { ETag: '"visual-performance-plan-2026-09-1"' },
+      body: JSON.stringify({
+        id: "10000000-0000-4000-8000-000000000010",
+        storeId: visualStoreId,
+        planMonth: "2026-09",
+        revenueTarget: 55_000_000,
+        accessoryShareTarget: 6.3,
+        serviceShareTarget: 4.2,
+        additionalShareTarget: 10.5,
+        updatedBy: "20000000-0000-4000-8000-000000000001",
+        version: 1,
+        updatedAt: "2026-09-01T06:00:00Z"
+      })
+    });
+  });
   await page.route("**/api/stores/*/performance-plans/*/progress?*", async (route) => {
     const scope = new URL(route.request().url()).searchParams.get("scope") === "STORE"
       ? "STORE"
@@ -264,12 +304,20 @@ async function installFixtureApi(page: Page) {
     },
     employees: [],
     history: {
-      status: "DRAFT",
+      status: "LIVE",
       snapshotId: null,
       finalizedAt: null,
       finalizedBy: null,
       finalizedByName: null
     }
+  }));
+  await page.route("**/api/stores/*/employees?*", async (route) => json(route, {
+    storeId: visualStoreId,
+    periodStart,
+    periodEnd,
+    previousPeriodStart: "2026-07-05",
+    previousPeriodEnd: "2026-07-31",
+    employees: []
   }));
   await page.route("**/api/stores/*/kpi/employees?*", async (route) => json(route, {
     storeId: visualStoreId,
@@ -290,6 +338,16 @@ async function installFixtureApi(page: Page) {
     },
     rates: []
   }));
+  await page.route("**/api/stores/*/reports?*", async (route) => json(route, {
+    items: [],
+    page: 0,
+    size: 20,
+    totalElements: 0,
+    totalPages: 0,
+    hasNext: false,
+    hasPrevious: false
+  }));
+  await page.route("**/api/stores/*/reports/years", async (route) => json(route, []));
   await page.route("**/api/stores/*/weekly-reviews/current", async (route) => {
     const review = makeWeeklyReview();
     const templateAction = review.actions[0]!;
@@ -685,8 +743,8 @@ test.describe("local frontend visual review", () => {
         await expect(dayButton).toBeFocused();
       }
 
-
-      await expect(page.locator(".query-error")).toHaveCount(0);
+      await expect(page.locator(".query-error, .inline-query-error, .stale-data-note"))
+        .toHaveCount(0);
       await expectNoHorizontalOverflow(page);
       expect(runtimeFailures).toEqual([]);
     });

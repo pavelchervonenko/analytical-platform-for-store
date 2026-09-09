@@ -6,7 +6,7 @@ owner: frontend
 audience:
   - developer
   - manager
-last_verified: 2026-09-03
+last_verified: 2026-09-09
 requirement_sources:
   - docs/current/product/employees-and-rating.md
   - docs/current/product/periods.md
@@ -35,10 +35,18 @@ superseded_by: null
 
 | View | Endpoint | Период | Cohort | Null/partial | Label |
 |---|---|---|---|---|---|
-| Directory | `/employees` | Selected + previous equal period | Accessible employees | May have no facts | «Сотрудники» |
+| Directory | `/employees` | Selected + previous equal period | Назначения магазина | May have no facts | «Сотрудники» |
 | Card | `/employees/{id}` | Selected + explicit comparison mode | One employee | Metrics nullable | Имя + обе даты |
 | Full KPI | `/kpi/employees` | Selected | Full financial cohort | GP nullable | «Все факты» |
 | Rating | `/employee-ratings` | Selected | Eligible/candidate | Score/rank nullable | Причина без места |
+
+На странице есть блок «Участники рейтинга и смен»: менеджер может включить активного сотрудника с
+активным назначением или исключить его с optimistic `version`. Изменение обновляет рейтинг,
+календарь смен и готовность зарплаты. «Без места» — фактический фильтр; отсутствие места не
+объявляется «требующим внимания», а таблица показывает конкретную причину.
+Endpoint directory возвращает назначения магазина, а таблица результатов дополнительно оставляет
+только записи с `participatesInRanking=true`. Отдельный блок управления участниками показывает и
+выключенных сотрудников, чтобы их можно было включить обратно.
 
 Командный блок показывает distribution roster, карточка — конкретного сотрудника; store-level
 вывод не дублируется как персональный. Full financial cohort шире roster, поэтому узкий список
@@ -52,3 +60,10 @@ superseded_by: null
 Нет предыдущей базы — «нет данных», не нулевой рост. Возврат уменьшает показатели сотрудника
 исходной продажи по [ADR-0001](../../decisions/ADR-0001-return-employee-attribution.md); сотрудник,
 оформивший возврат, не используется как fallback.
+
+Directory и rating являются основными источниками страницы, а настройки участия — вспомогательным.
+Сбой настроек не скрывает список и рейтинг; ошибка фонового обновления оставляет последние данные.
+Ошибку изменения участия интерфейс показывает только в строке конкретного сотрудника. Нормальные
+статусы «живой расчёт», неактивный профиль, отсутствие места и исключение из рейтинга не оформляются
+как предупреждения. Финализированный snapshot имеет один компактный статус в шапке без отдельного
+полноширинного success-баннера.

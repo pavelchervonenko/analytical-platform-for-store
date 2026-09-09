@@ -9,6 +9,9 @@
 .plan-panel-view, .schedule-panel-view, .plan-panel-skeleton, .schedule-skeleton { display: grid; gap: 14px; }
 .plan-quality-warning, .plan-focus-banner, .schedule-saved-banner { min-height: 62px; display: flex; align-items: center; gap: 12px; padding: 11px 16px; border-radius: 17px; }
 .plan-quality-warning { border: 1px solid #ead7b8; color: var(--warning); background: var(--warning-soft); }
+.plan-data-note { display: flex; align-items: center; gap: 8px; width: max-content; max-width: 100%; color: var(--text-muted); font-size: 11px; }
+.plan-data-note > svg { width: 15px; height: 15px; flex: 0 0 auto; }
+.plan-data-note > p { margin: 0; }
 .plan-focus-banner { border: 1px solid #d4dfd7; color: var(--primary); background: var(--primary-soft); }
 .plan-quality-warning > svg, .plan-focus-banner > svg, .schedule-saved-banner > svg { width: 20px; }
 .plan-quality-warning div, .plan-focus-banner div { min-width: 0; }
@@ -67,11 +70,14 @@
 .plan-progress-heading::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 5px; background: var(--success); }
 .plan-progress-heading--warning::before { background: #c99032; }
 .plan-progress-heading--danger::before { background: var(--danger); }
+.plan-progress-heading--neutral::before { background: var(--text-faint); }
 .plan-progress-heading > div { min-width: 0; }
 .plan-progress-heading > div > p:not(.eyebrow) { margin: 7px 0 0; color: var(--text); font-size: 13px; font-weight: 700; line-height: 1.45; }
 .plan-progress-heading > div > small { display: block; margin-top: 5px; color: var(--text-faint); font-size: 10px; }
 .plan-progress-score--warning { color: var(--warning); background: var(--warning-soft); }
 .plan-progress-score--danger { color: var(--danger); background: var(--danger-soft); }
+.plan-progress-score--neutral { color: var(--text-muted); background: var(--surface-muted); }
+.plan-direction-card--neutral { border-top: 3px solid var(--text-faint); }
 .plan-settings-disclosure { overflow: hidden; margin-bottom: 8px; padding: 0; }
 .plan-settings-disclosure > summary { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 17px 52px 17px 22px; cursor: pointer; list-style: none; }
 .plan-settings-disclosure > summary::-webkit-details-marker { display: none; }

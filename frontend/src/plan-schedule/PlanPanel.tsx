@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, CircleDollarSign, Pencil, Plus, Save, TrendingUp, X } from "lucide-react";
+import { CheckCircle2, CircleDollarSign, Pencil, Plus, RefreshCw, Save, TrendingUp, X } from "lucide-react";
 import { useState } from "react";
 import { isApiClientError } from "../api/client";
 import type { PerformancePlan, PlanDirection } from "../api/contracts";
 import { getPerformancePlan, getPlanProgress, queryKeys, upsertPerformancePlan } from "../api/queries";
 import { formatDate, formatMonth } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatPercent } from "../shared/format";
-import { QueryError } from "../shared/QueryState";
+import { InlineQueryError, PanelSkeleton, QueryError, StaleDataNote } from "../shared/QueryState";
 import { useWorkspace } from "../stores/WorkspaceProvider";
 import { DailyPlanTable } from "./DailyPlanTable";
 import { validatePlanForm, type PlanFormErrors, type PlanFormValues } from "./forms";
@@ -29,6 +29,7 @@ const statusLabels: Record<string, string> = {
 function statusTone(status: string): string {
   if (["ACHIEVED", "ON_TRACK"].includes(status)) return "success";
   if (status === "MISSED") return "danger";
+  if (status === "NOT_AVAILABLE") return "neutral";
   return "warning";
 }
 
@@ -89,16 +90,18 @@ function overallStatus(directions: PlanDirection[], allAchieved: boolean) {
   if (allAchieved) return { label: "План выполнен", tone: "success" };
   if (directions.some((direction) => direction.status === "MISSED")) return { label: "План не выполнен", tone: "danger" };
   if (directions.some((direction) => direction.status === "AT_RISK")) return { label: "План требует внимания", tone: "warning" };
-  if (directions.some((direction) => direction.status === "NOT_AVAILABLE")) return { label: "Недостаточно данных", tone: "warning" };
+  if (directions.some((direction) => direction.status === "NOT_AVAILABLE")) return { label: "Недостаточно данных", tone: "neutral" };
   return { label: "План выполняется по графику", tone: "success" };
 }
 
 export function primaryPlanAction(direction: PlanDirection | undefined): string {
   if (!direction) return "";
   const label = directionLabels[direction.code] ?? "Направление";
+  if (direction.status === "MISSED") return `${label}: итог месяца — план не выполнен.`;
+  if (direction.status === "NOT_AVAILABLE") return `${label}: расчёт появится после обновления данных.`;
   if (direction.remainingAmount <= 0) return `${label}: план выполнен.`;
   if (direction.requiredPerRemainingDay == null) {
-    return `${label}: проверьте данные и текущий темп.`;
+    return `${label}: расчёт темпа пока недоступен.`;
   }
   const dailyAmount = formatCompactMoney(direction.requiredPerRemainingDay);
   return isRevenueDirection(direction)
@@ -136,11 +139,13 @@ export function PlanPanel() {
     }
   });
 
-  if (planQuery.isPending || progressQuery.isPending) return <PlanSkeleton />;
-  if (planQuery.isError || progressQuery.isError) {
-    const failed = planQuery.isError ? planQuery : progressQuery;
-    return <QueryError error={failed.error} onRetry={() => void Promise.all([planQuery.refetch(), progressQuery.refetch()])} />;
+  const planAvailable = planQuery.data !== undefined;
+  const progressAvailable = progressQuery.data !== undefined;
+  if (!planAvailable && !progressAvailable && planQuery.isPending && progressQuery.isPending) return <PlanSkeleton />;
+  if (!planAvailable && !progressAvailable && planQuery.isError && progressQuery.isError) {
+    return <QueryError error={planQuery.error} onRetry={() => void Promise.all([planQuery.refetch(), progressQuery.refetch()])} />;
   }
+  const staleQuery = [planQuery, progressQuery].find((query) => query.isError && query.data !== undefined);
 
   const plan = planQuery.data?.value ?? null;
   const progress = progressQuery.data;
@@ -168,8 +173,12 @@ export function PlanPanel() {
 
   return (
     <div className="plan-panel-view">
-      {progress && (!progress.dataQuality.completeThroughAsOf || !progress.dataQuality.classificationComplete) ? <section className="plan-quality-warning"><AlertTriangle /><div><strong>Показатели требуют осторожной интерпретации</strong><p>{!progress.dataQuality.completeThroughAsOf ? "Синхронизация еще не подтвердила данные до даты среза. " : ""}{!progress.dataQuality.classificationComplete ? `Есть неклассифицированные позиции: ${progress.dataQuality.unmappedItemCount}.` : ""}</p></div></section> : null}
+      {staleQuery && <StaleDataNote error={staleQuery.error} onRetry={() => void Promise.all([planQuery.refetch(), progressQuery.refetch()])} />}
 
+      {progress && (!progress.dataQuality.completeThroughAsOf || !progress.dataQuality.classificationComplete) ? <section className="plan-data-note" role="status"><RefreshCw /><p>{!progress.dataQuality.completeThroughAsOf ? "Расчёт обновится, когда данные на выбранную дату будут загружены. " : ""}{!progress.dataQuality.classificationComplete ? "Некоторые направления появятся после обновления категорий товаров." : ""}</p></section> : null}
+
+      {!progressAvailable && progressQuery.isPending && <PanelSkeleton rows={4} />}
+      {!progressAvailable && progressQuery.isError && <InlineQueryError error={progressQuery.error} onRetry={() => void progressQuery.refetch()} />}
       {progress && summary && <>
         <section className={`plan-progress-heading plan-progress-heading--${summary.tone}`}>
           <div><p className="eyebrow">План на {formatMonth(month)}. Данные на {formatDate(progress.asOfDate)}</p><h2>{summary.label}</h2><p>{primaryAction}</p><small>{progress.remainingDays > 0 ? `До конца месяца ${progress.remainingDays} дн.` : "Месяц завершён."}</small></div>
@@ -178,7 +187,9 @@ export function PlanPanel() {
         <section className="plan-direction-grid" aria-label="Направления плана">{progress.directions.map((direction) => <DirectionCard direction={direction} key={direction.code} />)}</section>
       </>}
 
-      {!editing && plan ? <details className="panel plan-settings-disclosure">
+      {!planAvailable && planQuery.isPending ? <section className="panel plan-settings-panel"><PanelSkeleton rows={3} /></section>
+        : !planAvailable && planQuery.isError ? <InlineQueryError error={planQuery.error} onRetry={() => void planQuery.refetch()} />
+          : !editing && plan ? <details className="panel plan-settings-disclosure">
         <summary><div><p className="eyebrow">Настройки плана</p><h2>Цели на {formatMonth(month)}</h2><p>{formatCompactMoney(plan.revenueTarget)}, аксессуары {formatPercent(plan.accessoryShareTarget)}, услуги {formatPercent(plan.serviceShareTarget)}, доп. выручка {formatPercent(plan.additionalShareTarget)}</p></div><span aria-hidden="true" /></summary>
         <div className="plan-settings-disclosure__content">
           <div className="plan-current-values"><article><small>Выручка</small><strong>{formatMoney(plan.revenueTarget)}</strong></article><article><small>Аксессуары</small><strong>{formatPercent(plan.accessoryShareTarget)}</strong></article><article><small>Услуги</small><strong>{formatPercent(plan.serviceShareTarget)}</strong></article><article><small>Доп. выручка</small><strong>{formatPercent(plan.additionalShareTarget)}</strong></article></div>
@@ -189,7 +200,7 @@ export function PlanPanel() {
         <div className="panel__heading"><div><p className="eyebrow">Настройки плана</p><h2>{plan ? `Изменение целей на ${formatMonth(month)}` : "План ещё не задан"}</h2></div></div>
         {!plan && <div className="plan-empty-intro"><span><Plus /></span><div><strong>Заполните четыре цели на месяц</strong><p>План один для всего магазина. Персональные планы сотрудников не создаются.</p></div></div>}
         <div className="plan-form"><PlanField label="План выручки" suffix="₽" value={values.revenueTarget} error={errors.revenueTarget} onChange={(value) => updateValue("revenueTarget", value)} /><PlanField label="Доля аксессуаров" suffix="%" value={values.accessoryShareTarget} error={errors.accessoryShareTarget} onChange={(value) => updateValue("accessoryShareTarget", value)} /><PlanField label="Доля услуг" suffix="%" value={values.serviceShareTarget} error={errors.serviceShareTarget} onChange={(value) => updateValue("serviceShareTarget", value)} /><PlanField label="Доля доп. выручки" suffix="%" value={values.additionalShareTarget} error={errors.additionalShareTarget} onChange={(value) => updateValue("additionalShareTarget", value)} /></div>
-        {mutation.isError && <div className="form-alert" role="alert">{isApiClientError(mutation.error) && mutation.error.status === 412 ? "План уже изменён другим пользователем. Загружена актуальная версия — проверьте значения повторно." : "Не удалось сохранить план. Проверьте значения и повторите действие."}</div>}
+        {mutation.isError && <div className="form-alert" role="alert">{isApiClientError(mutation.error) && mutation.error.status === 412 ? "План уже изменён другим пользователем. Загружена актуальная версия — проверьте значения повторно." : isApiClientError(mutation.error) ? mutation.error.message : "Не удалось сохранить план. Проверьте значения и повторите действие."}</div>}
         <div className="plan-form-actions">{plan && <button className="button button--ghost" type="button" disabled={mutation.isPending} onClick={cancel}><X size={15} />Отмена</button>}<button className="button button--primary" type="button" disabled={mutation.isPending} onClick={submit}><Save size={15} />{mutation.isPending ? "Сохраняем…" : plan ? "Сохранить изменения" : "Создать план"}</button></div>
       </section>}
 

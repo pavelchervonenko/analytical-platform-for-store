@@ -7,7 +7,7 @@ import {
   revokeActiveSession,
   revokeOtherSessions
 } from "../api/queries";
-import { QueryError } from "../shared/QueryState";
+import { InlineQueryError, StaleDataNote } from "../shared/QueryState";
 import { useAuth } from "./AuthProvider";
 import { formatSessionActivity, orderActiveSessions } from "./session-ui";
 import { TelegramNotificationsCard } from "./TelegramNotificationsCard";
@@ -66,7 +66,8 @@ export function ProfilePage() {
         <p className="sessions-panel__intro">Завершите незнакомый или больше не используемый вход. Из соображений приватности приложение не хранит IP-адрес и название устройства.</p>
 
         {sessionsQuery.isPending && <div className="sessions-loading" aria-live="polite"><span className="spinner" />Проверяем активные сеансы…</div>}
-        {sessionsQuery.error && <QueryError error={sessionsQuery.error} onRetry={() => void sessionsQuery.refetch()} />}
+        {sessionsQuery.data === undefined && sessionsQuery.isError && <InlineQueryError error={sessionsQuery.error} onRetry={() => void sessionsQuery.refetch()} />}
+        {sessionsQuery.data !== undefined && sessionsQuery.isError && <StaleDataNote error={sessionsQuery.error} onRetry={() => void sessionsQuery.refetch()} />}
         {sessionsQuery.data && <div className="session-list">
           {sessions.map((session) => <article className={`session-row ${session.current ? "session-row--current" : ""}`} key={session.sessionReference}>
             <span className="session-row__icon"><KeyRound /></span>

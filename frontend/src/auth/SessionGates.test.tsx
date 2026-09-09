@@ -20,6 +20,7 @@ function AppRoutes() {
       <Route path="/overview" element={<OverviewRoute />} />
       <Route element={<AdminGate />}>
         <Route path="/admin" element={<div>admin</div>} />
+        <Route path="/quality" element={<div>quality</div>} />
       </Route>
     </Routes>
   );
@@ -40,5 +41,13 @@ describe("AdminGate", () => {
 
     expect(await screen.findByText("admin")).toBeInTheDocument();
     expect(screen.queryByText(/^overview/u)).not.toBeInTheDocument();
+  });
+
+  it("does not let a manager open data quality by URL", async () => {
+    auth.role = "MANAGER";
+    render(<MemoryRouter initialEntries={["/quality?store=store-1&month=2026-07"]}><AppRoutes /></MemoryRouter>);
+
+    expect(await screen.findByText("overview?store=store-1&month=2026-07")).toBeInTheDocument();
+    expect(screen.queryByText("quality")).not.toBeInTheDocument();
   });
 });

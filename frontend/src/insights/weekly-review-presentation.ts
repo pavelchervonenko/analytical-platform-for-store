@@ -95,7 +95,7 @@ export function reviewStateLabel(
   state: "PREPARING" | "READY" | "PARTIAL" | "BLOCKED"
 ): string {
   if (state === "READY") return "Данные готовы";
-  if (state === "PARTIAL") return "Есть ограничения";
+  if (state === "PARTIAL") return "Разбор по доступным данным";
   if (state === "BLOCKED") return "Нужны данные";
   return "Формируется";
 }

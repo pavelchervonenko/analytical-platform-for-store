@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
-  CheckCircle2,
   ChevronDown,
   RefreshCw,
   Sparkles
@@ -17,7 +16,7 @@ import type {
   WeeklyReviewObservation,
   WeeklyReviewStructureNode
 } from "../api/weeklyReviewContract";
-import { PanelSkeleton, QueryError } from "../shared/QueryState";
+import { PanelSkeleton, QueryError, StaleDataNote } from "../shared/QueryState";
 import {
   actionTargetText,
   formatCalculatedAt,
@@ -159,14 +158,14 @@ function ReviewHeader({ review }: { review: WeeklyReview }) {
               Дополнено ИИ
             </span>
           )}
-          <span className={`weekly-review-state ${stateClass}`} role="status">
-            {review.reportState === "READY"
-              ? <CheckCircle2 aria-hidden="true" />
-              : review.reportState === "PREPARING"
+          {review.reportState !== "READY" && (
+            <span className={`weekly-review-state ${stateClass}`} role="status">
+              {review.reportState === "PREPARING"
                 ? <RefreshCw aria-hidden="true" />
                 : <AlertTriangle aria-hidden="true" />}
-            {reviewStateLabel(review.reportState)}
-          </span>
+              {reviewStateLabel(review.reportState)}
+            </span>
+          )}
         </div>
         <small>Обновлено {formatCalculatedAt(review.provenance.calculatedAt)}</small>
       </div>
@@ -943,8 +942,6 @@ function LimitationsSection({ review }: { review: WeeklyReview }) {
         {review.limitations.map((limitation) => (
           <article key={limitation.limitationId}>
             <strong>{limitation.summary}</strong>
-            {limitation.resolution && <p>{limitation.resolution}</p>}
-            <small>Затронуто: {limitation.affectedCount}</small>
           </article>
         ))}
         {incompleteSources.map((source) => (
@@ -974,7 +971,7 @@ function BlockedReview({ review }: { review: WeeklyReview }) {
     <div className="weekly-review-blocked" role="alert">
       <span><AlertTriangle aria-hidden="true" /></span>
       <h2>Для разбора не хватает данных</h2>
-      <p>{review.qualitySummary.message}</p>
+      <p>Разбор обновится после загрузки исходных данных. Доступные показатели остаются в разделах ниже.</p>
       <LimitationsSection review={review} />
     </div>
   );
@@ -985,7 +982,7 @@ function PreparingReview({ review }: { review: WeeklyReview }) {
     <div className="weekly-review-blocked weekly-review-blocked--preparing" aria-live="polite">
       <span><RefreshCw aria-hidden="true" /></span>
       <h2>Разбор формируется</h2>
-      <p>{review.qualitySummary.message}</p>
+      <p>{review.qualitySummary.warningCount > 0 ? "Доступные показатели уже собраны; оставшиеся источники еще проверяются." : "Разбор будет доступен после завершения подготовки."}</p>
     </div>
   );
 }
@@ -1027,7 +1024,7 @@ export function WeeklyReviewView({
       </section>
     );
   }
-  if (query.isError) {
+  if (query.data === undefined && query.isError) {
     if (fallback) return <>{fallback}</>;
     return (
       <section className="weekly-review weekly-review--error">
@@ -1044,6 +1041,7 @@ export function WeeklyReviewView({
   const review = query.data;
   return (
     <article className="weekly-review" aria-label="Разбор завершенной недели">
+      {query.isError && <StaleDataNote error={query.error} onRetry={() => void query.refetch()} />}
       <ReviewHeader review={review} />
       {review.reportState === "BLOCKED" && <BlockedReview review={review} />}
       {review.reportState === "PREPARING" && <PreparingReview review={review} />}

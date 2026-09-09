@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - operator
-last_verified: 2026-08-31
+last_verified: 2026-09-09
 requirement_sources:
   - docs/archive/legacy-contracts/authentication-api.md
 implementation_sources:
@@ -37,13 +37,13 @@ Browser-клиент использует server-side `JSESSIONID` и CSRF doubl
 после ротации authentication нужно заново получить `GET /api/auth/csrf`. Unsafe requests передают
 cookie и `X-XSRF-TOKEN`.
 
-OpenAPI v10 публикует:
+OpenAPI v11 публикует:
 
 - `GET /api/auth/csrf`, `POST /api/auth/login`, `GET /api/auth/me`;
 - `GET /api/auth/sessions`, удаление одной другой или всех других sessions;
 - `POST /api/auth/change-password`.
 
-`POST /api/auth/logout` обслуживается Spring Security, но отсутствует в OpenAPI v10 — это
+`POST /api/auth/logout` обслуживается Spring Security, но отсутствует в OpenAPI v11 — это
 зафиксированный transport gap, а не разрешение менять method/path в клиенте без contract update.
 
 ## Безопасность и состояния
@@ -56,6 +56,7 @@ OpenAPI v10 публикует:
   при следующем запросе.
 - `ADMIN` имеет доступ ко всем магазинам, `MANAGER` — только к назначенным. Публичной регистрации
   нет.
+- Раздел и API качества данных доступны только `ADMIN`, даже если магазин назначен менеджеру.
 - Registry process-local; multi-replica API без общего session store не поддерживается.
 
 ## Ошибки
@@ -64,6 +65,6 @@ OpenAPI v10 публикует:
 `ACCESS_DENIED`, `LOGIN_THROTTLED`, `CURRENT_SESSION_REQUIRES_LOGOUT`. Точный общий error shape —
 в [`../architecture/error-handling.md`](../architecture/error-handling.md).
 
-OpenAPI v10 не содержит полноценного security scheme и общих 401/403 responses. Фактическая
+OpenAPI v11 не содержит полноценного security scheme и общих 401/403 responses. Фактическая
 security semantics подтверждается security configuration и integration tests; baseline необходимо
 дополнить отдельно.

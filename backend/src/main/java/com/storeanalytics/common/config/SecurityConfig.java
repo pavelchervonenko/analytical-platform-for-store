@@ -105,12 +105,16 @@ public class SecurityConfig {
                                 "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**",
                                 "/actuator/metrics/**"
                         ).access(adminAccess)
-                        .requestMatchers("/api/admin/**", "/api/sync/**").access(adminAccess)
+                        .requestMatchers(
+                                "/api/admin/**", "/api/sync/**", "/api/data-quality/**",
+                                "/api/stores/*/data-quality",
+                                "/api/stores/*/period-quality/**"
+                        ).access(adminAccess)
                         .requestMatchers(
                                 "/api/integration-connections/*/product-category-imports"
                         ).access(adminAccess)
                         .requestMatchers(
-                                "/api/stores/**", "/api/data-quality/**",
+                                "/api/stores/**",
                                 "/api/system/status", "/api/notifications/**"
                         )
                         .access(components.passwordChanged())

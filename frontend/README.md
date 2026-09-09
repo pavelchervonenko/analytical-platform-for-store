@@ -36,8 +36,8 @@ visual reference and is not imported by this application.
   Mutations invalidate dependent authoritative queries instead of recalculating business data in
   the browser.
 
-- Safe API errors keep diagnostics inside the transport layer; correlation IDs, raw proxy details and
-  server internals are not rendered to store managers.
+- Safe API errors keep diagnostics inside the transport layer. A correlation ID may be shown as a
+  support reference; raw proxy details and server internals are not rendered to store managers.
 
 ## Development
 

@@ -7,7 +7,7 @@ audience:
   - developer
   - operator
   - manager
-last_verified: 2026-09-03
+last_verified: 2026-09-09
 requirement_sources:
   - docs/archive/legacy-contracts/AI_WEEKLY_REDESIGN_STAGE2_CONTRACT.md
   - docs/archive/legacy-contracts/weekly-review-ai-management-rubric.md
@@ -164,9 +164,10 @@ lifecycle-записями для lease, retry и terminal state. Новая р�
 deterministic response с состоянием AI: `DISABLED`, `PREPARING`, `DELAYED`, `UNAVAILABLE` или
 `NOT_APPLICABLE`.
 
-Frontend показывает legacy weekly insight только когда новый endpoint вернул `404`/`null` или
-завершился ошибкой. Это compatibility fallback всего weekly-review, а не fallback отдельного AI
-слоя.
+Frontend показывает legacy weekly insight только когда новый endpoint не имеет сохранённого ответа
+и вернул `404`/`null` либо завершился ошибкой. Ошибка фонового обновления уже показанного v25
+snapshot не переключает пользователя на legacy: сохраняется последняя версия с компактной
+заметкой. Это compatibility fallback всего weekly-review, а не fallback отдельного AI слоя.
 
 ### Presentation contract
 
@@ -185,10 +186,11 @@ Frontend показывает `Дополнено ИИ` только когда 
 только названия без номера, цели и способа проверки; заголовок содержит календарный диапазон полной
 недели, следующей за отчетной.
 
-Для `PARTIAL` постоянный quality status показывается один раз в верхней панели над временем
-обновления. Локальные подписи `Данные ограничены`, inline limitations и отдельный нижний блок
-ограничений не повторяются; `INSUFFICIENT`, `NOT_APPLICABLE` и блокирующее состояние сохраняют
-явные объяснения, потому что значения в этих состояниях недоступны.
+Для `PARTIAL` нейтральный статус «Разбор по доступным данным» показывается один раз в верхней панели
+над временем обновления. Нормальный `READY` не получает отдельную success-плашку. Локальные подписи
+`Данные ограничены`, inline limitations и отдельный нижний блок ограничений не повторяются;
+`INSUFFICIENT`, `NOT_APPLICABLE` и блокирующее состояние сохраняют явные объяснения, потому что
+значения в этих состояниях недоступны.
 
 Текущее значение маржи приходит из backend по формуле `grossProfit / netRevenue × 100%`.
 Изменение маржи показывается как абсолютная разница в процентных пунктах, а не как относительный

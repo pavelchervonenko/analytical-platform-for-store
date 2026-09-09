@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-09
 requirement_sources:
   - docs/archive/legacy-contracts/reports.md
 implementation_sources:
@@ -42,10 +42,14 @@ exact finalized monthly revisions; correction создаёт новую immutabl
 переписывает предыдущую. Payload bytes, schema/template version, source hash и provenance
 сохраняются для проверки.
 
+Read response использует manager-safe `MonthlyReportView` и `AnnualReportView`. Хранимый
+`MonthlyReportPayload.quality` остаётся частью immutable snapshot, но не сериализуется в ответ;
+вложенные месяцы годового отчёта проходят ту же проекцию.
+
 Dashboard за текущий период — dynamic projection и не равен report archive. Employee section
 report-а также не следует считать полной сверкой всех store facts, если report schema включает
 только payroll/rating roster.
 
-Administrative backfill endpoints из OpenAPI v10 являются отдельным durable workflow с lease,
+Administrative backfill endpoints из OpenAPI v11 являются отдельным durable workflow с lease,
 cursor и cancellation. Их наличие не разрешает запуск без отдельного operations runbook и точного
 target.

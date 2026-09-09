@@ -6,7 +6,7 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-09
 requirement_sources:
   - docs/archive/legacy-contracts/data-quality-api.md
   - docs/archive/legacy-contracts/period-quality-api.md
@@ -33,6 +33,12 @@ superseded_by: null
 ---
 
 # Качество и готовность данных
+
+Полный реестр проверок, severity, технические причины и действия находится в разделе
+«Качество данных» и доступен только `ADMIN`. Менеджер магазина не получает этот реестр ни через
+маршрут, ни через quality API. В рабочих разделах менеджеру показывается только локальное
+последствие для показателя и доступное ему действие; исправления источников передаются
+администратору без раскрытия внутренних кодов и количества дефектных записей.
 
 `ERROR` блокирует `readyForDecisions`; `WARNING` снижает уверенность, но сейчас не блокирует.
 `null` означает недоступное/неполное, не ноль. Payroll отдельно имеет `canCalculate` и

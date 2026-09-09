@@ -17,10 +17,16 @@ vi.mock("../api/queries", () => ({
 
 const getWeeklyReviewMock = vi.mocked(getWeeklyReview);
 
-function renderView(fallback?: ReactNode) {
+function renderView(fallback?: ReactNode, initialReview?: WeeklyReview) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } }
   });
+  if (initialReview) {
+    client.setQueryData(
+      ["stores", "store-1", "weekly-reviews", "current"],
+      initialReview
+    );
+  }
   return render(
     <QueryClientProvider client={client}>
       <WeeklyReviewView storeId="store-1" fallback={fallback} />
@@ -80,6 +86,7 @@ describe("WeeklyReviewView", () => {
     expect(screen.getByRole("heading", { name: "Команда" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Сотрудники" })).toBeInTheDocument();
     expect(screen.queryByText(/план месяца/iu)).not.toBeInTheDocument();
+    expect(screen.queryByText("Данные готовы")).not.toBeInTheDocument();
 
     const summary = document.querySelector<HTMLElement>(".weekly-review-summary")!;
     expect(within(summary).getByText("Выручка направления «Техника» выросла"))
@@ -181,7 +188,7 @@ describe("WeeklyReviewView", () => {
     review.team.state = "LIMITED";
     renderReview(review);
 
-    expect(await screen.findByText("Есть ограничения")).toBeInTheDocument();
+    expect(await screen.findByText("Разбор по доступным данным")).toBeInTheDocument();
     expect(screen.queryByText("По возвратам доступны не все данные.")).not.toBeInTheDocument();
     expect(screen.queryByText("Данные ограничены")).not.toBeInTheDocument();
     expect(document.querySelectorAll(".weekly-review-state--limited")).toHaveLength(1);
@@ -195,7 +202,7 @@ describe("WeeklyReviewView", () => {
     review.team.state = "LIMITED";
     renderReview(review);
 
-    expect(await screen.findByText("Есть ограничения")).toBeInTheDocument();
+    expect(await screen.findByText("Разбор по доступным данным")).toBeInTheDocument();
     expect(screen.queryByText("Часть разделов доступна с ограничениями."))
       .not.toBeInTheDocument();
     expect(screen.queryByText("Данные готовы")).not.toBeInTheDocument();
@@ -227,7 +234,7 @@ describe("WeeklyReviewView", () => {
     review.team.state = state;
     renderReview(review);
 
-    await screen.findByText("Есть ограничения");
+    await screen.findByText("Разбор по доступным данным");
     fireEvent.click(screen.getByText("Структура продаж").closest("summary")!);
     expect(screen.getAllByText(text).length).toBeGreaterThanOrEqual(2);
   });
@@ -251,7 +258,7 @@ describe("WeeklyReviewView", () => {
     review.results[0]!.metricState = "LIMITED";
     renderReview(review);
 
-    await screen.findByText("Есть ограничения");
+    await screen.findByText("Разбор по доступным данным");
     expect(screen.queryByText("Данные требуют проверки")).not.toBeInTheDocument();
     expect(screen.getAllByText(/1[\s\u00a0]000[\s\u00a0]₽/u).length).toBeGreaterThan(0);
   });
@@ -306,8 +313,20 @@ describe("WeeklyReviewView", () => {
     renderView();
 
     const alert = await screen.findByRole("alert");
-    expect(within(alert).getByText("Данные временно недоступны")).toBeInTheDocument();
+    expect(within(alert).getByText("Не удалось загрузить данные")).toBeInTheDocument();
     expect(within(alert).getByRole("button", { name: /Повторить/u })).toBeInTheDocument();
+  });
+
+  it("keeps the latest review visible when a background refresh fails", async () => {
+    const cached = makeWeeklyReview();
+    getWeeklyReviewMock.mockRejectedValue(new Error("network"));
+    renderView(undefined, cached);
+
+    expect(await screen.findByRole("heading", { name: "Результаты недели" }))
+      .toBeInTheDocument();
+    expect(await screen.findByText(/Показаны последние доступные данные/u))
+      .toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("keeps the previous weekly view when the v22 snapshot is not ready", async () => {

@@ -1,7 +1,7 @@
 package com.storeanalytics.store.web;
 
 import com.storeanalytics.store.service.StoreDataStatusService;
-import com.storeanalytics.store.service.StoreDataStatusView;
+import com.storeanalytics.store.service.ManagerStoreDataStatusView;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,7 +21,7 @@ public class StoreDataStatusController {
 
     @GetMapping("/{storeId}/data-status")
     @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
-    StoreDataStatusView get(@PathVariable UUID storeId) {
-        return statusService.get(storeId);
+    ManagerStoreDataStatusView get(@PathVariable UUID storeId) {
+        return ManagerStoreDataStatusView.from(statusService.get(storeId));
     }
 }

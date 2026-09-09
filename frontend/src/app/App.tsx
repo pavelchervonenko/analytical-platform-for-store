@@ -30,11 +30,11 @@ export function App() {
       <Route path="/employees/:employeeId" element={<EmployeeCardPage />} />
       <Route path="/plan" element={<PlanSchedulePage />} />
       <Route path="/payroll" element={<PayrollPage />} />
-      <Route path="/quality" element={<QualityPage />} />
       <Route path="/reports" element={<ReportsPage />} />
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/insights" element={<InsightsPreviewPage />} />
       <Route element={<AdminGate />}>
+        <Route path="/quality" element={<QualityPage />} />
         <Route path="/admin" element={<AdminPage />} />
       </Route>
     </Route></Route>

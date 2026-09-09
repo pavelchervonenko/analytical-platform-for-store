@@ -6,7 +6,7 @@ owner: frontend
 audience:
   - developer
   - manager
-last_verified: 2026-09-03
+last_verified: 2026-09-09
 requirement_sources:
   - docs/current/product/business-metrics.md
   - docs/current/product/plans-and-shifts.md
@@ -17,6 +17,7 @@ implementation_sources:
   - frontend/src/api/queries.ts
 verification_sources:
   - frontend/src/dashboard/OverviewPage.test.tsx
+  - frontend/src/dashboard/OverviewPage.query-state.test.tsx
 runtime_evidence: []
 required_reviewers:
   - frontend
@@ -40,17 +41,27 @@ superseded_by: null
 | Plan | `/performance-plans/{month}/progress?scope=` | Month..asOf | Same selected scope | No plan state | «План месяца» |
 | Team | `/kpi/employees` + `/employee-ratings` | Selected | Overview roster | Score/rank nullable | «Основные продавцы» |
 | Attach map | `/kpi/attach-rates` + rating | Selected | Store + roster | Rate/base nullable | Empty-state reason |
-| Quality | `/period-quality/{month}` | Month..asOf | Store | Warning/error | Готовность данных |
 
 Переключатель находится слева сверху внутри тёмного блока. `SELLERS` («Только продавцы») — режим
 по умолчанию; `STORE` («Весь магазин») включает сотрудников вне рейтинга и факты без сотрудника.
 Выбор хранится в query-параметре `overviewScope`. Продавец определяется backend-признаком
 `rankingEligible`: активный сотрудник, активное назначение и «Участвует в рейтинге».
 
-В month mode карточки могут показывать план этого же месяца и scope. В week/custom тёмный блок
-показывает только selected-period amount, quantity и share; month gap/target остаются в отдельном
-блоке «План месяца». «Структура продаж» использует тот же выбранный scope, а attach-map
+В month mode тёмные карточки показывают цель этого же месяца и scope; процентные пункты
+подписаны как отклонение «к цели», а денежное отклонение — как «выше цели» или «не хватает».
+В week/custom тёмный блок показывает только selected-period amount, quantity и share, чтобы не
+смешивать недельный факт с месячной целью.
+
+«Структура продаж» использует тот же выбранный scope, а attach-map
 намеренно остаётся STORE и имеет явную подпись. `null` GP/margin не показывается как zero.
+Главная не запрашивает administrator-only period-quality. Менеджер видит только локальное
+последствие: конкретная прибыль или показатель временно недоступны. Технические issue code,
+severity и affected count на главной не показываются. Отсутствующая себестоимость объясняется один
+раз рядом с зависимыми показателями, а пустые attach-rate строки не размножают одинаковые причины.
+
+Основной KPI блокирует страницу только без ранее загруженных данных. Вспомогательные запросы плана,
+команды, attach-rate и категорий деградируют независимо. Ошибка фонового обновления сохраняет все
+последние успешные значения и показывается одной компактной заметкой над страницей.
 
 `overview-metrics-v1` сверяет STORE с полной employee-проекцией, а также инварианты
 `Допы = Аксессуары + Услуги` и одинаковую выручку seller cohort между employee KPI и category KPI.

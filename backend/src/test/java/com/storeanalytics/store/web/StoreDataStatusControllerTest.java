@@ -78,19 +78,14 @@ class StoreDataStatusControllerTest {
                 .andExpect(jsonPath("$.status").value("SYNCING"))
                 .andExpect(jsonPath("$.expectedThroughDate").value("2026-07-21"))
                 .andExpect(jsonPath("$.dataThroughDate").value("2026-07-20"))
-                .andExpect(jsonPath("$.salesDataThroughDate").value("2026-07-21"))
-                .andExpect(jsonPath("$.returnsDataThroughDate").value("2026-07-20"))
                 .andExpect(jsonPath("$.lagDays").value(1))
-                .andExpect(jsonPath("$.lastCompletedSyncAt").value("2026-07-22T06:30:00Z"))
-                .andExpect(jsonPath("$.synchronization.active").value(true))
-                .andExpect(jsonPath("$.synchronization.id").value(syncId.toString()))
-                .andExpect(jsonPath("$.synchronization.type").value("JOB"))
-                .andExpect(jsonPath("$.synchronization.status").value("WAITING_RETRY"))
-                .andExpect(jsonPath("$.synchronization.phase").value("RETURNS"))
-                .andExpect(jsonPath("$.openQualityIssueCount").value(3))
-                .andExpect(jsonPath("$.lastError").value(
-                        "Return synchronization failed: TimeoutException"
-                ))
+                .andExpect(jsonPath("$.updating").value(true))
+                .andExpect(jsonPath("$.salesDataThroughDate").doesNotExist())
+                .andExpect(jsonPath("$.returnsDataThroughDate").doesNotExist())
+                .andExpect(jsonPath("$.lastCompletedSyncAt").doesNotExist())
+                .andExpect(jsonPath("$.synchronization").doesNotExist())
+                .andExpect(jsonPath("$.openQualityIssueCount").doesNotExist())
+                .andExpect(jsonPath("$.lastError").doesNotExist())
                 .andExpect(jsonPath("$.checkedAt").value("2026-07-22T08:00:00Z"));
     }
 

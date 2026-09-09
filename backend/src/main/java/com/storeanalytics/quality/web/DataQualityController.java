@@ -21,14 +21,14 @@ public class DataQualityController {
     }
 
     @GetMapping("/api/data-quality/summary")
-    @PreAuthorize("isAuthenticated() and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
+    @PreAuthorize("hasRole('ADMIN') and !hasAuthority('PASSWORD_CHANGE_REQUIRED')")
     DataQualityOverviewView overview(Authentication authentication) {
         AppUserPrincipal principal = (AppUserPrincipal) authentication.getPrincipal();
         return dataQualityService.overview(principal.getUserId(), principal.getRole());
     }
 
     @GetMapping("/api/stores/{storeId}/data-quality")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasRole('ADMIN') and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     StoreDataQualityView get(@PathVariable UUID storeId) {
         return dataQualityService.get(storeId);
     }

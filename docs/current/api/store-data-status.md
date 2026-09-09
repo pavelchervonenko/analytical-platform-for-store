@@ -6,12 +6,13 @@ owner: backend
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-09
 requirement_sources:
   - docs/archive/legacy-contracts/store-data-status-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/store/service/StoreDataStatusService.java
   - backend/src/main/java/com/storeanalytics/store/service/StoreDataStatusView.java
+  - backend/src/main/java/com/storeanalytics/store/service/ManagerStoreDataStatusView.java
   - backend/src/main/java/com/storeanalytics/store/repository/StoreDataStatusRepository.java
 verification_sources:
   - backend/src/test/java/com/storeanalytics/store/service/StoreDataStatusServiceTest.java
@@ -46,12 +47,9 @@ dataThroughDate = min(SALES coverage, RETURNS coverage, ORDERS coverage)
 `SYNCING`, затем latest `ERROR`, затем `NOT_SYNCED`, `STALE`, `CURRENT`. `PARTIAL_SUCCESS` может
 давать coverage, но связанные quality issues остаются видимы.
 
-## Visibility gap
+## Граница видимости
 
-Текущий public DTO отдаёт `salesDataThroughDate` и `returnsDataThroughDate`, но не
-`ordersDataThroughDate`, хотя ORDERS участвует в общем минимуме. Поэтому клиент может увидеть
-`NOT_SYNCED`/`STALE` без возможности точно назвать отстающий ORDERS stream. До DTO/OpenAPI change
-frontend не должен приписывать проблему sales или returns по остаточному принципу.
-
-`lastError` — безопасная историческая строка и может сохраниться после success; источник текущего
-error state — поле `status`. `openQualityIssueCount` не равен sync failure.
+Public manager DTO содержит только `storeId`, общий `status`, `expectedThroughDate`,
+`dataThroughDate`, `lagDays`, `updating` и `checkedAt`. Он не раскрывает отдельные потоки,
+идентификатор/фазу синхронизации, `lastError` и число quality issues. Полный внутренний
+`StoreDataStatusView` используется administrator-only quality API и backend policies.

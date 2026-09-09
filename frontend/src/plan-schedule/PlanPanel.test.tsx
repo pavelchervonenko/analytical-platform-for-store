@@ -69,4 +69,20 @@ describe("plan direction presentation", () => {
     expect(within(card!).queryByText("Нужно в день")).not.toBeInTheDocument();
     expect(primaryPlanAction(accessory)).toMatch(/закрыть текущее отставание/u);
   });
+
+  it("does not prescribe a daily pace after a missed month is closed", () => {
+    expect(primaryPlanAction({
+      ...revenue,
+      status: "MISSED",
+      requiredPerRemainingDay: null
+    })).toBe("Выручка: итог месяца — план не выполнен.");
+  });
+
+  it("does not ask the manager to inspect technical data", () => {
+    expect(primaryPlanAction({
+      ...accessory,
+      status: "NOT_AVAILABLE",
+      requiredPerRemainingDay: null
+    })).toBe("Аксессуары: расчёт появится после обновления данных.");
+  });
 });

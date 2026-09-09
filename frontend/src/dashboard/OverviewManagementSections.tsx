@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowRight, ChevronDown, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, ChevronDown, TrendingUp, Users } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import type {
   AttachRate,
@@ -31,6 +31,15 @@ const attachMetricOrder = [
   "PREMIUM_PROTECTION"
 ] as const;
 
+function metricCountLabel(count: number): string {
+  const lastTwo = count % 100;
+  const last = count % 10;
+  const noun = lastTwo >= 11 && lastTwo <= 14
+    ? "показателей"
+    : last === 1 ? "показатель" : last >= 2 && last <= 4 ? "показателя" : "показателей";
+  return `${count} ${noun}`;
+}
+
 function findDirection(plan: PlanProgress | null | undefined, code: string): PlanDirection | null {
   return plan?.directions.find((direction) => direction.code === code) ?? null;
 }
@@ -40,16 +49,18 @@ function deltaTone(value: number | null | undefined): string {
   return value > 0 ? "positive" : "negative";
 }
 
-function signedPoints(value: number | null | undefined): string {
-  if (value == null) return "без плана";
-  if (value === 0) return "0 п. п.";
-  return `${value > 0 ? "+" : "−"}${formatNumber(Math.abs(value))} п. п.`;
+function goalPointsLabel(value: number | null | undefined): string {
+  if (value == null) return "Нет данных";
+  if (value === 0) return "По цели месяца";
+  return `${value > 0 ? "+" : "−"}${formatNumber(Math.abs(value))} п. п. к цели`;
 }
 
-function signedMoney(value: number | null | undefined): string {
-  if (value == null) return "—";
-  if (value === 0) return "0 ₽";
-  return `${value > 0 ? "+" : "−"}${formatCompactMoney(Math.abs(value))}`;
+function goalAmountLabel(value: number | null | undefined): string {
+  if (value == null) return "Недостаточно данных";
+  if (value === 0) return "Точно по цели";
+  return value > 0
+    ? `Выше цели: ${formatCompactMoney(value)}`
+    : `Не хватает: ${formatCompactMoney(Math.abs(value))}`;
 }
 
 function CommercialMetric({
@@ -74,11 +85,11 @@ function CommercialMetric({
       <span>{label}</span>
       <strong>{formatPercent(metric?.sharePercent)}</strong>
       <small>{formatMoney(metric?.netRevenue)}, {formatNumber(metric?.netQuantity)} ед.</small>
-      {showPlan && <span className={`delta delta--${deltaTone(gapPoints)}`}>{signedPoints(gapPoints)}</span>}
+      {showPlan && <span className={`delta delta--${deltaTone(gapPoints)}`}>{goalPointsLabel(gapPoints)}</span>}
       {showPlan && (
         <div className="overview-summary__metric-plan">
-          <span>{direction ? `План ${formatPercent(direction.targetSharePercent)}` : "План не задан"}</span>
-          <strong>{direction ? `${signedMoney(gapAmount)} к плану` : "—"}</strong>
+          <span>{direction ? `Цель месяца ${formatPercent(direction.targetSharePercent)}` : "Цель месяца не задана"}</span>
+          <strong>{direction ? goalAmountLabel(gapAmount) : "—"}</strong>
         </div>
       )}
       {completion != null && (
@@ -86,7 +97,7 @@ function CommercialMetric({
           className="progress overview-summary__progress"
           value={Math.max(0, Math.min(completion, 100))}
           max={100}
-          aria-label={`Выполнение плана: ${label}`}
+          aria-label={`Сравнение с целью месяца: ${label}`}
         />
       )}
     </article>
@@ -167,8 +178,7 @@ export function ManagementSummary({
         <article className="overview-summary__metric">
           <span>Валовая прибыль</span>
           <strong>{formatMoney(metrics?.grossProfit)}</strong>
-          <small>Маржа {formatPercent(metrics?.marginPercent)}</small>
-          {metrics && !metrics.dataQuality.completeCostData && <span className="quality-warning"><AlertCircle size={14} />Данные неполные</span>}
+          <small>{metrics && !metrics.dataQuality.completeCostData ? "Нет себестоимости" : `Маржа ${formatPercent(metrics?.marginPercent)}`}</small>
         </article>
         <CommercialMetric
           label="Допы"
@@ -253,7 +263,13 @@ export function EmployeePerformanceSection({
   const location = useLocation();
   const rows = employeeRows(rating, employeeKpi);
   const leader = byAdditionalShare(rows, "highest");
-  const focus = byAdditionalShare(rows, "lowest");
+  const additionalTarget = rating.plan.complete ? rating.plan.additionalShareTarget : null;
+  const focus = additionalTarget == null
+    ? null
+    : byAdditionalShare(
+        rows.filter(({ employee }) => employee.additionalSharePercent != null && employee.additionalSharePercent < additionalTarget),
+        "lowest"
+      );
   const totalRevenue = rows.reduce((sum, row) => sum + row.employee.netRevenue, 0);
   const completeGrossProfit = rows.every((row) => row.completeCostData && row.grossProfit != null);
   const totalGrossProfit = completeGrossProfit
@@ -280,7 +296,7 @@ export function EmployeePerformanceSection({
             <TeamSummaryCard
               label="Валовая прибыль"
               value={formatMoney(totalGrossProfit)}
-              note={completeGrossProfit ? "По отображаемым продавцам" : "Нужна проверка себестоимости"}
+              note={completeGrossProfit ? "По отображаемым продавцам" : "Нет себестоимости"}
             />
             <TeamSummaryCard
               label="Лидер по допам"
@@ -289,8 +305,8 @@ export function EmployeePerformanceSection({
             />
             <TeamSummaryCard
               label="Зона внимания"
-              value={focus?.employee.displayName ?? "—"}
-              note={focus ? `${formatPercent(focus.employee.additionalSharePercent)} допов` : "Недостаточно данных"}
+              value={focus?.employee.displayName ?? (additionalTarget == null ? "—" : "Нет")}
+              note={focus ? `${formatPercent(focus.employee.additionalSharePercent)} допов при плане ${formatPercent(additionalTarget)}` : additionalTarget == null ? "Нужен полный план" : "Все продавцы на уровне плана"}
             />
           </div>
 
@@ -310,14 +326,14 @@ export function EmployeePerformanceSection({
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ employee, grossProfit, completeCostData }) => (
+                {rows.map(({ employee, grossProfit }) => (
                   <tr key={employee.employeeId}>
                     <td>
                       <Link to={{ pathname: `/employees/${employee.employeeId}`, search: location.search }}>{employee.displayName}</Link>
                       <small>{employee.shiftCount} смен, {formatNumber(employee.workedHours)} ч</small>
                     </td>
                     <td>{formatMoney(employee.netRevenue)}</td>
-                    <td className={!completeCostData ? "overview-team-table__warning" : ""}>{formatMoney(grossProfit)}</td>
+                    <td>{formatMoney(grossProfit)}</td>
                     <td>{formatMoney(employee.accessoryRevenue)}</td>
                     <td>{formatPercent(employee.accessorySharePercent)}</td>
                     <td>{formatMoney(employee.serviceRevenue)}</td>
@@ -330,7 +346,7 @@ export function EmployeePerformanceSection({
             </table>
           </div>
           <div className="overview-team-compact" aria-label="Краткие показатели по продавцам">
-            {rows.map(({ employee, grossProfit, completeCostData }) => (
+            {rows.map(({ employee, grossProfit }) => (
               <Link
                 key={employee.employeeId}
                 className="overview-team-compact__row"
@@ -344,7 +360,7 @@ export function EmployeePerformanceSection({
                   <small>Выручка</small>
                   <strong>{formatCompactMoney(employee.netRevenue)}</strong>
                 </span>
-                <span className={`overview-team-compact__metric ${!completeCostData ? "overview-team-table__warning" : ""}`}>
+                <span className="overview-team-compact__metric">
                   <small>Валовая прибыль</small>
                   <strong>{formatCompactMoney(grossProfit)}</strong>
                 </span>
@@ -465,14 +481,14 @@ function AttachCell({
     : owner + ": " + formatNumber(value!.numerator) + " / " + formatNumber(value!.denominator)
       + " = " + formatPercent(value!.rate) + suffix;
   const detail = noBase
-    ? "нет продаж для расчёта"
+    ? null
     : tone === "insufficient"
-      ? benchmarkRate == null || benchmarkRate <= 0 ? "нет среднего по магазину" : "недостаточно продаж"
+      ? null
       : formatNumber(value!.numerator) + " / " + formatNumber(value!.denominator);
   return (
     <td className="attach-map__cell" data-tone={tone} title={title}>
       <strong>{noBase ? "—" : formatPercent(value!.rate)}</strong>
-      <small>{detail}</small>
+      {detail && <small>{detail}</small>}
       <span className="sr-only">{metric}, {title}</span>
     </td>
   );
@@ -489,7 +505,15 @@ export function AttachRateMatrix({
 }) {
   const location = useLocation();
   const employees = visibleEmployees(rating);
-  const showOutsideRating = attachMetricOrder.some((metricCode) => {
+  const visibleMetricCodes = attachMetricOrder.filter((metricCode) => {
+    const store = storeAttachCell(attach, metricCode);
+    if (store != null && store.denominator > 0 && store.rate != null) return true;
+    return employees.some((employee) => {
+      const value = employeeAttachCell(employee, metricCode);
+      return value != null && value.denominator > 0 && value.rate != null;
+    });
+  });
+  const showOutsideRating = visibleMetricCodes.some((metricCode) => {
     const outside = outsideRatingAttachCell(
       storeAttachCell(attach, metricCode),
       employees,
@@ -498,9 +522,6 @@ export function AttachRateMatrix({
     return outside != null
       && (Math.abs(outside.numerator) > 0.000001 || Math.abs(outside.denominator) > 0.000001);
   });
-  const qualityIssueCount = attach.dataQuality.unmatchedNumeratorItemCount
-    + attach.dataQuality.ambiguousWarrantyItemCount
-    + attach.dataQuality.unknownDeviceConditionItemCount;
 
   return (
     <details className="panel attach-map-panel" aria-labelledby="attach-map-title">
@@ -510,12 +531,10 @@ export function AttachRateMatrix({
           <h2 id="attach-map-title">Карта допродаж</h2>
           <p>Сравнение attach-rate магазина и продавцов по каждому показателю.</p>
         </div>
-        <span className="attach-map__summary-meta"><span>{employees.length} продавцов, {attachMetricOrder.length} показателей</span><ChevronDown size={18} /></span>
+        <span className="attach-map__summary-meta"><span>{employees.length} продавцов, {metricCountLabel(visibleMetricCodes.length)}</span><ChevronDown size={18} /></span>
       </summary>
       <div className="attach-map__content">
-        {qualityIssueCount > 0 && (
-          <div className="attach-map__quality" role="status"><AlertCircle size={16} />В расчёте есть {qualityIssueCount} позиций, требующих проверки классификации.</div>
-        )}
+        {visibleMetricCodes.length === 0 ? <div className="panel-empty attach-map__empty"><TrendingUp /><strong>Нет данных для расчёта допродаж</strong><p>За выбранный период не было релевантных продаж техники.</p></div> : <>
         <p className="attach-map__scroll-hint">Прокрутите таблицу по горизонтали, чтобы увидеть всех продавцов.</p>
         <div className="table-scroll attach-map-wrap">
           <table className="attach-map">
@@ -544,7 +563,7 @@ export function AttachRateMatrix({
               </tr>
             </thead>
             <tbody>
-              {attachMetricOrder.map((metricCode) => {
+              {visibleMetricCodes.map((metricCode) => {
                 const metricLabel = attachRateLabels[metricCode] ?? metricCode;
                 const storeValue = storeAttachCell(attach, metricCode);
                 const outsideValue = outsideRatingAttachCell(storeValue, employees, metricCode);
@@ -590,6 +609,7 @@ export function AttachRateMatrix({
           <span><i data-tone="above" />Выше магазина</span>
           <small>Средний показатель магазина рассчитан по всем документам. Отклонение до 10% считается уровнем магазина.</small>
         </footer>
+        </>}
       </div>
     </details>
   );

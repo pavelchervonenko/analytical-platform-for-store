@@ -6,7 +6,7 @@ owner: frontend
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-09
 requirement_sources:
   - docs/current/product/payroll.md
   - docs/current/product/reports.md
@@ -16,6 +16,7 @@ implementation_sources:
   - frontend/src/api/queries.ts
 verification_sources:
   - frontend/src/payroll/payroll-ui.test.ts
+  - frontend/src/reports/ReportsPage.test.tsx
   - backend/src/test/java/com/storeanalytics/salary/web/PayrollControllerTest.java
   - backend/src/test/java/com/storeanalytics/report
 runtime_evidence: []
@@ -46,4 +47,5 @@ Calculate/approve/paid следуют backend lifecycle, а не просто н
 
 Monthly employee rows основаны на payroll statements, не full employee KPI. Annual employee payload
 также ограничен; UI не называет эти таблицы «все сотрудники» и не использует их как store
-reconciliation. Для `ReportsPage` отдельного frontend test suite пока нет.
+reconciliation. В отчётах отсутствующая прибыль и маржа получают одно нейтральное объяснение,
+пустой архив не дублируется, а фоновая ошибка обновления не скрывает сохранённые snapshots.

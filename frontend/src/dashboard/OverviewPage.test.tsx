@@ -310,7 +310,7 @@ describe("management overview", () => {
       }]
     } as PlanProgress;
 
-    render(
+    const { rerender } = render(
       <ManagementSummary
         metrics={overviewMetrics}
         plan={plan}
@@ -322,8 +322,22 @@ describe("management overview", () => {
 
     expect(screen.getByText("19,5%")).toBeInTheDocument();
     expect(screen.queryByText("9,5%")).not.toBeInTheDocument();
-    expect(screen.queryByText("План 10,5%")).not.toBeInTheDocument();
-    expect(screen.queryByText(/к плану/u)).not.toBeInTheDocument();
+    expect(screen.queryByText("Цель месяца 10,5%")).not.toBeInTheDocument();
+    expect(screen.queryByText(/п\. п\. к цели/u)).not.toBeInTheDocument();
+
+    rerender(
+      <ManagementSummary
+        metrics={overviewMetrics}
+        plan={plan}
+        scope="SELLERS"
+        onScopeChange={() => undefined}
+        showMonthlyPlan
+      />
+    );
+
+    expect(screen.getByText("−1 п. п. к цели")).toBeInTheDocument();
+    expect(screen.getByText("Цель месяца 10,5%")).toBeInTheDocument();
+    expect(screen.getByText("Не хватает: 1 тыс. ₽")).toBeInTheDocument();
   });
 
   it("switches between sellers and the whole store inside the summary block", () => {
@@ -386,6 +400,22 @@ describe("management overview", () => {
     expect(screen.getByLabelText("Краткие показатели по продавцам")).toHaveTextContent("Анна");
   });
 
+  it("does not invent an attention zone when every seller meets the plan", () => {
+    const everyoneMeetsPlan: EmployeeRatingResult = {
+      ...rating,
+      employees: rating.employees.map((entry) => entry.employeeId === ilyaId
+        ? { ...entry, accessoryRevenue: 4000, serviceRevenue: 1000, additionalRevenue: 5000, additionalSharePercent: 12.5 }
+        : entry)
+    };
+
+    render(<MemoryRouter><EmployeePerformanceSection rating={everyoneMeetsPlan} employeeKpi={employeeKpi} /></MemoryRouter>);
+
+    const attention = screen.getByText("Зона внимания").closest("article");
+    expect(attention).not.toBeNull();
+    expect(attention).toHaveTextContent("Нет");
+    expect(attention).toHaveTextContent("Все продавцы на уровне плана");
+  });
+
   it("renders the all-store attach benchmark, residual scope and relative colors", () => {
     render(
       <MemoryRouter>
@@ -396,7 +426,7 @@ describe("management overview", () => {
     const map = screen.getByText("Карта допродаж").closest("details");
     expect(map).not.toBeNull();
     expect(map).not.toHaveAttribute("open");
-    expect(screen.getByText("14 показателей", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("1 показатель", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("Все продажи")).toBeInTheDocument();
     expect(screen.getByText("Вне рейтинга")).toBeInTheDocument();
     expect(screen.getByText("и без сотрудника")).toBeInTheDocument();
@@ -422,14 +452,22 @@ describe("management overview", () => {
     );
     expect(ilyaCell).toHaveAttribute("data-tone", "above");
 
-    const chargerRow = screen.getByText("Зарядные устройства и кабели").closest("tr");
-    expect(chargerRow).not.toBeNull();
-    expect(within(chargerRow!).getAllByText("нет продаж для расчёта").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Зарядные устройства и кабели")).not.toBeInTheDocument();
     expect(screen.getByText("Нет или недостаточно продаж")).toBeInTheDocument();
     expect(screen.getByText("Ниже магазина")).toBeInTheDocument();
     expect(screen.getByText("На уровне магазина")).toBeInTheDocument();
     expect(screen.getByText("Выше магазина")).toBeInTheDocument();
     expect(screen.queryByText("Скрытый сотрудник")).not.toBeInTheDocument();
+  });
+
+  it("does not expose technical attach diagnostics to the manager", () => {
+    render(<MemoryRouter><AttachRateMatrix attach={{
+      ...attach,
+      dataQuality: { ...attach.dataQuality, unmatchedNumeratorItemCount: 7 }
+    }} rating={rating} storeName="Магазин" /></MemoryRouter>);
+
+    expect(screen.queryByText(/временно недоступна/u)).not.toBeInTheDocument();
+    expect(screen.queryByText(/7 позиц/u)).not.toBeInTheDocument();
   });
 
   it("explains when an employee cannot be compared with the store average", () => {
@@ -451,7 +489,7 @@ describe("management overview", () => {
 
     const casesRow = screen.getByText("Чехлы Apple / iPhone").closest("tr");
     expect(casesRow).not.toBeNull();
-    expect(within(casesRow!).getAllByText("нет среднего по магазину")).toHaveLength(2);
+    expect(within(casesRow!).queryByText("нет среднего по магазину")).not.toBeInTheDocument();
     expect(within(casesRow!).getByTitle(/Анна:.*средний показатель по магазину недоступен/u))
       .toHaveAttribute("data-tone", "insufficient");
   });
@@ -477,6 +515,26 @@ describe("management overview", () => {
     expect(casesRow).not.toBeNull();
     const annaCell = within(casesRow!).getByTitle(/Анна:.*недостаточно продаж для рейтинга/u);
     expect(annaCell).toHaveAttribute("data-tone", "insufficient");
-    expect(within(annaCell).getByText("недостаточно продаж")).toBeInTheDocument();
+    expect(within(annaCell).queryByText("недостаточно продаж")).not.toBeInTheDocument();
+  });
+
+  it("collapses a completely empty attach matrix into one calm empty state", () => {
+    render(<MemoryRouter><AttachRateMatrix attach={{
+      ...attach,
+      rates: attach.rates.map((rate) => ({
+        ...rate,
+        numeratorReceiptCount: 0,
+        denominatorReceiptCount: 0,
+        numeratorQuantity: 0,
+        denominatorQuantity: 0,
+        ratePerHundred: null
+      }))
+    }} rating={{
+      ...rating,
+      employees: rating.employees.map((entry) => ({ ...entry, attachRates: [] }))
+    }} storeName="Магазин" /></MemoryRouter>);
+
+    expect(screen.getByText("Нет данных для расчёта допродаж")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 });

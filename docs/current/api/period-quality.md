@@ -5,8 +5,8 @@ status: current
 owner: backend
 audience:
   - developer
-  - manager
-last_verified: 2026-08-31
+  - operator
+last_verified: 2026-09-09
 requirement_sources:
   - docs/archive/legacy-contracts/period-quality-api.md
 implementation_sources:
@@ -33,6 +33,8 @@ superseded_by: null
 
 `GET /api/stores/{storeId}/period-quality/{yyyy-MM}?asOf=YYYY-MM-DD` оценивает конкретный месяц до
 явного cutoff. `asOf` обязан принадлежать месяцу и не должен интерпретироваться как конец месяца.
+Endpoint доступен только `ADMIN`; `MANAGER` получает `403`, включая свой магазин. Рабочие экраны
+менеджера не запрашивают period-quality и используют только domain-specific результат.
 
 Композиция объединяет source coverage, classification, plan, rating и payroll signals, но не
 пересчитывает их domain rules. `readyForDecisions` означает отсутствие blocking `ERROR`; WARNING

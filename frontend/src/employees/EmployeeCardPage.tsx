@@ -4,7 +4,7 @@ import { Link, useLocation, useParams } from "react-router";
 import { getEmployeeCard, queryKeys, type EmployeeComparisonMode } from "../api/queries";
 import { formatDate } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
-import { QueryError } from "../shared/QueryState";
+import { QueryError, StaleDataNote } from "../shared/QueryState";
 import { useWorkspace, type AnalyticsPeriodMode } from "../stores/WorkspaceProvider";
 import { attachRateLabels, employeeRatingReason } from "./rating-ui";
 
@@ -83,9 +83,9 @@ export function EmployeeCardPage() {
   });
 
   if (cardQuery.isPending) return <CardSkeleton />;
-  if (cardQuery.isError) return <QueryError error={cardQuery.error} onRetry={() => void cardQuery.refetch()} />;
+  if (cardQuery.data === undefined && cardQuery.isError) return <QueryError error={cardQuery.error} onRetry={() => void cardQuery.refetch()} />;
 
-  const card = cardQuery.data;
+  const card = cardQuery.data!;
   const employee = card.current;
   const previous = card.previous;
   const currentComparisonLabel = periodMode === "WEEK" ? "Текущая неделя" : "Текущий период";
@@ -102,9 +102,10 @@ export function EmployeeCardPage() {
 
   return (
     <div className="employee-card-page">
+      {cardQuery.isError && <StaleDataNote error={cardQuery.error} onRetry={() => void cardQuery.refetch()} />}
       <Link className="back-link" to={{ pathname: "/employees", search: location.search }}><ArrowLeft size={16} />К списку сотрудников</Link>
       <header className="employee-card-header">
-        <div className="employee-card-header__identity"><span>{employee.displayName.slice(0, 1).toUpperCase()}</span><div><h1>{employee.displayName}</h1><div className="employee-card-statuses"><span className={`status status--${employee.employeeActive && employee.assignmentActive ? "success" : "warning"}`}>{employee.employeeActive && employee.assignmentActive ? "Активен" : "Неактивен"}</span><span className={`status status--${employee.participatesInRanking ? "success" : "warning"}`}>{employee.participatesInRanking ? "Участвует в рейтинге" : "Вне рейтинга"}</span></div></div></div>
+        <div className="employee-card-header__identity"><span>{employee.displayName.slice(0, 1).toUpperCase()}</span><div><h1>{employee.displayName}</h1><div className="employee-card-statuses"><span className={`status ${employee.employeeActive && employee.assignmentActive ? "status--success" : ""}`}>{employee.employeeActive && employee.assignmentActive ? "Активен" : "Неактивен"}</span><span className={`status ${employee.participatesInRanking ? "status--success" : ""}`}>{employee.participatesInRanking ? "Участвует в рейтинге" : "Вне рейтинга"}</span></div></div></div>
         <div className="employee-card-header__period"><small>{currentComparisonLabel}</small><strong>{formatDate(card.periodStart)} — {formatDate(card.periodEnd)}</strong><span>{previousComparisonLabel}: {formatDate(card.previousPeriodStart)} — {formatDate(card.previousPeriodEnd)}</span></div>
       </header>
 
@@ -159,6 +160,12 @@ export function EmployeeCardPage() {
                   const dynamics = card.dynamics.attachRateChanges.find(
                     (item) => item.metricCode === rate.metricCode
                   );
+                  const denominator = rate.denominatorQuantity ?? rate.denominatorReceiptCount;
+                  const excludedReason = rate.storeRatePercent == null || rate.storeRatePercent <= 0
+                    ? "Нет среднего по магазину"
+                    : denominator < card.formula.minimumAttachDenominator
+                      ? "Недостаточно продаж"
+                      : "Не участвует в расчете";
                   return (
                     <article key={rate.metricCode}>
                       <div className="employee-attach-name">
@@ -178,10 +185,10 @@ export function EmployeeCardPage() {
                         storeRate={rate.storeRatePercent}
                         change={dynamics?.change ?? null}
                       />
-                      <i className={`employee-attach-status status status--${rate.includedInScore ? "success" : "warning"}`}>
+                      <i className={`employee-attach-status status ${rate.includedInScore ? "status--success" : ""}`}>
                         {rate.includedInScore
                           ? `В балле, ${formatNumber(rate.score)}`
-                          : "Не входит в балл"}
+                          : excludedReason}
                       </i>
                     </article>
                   );

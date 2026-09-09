@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-09
 requirement_sources:
   - docs/archive/legacy-contracts/payroll-api.md
 implementation_sources:
@@ -35,7 +35,7 @@ superseded_by: null
 ## Readiness и расчёт
 
 Store-scoped API предоставляет readiness, preview, calculation, revision list/detail/comparison,
-adjustments, approve и paid transitions согласно OpenAPI v10. `canCalculate` означает техническую
+adjustments, approve и paid transitions согласно OpenAPI v11. `canCalculate` означает техническую
 возможность построить scenario; более строгий `canApprove` требует закрытых blocking quality gaps.
 
 Calculation создаёт immutable revision lineage. После APPROVED/PAID новая ревизия требует reason.
@@ -63,5 +63,5 @@ plan, classification и formula; STALE revision нельзя approve/pay до я
 `IDEMPOTENCY_KEY_CONFLICT`. Missing revision reason — `INVALID_ARGUMENT`. Историческая revision не
 переписывается после conflict или recalculation.
 
-Admin payroll scheme и product payroll-category assignment endpoints входят в OpenAPI v10, но
+Admin payroll scheme и product payroll-category assignment endpoints входят в OpenAPI v11, но
 изменение formula/category является versioned business change и требует отдельного product review.

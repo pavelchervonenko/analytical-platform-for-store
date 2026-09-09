@@ -5,8 +5,8 @@ status: current
 owner: frontend
 audience:
   - developer
-  - manager
-last_verified: 2026-08-31
+  - operator
+last_verified: 2026-09-09
 requirement_sources:
   - docs/current/product/data-quality.md
   - docs/current/product/classification.md
@@ -30,6 +30,10 @@ superseded_by: null
 ---
 
 # Действия по качеству данных
+
+Экран и его action routing доступны только администратору. Role guard в descriptor остаётся
+fail-closed: попытка описать `REVIEW_DATA_ISSUES`, sync или classification для менеджера не создаёт
+ссылку в закрытый раздел.
 
 Action должно менять модель, породившую issue, учитывать роль и честно объяснять отсутствие ручного
 исправления.

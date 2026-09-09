@@ -148,29 +148,13 @@ export const storeSummarySchema = z.object({
 export const storeListSchema = z.array(storeSummarySchema);
 export type StoreSummary = z.infer<typeof storeSummarySchema>;
 
-const storeSyncActivitySchema = z.object({
-  active: z.boolean(),
-  id: z.string().uuid().nullable(),
-  type: z.string().nullable(),
-  status: z.string().nullable(),
-  phase: z.string().nullable(),
-  startedAt: z.string().nullable(),
-  nextAttemptAt: z.string().nullable()
-});
-
 export const storeDataStatusSchema = z.object({
   storeId: z.string().uuid(),
   status: z.string(),
   expectedThroughDate: z.string(),
   dataThroughDate: z.string().nullable(),
-  salesDataThroughDate: z.string().nullable(),
-  returnsDataThroughDate: z.string().nullable(),
   lagDays: z.number().int().nullable(),
-  lastCompletedSyncAt: z.string().nullable(),
-  synchronization: storeSyncActivitySchema,
-  openQualityIssueCount: z.number().int().nonnegative(),
-  lastError: z.string().nullable(),
-  lastErrorAt: z.string().nullable(),
+  updating: z.boolean(),
   checkedAt: z.string()
 });
 
@@ -998,8 +982,7 @@ export const monthlyReportPayloadSchema = z.object({
   attachRates: attachRateSchema,
   planProgress: planProgressSchema,
   employeeRating: employeeRatingResultSchema,
-  payroll: payrollRunDetailSchema,
-  quality: periodQualitySchema
+  payroll: payrollRunDetailSchema
 });
 
 const annualStoreTotalsSchema = z.object({

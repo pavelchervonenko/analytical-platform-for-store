@@ -15,6 +15,8 @@ import com.storeanalytics.metrics.model.ReportType;
 import com.storeanalytics.report.exception.ReportNotFoundException;
 import com.storeanalytics.report.service.ReportActorView;
 import com.storeanalytics.report.service.ReportCoverageStatus;
+import com.storeanalytics.report.service.ReportDetailView;
+import com.storeanalytics.report.service.MonthlyReportView;
 import com.storeanalytics.report.service.ReportQueryService;
 import com.storeanalytics.report.service.ReportSummaryView;
 import java.time.Instant;
@@ -99,5 +101,28 @@ class ReportControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("REPORT_NOT_FOUND"))
                 .andExpect(jsonPath("$.message").value("Report was not found"));
+    }
+
+    @Test
+    void returnsManagerReportWithoutAdministratorQualityDiagnostics() throws Exception {
+        UUID storeId = UUID.randomUUID();
+        UUID reportId = UUID.randomUUID();
+        ReportSummaryView summary = mock(ReportSummaryView.class);
+        when(summary.id()).thenReturn(reportId);
+        MonthlyReportView monthly = new MonthlyReportView(
+                1, null, null, null, null, null, null, null, null
+        );
+        when(service.get(storeId, reportId)).thenReturn(
+                new ReportDetailView(summary, monthly, null)
+        );
+
+        mockMvc.perform(get(
+                        "/api/stores/{storeId}/reports/{reportId}",
+                        storeId,
+                        reportId
+                ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.monthly.schemaVersion").value(1))
+                .andExpect(jsonPath("$.monthly.quality").doesNotExist());
     }
 }
