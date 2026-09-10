@@ -6,7 +6,7 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-09-03
+last_verified: 2026-09-10
 requirement_sources:
   - docs/archive/legacy-contracts/store-plan-progress-api.md
   - docs/archive/discoveries/analytics-business-rules-draft.md
@@ -15,11 +15,17 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics/service/OverviewMetricsService.java
   - backend/src/main/java/com/storeanalytics/performance/model/StorePlanTargets.java
   - frontend/src/plan-schedule/PlanSchedulePage.tsx
+  - frontend/src/plan-schedule/PlanPanel.tsx
+  - frontend/src/plan-schedule/PlanSettingsPanel.tsx
+  - frontend/src/plan-schedule/DailyPlanTable.tsx
   - frontend/src/plan-schedule/SchedulePanel.tsx
   - frontend/src/plan-schedule/forms.ts
 verification_sources:
   - backend/src/test/java/com/storeanalytics/performance/service/StorePlanProgressServiceTest.java
   - backend/src/test/java/com/storeanalytics/performance/web/StorePlanProgressControllerTest.java
+  - frontend/src/plan-schedule/PlanPanel.test.tsx
+  - frontend/src/plan-schedule/PlanSettingsPanel.test.tsx
+  - frontend/src/plan-schedule/DailyPlanTable.test.tsx
   - frontend/src/plan-schedule/forms.test.ts
 runtime_evidence: []
 required_reviewers:
@@ -36,9 +42,19 @@ superseded_by: null
 
 # Планы и смены
 
-План — один месячный контракт. Факт считается от первого числа до включительной `asOf`, но cohort
-задаётся параметром `scope`: `SELLERS` применяет тот же план только к продавцам рейтинга, `STORE` —
-ко всему магазину. Отдельных значений плана для двух режимов нет.
+Для каждого магазина и каждого календарного месяца создаётся отдельный план. План прошлого месяца
+не переносится автоматически. Внутри выбранного месяца набор целей один: факт считается от первого
+числа до включительной `asOf`, а cohort задаётся параметром `scope`. `SELLERS` применяет цели
+месяца только к продавцам рейтинга, `STORE` — ко всему магазину. Отдельных значений плана для двух
+режимов нет.
+
+Отдельный экран управления «План» показывает progress всего магазина (`STORE`). Переключение
+`SELLERS`/`STORE` относится к главной странице и не создаёт второй план.
+
+Экран плана разделяет контроль выполнения и редактирование целей. «Обзор плана» отвечает на три
+вопроса менеджера: где магазин находится сейчас, какое действие важнее всего и что требуется в
+ближайший рабочий день. «Настройка плана» содержит согласованную форму четырёх месячных целей и не
+дублируется в обзоре.
 
 ## Выручка
 
@@ -62,10 +78,23 @@ CriterionCompletion = ActualShare / target share * 100%
 ShareGap = ActualShare - target share
 ```
 
-При неположительной выручке доля недоступна. `TargetAmountToDate` — ориентир относительно уже
-полученной выручки, не отдельный месячный денежный план. Расчёт факта контролирует
+Статус `ACHIEVED` для доли означает, что фактическая доля уже достигла цели на текущую `asOf`.
+До конца месяца недостигнутая доля имеет `AT_RISK`; в последний день — `MISSED`. В отличие от
+выручки, прогноз суммы долевого направления не переводит статус в `ON_TRACK`. Поэтому статус
+«Выполнено» у услуг или допов может появиться в начале месяца и не гарантирует, что доля останется
+выше цели после следующих продаж.
+
+При неположительной выручке доля недоступна. Доля считается достигшей цели, как только фактическая
+сумма направления не меньше `TargetAmountToDate`; это оценка по данным на текущую `asOf`.
+`TargetAmountToDate` — ориентир относительно уже полученной выручки, не отдельный фиксированный
+денежный план на месяц. Расчёт факта контролирует
 `actual additional = actual accessory + actual service`. Модель плана пока не валидирует
 `additionalShareTarget = accessoryShareTarget + serviceShareTarget`.
+
+Цель «Доп. выручка» остаётся самостоятельным вводимым значением. Интерфейс не вычисляет её как
+сумму целей аксессуаров и услуг, не блокирует сохранение при несовпадении и не подменяет введённое
+заказчиком значение. При этом фактическая сумма дополнительной выручки по действующему контракту
+складывается из факта аксессуаров и услуг.
 
 ## Будущие дни
 
@@ -78,6 +107,16 @@ RequiredDirection = max(ProjectedMonthRevenue * target share / 100 - actual dire
 
 Остаток распределяется по будущим дням, копейки — детерминированно в последний день. Поэтому
 future target меняется после синхронизации.
+
+`FutureRevenuePerDay` в интерфейсе называется «Расчётная выручка дня»: это база для пересчёта
+целевых сумм аксессуаров и услуг, а не обещание фактической выручки конкретного дня. Ближайший
+будущий день является основным операционным ориентиром. Для завершённых дней
+`cumulativeGapAmount` показывается как «Отклонение с начала месяца», поскольку значение накоплено
+за месяц, а не относится только к одной дате.
+
+Достижение всех долей до закрытия месяца не означает окончательное выполнение месячного плана:
+последующие продажи могут изменить структуру. До последнего дня экран использует промежуточный
+статус и не сообщает, что весь план окончательно выполнен.
 
 ## Смены
 

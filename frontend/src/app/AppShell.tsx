@@ -1,4 +1,4 @@
-import { BarChart3, CalendarRange, ChevronDown, CircleDollarSign, DatabaseZap, FileArchive, LogOut, Menu, Settings, Sparkles, Users, X } from "lucide-react";
+import { BarChart3, CalendarDays, ChevronDown, CircleDollarSign, DatabaseZap, FileArchive, LogOut, Menu, Settings, Sparkles, Target, Users, X } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { InitialStoreSetup } from "../admin/InitialStoreSetup";
@@ -18,7 +18,8 @@ const navigationGroups = [
   {
     label: "Управление",
     items: [
-      { to: "/plan", label: "План и смены", icon: CalendarRange, visibility: "all" },
+      { to: "/plan", label: "План", icon: Target, visibility: "all" },
+      { to: "/shifts", label: "Смены", icon: CalendarDays, visibility: "all" },
       { to: "/payroll", label: "Зарплата", icon: CircleDollarSign, visibility: "all" },
       { to: "/reports", label: "Отчеты", icon: FileArchive, visibility: "all" }
     ]

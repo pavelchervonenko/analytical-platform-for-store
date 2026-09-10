@@ -60,7 +60,7 @@ function validCustomRange(start: string | null, end: string | null, today: strin
 function periodLabel(mode: AnalyticsPeriodMode, start: string, end: string, month: string): string {
   if (mode === "MONTH") {
     const label = formatMonth(month);
-    return end < monthRange(month).end ? `${label} · по ${formatDateShort(end)}` : label;
+    return end < monthRange(month).end ? `${label}, по ${formatDateShort(end)}` : label;
   }
   if (mode === "WEEK") return `${formatDateShort(start)} — ${formatDateShort(end)}`;
   return `${formatDateShort(start)} — ${formatDateShort(end)}`;

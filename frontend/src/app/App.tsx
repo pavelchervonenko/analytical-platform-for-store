@@ -8,7 +8,9 @@ import { AppShell } from "./AppShell";
 const OverviewPage = lazy(async () => { const module = await import("../dashboard/OverviewPage"); return { default: module.OverviewPage }; });
 const EmployeesPage = lazy(async () => { const module = await import("../employees/EmployeesPage"); return { default: module.EmployeesPage }; });
 const EmployeeCardPage = lazy(async () => { const module = await import("../employees/EmployeeCardPage"); return { default: module.EmployeeCardPage }; });
-const PlanSchedulePage = lazy(async () => { const module = await import("../plan-schedule/PlanSchedulePage"); return { default: module.PlanSchedulePage }; });
+const PlanPage = lazy(async () => { const module = await import("../plan-schedule/PlanSchedulePage"); return { default: module.PlanPage }; });
+const PlanSettingsPage = lazy(async () => { const module = await import("../plan-schedule/PlanSchedulePage"); return { default: module.PlanSettingsPage }; });
+const ShiftsPage = lazy(async () => { const module = await import("../plan-schedule/PlanSchedulePage"); return { default: module.ShiftsPage }; });
 const PayrollPage = lazy(async () => { const module = await import("../payroll/PayrollPage"); return { default: module.PayrollPage }; });
 const QualityPage = lazy(async () => { const module = await import("../quality/QualityPage"); return { default: module.QualityPage }; });
 const ReportsPage = lazy(async () => { const module = await import("../reports/ReportsPage"); return { default: module.ReportsPage }; });
@@ -28,7 +30,9 @@ export function App() {
       <Route path="/overview" element={<OverviewPage />} />
       <Route path="/employees" element={<EmployeesPage />} />
       <Route path="/employees/:employeeId" element={<EmployeeCardPage />} />
-      <Route path="/plan" element={<PlanSchedulePage />} />
+      <Route path="/plan" element={<PlanPage />} />
+      <Route path="/plan/settings" element={<PlanSettingsPage />} />
+      <Route path="/shifts" element={<ShiftsPage />} />
       <Route path="/payroll" element={<PayrollPage />} />
       <Route path="/reports" element={<ReportsPage />} />
       <Route path="/profile" element={<ProfilePage />} />

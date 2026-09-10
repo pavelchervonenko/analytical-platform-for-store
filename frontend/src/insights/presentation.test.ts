@@ -86,7 +86,7 @@ describe("weekly insight presentation", () => {
   });
 
   it("uses natural punctuation instead of a middle-dot separator", () => {
-    expect(readableInsightText("Выручка · изменение +20%"))
+    expect(readableInsightText("Выручка \u00b7 изменение +20%"))
       .toBe("Выручка, изменение +20%");
   });
 });

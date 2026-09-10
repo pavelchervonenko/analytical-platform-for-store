@@ -61,13 +61,13 @@ async function installFixtureApi(page: Page) {
   await page.route("**/api/stores/*/data-status", async (route) => json(route, {
     storeId: visualStoreId,
     status: "CURRENT",
-    expectedThroughDate: "2026-08-26",
-    dataThroughDate: "2026-08-26",
-    salesDataThroughDate: "2026-08-26",
-    returnsDataThroughDate: "2026-08-26",
+    expectedThroughDate: "2026-09-09",
+    dataThroughDate: "2026-09-09",
+    salesDataThroughDate: "2026-09-09",
+    returnsDataThroughDate: "2026-09-09",
     lagDays: 0,
     updating: false,
-    lastCompletedSyncAt: "2026-08-27T04:30:00Z",
+    lastCompletedSyncAt: "2026-09-10T04:30:00Z",
     synchronization: {
       active: false,
       id: null,
@@ -80,7 +80,7 @@ async function installFixtureApi(page: Page) {
     openQualityIssueCount: 28,
     lastError: null,
     lastErrorAt: null,
-    checkedAt: "2026-08-27T04:35:00Z"
+    checkedAt: "2026-09-10T04:35:00Z"
   }));
   const periodStart = "2026-08-01";
   const periodEnd = "2026-08-31";
@@ -172,9 +172,9 @@ async function installFixtureApi(page: Page) {
         id: "10000000-0000-4000-8000-000000000010",
         storeId: visualStoreId,
         planMonth: "2026-09",
-        revenueTarget: 55_000_000,
-        accessoryShareTarget: 6.3,
-        serviceShareTarget: 4.2,
+        revenueTarget: 75_000_000,
+        accessoryShareTarget: 5.7,
+        serviceShareTarget: 4.8,
         additionalShareTarget: 10.5,
         updatedBy: "20000000-0000-4000-8000-000000000001",
         version: 1,
@@ -183,11 +183,36 @@ async function installFixtureApi(page: Page) {
     });
   });
   await page.route("**/api/stores/*/performance-plans/*/progress?*", async (route) => {
-    const scope = new URL(route.request().url()).searchParams.get("scope") === "STORE"
+    const requestSearchParams = new URL(route.request().url()).searchParams;
+    expect(requestSearchParams.get("asOf")).toBe("2026-09-09");
+    const scope = requestSearchParams.get("scope") === "STORE"
       ? "STORE"
       : "SELLERS";
     const factor = scope === "STORE" ? 1.12 : 1;
-    const revenue = 54_800_000 * factor;
+    const totalDays = 30;
+    const elapsedDays = 9;
+    const remainingDays = totalDays - elapsedDays;
+    const revenue = 16_748_724 * factor;
+    const completedRevenue = [
+      1_500_000,
+      2_100_000,
+      1_750_000,
+      2_300_000,
+      1_900_000,
+      2_000_000,
+      1_084_420,
+      2_656_200,
+      1_458_104
+    ];
+    const accessoryShares = [5.6, 5.1, 5.8, 5.3, 5.5, 5.2, 5, 5.7, 5.4];
+    const serviceShares = [4.6, 4.3, 5, 4.5, 4.7, 4.2, 4.1, 4.8, 4.4];
+    const actualAmount = (shares: number[]) => completedRevenue.reduce(
+      (total, dayRevenue, index) => total + dayRevenue * shares[index]! / 100,
+      0
+    ) * factor;
+    const accessoryActual = actualAmount(accessoryShares);
+    const serviceActual = actualAmount(serviceShares);
+    const additionalActual = accessoryActual + serviceActual;
     const direction = (
       code: string,
       actualAmount: number,
@@ -198,19 +223,25 @@ async function installFixtureApi(page: Page) {
       const criterionCompletionPercent = targetSharePercent == null
         ? actualAmount * 100 / targetAmount
         : (actualSharePercent ?? 0) * 100 / targetSharePercent;
+      const expectedAmountToDate = targetSharePercent == null
+        ? targetAmount * elapsedDays / totalDays
+        : targetAmount;
+      const projectedAmount = actualAmount * totalDays / elapsedDays;
       return {
         code,
         criterionType: targetSharePercent == null ? "AMOUNT" : "SHARE",
         actualAmount,
         targetAmount,
         amountCompletionPercent: actualAmount * 100 / targetAmount,
-        currentDailyPace: actualAmount / 27,
-        expectedAmountToDate: targetAmount * 27 / 31,
-        paceGapAmount: actualAmount - targetAmount * 27 / 31,
-        projectedAmount: actualAmount * 31 / 27,
-        projectedAmountCompletionPercent: actualAmount * 31 * 100 / (27 * targetAmount),
+        currentDailyPace: actualAmount / elapsedDays,
+        expectedAmountToDate,
+        paceGapAmount: actualAmount - expectedAmountToDate,
+        projectedAmount,
+        projectedAmountCompletionPercent: targetSharePercent == null
+          ? projectedAmount * 100 / targetAmount
+          : criterionCompletionPercent,
         remainingAmount: Math.max(0, targetAmount - actualAmount),
-        requiredPerRemainingDay: Math.max(0, targetAmount - actualAmount) / 4,
+        requiredPerRemainingDay: Math.max(0, targetAmount - actualAmount) / remainingDays,
         actualSharePercent,
         targetSharePercent,
         shareGapPercentagePoints: targetSharePercent == null
@@ -218,39 +249,127 @@ async function installFixtureApi(page: Page) {
           : (actualSharePercent ?? 0) - targetSharePercent,
         criterionCompletionPercent,
         achieved: criterionCompletionPercent >= 100,
-        status: criterionCompletionPercent >= 100 ? "ACHIEVED" : "ON_TRACK"
+        status: criterionCompletionPercent >= 100 ? "ACHIEVED" : "AT_RISK"
       };
     };
     const directions = [
-      direction("REVENUE", revenue, 55_000_000, null, null),
-      direction("ACCESSORY", revenue * 0.065, revenue * 0.063, 6.5, 6.3),
-      direction("SERVICE", revenue * 0.045, revenue * 0.042, 4.5, 4.2),
-      direction("ADDITIONAL", revenue * 0.11, revenue * 0.105, 11, 10.5)
+      direction("REVENUE", revenue, 75_000_000, null, null),
+      direction(
+        "ACCESSORY",
+        accessoryActual,
+        revenue * 0.057,
+        accessoryActual * 100 / revenue,
+        5.7
+      ),
+      direction(
+        "SERVICE",
+        serviceActual,
+        revenue * 0.048,
+        serviceActual * 100 / revenue,
+        4.8
+      ),
+      direction(
+        "ADDITIONAL",
+        additionalActual,
+        revenue * 0.105,
+        additionalActual * 100 / revenue,
+        10.5
+      )
     ];
+    let accessoryGap = 0;
+    let serviceGap = 0;
+    const projectedRevenueBasis = revenue / elapsedDays;
+    const projectedRevenue = revenue + projectedRevenueBasis * remainingDays;
+    const accessoryRequired = Math.max(projectedRevenue * 0.057 - accessoryActual, 0);
+    const serviceRequired = Math.max(projectedRevenue * 0.048 - serviceActual, 0);
+    const accessoryDailyBase = Math.floor(accessoryRequired * 100 / remainingDays) / 100;
+    const serviceDailyBase = Math.floor(serviceRequired * 100 / remainingDays) / 100;
+    const dailyTargets = Array.from({ length: totalDays }, (_, index) => {
+      const day = index + 1;
+      const date = `2026-09-${String(day).padStart(2, "0")}`;
+      if (day > elapsedDays) {
+        const futureIndex = day - elapsedDays;
+        const accessoryTargetAmount = futureIndex === remainingDays
+          ? accessoryRequired - accessoryDailyBase * (remainingDays - 1)
+          : accessoryDailyBase;
+        const serviceTargetAmount = futureIndex === remainingDays
+          ? serviceRequired - serviceDailyBase * (remainingDays - 1)
+          : serviceDailyBase;
+        return {
+          date,
+          completed: false,
+          revenueBasisAmount: projectedRevenueBasis,
+          revenueBasisProjected: true,
+          accessory: {
+            actualAmount: null,
+            actualSharePercent: null,
+            targetAmount: accessoryTargetAmount,
+            targetSharePercent: accessoryTargetAmount * 100 / projectedRevenueBasis,
+            cumulativeGapAmount: null
+          },
+          service: {
+            actualAmount: null,
+            actualSharePercent: null,
+            targetAmount: serviceTargetAmount,
+            targetSharePercent: serviceTargetAmount * 100 / projectedRevenueBasis,
+            cumulativeGapAmount: null
+          }
+        };
+      }
+
+      const revenueBasisAmount = completedRevenue[index]! * factor;
+      const accessoryTargetAmount = revenueBasisAmount * 0.057;
+      const accessoryActualAmount = revenueBasisAmount * accessoryShares[index]! / 100;
+      const serviceTargetAmount = revenueBasisAmount * 0.048;
+      const serviceActualAmount = revenueBasisAmount * serviceShares[index]! / 100;
+      accessoryGap += accessoryActualAmount - accessoryTargetAmount;
+      serviceGap += serviceActualAmount - serviceTargetAmount;
+
+      return {
+        date,
+        completed: true,
+        revenueBasisAmount,
+        revenueBasisProjected: false,
+        accessory: {
+          actualAmount: accessoryActualAmount,
+          actualSharePercent: accessoryShares[index]!,
+          targetAmount: accessoryTargetAmount,
+          targetSharePercent: 5.7,
+          cumulativeGapAmount: accessoryGap
+        },
+        service: {
+          actualAmount: serviceActualAmount,
+          actualSharePercent: serviceShares[index]!,
+          targetAmount: serviceTargetAmount,
+          targetSharePercent: 4.8,
+          cumulativeGapAmount: serviceGap
+        }
+      };
+    });
     await json(route, {
       storeId: visualStoreId,
-      periodStart,
-      periodEnd,
-      asOfDate: "2026-08-27",
-      totalDays: 31,
-      elapsedDays: 27,
-      remainingDays: 4,
+      periodStart: "2026-09-01",
+      periodEnd: "2026-09-30",
+      asOfDate: "2026-09-09",
+      totalDays,
+      elapsedDays,
+      remainingDays,
       formulaVersion: "store-plan-progress-v3",
       plan: {
         id: "10000000-0000-4000-8000-000000000010",
         storeId: visualStoreId,
-        planMonth: "2026-08",
-        revenueTarget: 55_000_000,
-        accessoryShareTarget: 6.3,
-        serviceShareTarget: 4.2,
+        planMonth: "2026-09",
+        revenueTarget: 75_000_000,
+        accessoryShareTarget: 5.7,
+        serviceShareTarget: 4.8,
         additionalShareTarget: 10.5,
         updatedBy: "20000000-0000-4000-8000-000000000001",
         version: 1,
-        updatedAt: "2026-08-01T06:00:00Z"
+        updatedAt: "2026-09-01T06:00:00Z"
       },
       dataQuality: {
         freshnessStatus: "CURRENT",
-        dataThroughDate: "2026-08-27",
+        dataThroughDate: "2026-09-09",
         completeThroughAsOf: true,
         classificationComplete: true,
         unmappedItemCount: 0,
@@ -260,8 +379,8 @@ async function installFixtureApi(page: Page) {
       allDirectionsAchieved: directions.every((item) => item.achieved),
       focusDirections: [],
       directions,
-      dailyTargets: [],
-      calculatedAt: "2026-08-27T06:00:00Z"
+      dailyTargets,
+      calculatedAt: "2026-09-09T06:00:00Z"
     });
   });
   await page.route("**/api/stores/*/period-quality/*?*", async (route) => json(route, {
@@ -549,6 +668,7 @@ const visualRoutes = parseRoutes(configuredRoutes);
 test.describe("local frontend visual review", () => {
   test.beforeEach(async ({ page }) => {
     if (useFixtureApi) {
+      await page.clock.setFixedTime(new Date("2026-09-10T09:00:00+03:00"));
       await installFixtureApi(page);
       await page.goto("/insights");
       await expect(page).toHaveURL(/\/insights(?:\?|$)/u);
@@ -692,37 +812,58 @@ test.describe("local frontend visual review", () => {
           });
         }
       }
+      const routePath = new URL(route, "http://local.test").pathname;
+      if (routePath === "/plan" || routePath === "/plan/settings") {
+        await expect(page.getByRole("link", { name: "Обзор плана", exact: true })).toBeVisible();
+        await expect(page.getByRole("link", { name: "Настройка плана", exact: true })).toBeVisible();
+      }
+      if (routePath === "/plan") {
+        await expect(page.locator(".plan-panel-view")).toBeVisible();
+        await expect(page.getByText("Ориентир на ближайший день", { exact: true })).toBeVisible();
+      }
+      if (routePath === "/plan/settings") {
+        await expect(page.locator(".plan-settings-view")).toBeVisible();
+      }
+      if (routePath === "/shifts") {
+        await expect(page.locator(".schedule-panel-view")).toBeVisible();
+      }
       await captureVisualArtifacts(page, screenshotDirectory, screenshotName(route));
-      if (new URL(route, "http://local.test").pathname === "/plan") {
-        const settings = page.locator(".plan-settings-disclosure");
-        if (await settings.count() > 0) {
-          await settings.locator(":scope > summary").click();
-          await expect(settings).toHaveAttribute("open", "");
-          await settings.screenshot({
-            path: resolve(screenshotDirectory, screenshotName(route) + "-settings-open.png"),
-            animations: "disabled"
-          });
+      if (routePath === "/plan") {
+        const structureRow = page.locator(".plan-structure-row").first();
+        await structureRow.locator(":scope > summary").click();
+        await expect(structureRow).toHaveAttribute("open", "");
+        await structureRow.screenshot({
+          path: resolve(screenshotDirectory, screenshotName(route) + "-structure-details.png"),
+          animations: "disabled"
+        });
 
-          await settings.getByRole("button", { name: "Изменить цели" }).click();
+        const historyDay = page.locator(".daily-plan-day").first();
+        await historyDay.locator(":scope > summary").click();
+        await expect(historyDay).toHaveAttribute("open", "");
+        await historyDay.screenshot({
+          path: resolve(screenshotDirectory, screenshotName(route) + "-history-details.png"),
+          animations: "disabled"
+        });
+      }
+      if (routePath === "/plan/settings") {
+        const editButton = page.getByRole("button", { name: "Изменить цели" });
+        if (await editButton.count() > 0) {
+          await editButton.click();
           const editor = page.locator(".plan-settings-panel");
           await expect(editor).toBeVisible();
           await editor.screenshot({
-            path: resolve(screenshotDirectory, screenshotName(route) + "-settings-editor.png"),
+            path: resolve(screenshotDirectory, screenshotName(route) + "-editor.png"),
             animations: "disabled"
           });
 
           await editor.getByRole("button", { name: "Отмена" }).click();
-          await expect(page.locator(".plan-settings-disclosure")).toBeVisible();
+          await expect(editButton).toBeVisible();
         }
+      }
 
-        await page.getByRole("button", { name: "Смены" }).click();
-        await expect(page.locator(".schedule-panel-view")).toBeVisible();
-        await page.waitForLoadState("networkidle");
-        await page.screenshot({
-          path: resolve(screenshotDirectory, screenshotName(route) + "-schedule.png"),
-          fullPage: true,
-          animations: "disabled"
-        });
+      if (new URL(route, "http://local.test").pathname === "/shifts") {
+        const schedule = page.locator(".schedule-panel-view");
+        await expect(schedule).toBeVisible();
 
         const dayButton = page.locator("button.schedule-day:not([disabled])").first();
         await dayButton.click();

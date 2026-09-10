@@ -37,7 +37,7 @@ test("ADMIN видит ключевые разделы и новые опера�
   await login(page, adminEmail!, adminPassword!);
   await openNavigationOnMobile(page);
 
-  for (const name of ["Сотрудники", "План и смены", "Зарплата", "Отчеты", "Качество данных"]) {
+  for (const name of ["Сотрудники", "План", "Смены", "Зарплата", "Отчеты", "Качество данных"]) {
     await expect(page.getByRole("link", { name })).toBeVisible();
   }
 
@@ -59,7 +59,8 @@ test("MANAGER не получает административную навиг�
   for (const [path, heading] of [
     ["/overview", "Обзор"],
     ["/employees", "Сотрудники и рейтинг"],
-    ["/plan", "План и смены"],
+    ["/plan", "План"],
+    ["/shifts", "Смены"],
     ["/payroll", "Зарплата"],
     ["/reports", "Отчеты"],
     ["/quality", "Качество данных"],
