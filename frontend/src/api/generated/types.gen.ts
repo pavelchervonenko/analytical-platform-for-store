@@ -430,6 +430,7 @@ export type ProductCategoryImportResult = {
     productsCreated?: number;
     assignmentsCreated?: number;
     assignmentsUnchanged?: number;
+    affectedStoreIds?: Array<string>;
 };
 
 export type LoginRequest = {

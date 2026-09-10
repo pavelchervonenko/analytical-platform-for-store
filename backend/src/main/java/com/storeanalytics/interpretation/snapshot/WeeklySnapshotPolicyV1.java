@@ -9,7 +9,6 @@ import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Suff
 import com.storeanalytics.interpretation.contract.WeeklyInterpretationInput.Versions;
 import com.storeanalytics.metrics.service.AttachRateDataQuality;
 import com.storeanalytics.metrics.service.StoreKpiDataQuality;
-import com.storeanalytics.store.service.StoreDataFreshnessStatus;
 import com.storeanalytics.store.service.StoreDataStatusView;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -117,15 +116,15 @@ public class WeeklySnapshotPolicyV1 {
 
     public SnapshotQualityDecision quality(
             StoreDataStatusView source,
-            StoreKpiDataQuality storeQuality,
-            AttachRateDataQuality attachQuality,
+            StoreKpiDataQuality currentStoreQuality,
+            StoreKpiDataQuality previousStoreQuality,
+            AttachRateDataQuality currentAttachQuality,
+            AttachRateDataQuality previousAttachQuality,
             LocalDate periodEnd
     ) {
         List<EvidenceIndexEntry> unavailable = new ArrayList<>();
         List<Limitation> limitations = new ArrayList<>();
-        if (source.status() == StoreDataFreshnessStatus.NOT_SYNCED
-                || source.status() == StoreDataFreshnessStatus.ERROR
-                || source.dataThroughDate() == null
+        if (source.dataThroughDate() == null
                 || source.dataThroughDate().isBefore(periodEnd)) {
             String evidenceRef = "STORE.DATA_COVERAGE.STATUS";
             unavailable.add(unavailable(evidenceRef));
@@ -142,7 +141,8 @@ public class WeeklySnapshotPolicyV1 {
             );
         }
 
-        if (!storeQuality.completeCostData()) {
+        if (!currentStoreQuality.completeCostData()
+                || !previousStoreQuality.completeCostData()) {
             String evidenceRef = "STORE.GROSS_PROFIT.CURRENT";
             unavailable.add(unavailable(evidenceRef));
             limitations.add(limitation(
@@ -152,7 +152,8 @@ public class WeeklySnapshotPolicyV1 {
                     evidenceRef
             ));
         }
-        if (storeQuality.unmappedItemCount() > 0 || source.openQualityIssueCount() > 0) {
+        if (currentStoreQuality.unmappedItemCount() > 0
+                || previousStoreQuality.unmappedItemCount() > 0) {
             String evidenceRef = "STORE.CLASSIFICATION_QUALITY.STATUS";
             unavailable.add(unavailable(evidenceRef));
             limitations.add(limitation(
@@ -162,9 +163,23 @@ public class WeeklySnapshotPolicyV1 {
                     evidenceRef
             ));
         }
-        if (attachQuality.unmatchedNumeratorItemCount() > 0
-                || attachQuality.ambiguousWarrantyItemCount() > 0
-                || attachQuality.unknownDeviceConditionItemCount() > 0) {
+        if (currentStoreQuality.periodOpenConsistencyIssueCount() > 0
+                || previousStoreQuality.periodOpenConsistencyIssueCount() > 0) {
+            String evidenceRef = "STORE.CONSISTENCY_QUALITY.STATUS";
+            unavailable.add(unavailable(evidenceRef));
+            limitations.add(limitation(
+                    "SOURCE_CONSISTENCY_QUALITY_LIMITED",
+                    LimitationImpact.REDUCED_CONFIDENCE,
+                    List.of("RESULT", "DYNAMICS"),
+                    evidenceRef
+            ));
+        }
+        if (currentAttachQuality.unmatchedNumeratorItemCount() > 0
+                || currentAttachQuality.ambiguousWarrantyItemCount() > 0
+                || currentAttachQuality.unknownDeviceConditionItemCount() > 0
+                || previousAttachQuality.unmatchedNumeratorItemCount() > 0
+                || previousAttachQuality.ambiguousWarrantyItemCount() > 0
+                || previousAttachQuality.unknownDeviceConditionItemCount() > 0) {
             String evidenceRef = "STORE.ATTACH_DATA_QUALITY.STATUS";
             unavailable.add(unavailable(evidenceRef));
             limitations.add(limitation(

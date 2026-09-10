@@ -20,7 +20,7 @@ export function describeQualityAction(action: QualityAction, isAdmin: boolean): 
     case "UPDATE_WORK_SCHEDULE": return { label: "Заполнить смены", route: "/plan", view: "shifts" };
     case "REVIEW_EMPLOYEE_ELIGIBILITY": return { label: "Проверить участников", route: "/employees" };
     case "CLASSIFY_PRODUCTS": return isAdmin
-      ? { label: "Исправить категории", route: "/admin", view: "classification" }
+      ? { label: "Исправить категории", route: "/admin", view: "category-import" }
       : { label: "Нужен администратор", unavailableReason: "Классификацию товаров выполняет администратор." };
     case "PROVIDE_COST_DATA": return { label: "Проверить себестоимость", unavailableReason: "Ручное исправление себестоимости пока недоступно. Проверьте источник данных и синхронизацию." };
     case "CALCULATE_PAYROLL": return { label: "Рассчитать зарплату", route: "/payroll" };

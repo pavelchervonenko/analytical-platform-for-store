@@ -88,6 +88,8 @@ class WeeklyReviewQualityPolicyV1Test {
             assertThat(limitation.code())
                     .isEqualTo("SALES_OR_RETURNS_CONSISTENCY_ISSUE");
             assertThat(limitation.summary()).contains("продаж или возвратов");
+            assertThat(limitation.affectedBlockIds())
+                    .containsExactly("results", "summary", "revenue-decomposition");
         });
     }
 

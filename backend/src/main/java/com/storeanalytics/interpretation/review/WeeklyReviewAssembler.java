@@ -185,7 +185,12 @@ public final class WeeklyReviewAssembler {
                 .findFirst()
                 .map(factor -> narrative("summary:risk", factor))
                 .orElse(null);
-        BlockState state = reportState == ReportState.PARTIAL ? LIMITED : READY;
+        boolean includedProfitIsReady = profit.metricState()
+                == WeeklyReviewResponse.MetricState.UNAVAILABLE
+                || profit.metricState() == WeeklyReviewResponse.MetricState.READY;
+        BlockState state = revenue.metricState() == WeeklyReviewResponse.MetricState.READY
+                && includedProfitIsReady
+                ? READY : LIMITED;
         return new SummaryBlock(
                 "summary",
                 state,

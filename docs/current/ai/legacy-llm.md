@@ -6,17 +6,19 @@ owner: ai
 audience:
   - developer
   - operator
-last_verified: 2026-08-31
+last_verified: 2026-09-10
 requirement_sources:
   - docs/archive/legacy-contracts/llm-notifications-design.md
   - docs/archive/legacy-contracts/llm-interpretation-publication.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/interpretation/contract/LlmContractResources.java
   - backend/src/main/java/com/storeanalytics/interpretation/generation/LlmAnalysisJobWorker.java
+  - backend/src/main/java/com/storeanalytics/interpretation/snapshot/WeeklySnapshotPolicyV1.java
   - backend/src/main/java/com/storeanalytics/interpretation/publication/LlmPublicationStore.java
   - backend/src/main/java/com/storeanalytics/interpretation/query/WeeklyInsightQueryService.java
   - backend/src/main/java/com/storeanalytics/notification/fanout/WeeklyTelegramMessageRenderer.java
 verification_sources:
+  - backend/src/test/java/com/storeanalytics/interpretation/snapshot/WeeklySnapshotQualityPolicyTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/generation/LlmProviderCallPipelineIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/validation/LlmResponseValidationPipelineIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/query/WeeklyInsightQueryServiceTest.java
@@ -93,7 +95,14 @@ Legacy publication и v25 enrichment различаются:
 
 `WeeklyInsightQueryService` возвращает latest interpretation завершённой недели либо явное
 `PREPARING`/`DELAYED`/`UNAVAILABLE` состояние. Frontend использует этот endpoint как fallback,
-когда новый weekly-review отсутствует или его запрос завершился ошибкой.
+только когда новый weekly-review отсутствует и основной endpoint вернул `404`/`null`. Ошибка
+основного endpoint показывается отдельно и не маскируется legacy-ответом.
+
+Legacy snapshot quality симметрично использует period-scoped counters текущей и предыдущей
+сравниваемых недель. Store-wide issue вне этих периодов не меняет статус snapshot; реальная
+consistency-проблема внутри любого из периодов получает отдельное ограничение для результата и
+динамики и не выдаётся за проблему классификации. Более поздняя ошибка синхронизации не блокирует
+уже полностью покрытый период.
 
 Legacy fallback может отличаться от v25 по структуре и семантике. Это известная compatibility
 граница, а не доказательство эквивалентности двух отчётов.

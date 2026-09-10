@@ -5,7 +5,7 @@ describe("quality action routing", () => {
   it("keeps administrator-only actions fail closed", () => {
     expect(describeQualityAction("RUN_SYNC", false)?.route).toBeUndefined();
     expect(describeQualityAction("RUN_SYNC", false)?.unavailableReason).toEqual(expect.any(String));
-    expect(describeQualityAction("CLASSIFY_PRODUCTS", true)).toMatchObject({ route: "/admin", view: "classification" });
+    expect(describeQualityAction("CLASSIFY_PRODUCTS", true)).toMatchObject({ route: "/admin", view: "category-import" });
   });
 
   it("routes correction actions by stable action code", () => {

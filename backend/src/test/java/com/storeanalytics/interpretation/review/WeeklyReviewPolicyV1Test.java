@@ -139,9 +139,9 @@ class WeeklyReviewPolicyV1Test {
         assertThat(WeeklyReviewPolicyV1.VERSIONS.metricsPolicy())
                 .isEqualTo("weekly-metrics-v4");
         assertThat(WeeklyReviewPolicyV1.VERSIONS.snapshotPolicy())
-                .isEqualTo("weekly-snapshot-v7");
+                .isEqualTo("weekly-snapshot-v8");
         assertThat(WeeklyReviewPolicyV1.VERSIONS.qualityPolicy())
-                .isEqualTo("weekly-quality-v4");
+                .isEqualTo("weekly-quality-v5");
     }
 
     private RevenuePeriod revenue(

@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - operator
-last_verified: 2026-08-31
+last_verified: 2026-09-10
 requirement_sources:
   - docs/archive/legacy-contracts/database-design.md
 implementation_sources:
@@ -16,6 +16,7 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/sync/service/StoreSyncIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/ReturnSyncIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/OrderSyncIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/product/service/ProductClassificationReconciliationServiceTest.java
   - backend/src/test/java/com/storeanalytics/integration/livesklad/webhook/LiveSkladWebhookStoreIntegrationTest.java
 runtime_evidence: []
 required_reviewers:
@@ -57,8 +58,14 @@ Source corrections обновляют актуальную нормализов�
 
 ### Снимки и ревизии
 
-Классификация, стоимость и наименование позиции фиксируются в item snapshot и не меняются задним
-числом после переклассификации товара. Finalized rating/report snapshots и опубликованные weekly
+Классификация, стоимость и наименование позиции фиксируются в item snapshot. Обычное изменение
+товарного справочника не переписывает уже классифицированные позиции. Единственное явное исключение
+для классификации — точечная reconciliation активных `UNMAPPED`-позиций по каноническим product IDs
+внутри одного exact integration connection; она не меняет уже классифицированные позиции.
+Связанный возврат при reconciliation наследует snapshot исходной продажи, поэтому обе позиции не
+могут получить разные аналитические категории.
+
+Finalized rating/report snapshots и опубликованные weekly
 review artifacts append-only; корректировка создаёт новую ревизию с provenance и hash.
 
 ### Durable lifecycle

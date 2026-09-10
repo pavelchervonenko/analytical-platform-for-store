@@ -285,7 +285,7 @@ public final class WeeklyReviewQualityPolicyV1 {
         );
         addCountLimitation(
                 new Issue("cost:zero:current", "UNEXPECTED_ZERO_COST"),
-                List.of("results"),
+                List.of("results", "summary"),
                 List.of("GROSS_PROFIT", "MARGIN_PERCENT"),
                 currentPeriod,
                 current.dataQuality().unexpectedZeroCostItemCount(),
@@ -294,7 +294,7 @@ public final class WeeklyReviewQualityPolicyV1 {
         );
         addCountLimitation(
                 new Issue("cost:zero:previous", "UNEXPECTED_ZERO_COST"),
-                List.of("results"),
+                List.of("results", "summary"),
                 List.of("GROSS_PROFIT", "MARGIN_PERCENT"),
                 previousPeriod,
                 previous.dataQuality().unexpectedZeroCostItemCount(),
@@ -312,7 +312,7 @@ public final class WeeklyReviewQualityPolicyV1 {
     ) {
         addCountLimitation(
                 new Issue("consistency:current", "SALES_OR_RETURNS_CONSISTENCY_ISSUE"),
-                List.of("results"),
+                List.of("results", "summary", "revenue-decomposition"),
                 List.of("NET_REVENUE"),
                 currentPeriod,
                 current.dataQuality().periodOpenConsistencyIssueCount(),
@@ -321,7 +321,7 @@ public final class WeeklyReviewQualityPolicyV1 {
         );
         addCountLimitation(
                 new Issue("consistency:previous", "SALES_OR_RETURNS_CONSISTENCY_ISSUE"),
-                List.of("results"),
+                List.of("results", "summary", "revenue-decomposition"),
                 List.of("NET_REVENUE"),
                 previousPeriod,
                 previous.dataQuality().periodOpenConsistencyIssueCount(),

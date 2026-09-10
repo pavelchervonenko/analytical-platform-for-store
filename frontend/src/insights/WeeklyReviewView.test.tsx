@@ -17,11 +17,11 @@ vi.mock("../api/queries", () => ({
 
 const getWeeklyReviewMock = vi.mocked(getWeeklyReview);
 
-function renderView(fallback?: ReactNode, initialReview?: WeeklyReview) {
+function renderView(fallback?: ReactNode, initialReview?: WeeklyReview | null) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } }
   });
-  if (initialReview) {
+  if (initialReview !== undefined) {
     client.setQueryData(
       ["stores", "store-1", "weekly-reviews", "current"],
       initialReview
@@ -324,7 +324,11 @@ describe("WeeklyReviewView", () => {
 
     expect(await screen.findByRole("heading", { name: "Результаты недели" }))
       .toBeInTheDocument();
-    expect(await screen.findByText(/Показаны последние доступные данные/u))
+    expect(await screen.findByText(
+      /Показаны последние доступные данные/u,
+      undefined,
+      { timeout: 5_000 }
+    ))
       .toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
@@ -334,14 +338,27 @@ describe("WeeklyReviewView", () => {
     renderView(<div>Предыдущий недельный разбор</div>);
 
     expect(await screen.findByText("Предыдущий недельный разбор")).toBeInTheDocument();
+    expect(screen.getByText(
+      "Показан предыдущий формат: новый недельный разбор еще не сформирован."
+    )).toBeInTheDocument();
     expect(screen.queryByText("Разбор еще не сформирован")).not.toBeInTheDocument();
   });
 
-  it("keeps the previous weekly view when the v22 endpoint fails", async () => {
+  it("shows the endpoint error instead of masking it with the previous view", async () => {
     getWeeklyReviewMock.mockRejectedValue(new Error("network"));
     renderView(<div>Предыдущий недельный разбор</div>);
 
-    expect(await screen.findByText("Предыдущий недельный разбор")).toBeInTheDocument();
-    expect(screen.queryByText("Данные временно недоступны")).not.toBeInTheDocument();
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByText("Не удалось загрузить данные")).toBeInTheDocument();
+    expect(screen.queryByText("Предыдущий недельный разбор")).not.toBeInTheDocument();
+  });
+
+  it("does not mask a refresh error after a cached empty response", async () => {
+    getWeeklyReviewMock.mockRejectedValue(new Error("network"));
+    renderView(<div>Предыдущий недельный разбор</div>, null);
+
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByText("Не удалось загрузить данные")).toBeInTheDocument();
+    expect(screen.queryByText("Предыдущий недельный разбор")).not.toBeInTheDocument();
   });
 });

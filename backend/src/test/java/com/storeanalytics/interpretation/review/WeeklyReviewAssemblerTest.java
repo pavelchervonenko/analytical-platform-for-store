@@ -153,6 +153,77 @@ class WeeklyReviewAssemblerTest {
     }
 
     @Test
+    void classificationLimitsOnlySalesStructure() {
+        WeeklyReviewResponse result = assembler.assemble(
+                facts(
+                        completeStatus(),
+                        quality(true, 0, 1, 0),
+                        quality(true, 0, 1, 0)
+                ),
+                provenance()
+        );
+
+        assertThat(result.reportState()).isEqualTo(ReportState.PARTIAL);
+        assertThat(result.summary().state())
+                .isEqualTo(WeeklyReviewResponse.BlockState.READY);
+        assertThat(result.salesStructure().state())
+                .isEqualTo(WeeklyReviewResponse.BlockState.LIMITED);
+        assertThat(result.team().state())
+                .isEqualTo(WeeklyReviewResponse.BlockState.READY);
+        assertThat(result.results())
+                .allMatch(metric -> metric.metricState() == MetricState.READY);
+    }
+
+    @Test
+    void consistencyIssueLimitsNetRevenueAndSummaryOnly() {
+        WeeklyReviewResponse result = assembler.assemble(
+                facts(
+                        completeStatus(),
+                        quality(true, 0, 0, 1),
+                        quality(true, 0, 0, 0)
+                ),
+                provenance()
+        );
+
+        assertThat(metric(result, "NET_REVENUE").metricState()).isEqualTo(MetricState.LIMITED);
+        assertThat(metric(result, "GROSS_PROFIT").metricState()).isEqualTo(MetricState.READY);
+        assertThat(result.revenueDecomposition().salesRevenue().metricState())
+                .isEqualTo(MetricState.LIMITED);
+        assertThat(result.revenueDecomposition().returnRevenue().metricState())
+                .isEqualTo(MetricState.LIMITED);
+        assertThat(result.factors())
+                .noneMatch(factor -> "RETURN_CHANGE".equals(factor.kind()));
+        assertThat(result.summary().state())
+                .isEqualTo(WeeklyReviewResponse.BlockState.LIMITED);
+    }
+
+    @Test
+    void limitedGrossProfitAlsoLimitsSummaryThatIncludesIt() {
+        StoreKpiDataQuality limitedCost = new StoreKpiDataQuality(
+                true,
+                10,
+                0,
+                0,
+                1,
+                0,
+                0
+        );
+        WeeklyReviewResponse result = assembler.assemble(
+                facts(
+                        completeStatus(),
+                        limitedCost,
+                        limitedCost
+                ),
+                provenance()
+        );
+
+        assertThat(metric(result, "NET_REVENUE").metricState()).isEqualTo(MetricState.READY);
+        assertThat(metric(result, "GROSS_PROFIT").metricState()).isEqualTo(MetricState.LIMITED);
+        assertThat(result.summary().state())
+                .isEqualTo(WeeklyReviewResponse.BlockState.LIMITED);
+    }
+
+    @Test
     void sourceGraphHasNoMonthlyPlanOrRatingServiceDependency() {
         assertThat(List.of(WeeklyReviewFactsSource.class.getDeclaredFields()))
                 .extracting(field -> field.getType().getSimpleName())

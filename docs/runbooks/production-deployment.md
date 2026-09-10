@@ -65,6 +65,9 @@ production-read-only preflight и владелец не подтвердил п�
 - Fresh backup checkpoint с доказанной возможностью restore; отсутствие активной migration/recovery.
 - Release env — root-owned regular file `0600`; секреты provisioned отдельно.
 - Exact DB cert host/hostaddr/port/name/schema и runtime/migrator/backup roles заданы в release env.
+- Если включена одноразовая product-classification reconciliation, release env содержит exact
+  connection UUID, явный allowlist product IDs и подтверждённое ожидаемое число позиций; при
+  выключенной reconciliation все три значения пусты/нулевые.
 - Recorded source schema входит в migration range, packaged target совпадает с `SCHEMA_VERSION`.
 - Назначены observer, rollback/forward-fix owner и окно наблюдения.
 

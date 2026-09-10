@@ -27,7 +27,9 @@ class WeeklySnapshotQualityPolicyTest {
         SnapshotQualityDecision decision = policy.quality(
                 source,
                 new StoreKpiDataQuality(false, 10, 1, 1, 0, 1, 1),
+                new StoreKpiDataQuality(true, 10, 0, 0, 0, 0, 0),
                 new AttachRateDataQuality(1, 0, 0),
+                new AttachRateDataQuality(0, 0, 0),
                 periodEnd
         );
 
@@ -37,8 +39,75 @@ class WeeklySnapshotQualityPolicyTest {
                 .containsExactly(
                         "COST_DATA_INCOMPLETE",
                         "CLASSIFICATION_QUALITY_LIMITED",
+                        "SOURCE_CONSISTENCY_QUALITY_LIMITED",
                         "ATTACH_QUALITY_LIMITED"
                 );
-        assertThat(decision.unavailableEvidence()).hasSize(3);
+        assertThat(decision.unavailableEvidence()).hasSize(4);
+    }
+
+    @Test
+    void ignoresStoreWideIssuesThatAreNotPresentInComparedWeeks() {
+        LocalDate periodEnd = LocalDate.of(2026, 9, 6);
+        StoreDataStatusView source = mock(StoreDataStatusView.class);
+        when(source.status()).thenReturn(StoreDataFreshnessStatus.CURRENT);
+        when(source.dataThroughDate()).thenReturn(periodEnd);
+        when(source.openQualityIssueCount()).thenReturn(1L);
+
+        SnapshotQualityDecision decision = policy.quality(
+                source,
+                new StoreKpiDataQuality(true, 10, 0, 0, 0, 0, 0),
+                new StoreKpiDataQuality(true, 10, 0, 0, 0, 0, 0),
+                new AttachRateDataQuality(0, 0, 0),
+                new AttachRateDataQuality(0, 0, 0),
+                periodEnd
+        );
+
+        assertThat(decision.status()).isEqualTo(QualityStatus.READY);
+        assertThat(decision.limitations()).isEmpty();
+        assertThat(decision.unavailableEvidence()).isEmpty();
+    }
+
+    @Test
+    void appliesTheSameQualityChecksToThePreviousComparisonWeek() {
+        LocalDate periodEnd = LocalDate.of(2026, 9, 6);
+        StoreDataStatusView source = mock(StoreDataStatusView.class);
+        when(source.dataThroughDate()).thenReturn(periodEnd);
+
+        SnapshotQualityDecision decision = policy.quality(
+                source,
+                new StoreKpiDataQuality(true, 10, 0, 0, 0, 0, 0),
+                new StoreKpiDataQuality(true, 10, 1, 0, 0, 0, 0),
+                new AttachRateDataQuality(0, 0, 0),
+                new AttachRateDataQuality(1, 0, 0),
+                periodEnd
+        );
+
+        assertThat(decision.status()).isEqualTo(QualityStatus.PARTIAL);
+        assertThat(decision.limitations())
+                .extracting(limitation -> limitation.code())
+                .containsExactly(
+                        "CLASSIFICATION_QUALITY_LIMITED",
+                        "ATTACH_QUALITY_LIMITED"
+                );
+    }
+
+    @Test
+    void doesNotBlockCoveredPeriodBecauseOfALaterSyncError() {
+        LocalDate periodEnd = LocalDate.of(2026, 9, 6);
+        StoreDataStatusView source = mock(StoreDataStatusView.class);
+        when(source.status()).thenReturn(StoreDataFreshnessStatus.ERROR);
+        when(source.dataThroughDate()).thenReturn(periodEnd);
+
+        SnapshotQualityDecision decision = policy.quality(
+                source,
+                new StoreKpiDataQuality(true, 10, 0, 0, 0, 0, 0),
+                new StoreKpiDataQuality(true, 10, 0, 0, 0, 0, 0),
+                new AttachRateDataQuality(0, 0, 0),
+                new AttachRateDataQuality(0, 0, 0),
+                periodEnd
+        );
+
+        assertThat(decision.status()).isEqualTo(QualityStatus.READY);
+        assertThat(decision.limitations()).isEmpty();
     }
 }

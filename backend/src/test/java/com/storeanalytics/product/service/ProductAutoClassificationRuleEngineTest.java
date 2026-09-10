@@ -60,6 +60,20 @@ class ProductAutoClassificationRuleEngineTest {
                 .isEqualTo("SETUP_SERVICE");
     }
 
+    @Test
+    void classifiesWiredAppleEarPodsAsAnAppleDeviceAccessory() {
+        var decision = engine.classify(
+                "Apple EarPods (Lightning) A1748",
+                ProductSourceKind.PRODUCT
+        );
+
+        assertThat(decision).isPresent();
+        assertThat(decision.orElseThrow().categoryCode())
+                .isEqualTo("PODS_WATCH_OTHER_DEVICE");
+        assertThat(decision.orElseThrow().conditionType())
+                .isEqualTo(ProductConditionType.NEW);
+    }
+
     private static Stream<Arguments> yandexStationCases() {
         return Stream.of(
                 arguments(

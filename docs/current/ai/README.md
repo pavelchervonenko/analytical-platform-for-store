@@ -7,7 +7,7 @@ audience:
   - developer
   - operator
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-10
 requirement_sources:
   - docs/maintenance/documentation-policy.md
   - docs/archive/legacy-contracts/AI_WEEKLY_REDESIGN_STAGE2_CONTRACT.md
@@ -79,8 +79,9 @@ sanitized staging evidence и production read-only preflight.
 backend возвращает детерминированный weekly-review и отдельное состояние AI, а не legacy-ответ.
 
 Frontend переходит к legacy-представлению только если новый endpoint вернул `404`/`null` либо
-запрос завершился ошибкой. Отсутствие AI-enrichment внутри существующего weekly-review само по
-себе не включает frontend fallback.
+не имеет сохранённого ответа. Transport/schema/server error показывает ошибку загрузки и не
+маскируется legacy-представлением. Отсутствие AI-enrichment внутри существующего weekly-review само
+по себе не включает frontend fallback.
 
 ## Критические границы
 

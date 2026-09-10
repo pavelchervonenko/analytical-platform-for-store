@@ -46,6 +46,7 @@ public class ProductCategoryImportService {
     private final EntityManager entityManager;
     private final AppUserRepository userRepository;
     private final AuditLogService auditLogService;
+    private final ProductClassificationReconciliationService reconciliationService;
 
     public ProductCategoryImportService(
             IntegrationConnectionRepository connectionRepository,
@@ -53,7 +54,8 @@ public class ProductCategoryImportService {
             ProductCategoryAssignmentRepository assignmentRepository,
             EntityManager entityManager,
             AppUserRepository userRepository,
-            AuditLogService auditLogService
+            AuditLogService auditLogService,
+            ProductClassificationReconciliationService reconciliationService
     ) {
         this.connectionRepository = connectionRepository;
         this.identityResolver = identityResolver;
@@ -61,6 +63,7 @@ public class ProductCategoryImportService {
         this.entityManager = entityManager;
         this.userRepository = userRepository;
         this.auditLogService = auditLogService;
+        this.reconciliationService = reconciliationService;
     }
 
     @Transactional
@@ -127,11 +130,19 @@ public class ProductCategoryImportService {
                     classificationSummary(assignment)
             ));
         }
+        ProductClassificationReconciliationResult reconciliation =
+                reconciliationService.reconcileImportedScope(
+                        connection.getId(),
+                        products.values().stream()
+                                .map(Product::getExternalId)
+                                .collect(Collectors.toUnmodifiableSet())
+                );
         return new ProductCategoryImportResult(
                 command.assignments().size(),
                 catalog.createdCount(),
                 newAssignments.size(),
-                unchanged
+                unchanged,
+                reconciliation.affectedStoreIds()
         );
     }
 

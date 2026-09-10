@@ -3,8 +3,9 @@ import { CheckCircle2, FileJson, ShieldCheck, TriangleAlert } from "lucide-react
 import { useMemo, useState, type FormEvent } from "react";
 import { isApiClientError } from "../api/client";
 import { queryKeys } from "../api/queries";
+import { qualityKeys } from "../quality/api";
 import { useWorkspace } from "../stores/WorkspaceProvider";
-import { importProductCategories, type ProductCategoryImportResult } from "./api";
+import { generateWeeklyReview, importProductCategories, type ProductCategoryImportResult } from "./api";
 import { instantToReportingDateTime, parseCategoryAssignments, reportingDateTimeToInstant } from "./category-import";
 
 const EXAMPLE = `[
@@ -32,10 +33,15 @@ export function CategoryImportPanel() {
   const [confirmation, setConfirmation] = useState(false);
   const [result, setResult] = useState<ProductCategoryImportResult | null>(null);
   const parsed = useMemo(() => parseCategoryAssignments(source), [source]);
+  const [reviewRefreshWarning, setReviewRefreshWarning] = useState<string | null>(null);
+  const [failedReviewStoreIds, setFailedReviewStoreIds] = useState<string[]>([]);
+  const [reviewRefreshPending, setReviewRefreshPending] = useState(false);
   const instant = reportingDateTimeToInstant(validFrom);
   const applySource = (value: string) => {
     setSource(value);
     setResult(null);
+    setReviewRefreshWarning(null);
+    setFailedReviewStoreIds([]);
     const candidate = parseCategoryAssignments(value);
     if (!candidate.ok || !candidate.metadata) return;
     const artifactValidFrom = instantToReportingDateTime(candidate.metadata.validFrom);
@@ -45,6 +51,24 @@ export function CategoryImportPanel() {
   };
   const valid = connectionKey.trim().length > 0 && ruleVersion.trim().length > 0
     && instant !== null && parsed.ok && confirmation;
+
+  const refreshAffectedReviews = async (storeIds: string[]) => {
+    setReviewRefreshPending(true);
+    const refreshes = await Promise.allSettled(
+      storeIds.map((storeId) => generateWeeklyReview(storeId))
+    );
+    const failed = storeIds.filter((_, index) => refreshes[index]?.status === "rejected");
+    setFailedReviewStoreIds(failed);
+    setReviewRefreshWarning(failed.length > 0
+      ? `Категории сохранены, но ИИ-разбор не обновлён для магазинов: ${failed.length}.`
+      : null);
+    await Promise.allSettled([
+      queryClient.invalidateQueries({ queryKey: queryKeys.stores }),
+      queryClient.invalidateQueries({ queryKey: ["admin", "sync-readiness"] }),
+      queryClient.invalidateQueries({ queryKey: qualityKeys.overview })
+    ]);
+    setReviewRefreshPending(false);
+  };
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -58,11 +82,10 @@ export function CategoryImportPanel() {
     },
     onSuccess: async (value) => {
       setResult(value);
+      setReviewRefreshWarning(null);
+      setFailedReviewStoreIds([]);
       setConfirmation(false);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.stores }),
-        queryClient.invalidateQueries({ queryKey: ["admin", "sync-readiness"] })
-      ]);
+      await refreshAffectedReviews(value.affectedStoreIds);
     }
   });
 
@@ -71,6 +94,8 @@ export function CategoryImportPanel() {
     if (!valid || !parsed.ok) return;
     if (window.confirm(`Импортировать назначений: ${parsed.assignments.length}?`)) {
       setResult(null);
+      setReviewRefreshWarning(null);
+      setFailedReviewStoreIds([]);
       mutation.mutate();
     }
   };
@@ -80,8 +105,8 @@ export function CategoryImportPanel() {
 
   return <div className="category-import-layout">
     <section className="panel category-import-main">
-      <div className="panel__heading"><h2>Импорт справочника категорий</h2><FileJson /></div>
-      <p className="category-import-lead">Загрузите подготовленный JSON-файл или вставьте список категорий. Перед импортом система проверит данные и покажет ошибки.</p>
+      <div className="panel__heading"><h2>Аналитические категории товаров</h2><FileJson /></div>
+      <p className="category-import-lead">Эти категории используются в показателях, структуре продаж и ИИ-разборе. Загрузите подготовленный JSON-файл или вставьте согласованный список.</p>
       <form className="admin-form category-import-form" onSubmit={submit}>
         <label className="field"><span>Файл классификации</span><input type="file" accept="application/json,.json" onChange={(event) => {
           const input = event.currentTarget;
@@ -102,9 +127,10 @@ export function CategoryImportPanel() {
         <label className="admin-switch category-import-confirm"><input type="checkbox" checked={confirmation} onChange={(event) => setConfirmation(event.target.checked)} /><span><strong>Подтверждаю согласованную версию</strong><small>Конфликтующая история остановит всю операцию без частичного сохранения.</small></span></label>
         {error && <p className="form-error" role="alert">{error}</p>}
         {result && <p className="admin-form-note" role="status"><CheckCircle2 />{resultMessage(result)}</p>}
+        {reviewRefreshWarning && <p className="admin-form-note admin-form-note--warning" role="status"><TriangleAlert /><span>{reviewRefreshWarning}</span><button className="button button--ghost" type="button" disabled={reviewRefreshPending} onClick={() => void refreshAffectedReviews(failedReviewStoreIds)}>{reviewRefreshPending ? "Обновляем…" : "Повторить"}</button></p>}
         <footer><span className="category-import-count">Лимит: 10 000 записей</span><button className="button button--primary" disabled={!valid || mutation.isPending}>{mutation.isPending ? "Импортируем…" : "Проверить и импортировать"}</button></footer>
       </form>
     </section>
-    <aside className="panel category-import-aside"><span className="context-icon"><ShieldCheck /></span><p className="eyebrow">Контроль риска</p><h2>Только для первичной настройки</h2><p>Операция не заменяет ежемесячную классификацию для расчета зарплаты. Используйте ее для заранее согласованного справочника внешних товаров.</p><div className="admin-safety-note"><TriangleAlert /><p><strong>Не вставляйте секреты.</strong><span>JSON должен содержать только идентификатор, название, категорию и состояние товара.</span></p></div></aside>
+    <aside className="panel category-import-aside"><span className="context-icon"><ShieldCheck /></span><p className="eyebrow">Аналитика магазина</p><h2>Влияет на показатели</h2><p>После сохранения выбранные товары будут пересчитаны в структуре продаж. Категории зарплаты настраиваются отдельно.</p><div className="admin-safety-note"><TriangleAlert /><p><strong>Не вставляйте секреты.</strong><span>JSON должен содержать только идентификатор, название, категорию и состояние товара.</span></p></div></aside>
   </div>;
 }

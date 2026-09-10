@@ -45,6 +45,8 @@
 .admin-form-note { display: flex; align-items: center; gap: 9px; margin: 0; padding: 11px; border-radius: 12px; color: var(--primary); background: var(--primary-soft); font-size: 12px; line-height: 1.45; }
 .admin-form-note svg { width: 18px; flex: 0 0 18px; }
 .admin-form-note--warning { color: var(--warning); background: var(--warning-soft); }
+.admin-form-note--warning > span { flex: 1; }
+.admin-form-note--warning > .button { min-height: 34px; padding-inline: 12px; font-size: 11px; }
 .form-error { margin: 0; padding: 10px 12px; border-radius: 10px; color: var(--danger); background: var(--danger-soft); font-size: 12px; line-height: 1.45; }
 .admin-sync-layout { display: grid; grid-template-columns: 330px minmax(0,1fr); gap: 14px; }
 .admin-sync-card > p:not(.eyebrow), .admin-scheme-card > p, .classification-readiness > p { color: var(--text-muted); font-size: 12px; line-height: 1.55; }

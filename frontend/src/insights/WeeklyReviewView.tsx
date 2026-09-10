@@ -1004,6 +1004,17 @@ function ReadyReview({ review }: { review: WeeklyReview }) {
   );
 }
 
+function LegacyReviewFallback({ children }: { children: ReactNode }) {
+  return (
+    <section className="weekly-review-legacy" aria-label="Предыдущий формат недельного разбора">
+      <p className="weekly-review-legacy__note" role="status">
+        Показан предыдущий формат: новый недельный разбор еще не сформирован.
+      </p>
+      {children}
+    </section>
+  );
+}
+
 export function WeeklyReviewView({
   storeId,
   fallback
@@ -1024,8 +1035,7 @@ export function WeeklyReviewView({
       </section>
     );
   }
-  if (query.data === undefined && query.isError) {
-    if (fallback) return <>{fallback}</>;
+  if (query.isError && !query.data) {
     return (
       <section className="weekly-review weekly-review--error">
         <QueryError error={query.error} onRetry={() => void query.refetch()} compact />
@@ -1034,7 +1044,7 @@ export function WeeklyReviewView({
   }
   if (!query.data) {
     return fallback
-      ? <>{fallback}</>
+      ? <LegacyReviewFallback>{fallback}</LegacyReviewFallback>
       : <EmptyReview onRetry={() => void query.refetch()} />;
   }
 

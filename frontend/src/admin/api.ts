@@ -25,7 +25,8 @@ const productCategoryImportResultSchema = z.object({
   requested: z.number().int().positive(),
   productsCreated: z.number().int().nonnegative(),
   assignmentsCreated: z.number().int().nonnegative(),
-  assignmentsUnchanged: z.number().int().nonnegative()
+  assignmentsUnchanged: z.number().int().nonnegative(),
+  affectedStoreIds: z.array(z.string().uuid()).default([])
 });
 const syncClassificationReadinessSchema = z.object({
   connectionKey: z.string(),
@@ -149,6 +150,15 @@ export const importProductCategories = (
   `/api/integration-connections/${encodeURIComponent(connectionKey)}/product-category-imports`,
   { method: "POST", body: input, schema: productCategoryImportResultSchema, timeoutMs: 120_000 }
 );
+export const generateWeeklyReview = (storeId: string): Promise<unknown> =>
+  apiClient.request(
+    `/api/admin/weekly-reviews/stores/${encodeURIComponent(storeId)}/generate`,
+    {
+      method: "POST",
+      idempotencyScope: `weekly-review:generate:${storeId}`,
+      schema: z.unknown()
+    }
+  );
 export const getReportBackfillJobs = (): Promise<ReportBackfillJob[]> => apiClient.request(
   "/api/admin/reports/backfill?limit=50", { schema: z.array(reportBackfillJobSchema) }
 );

@@ -2,8 +2,8 @@
   "contractVersion" : 2,
   "versions" : {
     "metricsPolicy" : "weekly-metrics-v4",
-    "snapshotPolicy" : "weekly-snapshot-v7",
-    "qualityPolicy" : "weekly-quality-v4"
+    "snapshotPolicy" : "weekly-snapshot-v8",
+    "qualityPolicy" : "weekly-quality-v5"
   },
   "period" : {
     "timezone" : "Europe/Moscow",

@@ -7,7 +7,7 @@ audience:
   - developer
   - operator
   - manager
-last_verified: 2026-09-09
+last_verified: 2026-09-10
 requirement_sources:
   - docs/archive/legacy-contracts/AI_WEEKLY_REDESIGN_STAGE2_CONTRACT.md
   - docs/archive/legacy-contracts/weekly-review-ai-management-rubric.md
@@ -16,6 +16,9 @@ implementation_sources:
   - frontend/src/insights/WeeklyReviewView.tsx
   - frontend/src/insights/weekly-review-presentation.ts
   - frontend/src/insights/weekly-review.css
+  - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewAssembler.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewCoreProjector.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewQualityPolicyV1.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewService.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewSnapshotStore.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewTeamEmployeeProjector.java
@@ -29,6 +32,7 @@ implementation_sources:
 verification_sources:
   - frontend/src/insights/WeeklyReviewView.test.tsx
   - frontend/src/insights/weekly-review-presentation.test.ts
+  - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewAssemblerTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewServiceTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewSnapshotStoreIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewTeamEmployeeProjectorTest.java
@@ -145,7 +149,13 @@ Employee scope и employee public IDs в input запрещены. Модель 
 6. Completion в одной транзакции сохраняет enrichment и завершает attempt/job.
 
 Для `PARTIAL` backend явно добавляет ограничение, что вывод основан только на доступной части
-данных. Несовместимый enrichment игнорируется; детерминированный отчёт остаётся источником ответа.
+данных. Каждая quality-проблема привязана к конкретным block IDs и metric codes. Неполная
+аналитическая классификация ограничивает только структуру продаж и attach, но не чистую выручку,
+валовую прибыль, команду или сотрудников. Проблема согласованности продаж/возвратов ограничивает
+чистую выручку, её разложение и основанный на ней главный вывод, но не переносится на независимые
+метрики. Если включённая в главный вывод валовая прибыль ограничена качеством себестоимости,
+главный вывод также получает состояние `LIMITED`.
+Несовместимый enrichment игнорируется; детерминированный отчёт остаётся источником ответа.
 
 ## Неизменяемость и повторный запуск
 
@@ -165,9 +175,13 @@ deterministic response с состоянием AI: `DISABLED`, `PREPARING`, `DEL
 `NOT_APPLICABLE`.
 
 Frontend показывает legacy weekly insight только когда новый endpoint не имеет сохранённого ответа
-и вернул `404`/`null` либо завершился ошибкой. Ошибка фонового обновления уже показанного v25
-snapshot не переключает пользователя на legacy: сохраняется последняя версия с компактной
-заметкой. Это compatibility fallback всего weekly-review, а не fallback отдельного AI слоя.
+и вернул `404`/`null`. Legacy явно помечается как предыдущий формат, чтобы пользователь не принял
+его за новый Weekly Review. Ошибка transport/schema/server не включает legacy: frontend показывает
+ошибку загрузки и действие повтора.
+
+Ошибка фонового обновления уже показанного v25 snapshot не переключает пользователя на legacy:
+сохраняется последняя версия с компактной заметкой. Это compatibility fallback всего weekly-review,
+а не fallback отдельного AI слоя.
 
 ### Presentation contract
 
@@ -217,9 +231,12 @@ overflow и сохраняет доступные области нажатия.
 
 ## Ошибки и неполные данные
 
+- Quality counters для Weekly Review вычисляются только по текущей и предыдущей сравниваемым
+  неделям. Открытая store-wide проблема вне этих периодов не переводит отчёт в `PARTIAL`.
 - `BLOCKED` snapshot не передаётся AI и получает `NOT_APPLICABLE`.
 - Невалидный provider response не публикуется.
 - Budget, deadline, request-size и context-window violations завершаются fail-closed.
+- Ошибка чтения weekly-review endpoint не маскируется legacy-представлением.
 - Ошибка чтения отдельного enrichment логируется без раскрытия payload; следующий candidate может
   быть проверен, после чего остаётся deterministic fallback.
 - `PARTIAL` допускает AI только при наличии deterministic outcome и явно сохраняет ограничение.

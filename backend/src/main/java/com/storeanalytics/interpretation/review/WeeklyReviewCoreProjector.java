@@ -15,6 +15,7 @@ import com.storeanalytics.interpretation.review.WeeklyReviewPolicyV1.MetricSpec;
 import com.storeanalytics.interpretation.review.WeeklyReviewPolicyV1.RevenuePeriod;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricComparison;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricState;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.RevenueDecomposition;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Sample;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Sufficiency;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Unit;
@@ -47,12 +48,15 @@ public final class WeeklyReviewCoreProjector {
         require(previousKpi.netRevenue().compareTo(previousBreakdown.netRevenue()) == 0,
                 "previous store KPI must match revenue decomposition");
 
+        boolean revenueQualityComplete = currentKpi.dataQuality()
+                .periodOpenConsistencyIssueCount() == 0
+                && previousKpi.dataQuality().periodOpenConsistencyIssueCount() == 0;
         MetricComparison netRevenue = policy.compare(
                 moneySpec("NET_REVENUE", "Чистая выручка", "STORE.NET_REVENUE"),
                 currentKpi.netRevenue(),
                 previousKpi.netRevenue(),
-                READY,
-                SUFFICIENT,
+                revenueQualityComplete ? READY : LIMITED,
+                revenueQualityComplete ? SUFFICIENT : Sufficiency.LIMITED,
                 null,
                 null
         );
@@ -101,9 +105,15 @@ public final class WeeklyReviewCoreProjector {
                 saleSample(currentBreakdown),
                 saleSample(previousBreakdown)
         );
+        RevenueDecomposition decomposition = policy.revenueDecomposition(
+                currentBreakdown,
+                previousBreakdown,
+                revenueQualityComplete ? READY : LIMITED,
+                revenueQualityComplete ? SUFFICIENT : Sufficiency.LIMITED
+        );
         return new Projection(
                 List.of(netRevenue, grossProfit, margin, averageSale),
-                policy.revenueDecomposition(currentBreakdown, previousBreakdown)
+                decomposition
         );
     }
 

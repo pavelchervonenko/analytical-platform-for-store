@@ -19,6 +19,7 @@ import com.storeanalytics.sales.model.SalesDocument;
 import com.storeanalytics.sales.model.SalesDocumentItem;
 import com.storeanalytics.sales.model.SalesItemClassification;
 import com.storeanalytics.sales.repository.SalesDocumentItemRepository;
+import com.storeanalytics.store.model.Store;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -54,17 +55,46 @@ class ProductClassificationReconciliationServiceTest {
     @Test
     void rejectsScopeDriftBeforeChangingItems() {
         Set<String> approvedIds = Set.of("approved-product");
+        UUID connectionId = UUID.randomUUID();
         when(salesItemRepository
-                .findAllActiveUnmappedByProductExternalIdIn(approvedIds))
+                .findAllActiveUnmappedByConnectionIdAndProductExternalIdIn(
+                        connectionId,
+                        approvedIds
+                ))
                 .thenReturn(List.of());
 
         assertThatThrownBy(() -> service.reconcileApprovedScope(
+                connectionId,
                 approvedIds,
                 1
         )).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("approved dry-run");
 
         verify(resolver, never()).resolve(any(), any());
+    }
+
+    @Test
+    void importedScopeIsBoundToItsConnectionAndAllowsNoExistingFacts() {
+        UUID connectionId = UUID.randomUUID();
+        Set<String> importedIds = Set.of("new-product");
+        when(salesItemRepository
+                .findAllActiveUnmappedByConnectionIdAndProductExternalIdIn(
+                        connectionId,
+                        importedIds
+                ))
+                .thenReturn(List.of());
+
+        ProductClassificationReconciliationResult result =
+                service.reconcileImportedScope(connectionId, importedIds);
+
+        assertThat(result).isEqualTo(
+                new ProductClassificationReconciliationResult(0, 0, 0, 0)
+        );
+        verify(salesItemRepository)
+                .findAllActiveUnmappedByConnectionIdAndProductExternalIdIn(
+                        connectionId,
+                        importedIds
+                );
     }
 
     @Test
@@ -76,6 +106,8 @@ class ProductClassificationReconciliationServiceTest {
         SalesDocument document = mock(SalesDocument.class);
         SalesDocumentItem item = mock(SalesDocumentItem.class);
         IntegrationConnection connection = mock(IntegrationConnection.class);
+        Store store = mock(Store.class);
+        UUID storeId = UUID.randomUUID();
         AnalyticsCategory category = mock(AnalyticsCategory.class);
         DataQualityIssue issue = mock(DataQualityIssue.class);
 
@@ -85,9 +117,14 @@ class ProductClassificationReconciliationServiceTest {
         when(item.getSalesDocument()).thenReturn(document);
         when(document.getOccurredAt()).thenReturn(occurredAt);
         when(document.getConnection()).thenReturn(connection);
+        when(document.getStore()).thenReturn(store);
+        when(store.getId()).thenReturn(storeId);
         when(connection.getId()).thenReturn(connectionId);
         when(salesItemRepository
-                .findAllActiveUnmappedByProductExternalIdIn(Set.of(externalId)))
+                .findAllActiveUnmappedByConnectionIdAndProductExternalIdIn(
+                        connectionId,
+                        Set.of(externalId)
+                ))
                 .thenReturn(List.of(item));
         when(resolver.resolve(product, occurredAt)).thenReturn(Optional.of(
                 new ProductClassificationResolution(
@@ -107,11 +144,98 @@ class ProductClassificationReconciliationServiceTest {
                         DataQualityStatus.OPEN
                 )).thenReturn(Optional.of(issue));
 
-        var result = service.reconcileApprovedScope(Set.of(externalId), 1);
+        var result = service.reconcileApprovedScope(
+                connectionId,
+                Set.of(externalId),
+                1
+        );
 
         assertThat(result.reclassifiedItems()).isEqualTo(1);
         assertThat(result.unresolvedItems()).isZero();
         assertThat(result.resolvedQualityIssues()).isEqualTo(1);
+        assertThat(result.affectedStoreIds()).containsExactly(storeId);
         verify(issue).resolve(null, NOW);
+    }
+
+    @Test
+    void importedScopeDoesNotBypassAssignmentValidFromWithAutoRules() {
+        UUID connectionId = UUID.randomUUID();
+        Product product = mock(Product.class);
+        SalesDocument document = mock(SalesDocument.class);
+        SalesDocumentItem item = mock(SalesDocumentItem.class);
+        IntegrationConnection connection = mock(IntegrationConnection.class);
+        Instant occurredAt = Instant.parse("2026-08-31T10:00:00Z");
+
+        when(product.getExternalId()).thenReturn("earpods");
+        when(item.getProduct()).thenReturn(product);
+        when(item.getSalesDocument()).thenReturn(document);
+        when(document.getOccurredAt()).thenReturn(occurredAt);
+        when(document.getConnection()).thenReturn(connection);
+        when(connection.getId()).thenReturn(connectionId);
+        when(salesItemRepository
+                .findAllActiveUnmappedByConnectionIdAndProductExternalIdIn(
+                        connectionId,
+                        Set.of("earpods")
+                ))
+                .thenReturn(List.of(item));
+        when(resolver.resolveAssigned(product, occurredAt)).thenReturn(Optional.empty());
+
+        ProductClassificationReconciliationResult result =
+                service.reconcileImportedScope(connectionId, Set.of("earpods"));
+
+        assertThat(result.reclassifiedItems()).isZero();
+        assertThat(result.unresolvedItems()).isOne();
+        assertThat(result.affectedStoreIds()).isEmpty();
+        verify(resolver, never()).resolve(product, occurredAt);
+        verify(item, never()).reclassify(any());
+    }
+
+    @Test
+    void linkedReturnInheritsClassificationFromOriginalSale() {
+        UUID connectionId = UUID.randomUUID();
+        UUID storeId = UUID.randomUUID();
+        Product product = mock(Product.class);
+        SalesDocument document = mock(SalesDocument.class);
+        SalesDocumentItem originalItem = mock(SalesDocumentItem.class);
+        SalesDocumentItem returnItem = mock(SalesDocumentItem.class);
+        IntegrationConnection connection = mock(IntegrationConnection.class);
+        Store store = mock(Store.class);
+        AnalyticsCategory category = mock(AnalyticsCategory.class);
+        SalesItemClassification inherited = new SalesItemClassification(
+                "Apple EarPods (Lightning) A1748",
+                null,
+                category,
+                null,
+                "manual-import-v1",
+                ProductConditionType.NEW
+        );
+
+        when(product.getExternalId()).thenReturn("earpods");
+        when(returnItem.getProduct()).thenReturn(product);
+        when(returnItem.getSalesDocument()).thenReturn(document);
+        when(returnItem.getOriginalItem()).thenReturn(originalItem);
+        when(originalItem.classificationSnapshot()).thenReturn(inherited);
+        when(category.getCode()).thenReturn("PODS_WATCH_OTHER_DEVICE");
+        when(document.getConnection()).thenReturn(connection);
+        when(connection.getId()).thenReturn(connectionId);
+        when(document.getStore()).thenReturn(store);
+        when(store.getId()).thenReturn(storeId);
+        when(salesItemRepository
+                .findAllActiveUnmappedByConnectionIdAndProductExternalIdIn(
+                        connectionId,
+                        Set.of("earpods")
+                ))
+                .thenReturn(List.of(returnItem));
+        when(returnItem.reclassify(inherited)).thenReturn(true);
+
+        ProductClassificationReconciliationResult result =
+                service.reconcileImportedScope(connectionId, Set.of("earpods"));
+
+        assertThat(result.reclassifiedItems()).isOne();
+        assertThat(result.unresolvedItems()).isZero();
+        assertThat(result.affectedStoreIds()).containsExactly(storeId);
+        verify(returnItem).reclassify(inherited);
+        verify(resolver, never()).resolveAssigned(any(), any());
+        verify(resolver, never()).resolve(any(), any());
     }
 }

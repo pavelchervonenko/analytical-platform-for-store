@@ -21,7 +21,8 @@
 }
 
 .weekly-review,
-.weekly-review-empty {
+.weekly-review-empty,
+.weekly-review-legacy {
   --review-ink: var(--text);
   --review-muted: var(--text-muted);
   --review-faint: var(--text-faint);
@@ -40,6 +41,22 @@
   --review-amber-soft: var(--warning-soft);
   min-width: 0;
   color: var(--review-ink);
+}
+
+.weekly-review-legacy {
+  display: grid;
+  gap: 12px;
+}
+
+.weekly-review-legacy__note {
+  margin: 0;
+  padding: 11px 14px;
+  border: 1px solid var(--review-line);
+  border-radius: 12px;
+  color: var(--review-muted);
+  background: var(--review-soft);
+  font-size: var(--type-secondary);
+  line-height: 1.45;
 }
 
 .weekly-review {

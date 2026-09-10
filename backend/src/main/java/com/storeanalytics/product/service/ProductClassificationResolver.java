@@ -33,10 +33,9 @@ public class ProductClassificationResolver {
             Product product,
             Instant occurredAt
     ) {
-        List<ProductCategoryAssignment> effective = assignmentRepository
-                .findEffectiveAssignments(product.getId(), occurredAt);
-        if (!effective.isEmpty()) {
-            return Optional.of(resolution(effective.getFirst()));
+        Optional<ProductClassificationResolution> assigned = resolveAssigned(product, occurredAt);
+        if (assigned.isPresent()) {
+            return assigned;
         }
 
         return ruleEngine.classify(product).map(decision -> {
@@ -53,6 +52,19 @@ public class ProductClassificationResolver {
                     decision.conditionType()
             );
         });
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<ProductClassificationResolution> resolveAssigned(
+            Product product,
+            Instant occurredAt
+    ) {
+        List<ProductCategoryAssignment> effective = assignmentRepository
+                .findEffectiveAssignments(product.getId(), occurredAt);
+        if (!effective.isEmpty()) {
+            return Optional.of(resolution(effective.getFirst()));
+        }
+        return Optional.empty();
     }
 
     private ProductClassificationResolution resolution(
