@@ -6,7 +6,7 @@ owner: integrations
 audience:
   - developer
   - operator
-last_verified: 2026-08-31
+last_verified: 2026-09-12
 requirement_sources:
   - docs/archive/legacy-contracts/synchronization-api.md
 implementation_sources:
@@ -71,8 +71,18 @@ Malformed/rejected payload и unclassified `LiveSkladException` завершаю
 (`LIVESKLAD_PERMANENT` для последнего случая) и требуют анализа причины. Нельзя автоматически
 повторять любой permanent failure, не уточнив классификацию.
 
-Targeted webhook sync не запускает period-wide absence/deletion. Period sync делает deletion
-detection только после полного успешного чтения соответствующей области.
+Targeted webhook sync не запускает period-wide absence/deletion. Для продаж и заказов period sync
+делает absence-based deletion только после полного успешного чтения соответствующей области.
+Возвраты являются отдельным случаем и следуют правилу ниже.
+
+Для возвратов child window фильтрует кассовые операции, а не дату документа. LiveSklad может
+провести возврат денег спустя несколько часов после создания документа, поэтому detail допустимо
+находиться в другом child window. `business_date` при этом сохраняется по самому документу.
+Отсутствие возврата в отдельном кассовом окне не является доказательством удаления: soft-delete
+выполняется только по явному source-событию `delete`.
+Cash API использует диапазон `date=[start,end]`, поэтому клиент допускает запись ровно на границе
+`end`; повтор той же транзакции в соседнем child window безопасен благодаря идемпотентности по
+source ID и версии.
 
 ## Coverage и API
 

@@ -139,13 +139,6 @@ public class ReturnSyncPersistence {
                 }
                 synchronizeReturn(context, store, source);
             }
-            markMissingReturnsDeleted(
-                    syncRun,
-                    store,
-                    period,
-                    seenDocumentIds,
-                    result
-            );
         }
         return result.toResult();
     }
@@ -1020,31 +1013,6 @@ public class ReturnSyncPersistence {
         }
     }
 
-    private void markMissingReturnsDeleted(
-            SyncRun syncRun,
-            Store store,
-            ReturnSyncPeriod period,
-            Set<String> seenDocumentIds,
-            Accumulator result
-    ) {
-        for (SalesDocument document : factRepositories.documents()
-                .findAllByConnectionIdAndStoreIdAndDocumentKindAndOccurredAtBetween(
-                        syncRun.getConnection().getId(),
-                        store.getId(),
-                        SalesDocumentKind.RETURN,
-                        "saleReturn",
-                        period.start(),
-                        period.end()
-                )) {
-            if (!seenDocumentIds.contains(document.getExternalId())
-                    && !DISCOVERY_WEBHOOK.equals(document.getSourceStatus())
-                    && document.markDeleted(syncRun)) {
-                result.documentsUpdated++;
-                result.documentsDeleted++;
-            }
-        }
-    }
-
     private void validateSource(
             Store store,
             ReturnSyncPeriod period,
@@ -1079,13 +1047,6 @@ public class ReturnSyncPersistence {
                 || detail.positions() == null) {
             throw new IllegalArgumentException(
                     "LiveSklad return detail is inconsistent"
-            );
-        }
-        if (returnDetail
-                && (detail.occurredAt().isBefore(period.start())
-                || detail.occurredAt().isAfter(period.end()))) {
-            throw new IllegalArgumentException(
-                    "LiveSklad return detail is outside the requested period"
             );
         }
     }

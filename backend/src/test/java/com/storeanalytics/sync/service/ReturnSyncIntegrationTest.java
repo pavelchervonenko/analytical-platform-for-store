@@ -198,6 +198,96 @@ class ReturnSyncIntegrationTest {
     }
 
     @Test
+    void synchronizesDelayedCashReturnWithoutFalseWindowDeletion() {
+        bootstrapReferences();
+        SaleFixture sale = new SaleFixture(
+                "sale-delayed-cash",
+                "sale-position-delayed-cash",
+                "product-delayed-cash",
+                Instant.parse("2026-07-01T10:00:00Z"),
+                "100.00",
+                "60.00"
+        );
+        seedSale(sale);
+        ReturnFixture source = new ReturnFixture(
+                "return-delayed-cash",
+                sale,
+                Instant.parse("2026-07-01T19:00:00Z"),
+                Instant.parse("2026-07-02T01:02:00Z"),
+                "saleReturn"
+        );
+        Instant cashOccurredAt = Instant.parse("2026-07-02T01:00:00Z");
+        fakeClient.setReturns(
+                List.of(cashItem()),
+                Map.of("store-1", List.of(cashRegister())),
+                List.of(cashTransaction(source, cashOccurredAt)),
+                Map.of(source.externalId(), returnDetail(source))
+        );
+        ReturnSyncPeriod cashWindow = new ReturnSyncPeriod(
+                Instant.parse("2026-07-02T00:00:00Z"),
+                Instant.parse("2026-07-02T06:00:00Z")
+        );
+
+        ReturnSyncResult first = returnSyncService.synchronize(cashWindow);
+        ReturnSyncResult replay = returnSyncService.synchronize(cashWindow);
+
+        assertThat(first.status()).isEqualTo(SyncStatus.SUCCESS);
+        assertThat(first.recordsCreated()).isEqualTo(1);
+        assertThat(replay.recordsSkipped()).isEqualTo(1);
+        Map<String, Object> document = jdbcTemplate.queryForMap(
+                """
+                SELECT business_date,
+                       occurred_at = TIMESTAMPTZ '2026-07-01T19:00:00Z'
+                           AS expected_occurred_at, net_amount, is_deleted
+                FROM sales_documents
+                WHERE external_id = 'return-delayed-cash'
+                """
+        );
+        assertThat(document.get("business_date").toString())
+                .isEqualTo("2026-07-01");
+        assertThat(document.get("expected_occurred_at"))
+                .isEqualTo(true);
+        assertThat(document.get("net_amount")).isEqualTo(money("100.00"));
+        assertThat(document.get("is_deleted")).isEqualTo(false);
+
+        fakeClient.setReturns(
+                List.of(cashItem()),
+                Map.of("store-1", List.of(cashRegister())),
+                List.of(),
+                Map.of()
+        );
+        ReturnSyncResult documentWindow = returnSyncService.synchronize(
+                new ReturnSyncPeriod(
+                        Instant.parse("2026-07-01T18:00:00Z"),
+                        Instant.parse("2026-07-02T00:00:00Z")
+                )
+        );
+
+        assertThat(documentWindow.documentsDeleted()).isZero();
+        assertReturnDeleted("return-delayed-cash", false);
+
+        ReturnFixture deleted = new ReturnFixture(
+                source.externalId(),
+                sale,
+                cashOccurredAt,
+                Instant.parse("2026-07-02T01:03:00Z"),
+                "delete"
+        );
+        fakeClient.setReturns(
+                List.of(cashItem()),
+                Map.of("store-1", List.of(cashRegister())),
+                List.of(cashTransaction(deleted)),
+                Map.of()
+        );
+
+        ReturnSyncResult explicitDelete =
+                returnSyncService.synchronize(cashWindow);
+
+        assertThat(explicitDelete.documentsDeleted()).isEqualTo(1);
+        assertReturnDeleted("return-delayed-cash", true);
+    }
+
+    @Test
     void preservesOrphanReturnAndLinksItAfterOriginalSaleArrives() {
         bootstrapReferences();
         SaleFixture lateSale = new SaleFixture(
@@ -728,12 +818,17 @@ class ReturnSyncIntegrationTest {
     }
 
     private void assertReturnDeleted(boolean expected) {
+        assertReturnDeleted("return-1", expected);
+    }
+
+    private void assertReturnDeleted(String externalId, boolean expected) {
         assertThat(jdbcTemplate.queryForObject(
                 """
                 SELECT is_deleted FROM sales_documents
-                WHERE external_id = 'return-1'
+                WHERE external_id = ?
                 """,
-                Boolean.class
+                Boolean.class,
+                externalId
         )).isEqualTo(expected);
     }
 
@@ -785,9 +880,16 @@ class ReturnSyncIntegrationTest {
     private LiveSkladCashTransactionPayload cashTransaction(
             ReturnFixture fixture
     ) {
+        return cashTransaction(fixture, fixture.occurredAt());
+    }
+
+    private LiveSkladCashTransactionPayload cashTransaction(
+            ReturnFixture fixture,
+            Instant occurredAt
+    ) {
         return new LiveSkladCashTransactionPayload(
                 "cash-" + fixture.externalId(),
-                fixture.occurredAt(),
+                occurredAt,
                 fixture.sourceUpdatedAt(),
                 fixture.sourceType(),
                 "store-1",

@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - operator
-last_verified: 2026-08-31
+last_verified: 2026-09-12
 requirement_sources:
   - docs/archive/legacy-contracts/database-design.md
 implementation_sources:
@@ -73,6 +73,9 @@ review artifacts append-only; корректировка создаёт нову
 - Sale list/detail должны совпасть по identity, номеру, времени, типу и магазину до записи facts.
 - Возвраты группируются по document ID; linked item наследует классификационный snapshot исходной
   продажи.
+- Окно получения возвратов определяется временем cash transaction, а `business_date` — временем
+  return detail. Эти значения могут попадать в разные adaptive windows; отсутствие detail ID в
+  отдельном cash window не означает удаление.
 - После V43 orphan return разрешён: возврат может быть сохранён без найденной исходной продажи и
   связан позже. Старое правило «каждый return обязан ссылаться на sale» больше не действует.
 - Targeted webhook sync не выполняет period-wide deletion.
