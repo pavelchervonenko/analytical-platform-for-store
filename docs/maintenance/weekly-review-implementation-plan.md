@@ -49,7 +49,7 @@ exit_target: current
 План следует выполнять сверху вниз. Пакет считается завершённым только после его тестов и
 контрольной точки; перенос незавершённых решений в следующий пакет не допускается.
 
-### Ход реализации на 2026-09-14
+### Ход реализации на 2026-09-15
 
 - P0 завершён: исходные тесты, build и локальные desktop/tablet/mobile снимки зафиксированы.
 - P1–P4 завершены локально. Семантика workload отделена от sales, summary принадлежит backend,
@@ -68,9 +68,13 @@ exit_target: current
   полные code/UI проверки выполнены повторно после финальной текстовой калибровки.
 - P7-A завершён локально: создан отдельный candidate worktree от подтверждённой production-базы,
   change set сокращён до Weekly Review и двух минимальных общих frontend-зависимостей, manifest
-  зарегистрирован и проверен против настоящего Git index. P7-B–P7-I не начаты; production rollout,
-  project-state, release evidence и legacy cleanup требуют собственных контрольных точек и
-  авторизации. Свежий реальный `READY` в разрешённом диапазоне не получен и остаётся явным
+  зарегистрирован и проверен против настоящего Git index.
+- P7-B завершён локально: чистая установка, полный frontend/backend/documentation набор,
+  пятисценарная visual-матрица и ручной UI-review прошли; npm audit не обнаружил уязвимостей.
+  Локальные backend/web images собраны из одного reviewed commit, OCI revision совпадает, а
+  упакованный migration range не отличается от production-базы. P7-C–P7-I не начаты; production
+  rollout, project-state, release evidence и legacy cleanup требуют собственных контрольных точек
+  и авторизации. Свежий реальный `READY` в разрешённом диапазоне не получен и остаётся явным
   ограничением предрелизного evidence.
 
 ## Целевой результат
@@ -793,6 +797,24 @@ harness была отклонена из-за смешанных plan/auth hunks
 Контрольная точка P7-B: один и тот же reviewed commit воспроизводимо проходит frontend, backend,
 documentation, supply-chain и release-safety gates; его immutable images однозначно связаны с
 commit.
+
+Статус: **PASS локально**. На чистом candidate worktree получены следующие результаты:
+
+- `npm ci`, generated contract check, lint, `42` test files / `198` tests и production build —
+  успешно; полный и production-only npm audit показывают `0` известных уязвимостей;
+- полный `:backend:check` на Java 21 — `1098` tests без failures/errors/skips; OpenAPI generation и
+  compatibility, Checkstyle, operator/release-safety и Gradle supply-chain verification прошли;
+- fixture-матрица пяти состояний прошла `15/15` на desktop/tablet/mobile. Все основные и раскрытые
+  состояния просмотрены вручную; переполнения, обрезки, нарушения композиции и повторения смыслов
+  не обнаружены, desktop decision cards отличаются по высоте не более чем на один CSS-пиксель;
+- documentation unit suite прошёл `25/25`, ordinary strict проверил `398` inventory rows без
+  предупреждений; оба release-safety набора и `git diff --check` прошли;
+- локальные backend/web images собраны с immutable candidate-тегами; обе OCI revision labels
+  совпадают с reviewed commit. Images не публиковались и не запускались против внешних сред;
+- migration diff относительно production-базы пуст. В backend JAR присутствуют все `49` исходных
+  migration-файлов, без дополнительных migration; OpenAPI diff отсутствует;
+- отдельный scope/security review не нашёл secrets, business screenshots, local data, build
+  outputs или изменений auth, payroll, plan/shifts и LiveSklad integration в candidate diff.
 
 После P7-B выполняются отдельные code review backend/frontend и security/privacy review артефактов.
 При изменении кода после review весь затронутый gate запускается повторно.

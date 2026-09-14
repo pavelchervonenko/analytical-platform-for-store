@@ -176,6 +176,30 @@ presentation-семантика. P7-B обязан выполнить штатн
 Это закрывает только P7-A. Полные lockfile install/check/build и воспроизводимая упаковка относятся
 к P7-B; реальные `READY`/`PARTIAL` и новая immutable revision — к P7-C.
 
+### Результат P7-B
+
+`PASS` для воспроизводимого локального кандидата:
+
+- чистый lockfile install, contract check, lint, `42` frontend test files / `198` tests и production
+  build прошли; полный и production-only npm audit показывают `0` известных уязвимостей;
+- полный backend `:backend:check` на Java 21 прошёл `1098` tests без failures/errors/skips вместе с
+  OpenAPI, Checkstyle, operator/release-safety и supply-chain gates;
+- пять состояний Weekly Review прошли `15/15` local visual captures на desktop/tablet/mobile;
+  основные и раскрытые состояния просмотрены вручную без новых дефектов компоновки или доступности;
+- documentation unit suite прошёл `25/25`, ordinary strict — `398` inventory rows без
+  предупреждений; deploy и Weekly Review AI release-safety tests, а также `git diff --check`,
+  прошли;
+- backend и web images локально собраны из одного reviewed commit с immutable candidate-тегами;
+  их OCI revision labels совпадают. Images не публиковались и не использовались с production или
+  staging;
+- migration diff относительно production-базы и OpenAPI diff пусты; backend JAR содержит все `49`
+  исходных migration-файлов без дополнительных migration;
+- scope/security review не обнаружил secrets, local data, business screenshots, build outputs или
+  изменений исключённых продуктовых и интеграционных областей.
+
+P7-B не подтверждает реальный `READY`: это отдельная P7-C проверка, для которой требуется новое
+явное разрешение на источник, магазины и диапазон дат.
+
 ## Открытые решения
 
 - В P7-C определить, достаточно ли production-классификации для реального `READY`. Если нет,
