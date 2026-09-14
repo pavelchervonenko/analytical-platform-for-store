@@ -12,6 +12,21 @@ export function QueryError({ error, onRetry, compact = false }: { error: unknown
   );
 }
 
+export function StaleDataNote({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+  const reference = isApiClientError(error) ? error.correlationId ?? null : null;
+  return (
+    <div className="stale-data-note" role="status">
+      <span>Не удалось обновить. Показаны последние доступные данные.</span>
+      <button type="button" onClick={onRetry}><RefreshCw size={14} />Повторить</button>
+      {reference && (
+        <details className="query-error-reference">
+          <summary>Подробности</summary><small>Код обращения: {reference}</small>
+        </details>
+      )}
+    </div>
+  );
+}
+
 export function PanelSkeleton({ rows = 3 }: { rows?: number }) {
   return <div className="skeleton-panel" aria-busy="true" aria-label="Загрузка данных">{Array.from({ length: rows }, (_, index) => <span key={index} />)}</div>;
 }

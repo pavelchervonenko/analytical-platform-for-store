@@ -13,6 +13,7 @@ import com.storeanalytics.metrics.service.StoreKpiDataQuality;
 import com.storeanalytics.metrics.service.StoreKpiResult;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -84,6 +85,34 @@ class WeeklyReviewCoreProjectorTest {
         MetricComparison averageSale = result.results().get(3);
         assertThat(averageSale.current()).isNull();
         assertThat(averageSale.metricState()).isEqualTo(UNAVAILABLE);
+    }
+
+    @Test
+    void neverExposesComputedZerosWhenRequiredSourceCoverageIsBlocked() {
+        WeeklyReviewCoreProjector.Projection result = projector.project(
+                kpi("0.00", "0.00", null, quality(0, 0)),
+                kpi("0.00", "0.00", null, quality(0, 0)),
+                revenue("0.00", "0.00", 0, 0),
+                revenue("0.00", "0.00", 0, 0),
+                true
+        );
+
+        assertThat(result.results()).allSatisfy(metric -> {
+            assertThat(metric.metricState()).isEqualTo(UNAVAILABLE);
+            assertThat(metric.current()).isNull();
+            assertThat(metric.previous()).isNull();
+        });
+        assertThat(List.of(
+                result.revenueDecomposition().salesRevenue(),
+                result.revenueDecomposition().returnRevenue(),
+                result.revenueDecomposition().netRevenue(),
+                result.revenueDecomposition().saleDocumentCount(),
+                result.revenueDecomposition().returnDocumentCount()
+        )).allSatisfy(metric -> {
+            assertThat(metric.metricState()).isEqualTo(UNAVAILABLE);
+            assertThat(metric.current()).isNull();
+            assertThat(metric.previous()).isNull();
+        });
     }
 
     @Test

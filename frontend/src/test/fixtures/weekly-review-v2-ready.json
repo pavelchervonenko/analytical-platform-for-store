@@ -1,9 +1,9 @@
 {
   "contractVersion" : 2,
   "versions" : {
-    "metricsPolicy" : "weekly-metrics-v4",
-    "snapshotPolicy" : "weekly-snapshot-v7",
-    "qualityPolicy" : "weekly-quality-v4"
+    "metricsPolicy" : "weekly-metrics-v6",
+    "snapshotPolicy" : "weekly-snapshot-v12",
+    "qualityPolicy" : "weekly-quality-v6"
   },
   "period" : {
     "timezone" : "Europe/Moscow",
@@ -36,7 +36,7 @@
   "sourceCoverage" : [ {
     "sourceCode" : "SALES",
     "requiredForReport" : true,
-    "affectedBlockIds" : [ "results" ],
+    "affectedBlockIds" : [ "summary", "results", "revenue-decomposition", "sales-structure", "team", "employees" ],
     "currentThroughDate" : "2026-08-23",
     "previousThroughDate" : "2026-08-23",
     "state" : "COMPLETE",
@@ -44,7 +44,7 @@
   }, {
     "sourceCode" : "RETURNS",
     "requiredForReport" : true,
-    "affectedBlockIds" : [ "results" ],
+    "affectedBlockIds" : [ "summary", "results", "revenue-decomposition", "sales-structure", "team", "employees" ],
     "currentThroughDate" : "2026-08-23",
     "previousThroughDate" : "2026-08-23",
     "state" : "COMPLETE",
@@ -63,9 +63,9 @@
     "state" : "READY",
     "outcome" : {
       "itemId" : "summary:outcome",
-      "text" : "Чистая выручка за неделю — 1000 ₽ (+11.1%). Валовая прибыль — 400 ₽ (+11.1%)",
+      "text" : "Неделя завершилась лучше периода сравнения. Главная зона внимания — возвраты выросли.",
       "effect" : "POSITIVE",
-      "evidenceRefs" : [ "STORE.NET_REVENUE", "STORE.GROSS_PROFIT" ]
+      "evidenceRefs" : [ "STORE.NET_REVENUE", "STORE.GROSS_PROFIT", "STORE.MARGIN_PERCENT", "STORE.AVERAGE_SALE", "STORE.RETURN_REVENUE" ]
     },
     "positive" : {
       "itemId" : "summary:positive",
@@ -741,13 +741,13 @@
     },
     "observations" : [ {
       "observationId" : "team:net_revenue:positive",
-      "title" : "Чистая выручка вырос у нескольких сотрудников",
+      "title" : "Чистая выручка выросла у нескольких сотрудников",
       "detail" : "Изменение выше порога отмечено у 2 сотрудников",
       "effect" : "POSITIVE",
       "evidenceRefs" : [ "TEAM.NET_REVENUE.POSITIVE" ]
     }, {
       "observationId" : "team:revenue_per_hour:positive",
-      "title" : "Выручка в час вырос у нескольких сотрудников",
+      "title" : "Выручка в час выросла у нескольких сотрудников",
       "detail" : "Изменение выше порога отмечено у 2 сотрудников",
       "effect" : "POSITIVE",
       "evidenceRefs" : [ "TEAM.REVENUE_PER_HOUR.POSITIVE" ]
@@ -756,7 +756,7 @@
     "benchmarkPolicy" : {
       "method" : "MEDIAN",
       "minimumEligibleCount" : 3,
-      "label" : "Медиана магазина, 3 сотрудников"
+      "label" : "Медиана выручки в час, 3 сотрудников"
     },
     "limitations" : [ ]
   },
@@ -923,31 +923,31 @@
     },
     "ownDynamics" : [ {
       "observationId" : "employee:d52840bc-99b9-4662-b724-7b5be5dfccbf:net_revenue",
-      "title" : "Чистая выручка вырос",
+      "title" : "Чистая выручка выросла",
       "detail" : "Текущая неделя: 400 ₽; предыдущая: 360 ₽",
       "effect" : "POSITIVE",
       "evidenceRefs" : [ "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.NET_REVENUE" ]
     }, {
       "observationId" : "employee:d52840bc-99b9-4662-b724-7b5be5dfccbf:revenue_per_hour",
-      "title" : "Выручка в час вырос",
+      "title" : "Выручка в час выросла",
       "detail" : "Текущая неделя: 29 ₽; предыдущая: 26 ₽",
       "effect" : "POSITIVE",
       "evidenceRefs" : [ "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.REVENUE_PER_HOUR" ]
     } ],
     "peerComparison" : {
-      "metricCode" : "NET_REVENUE",
-      "employeeValue" : 400.00,
-      "benchmarkValue" : 350.00,
+      "metricCode" : "REVENUE_PER_HOUR",
+      "employeeValue" : 28.57,
+      "benchmarkValue" : 25.00,
       "benchmarkMethod" : "MEDIAN",
       "eligibleCount" : 3,
-      "absoluteDelta" : 50.00,
-      "changePercent" : 14.29,
+      "absoluteDelta" : 3.57,
+      "changePercent" : 14.28,
       "effect" : "POSITIVE",
-      "evidenceRefs" : [ "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.NET_REVENUE", "TEAM.MEDIAN.NET_REVENUE" ]
+      "evidenceRefs" : [ "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.REVENUE_PER_HOUR", "TEAM.MEDIAN.REVENUE_PER_HOUR" ]
     },
     "strength" : {
       "observationId" : "employee:d52840bc-99b9-4662-b724-7b5be5dfccbf:net_revenue",
-      "title" : "Чистая выручка вырос",
+      "title" : "Чистая выручка выросла",
       "detail" : "Текущая неделя: 400 ₽; предыдущая: 360 ₽",
       "effect" : "POSITIVE",
       "evidenceRefs" : [ "EMP:d52840bc-99b9-4662-b724-7b5be5dfccbf.NET_REVENUE" ]
@@ -1118,31 +1118,31 @@
     },
     "ownDynamics" : [ {
       "observationId" : "employee:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b:net_revenue",
-      "title" : "Чистая выручка вырос",
+      "title" : "Чистая выручка выросла",
       "detail" : "Текущая неделя: 250 ₽; предыдущая: 220 ₽",
       "effect" : "POSITIVE",
       "evidenceRefs" : [ "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.NET_REVENUE" ]
     }, {
       "observationId" : "employee:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b:revenue_per_hour",
-      "title" : "Выручка в час вырос",
+      "title" : "Выручка в час выросла",
       "detail" : "Текущая неделя: 18 ₽; предыдущая: 16 ₽",
       "effect" : "POSITIVE",
       "evidenceRefs" : [ "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.REVENUE_PER_HOUR" ]
     } ],
     "peerComparison" : {
-      "metricCode" : "NET_REVENUE",
-      "employeeValue" : 250.00,
-      "benchmarkValue" : 350.00,
+      "metricCode" : "REVENUE_PER_HOUR",
+      "employeeValue" : 17.86,
+      "benchmarkValue" : 25.00,
       "benchmarkMethod" : "MEDIAN",
       "eligibleCount" : 3,
-      "absoluteDelta" : -100.00,
-      "changePercent" : -28.57,
+      "absoluteDelta" : -7.14,
+      "changePercent" : -28.56,
       "effect" : "NEGATIVE",
-      "evidenceRefs" : [ "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.NET_REVENUE", "TEAM.MEDIAN.NET_REVENUE" ]
+      "evidenceRefs" : [ "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.REVENUE_PER_HOUR", "TEAM.MEDIAN.REVENUE_PER_HOUR" ]
     },
     "strength" : {
       "observationId" : "employee:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b:net_revenue",
-      "title" : "Чистая выручка вырос",
+      "title" : "Чистая выручка выросла",
       "detail" : "Текущая неделя: 250 ₽; предыдущая: 220 ₽",
       "effect" : "POSITIVE",
       "evidenceRefs" : [ "EMP:b5fbc9bf-e425-4be3-bc4a-c7a7c2ae6f1b.NET_REVENUE" ]
@@ -1313,15 +1313,15 @@
     },
     "ownDynamics" : [ ],
     "peerComparison" : {
-      "metricCode" : "NET_REVENUE",
-      "employeeValue" : 350.00,
-      "benchmarkValue" : 350.00,
+      "metricCode" : "REVENUE_PER_HOUR",
+      "employeeValue" : 25.00,
+      "benchmarkValue" : 25.00,
       "benchmarkMethod" : "MEDIAN",
       "eligibleCount" : 3,
       "absoluteDelta" : 0.00,
       "changePercent" : 0.00,
       "effect" : "NEUTRAL",
-      "evidenceRefs" : [ "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.NET_REVENUE", "TEAM.MEDIAN.NET_REVENUE" ]
+      "evidenceRefs" : [ "EMP:f5748bf4-d59b-443b-a4bd-e6507cdf3dbe.REVENUE_PER_HOUR", "TEAM.MEDIAN.REVENUE_PER_HOUR" ]
     },
     "strength" : null,
     "attention" : null,
@@ -1334,7 +1334,7 @@
     "actionType" : "RESTORE_METRIC",
     "scope" : "STORE",
     "employeePublicId" : null,
-    "title" : "Разобрать рост возвратов",
+    "title" : "Проверить чеки и причины возвратов",
     "metricCode" : "RETURN_REVENUE",
     "target" : {
       "operator" : "AT_MOST",
@@ -1368,7 +1368,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1393,7 +1393,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1418,7 +1418,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1443,7 +1443,7 @@
     "currentDenominator" : 18,
     "previousNumerator" : 950.00,
     "previousDenominator" : 18,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1468,7 +1468,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1493,7 +1493,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1518,7 +1518,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1543,7 +1543,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1568,7 +1568,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1593,7 +1593,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1618,7 +1618,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1643,7 +1643,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1668,7 +1668,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1693,7 +1693,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1718,7 +1718,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1743,7 +1743,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1768,7 +1768,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1793,7 +1793,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1818,7 +1818,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1843,7 +1843,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1868,7 +1868,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1893,7 +1893,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1918,7 +1918,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_EVALUATED",
     "available" : true
@@ -1943,7 +1943,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1968,7 +1968,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1993,7 +1993,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -2018,7 +2018,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2043,7 +2043,7 @@
     "currentDenominator" : 6,
     "previousNumerator" : 360.00,
     "previousDenominator" : 6,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -2068,7 +2068,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_EVALUATED",
     "available" : true
@@ -2093,7 +2093,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2118,7 +2118,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2143,7 +2143,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2168,16 +2168,16 @@
     "currentDenominator" : 14.00,
     "previousNumerator" : 360.00,
     "previousDenominator" : 14.00,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
   }, {
-    "evidenceRef" : "TEAM.MEDIAN.NET_REVENUE",
+    "evidenceRef" : "TEAM.MEDIAN.REVENUE_PER_HOUR",
     "scope" : "TEAM",
     "employeePublicId" : null,
-    "metricCode" : "NET_REVENUE_MEDIAN",
-    "label" : "Медиана чистой выручки сотрудников",
+    "metricCode" : "REVENUE_PER_HOUR_MEDIAN",
+    "label" : "Медиана выручки в час сотрудников",
     "unit" : "RUB",
     "currentPeriod" : {
       "start" : "2026-08-17",
@@ -2187,13 +2187,13 @@
       "start" : "2026-08-10",
       "end" : "2026-08-16"
     },
-    "currentValue" : 350.00,
+    "currentValue" : 25.00,
     "previousValue" : null,
     "currentNumerator" : null,
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_EVALUATED",
     "available" : true
@@ -2218,7 +2218,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2243,7 +2243,7 @@
     "currentDenominator" : 6,
     "previousNumerator" : 220.00,
     "previousDenominator" : 6,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -2268,7 +2268,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_EVALUATED",
     "available" : true
@@ -2293,7 +2293,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2318,7 +2318,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2343,7 +2343,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2368,7 +2368,7 @@
     "currentDenominator" : 14.00,
     "previousNumerator" : 220.00,
     "previousDenominator" : 14.00,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -2393,7 +2393,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2418,7 +2418,7 @@
     "currentDenominator" : 6,
     "previousNumerator" : 320.00,
     "previousDenominator" : 6,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2443,7 +2443,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_EVALUATED",
     "available" : true
@@ -2468,7 +2468,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2493,7 +2493,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2518,7 +2518,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2543,7 +2543,7 @@
     "currentDenominator" : 14.00,
     "previousNumerator" : 320.00,
     "previousDenominator" : 14.00,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2552,7 +2552,7 @@
     "scope" : "TEAM",
     "employeePublicId" : null,
     "metricCode" : "TEAM.NET_REVENUE.POSITIVE",
-    "label" : "Чистая выручка вырос у нескольких сотрудников",
+    "label" : "Чистая выручка выросла у нескольких сотрудников",
     "unit" : "STATUS",
     "currentPeriod" : {
       "start" : "2026-08-17",
@@ -2568,7 +2568,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -2577,7 +2577,7 @@
     "scope" : "TEAM",
     "employeePublicId" : null,
     "metricCode" : "TEAM.REVENUE_PER_HOUR.POSITIVE",
-    "label" : "Выручка в час вырос у нескольких сотрудников",
+    "label" : "Выручка в час выросла у нескольких сотрудников",
     "unit" : "STATUS",
     "currentPeriod" : {
       "start" : "2026-08-17",
@@ -2593,7 +2593,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v4",
+    "formulaVersion" : "weekly-metrics-v6",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true

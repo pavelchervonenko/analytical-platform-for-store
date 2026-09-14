@@ -88,6 +88,8 @@ class WeeklyReviewQualityPolicyV1Test {
             assertThat(limitation.code())
                     .isEqualTo("SALES_OR_RETURNS_CONSISTENCY_ISSUE");
             assertThat(limitation.summary()).contains("продаж или возвратов");
+            assertThat(limitation.affectedBlockIds())
+                    .containsExactly("results", "summary", "revenue-decomposition");
         });
     }
 
@@ -129,13 +131,72 @@ class WeeklyReviewQualityPolicyV1Test {
                 kpi(quality(0, 0, 0, 0)),
                 kpi(quality(0, 0, 0, 0)),
                 CURRENT,
+                PREVIOUS,
+                2,
+                1
+        );
+
+        assertThat(result.reportState()).isEqualTo(ReportState.BLOCKED);
+        assertThat(result.limitations()).singleElement().satisfies(limitation -> {
+            assertThat(limitation.code()).isEqualTo("RETURNS_COVERAGE_INCOMPLETE");
+            assertThat(limitation.affectedBlockIds())
+                    .containsExactly(
+                            "summary",
+                            "results",
+                            "revenue-decomposition",
+                            "sales-structure",
+                            "team",
+                            "employees"
+                    );
+            assertThat(limitation.affectedMetricCodes()).containsExactly(
+                    "RETURN_REVENUE",
+                    "RETURN_DOCUMENT_COUNT",
+                    "NET_REVENUE",
+                    "GROSS_PROFIT",
+                    "MARGIN_PERCENT"
+            );
+        });
+        assertThat(result.limitations())
+                .noneMatch(limitation -> limitation.code().equals("RETURN_EMPLOYEE_UNATTRIBUTED"));
+    }
+
+    @Test
+    void namesMissingSalesAndReturnsWithoutDuplicateManagerMessages() {
+        Decision result = policy.decide(
+                source(
+                        StoreDataFreshnessStatus.STALE,
+                        PREVIOUS.end(),
+                        PREVIOUS.end(),
+                        PREVIOUS.end()
+                ),
+                kpi(quality(0, 0, 0, 0)),
+                kpi(quality(0, 0, 0, 0)),
+                CURRENT,
                 PREVIOUS
         );
 
         assertThat(result.reportState()).isEqualTo(ReportState.BLOCKED);
-        assertThat(result.limitations()).singleElement().satisfies(limitation ->
-                assertThat(limitation.code()).isEqualTo("RETURNS_COVERAGE_INCOMPLETE")
+        assertThat(result.limitations())
+                .extracting(limitation -> limitation.summary())
+                .containsExactly(
+                        "Данные о продажах не покрывают завершённую неделю",
+                        "Данные о возвратах не покрывают завершённую неделю"
+                );
+        assertThat(result.limitations().getFirst().affectedMetricCodes()).containsExactly(
+                "SALES_REVENUE",
+                "SALE_DOCUMENT_COUNT",
+                "AVERAGE_SALE",
+                "NET_REVENUE",
+                "GROSS_PROFIT",
+                "MARGIN_PERCENT"
         );
+        assertThat(result.sourceCoverage())
+                .filteredOn(coverage -> coverage.requiredForReport())
+                .extracting(coverage -> coverage.message())
+                .containsExactly(
+                        "Данные о продажах не покрывают обе сравниваемые недели",
+                        "Данные о возвратах не покрывают обе сравниваемые недели"
+                );
     }
 
     private StoreDataStatusView source(

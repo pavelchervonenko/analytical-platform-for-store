@@ -47,9 +47,9 @@ public final class WeeklyReviewPolicyV1 {
 
     public static final int FACTS_SCHEMA_VERSION = 2;
     public static final VersionSet VERSIONS = new VersionSet(
-            "weekly-metrics-v4",
-            "weekly-snapshot-v7",
-            "weekly-quality-v4"
+            "weekly-metrics-v6",
+            "weekly-snapshot-v12",
+            "weekly-quality-v6"
     );
 
     private static final int PERCENT_SCALE = 2;
@@ -166,37 +166,53 @@ public final class WeeklyReviewPolicyV1 {
             RevenuePeriod current,
             RevenuePeriod previous
     ) {
+        return revenueDecomposition(
+                current,
+                previous,
+                MetricState.READY,
+                SUFFICIENT
+        );
+    }
+
+    public RevenueDecomposition revenueDecomposition(
+            RevenuePeriod current,
+            RevenuePeriod previous,
+            MetricState metricState,
+            Sufficiency sufficiency
+    ) {
         requireNonNull(current, "current");
         requireNonNull(previous, "previous");
+        requireNonNull(metricState, "metricState");
+        requireNonNull(sufficiency, "sufficiency");
         require(current.identityValid(), "current revenue identity must be valid");
         require(previous.identityValid(), "previous revenue identity must be valid");
         return new RevenueDecomposition(
                 compare(
                         MetricSpec.storeMoney("SALES_REVENUE", Polarity.HIGHER_IS_BETTER),
                         current.salesRevenue(), previous.salesRevenue(),
-                        MetricState.READY, SUFFICIENT, null, null
+                        metricState, sufficiency, null, null
                 ),
                 compare(
                         MetricSpec.storeMoney("RETURN_REVENUE", Polarity.LOWER_IS_BETTER),
                         current.returnRevenue(), previous.returnRevenue(),
-                        MetricState.READY, SUFFICIENT, null, null
+                        metricState, sufficiency, null, null
                 ),
                 compare(
                         MetricSpec.storeMoney("NET_REVENUE", Polarity.HIGHER_IS_BETTER),
                         current.netRevenue(), previous.netRevenue(),
-                        MetricState.READY, SUFFICIENT, null, null
+                        metricState, sufficiency, null, null
                 ),
                 compare(
                         MetricSpec.storeCount("SALE_DOCUMENT_COUNT"),
                         BigDecimal.valueOf(current.saleDocumentCount()),
                         BigDecimal.valueOf(previous.saleDocumentCount()),
-                        MetricState.READY, SUFFICIENT, null, null
+                        metricState, sufficiency, null, null
                 ),
                 compare(
                         MetricSpec.storeCount("RETURN_DOCUMENT_COUNT"),
                         BigDecimal.valueOf(current.returnDocumentCount()),
                         BigDecimal.valueOf(previous.returnDocumentCount()),
-                        MetricState.READY, SUFFICIENT, null, null
+                        metricState, sufficiency, null, null
                 ),
                 true
         );

@@ -272,6 +272,11 @@ td:first-child small { margin-top: 4px; color: var(--text-faint); font-size: 11p
 .query-error p { margin: 5px 0 0; font-size: 13px; }
 .query-error button { display: inline-flex; align-items: center; gap: 6px; margin-left: 20px; padding: 9px 12px; border: 0; border-radius: 10px; color: #fff; background: var(--danger); font-size: 13px; font-weight: 700; }
 .query-error--compact { min-height: 160px; }
+.query-error-reference { margin-top: 8px; color: var(--text-muted); font-size: 11px; }
+.query-error-reference summary { width: max-content; cursor: pointer; }
+.query-error-reference small { display: block; margin-top: 4px; }
+.stale-data-note { display: flex; align-items: center; gap: 10px; width: max-content; max-width: 100%; margin: 8px 0; color: var(--text-muted); font-size: 11px; }
+.stale-data-note > button { display: inline-flex; align-items: center; gap: 5px; padding: 7px 9px; border: 0; border-radius: 9px; color: var(--primary); background: var(--surface-muted); font-size: 12px; font-weight: 700; }
 .skeleton-panel { display: grid; gap: 10px; }
 .skeleton-panel span, .skeleton { display: block; border-radius: 14px; background: linear-gradient(90deg, #eeefea, #f8f8f5, #eeefea); background-size: 200% 100%; animation: skeleton 1.4s infinite; }
 .skeleton-panel span { height: 54px; }

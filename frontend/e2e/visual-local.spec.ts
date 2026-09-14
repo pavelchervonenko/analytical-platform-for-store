@@ -2,11 +2,13 @@ import { mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { makeWeeklyReview } from "../src/test/weeklyReviewFixture";
+import { visualWeeklyReview } from "./weekly-review-visual-fixtures";
 
 const email = process.env.VISUAL_EMAIL?.trim() || process.env.E2E_ADMIN_EMAIL?.trim();
 const password = process.env.VISUAL_PASSWORD || process.env.E2E_ADMIN_PASSWORD;
 const configuredRoutes = process.env.VISUAL_ROUTES?.trim() || "/insights";
 const useFixtureApi = process.env.VISUAL_USE_FIXTURES === "true";
+const useLiveWeeklyReview = process.env.VISUAL_USE_LIVE_WEEKLY_REVIEW === "true";
 const templateEmails = new Set(["manager@example.com", "replace-with-local-email"]);
 const visualStoreId = "10000000-0000-4000-8000-000000000001";
 
@@ -291,22 +293,8 @@ async function installFixtureApi(page: Page) {
     rates: []
   }));
   await page.route("**/api/stores/*/weekly-reviews/current", async (route) => {
-    const review = makeWeeklyReview();
-    const templateAction = review.actions[0]!;
-    review.actions = [
-      templateAction,
-      {
-        ...templateAction,
-        actionId: "action:visual:accessory-share",
-        title: "Проверить долю аксессуаров"
-      },
-      {
-        ...templateAction,
-        actionId: "action:visual:device-growth",
-        title: "Закрепить рост техники"
-      }
-    ];
-    await json(route, review);
+    const scenario = new URL(page.url()).searchParams.get("reviewScenario");
+    await json(route, visualWeeklyReview(scenario));
   });
   const sellerOneId = "30000000-0000-4000-8000-000000000001";
   const sellerTwoId = "30000000-0000-4000-8000-000000000002";
@@ -515,7 +503,11 @@ test.describe("local frontend visual review", () => {
         }
       });
 
-      if (!useFixtureApi && new URL(route, "http://local.test").pathname === "/insights") {
+      if (
+        !useFixtureApi
+        && !useLiveWeeklyReview
+        && new URL(route, "http://local.test").pathname === "/insights"
+      ) {
         await page.route("**/api/stores/*/weekly-reviews/current", async (requestRoute) => {
           await requestRoute.fulfill({
             status: 200,
@@ -529,45 +521,77 @@ test.describe("local frontend visual review", () => {
       await waitForStablePage(page);
 
       let capturePeriodDialog = false;
-      if (new URL(route, "http://local.test").pathname === "/insights") {
-        for (const selector of [
-          ".weekly-review-formula > summary",
-          ".weekly-review-evidence > summary",
-          ".weekly-review-secondary > summary"
-        ]) {
-          const summary = page.locator(selector).first();
-          const details = summary.locator("..");
-          await summary.focus();
-          await page.keyboard.press("Enter");
-          await expect(details).toHaveAttribute("open", "");
-          await page.keyboard.press("Enter");
-          await expect(details).not.toHaveAttribute("open", "");
+      let weeklyReviewBlocked = false;
+      const routeUrl = new URL(route, "http://local.test");
+      if (routeUrl.pathname === "/insights") {
+        const scenario = routeUrl.searchParams.get("reviewScenario") ?? "ready-dense";
+        if (useLiveWeeklyReview) {
+          await expect.poll(async () => (
+            await page.getByRole("heading", { name: "Для разбора не хватает данных" }).count()
+            + await page.getByRole("heading", { name: "Результаты недели", exact: true }).count()
+          )).toBe(1);
+          weeklyReviewBlocked = await page.getByRole("heading", {
+            name: "Для разбора не хватает данных"
+          }).count() === 1;
+        } else {
+          weeklyReviewBlocked = scenario === "blocked";
         }
-        const employeeSelectors = page.locator(".weekly-review-employee-selector");
-        const firstEmployee = employeeSelectors.first();
-        await expect(firstEmployee).toHaveAttribute("aria-pressed", "true");
-        if (await employeeSelectors.count() > 1) {
-          const secondEmployee = employeeSelectors.nth(1);
-          await secondEmployee.click();
-          await expect(secondEmployee).toHaveAttribute("aria-pressed", "true");
-          await expect(firstEmployee).toHaveAttribute("aria-pressed", "false");
-          await firstEmployee.click();
-          await expect(firstEmployee).toHaveAttribute("aria-pressed", "true");
-        }
-        await expect(page.locator(".weekly-review-employee-detail")).toBeVisible();
-        await expect(page.getByText("Расчет по данным", { exact: true })).toHaveCount(0);
-        await expect(page.getByText("Что сделать", { exact: true })).toHaveCount(0);
-        await expect(page.getByText("Что требует внимания", { exact: true })).toHaveCount(0);
-        await expect(page.getByText("На следующую полную неделю", { exact: true }))
-          .toHaveCount(0);
-        const actionList = page.locator(".weekly-review-action-list");
-        await expect(actionList.getByText("Цель", { exact: true })).toHaveCount(0);
-        await expect(actionList.getByText("Как проверим", { exact: true })).toHaveCount(0);
-        if (useFixtureApi) {
-          await expect(page.getByRole("heading", { name: "Шаги на следующую неделю" }))
+        if (weeklyReviewBlocked) {
+          await expect(page.getByRole("heading", { name: "Для разбора не хватает данных" }))
             .toBeVisible();
-          await expect(page.getByText("24–30 августа 2026", { exact: true })).toBeVisible();
-          await expect(actionList.locator(".weekly-review-action")).toHaveCount(3);
+          await expect(page.getByRole("heading", { name: "Результаты недели", exact: true }))
+            .toHaveCount(0);
+        } else {
+          await expect(page.getByRole("heading", { name: "Результаты недели", exact: true }))
+            .toBeVisible();
+          await expect(page.locator(".weekly-review-metric")).toHaveCount(4);
+          await expect(page.locator(".weekly-review-structure-section")).not.toHaveAttribute("open", "");
+          if (!useLiveWeeklyReview && scenario === "ready-calm") {
+            await expect(page.getByText(/Дополнительная проверка не требуется/u)).toBeVisible();
+          } else {
+            await expect(page.getByText("Что проверить на этой неделе", { exact: true })).toBeVisible();
+          }
+          if (!useLiveWeeklyReview && scenario === "partial") {
+            await expect(page.getByText("Часть выводов ограничена", { exact: true })).toBeVisible();
+          }
+          if (!useLiveWeeklyReview && scenario === "ready-missing-shifts") {
+            await expect(page.getByText("Часть выводов ограничена", { exact: true })).toHaveCount(0);
+            await expect(page.getByText(
+              "Часть смен не заполнена — оценка по часам недоступна",
+              { exact: true }
+            )).toBeVisible();
+          }
+          if (!useLiveWeeklyReview && scenario === "ready-dense") {
+            await expect(page.locator(".weekly-review-factor")).toHaveCount(2);
+            await expect(page.locator(".weekly-review-exception")).toHaveCount(3);
+            await expect(page.getByText("Ковзель Ангелина Александровна", { exact: true }))
+              .toBeVisible();
+            await expect(page.locator(".weekly-review-exception").first())
+              .toContainText("Ориентир: не ниже 28 ₽/ч");
+            await expect(page.locator(".weekly-review-secondary-actions > summary"))
+              .toContainText("Ещё проверки 2");
+            const mobile = testInfo.project.name === "mobile-chromium";
+            await expect(page.locator(".weekly-review-factor:visible"))
+              .toHaveCount(mobile ? 1 : 2);
+            await expect(page.locator(".weekly-review-exception:visible"))
+              .toHaveCount(mobile ? 1 : 3);
+            const changesToggle = page.getByRole("button", { name: "Ещё 1 изменение" });
+            const employeesToggle = page.getByRole("button", { name: "Ещё 2 сотрудника" });
+            if (mobile) {
+              await expect(changesToggle).toBeVisible();
+              await expect(employeesToggle).toBeVisible();
+            } else {
+              await expect(changesToggle).toBeHidden();
+              await expect(employeesToggle).toBeHidden();
+            }
+            if (testInfo.project.name === "desktop-chromium") {
+              const summaryBox = await page.locator(".weekly-review-summary").boundingBox();
+              const actionBox = await page.locator(".weekly-review-primary-action").boundingBox();
+              expect(summaryBox).not.toBeNull();
+              expect(actionBox).not.toBeNull();
+              expect(Math.abs(summaryBox!.height - actionBox!.height)).toBeLessThanOrEqual(1);
+            }
+          }
         }
       }
 
@@ -587,6 +611,144 @@ test.describe("local frontend visual review", () => {
         testInfo.project.name
       );
       await mkdir(screenshotDirectory, { recursive: true });
+      if (routeUrl.pathname === "/insights" && weeklyReviewBlocked) {
+        const correctionTrigger = page.getByRole("button", { name: "Что нужно исправить" });
+        await correctionTrigger.click();
+        const correctionPanel = page.getByRole("dialog", { name: "Что нужно исправить" });
+        await expect(correctionPanel).toContainText(
+          "Исправление выполняет администратор или ответственный за загрузку данных."
+        );
+        const currentUserRole = await page.evaluate(async () => {
+          const response = await fetch("/api/auth/me", { credentials: "include" });
+          const currentUser = await response.json() as { role?: string };
+          return currentUser.role;
+        });
+        const qualityLink = correctionPanel.getByRole("link", {
+          name: "Открыть качество данных"
+        });
+        if (currentUserRole === "ADMIN") {
+          await expect(qualityLink).toBeVisible();
+          await expect(qualityLink).toHaveAttribute(
+            "href",
+            `/quality?store=${routeUrl.searchParams.get("store")}`
+          );
+        } else {
+          await expect(qualityLink).toHaveCount(0);
+        }
+        await page.screenshot({
+          path: resolve(screenshotDirectory, screenshotName(route) + "-correction-panel.png"),
+          animations: "disabled"
+        });
+        await page.keyboard.press("Escape");
+      } else if (routeUrl.pathname === "/insights") {
+        const detailTrigger = page.getByRole("button", { name: "Почему такой вывод" });
+        await detailTrigger.click();
+        const detailPanel = page.getByRole("dialog", { name: "Основание главного вывода" });
+        await expect(detailPanel).toBeVisible();
+        await page.screenshot({
+          path: resolve(screenshotDirectory, screenshotName(route) + "-detail-panel.png"),
+          animations: "disabled"
+        });
+        await page.keyboard.press("Escape");
+        await expect(detailPanel).toHaveCount(0);
+        await expect(detailTrigger).toBeFocused();
+        await page.getByRole("heading", { name: "ИИ-разбор", exact: true }).click();
+
+        const reviewScenario = routeUrl.searchParams.get("reviewScenario") ?? "ready-dense";
+        if (!useLiveWeeklyReview && reviewScenario === "partial") {
+          const limitationTrigger = page.getByRole("button", {
+            name: "Подробнее об ограничениях"
+          });
+          await limitationTrigger.click();
+          const limitationPanel = page.getByRole("dialog", { name: "Ограничения данных" });
+          await expect(limitationPanel).toBeVisible();
+          await expect(limitationPanel).toContainText(
+            "Исправление выполняет администратор или ответственный за классификацию товаров."
+          );
+          await page.screenshot({
+            path: resolve(screenshotDirectory, screenshotName(route) + "-limitations.png"),
+            animations: "disabled"
+          });
+          await page.keyboard.press("Escape");
+          await expect(limitationPanel).toHaveCount(0);
+          await expect(limitationTrigger).toBeFocused();
+        }
+        if (!useLiveWeeklyReview && reviewScenario === "ready-dense") {
+          if (testInfo.project.name === "mobile-chromium") {
+            const changesToggle = page.locator(
+              'button[aria-controls="weekly-review-changes-list"]'
+            );
+            await expect(changesToggle).toHaveText("Ещё 1 изменение");
+            await changesToggle.click();
+            await expect(changesToggle).toHaveAttribute("aria-expanded", "true");
+            await expect(page.locator(".weekly-review-factor:visible")).toHaveCount(2);
+            await page.locator(".weekly-review-factor-list").screenshot({
+              path: resolve(screenshotDirectory, screenshotName(route) + "-more-changes.png"),
+              animations: "disabled"
+            });
+            await page.getByRole("button", {
+              name: "Скрыть дополнительные изменения"
+            }).click();
+
+            const employeesToggle = page.locator(
+              'button[aria-controls="weekly-review-employees-list"]'
+            );
+            await expect(employeesToggle).toHaveText("Ещё 2 сотрудника");
+            await employeesToggle.click();
+            await expect(employeesToggle).toHaveAttribute("aria-expanded", "true");
+            await expect(employeesToggle).toBeFocused();
+            await expect(page.locator(".weekly-review-exception:visible")).toHaveCount(3);
+            await page.locator(".weekly-review-exception-list").screenshot({
+              path: resolve(screenshotDirectory, screenshotName(route) + "-more-employees.png"),
+              animations: "disabled"
+            });
+            await page.getByRole("button", {
+              name: "Скрыть дополнительных сотрудников"
+            }).click();
+          }
+
+          const secondaryActions = page.locator(".weekly-review-secondary-actions > summary");
+          await secondaryActions.focus();
+          await page.keyboard.press("Enter");
+          await expect(page.locator(".weekly-review-secondary-actions")).toHaveAttribute("open", "");
+          await page.locator(".weekly-review-primary-action").screenshot({
+            path: resolve(screenshotDirectory, screenshotName(route) + "-secondary-actions.png"),
+            animations: "disabled"
+          });
+          await page.keyboard.press("Enter");
+          await expect(page.locator(".weekly-review-secondary-actions"))
+            .not.toHaveAttribute("open", "");
+
+          const employeeTrigger = page.getByRole("button", {
+            name: "Почему сотрудник в списке: Ковзель Ангелина Александровна"
+          });
+          await employeeTrigger.click();
+          const employeePanel = page.getByRole("dialog", {
+            name: "Ковзель Ангелина Александровна"
+          });
+          await expect(employeePanel).toContainText("Ориентир: не ниже 28 ₽/ч");
+          await page.screenshot({
+            path: resolve(screenshotDirectory, screenshotName(route) + "-employee-detail.png"),
+            animations: "disabled"
+          });
+          await page.keyboard.press("Escape");
+          await expect(employeePanel).toHaveCount(0);
+          await expect(employeeTrigger).toBeFocused();
+
+          const structureSummary = page.locator(".weekly-review-structure-section > summary");
+          await structureSummary.focus();
+          await page.keyboard.press("Enter");
+          await expect(page.locator(".weekly-review-structure-section")).toHaveAttribute("open", "");
+          await page.locator(".weekly-review-structure-section__body").screenshot({
+            path: resolve(screenshotDirectory, screenshotName(route) + "-structure-open.png"),
+            animations: "disabled",
+            style: ".skip-link, .topbar { visibility: hidden !important; }"
+          });
+          await page.keyboard.press("Enter");
+          await expect(page.locator(".weekly-review-structure-section"))
+            .not.toHaveAttribute("open", "");
+        }
+      }
       if (capturePeriodDialog) {
         await page.locator(".range-period__popover").screenshot({
           path: resolve(screenshotDirectory, screenshotName(route) + "-period-selector.png"),

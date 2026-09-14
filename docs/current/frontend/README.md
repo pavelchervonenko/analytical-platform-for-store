@@ -6,7 +6,7 @@ owner: frontend
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-14
 requirement_sources:
   - docs/current/product/README.md
 implementation_sources:
@@ -16,7 +16,10 @@ implementation_sources:
 verification_sources:
   - frontend/src/api/consumerContract.test.ts
   - frontend/src/dashboard/OverviewPage.test.tsx
-runtime_evidence: []
+  - frontend/src/insights/WeeklyReviewView.test.tsx
+  - frontend/e2e/visual-local.spec.ts
+runtime_evidence:
+  - docs/history/audits/2026/09/WEEKLY_REVIEW_LOCAL_PRERELEASE_2026-09-14.md
 required_reviewers:
   - frontend
   - product
@@ -35,9 +38,10 @@ superseded_by: null
 
 - [Период и scope](period-and-scope-contract.md)
 - [Главная](overview.md)
+- [ИИ-разбор / Weekly Review](../ai/weekly-review.md)
 - [Структура и attach-map](sales-structure-and-attach-map.md)
 - [Сотрудники](employees.md)
-- [План и смены](plan-and-shifts.md)
+- [План и смены: отдельные экраны](plan-and-shifts.md)
 - [Зарплата и отчёты](payroll-and-reports.md)
 - [Quality actions](data-quality-actions.md)
 - [Transport](transport-contracts.md)

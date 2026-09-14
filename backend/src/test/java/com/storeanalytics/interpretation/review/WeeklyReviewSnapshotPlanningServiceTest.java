@@ -123,6 +123,35 @@ class WeeklyReviewSnapshotPlanningServiceTest {
     }
 
     @Test
+    void createsARevisionWhenPolicyChangesWithoutANewerSource() {
+        UUID previousId = UUID.randomUUID();
+        UUID revisionId = UUID.randomUUID();
+        Instant completedAt = Instant.parse("2026-08-24T03:00:00Z");
+        PersistedWeeklyReviewSnapshot previous = snapshot(
+                previousId,
+                completedAt,
+                new WeeklyReviewResponse.VersionSet(
+                        "weekly-metrics-v5",
+                        "weekly-snapshot-v9",
+                        "weekly-quality-v5"
+                )
+        );
+        PersistedWeeklyReviewSnapshot revision = snapshot(revisionId, completedAt);
+        when(sourceStore.newestSuitableSource(
+                eq(STORE_ID), any(), any(), eq(NOW)
+        )).thenReturn(Optional.of(source(completedAt.toString())));
+        when(snapshotStore.findLatest(eq(STORE_ID), any(DateRange.class)))
+                .thenReturn(Optional.of(previous));
+        when(reviewService.generate(STORE_ID)).thenReturn(revision);
+
+        WeeklyReviewSnapshotPlanningResult result = service.plan();
+
+        assertThat(result.revisionsCreated()).isOne();
+        assertThat(result.sourceUnchanged()).isZero();
+        verify(reviewService).generate(STORE_ID);
+    }
+
+    @Test
     void scansEveryKeysetPageInsteadOfRepeatingTheFirstBatch() {
         StoreTarget second = new StoreTarget(
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
@@ -168,10 +197,19 @@ class WeeklyReviewSnapshotPlanningServiceTest {
             UUID id,
             Instant sourceDataUpdatedAt
     ) {
+        return snapshot(id, sourceDataUpdatedAt, WeeklyReviewPolicyV1.VERSIONS);
+    }
+
+    private PersistedWeeklyReviewSnapshot snapshot(
+            UUID id,
+            Instant sourceDataUpdatedAt,
+            WeeklyReviewResponse.VersionSet versions
+    ) {
         WeeklyReviewResponse response = mock(WeeklyReviewResponse.class);
         Provenance provenance = mock(Provenance.class);
         when(provenance.sourceDataUpdatedAt()).thenReturn(sourceDataUpdatedAt);
         when(response.provenance()).thenReturn(provenance);
+        when(response.versions()).thenReturn(versions);
         return new PersistedWeeklyReviewSnapshot(
                 id,
                 STORE_ID,

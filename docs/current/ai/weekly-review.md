@@ -7,7 +7,7 @@ audience:
   - developer
   - operator
   - manager
-last_verified: 2026-09-02
+last_verified: 2026-09-14
 requirement_sources:
   - docs/archive/legacy-contracts/AI_WEEKLY_REDESIGN_STAGE2_CONTRACT.md
   - docs/archive/legacy-contracts/weekly-review-ai-management-rubric.md
@@ -15,8 +15,17 @@ implementation_sources:
   - frontend/src/insights/InsightsPreviewPage.tsx
   - frontend/src/insights/WeeklyReviewView.tsx
   - frontend/src/insights/weekly-review-presentation.ts
-  - frontend/src/insights/weekly-review.css
+  - frontend/src/insights/weekly-review/WeeklyReviewContent.tsx
+  - frontend/src/insights/weekly-review/ReviewDetailPanel.tsx
+  - frontend/src/insights/weekly-review/weeklyReviewViewModel.ts
+  - frontend/src/insights/weekly-review/weekly-review.css
+  - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewAssembler.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewCoreProjector.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewQualityPolicyV1.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewSummaryPresenter.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewSnapshotStore.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewTeamEmployeeProjector.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiContract.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiInputCompactor.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiSemanticValidator.java
@@ -26,14 +35,19 @@ implementation_sources:
   - backend/src/main/resources/db/migration/V48__harden_weekly_review_rollout.sql
 verification_sources:
   - frontend/src/insights/WeeklyReviewView.test.tsx
+  - frontend/src/insights/weekly-review/weeklyReviewViewModel.test.ts
   - frontend/src/insights/weekly-review-presentation.test.ts
+  - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewAssemblerTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewServiceTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewSnapshotStoreIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewTeamEmployeeProjectorTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewResponseContractTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiSchemaContractTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiSemanticValidatorTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiRendererV25Test.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiCompletionServiceIntegrationTest.java
-runtime_evidence: []
+runtime_evidence:
+  - docs/history/audits/2026/09/WEEKLY_REVIEW_LOCAL_PRERELEASE_2026-09-14.md
 required_reviewers:
   - ai-semantic
   - backend-data
@@ -86,6 +100,24 @@ Snapshot формируется отдельно от AI. Отчёт остаё�
 ни в персональные карточки Weekly Review, ни в командный benchmark. Для появления сотрудника в
 карточках также нужна активность хотя бы в одном из двух сравниваемых недельных периодов.
 
+### Roster и исторические snapshots
+
+Roster вычисляется во время формирования snapshot, а не при каждом открытии страницы. Активностью
+считается хотя бы одна завершённая продажа, ненулевая чистая выручка или смена в текущей либо
+предыдущей неделе. Сотрудник, добавленный после отчётной недели и не имеющий активности в обеих
+неделях, в такой отчёт не попадает даже после включения флага рейтинга.
+
+Payload snapshot, включая состав и имена сотрудников, хранится неизменяемо. Изменение назначения,
+активности или `participatesInRanking` не переписывает уже сохранённый отчёт и не фильтрует его на
+read path. Поэтому историческая revision может содержать сотрудника, который сейчас исключён из
+рейтинга, либо не содержать сотрудника, добавленного позднее.
+
+Повторная генерация той же завершённой недели создаёт следующую immutable revision только если
+содержимое изменилось; при том же content hash возвращается существующая revision. После начала
+новой недели обычная генерация нацелена уже на последнюю завершённую неделю — произвольный
+исторический период endpoint не принимает. Включён ли автоматический planner в production,
+фиксируется только в [`project-state.md`](../project-state.md).
+
 ## Активный контракт
 
 | Элемент | Версия | Источник |
@@ -94,10 +126,45 @@ Snapshot формируется отдельно от AI. Отчёт остаё�
 | Provider input | schema 4 | [`weekly-review-ai-input-v4.schema.json`](../../schemas/weekly-review-ai-input-v4.schema.json) |
 | Provider output | selection schema 1 | [`weekly-review-ai-selection-v1.schema.json`](../../schemas/weekly-review-ai-selection-v1.schema.json) |
 | Published content | schema 4 | [`weekly-review-ai-content-v4.schema.json`](../../schemas/weekly-review-ai-content-v4.schema.json) |
+| Deterministic snapshot policy | `weekly-snapshot-v12` | `WeeklyReviewPolicyV1` |
 
 Backend читает опубликованные schema4 enrichments в порядке `v25`, `v24`, `v23`, `v22`. Worker
 создаёт только активную пару `v25/schema4`. Read compatibility не означает, что старые версии
 снова допустимы для генерации.
+
+### Детерминированное управленческое представление
+
+`WeeklyReviewSummaryPresenter` формирует один категориальный итог: неделя лучше, слабее, изменилась
+разнонаправленно либо существенно не изменилась. Категория учитывает все материальные KPI со
+состоянием `READY`; ограниченные и недоступные KPI не меняют направление вывода. Итог не повторяет
+точные значения четырёх KPI; при наличии материального фактора он добавляет одну главную зону
+внимания, а при её отсутствии — один положительный сигнал. `summary.effect` описывает общий
+результат, а не тон добавленного фактора.
+
+Корневое действие берётся из первого элемента backend-списка и должно однозначно соответствовать
+фактору по `metricCode` и evidence. Оно остаётся проверкой, а не сохраняемой задачей: API уже
+передаёт операцию, числовой ориентир, горизонт и способ проверки.
+
+Presentation model не повторяет однозначно связанный с корневым действием фактор второй
+равноправной карточкой в `Что изменилось`: числа и evidence остаются доступны через основание
+действия, а остальные материальные факторы сохраняются в списке. Если связь неоднозначна, frontend
+ничего не скрывает. Полное отсутствие исходных факторов и отсутствие только вторичных факторов —
+разные состояния: во втором случае секция скрывается без ложного сообщения о спокойной неделе.
+Deterministic действие по росту возвратов сформулировано как операция менеджера —
+`Проверить чеки и причины возвратов`. Изменение persisted wording выпущено новой policy
+`weekly-snapshot-v12`; прежние immutable snapshots не переписываются и остаются читаемыми.
+
+В персональном блоке чистая выручка означает вклад сотрудника. `peerComparison` означает только
+сравнение выручки в час с медианой минимум трёх сотрудников, у которых достаточно продаж, смен и
+часов в обеих сравниваемых неделях. Старый сохранённый payload с
+`peerComparison.metricCode=NET_REVENUE` принимается frontend для совместимости, но не показывается
+как сравнение эффективности. Frontend дополнительно требует `participatesInBenchmark=true` и
+готовую достаточную метрику `REVENUE_PER_HOUR`; несовместимый peer payload не отображается.
+
+Незаполненные или недостаточные смены ограничивают только `SHIFT_COUNT`, `WORKED_HOURS` и
+`REVENUE_PER_HOUR`. Такие workload-метрики получают адресное состояние `UNAVAILABLE`/`LIMITED`, но
+сами по себе не переводят сотрудника, команду или весь отчёт в `LIMITED`/`PARTIAL`, не создают
+сотруднику приоритет и не порождают действие. Достаточные sales-выводы при этом сохраняются.
 
 ## Provider boundary
 
@@ -123,7 +190,17 @@ Employee scope и employee public IDs в input запрещены. Модель 
 6. Completion в одной транзакции сохраняет enrichment и завершает attempt/job.
 
 Для `PARTIAL` backend явно добавляет ограничение, что вывод основан только на доступной части
-данных. Несовместимый enrichment игнорируется; детерминированный отчёт остаётся источником ответа.
+данных. Каждая quality-проблема привязана к конкретным block IDs и metric codes. Неполная
+аналитическая классификация ограничивает только структуру продаж и attach, но не чистую выручку,
+валовую прибыль, команду или сотрудников. Проблема согласованности продаж/возвратов ограничивает
+чистую выручку, её разложение и основанный на ней главный вывод, но не переносится на независимые
+метрики. Если включённая в главный вывод валовая прибыль ограничена качеством себестоимости,
+главный вывод также получает состояние `LIMITED`.
+Если `PARTIAL` возник только внутри структуры или команды, assembler добавляет такой блок в общую
+сводку качества даже при отсутствии корневого quality limitation. Frontend объединяет корневые и
+локальные тексты в одной панели ограничений, а у затронутого главного вывода показывает короткий
+маркер доверия вместо повторения полного предупреждения.
+Несовместимый enrichment игнорируется; детерминированный отчёт остаётся источником ответа.
 
 ## Неизменяемость и повторный запуск
 
@@ -142,48 +219,74 @@ lifecycle-записями для lease, retry и terminal state. Новая р�
 deterministic response с состоянием AI: `DISABLED`, `PREPARING`, `DELAYED`, `UNAVAILABLE` или
 `NOT_APPLICABLE`.
 
-Frontend показывает legacy weekly insight только когда новый endpoint вернул `404`/`null` или
-завершился ошибкой. Это compatibility fallback всего weekly-review, а не fallback отдельного AI
-слоя.
+Frontend показывает legacy weekly insight только когда новый endpoint не имеет сохранённого ответа
+и вернул `404`/`null`. Legacy явно помечается как предыдущий формат, чтобы пользователь не принял
+его за новый Weekly Review. Ошибка transport/schema/server не включает legacy: frontend показывает
+ошибку загрузки и действие повтора.
+
+Ошибка фонового обновления уже показанного v25 snapshot не переключает пользователя на legacy:
+сохраняется последняя версия с компактной заметкой. Это compatibility fallback всего weekly-review,
+а не fallback отдельного AI слоя.
 
 ### Presentation contract
 
-Страница сохраняет manager-first порядок: главный вывод, ключевые результаты, изменения и шаги,
-затем структура продаж, команда и сотрудники. Evidence остаётся доступным по раскрытию рядом с
-соответствующим выводом, но не конкурирует с управленческим уровнем.
+Первый содержательный экран имеет фиксированный manager-first порядок:
+
+1. компактный header с последней завершённой неделей, периодом сравнения и временем обновления;
+2. общий вывод и одна приоритетная проверка рядом на desktop и друг под другом на узких экранах;
+3. четыре KPI: чистая выручка, валовая прибыль, маржа и средняя продажа.
+
+На desktop карточки итога и приоритетной проверки растягиваются до одной высоты текущей grid-строки
+без фиксированной высоты; их действия выровнены по нижней границе. На tablet/mobile они идут друг
+под другом и сохраняют естественную высоту.
+
+Проверка показывает backend-owned название, числовой ориентир, критерий и следующую полную неделю.
+Дополнительные проверки свёрнуты внутри того же action-блока. Название «Что проверить на этой
+неделе» сохраняется, пока в продукте нет task-state с назначением и выполнением.
 
 Frontend показывает `Дополнено ИИ` только когда опубликованный summary действительно имеет
 `generatedBy=AI_ENHANCED` и `aiEnhancement.state=READY`. Для детерминированного отчёта отдельная
 подпись источника не показывается; отсутствие AI enrichment не маскирует детерминированный отчёт
 как ошибку и не меняет порядок бизнес-блоков.
 
-Карточка `Главное` занимает всю ширину и не дублирует store action или отдельный сигнал риска:
-риск остаётся в `Основных изменениях`, а действия — в соседнем разделе. `Основные изменения` и
-`Шаги на следующую неделю` используют равные колонки на широком экране. В действиях отображаются
-только названия без номера, цели и способа проверки; заголовок содержит календарный диапазон полной
-недели, следующей за отчетной.
+После KPI расположены независимые вторичные секции: до трёх факторов в «Что изменилось», свёрнутая
+«Структура продаж» без графика и «Команда». Связанный с primary action фактор принадлежит верхнему
+decision-блоку и не повторяется здесь. В спокойном READY вместо пустых больших блоков показывается
+короткое нейтральное сообщение.
 
-Для `PARTIAL` постоянный quality status показывается один раз в верхней панели над временем
-обновления. Локальные подписи `Данные ограничены`, inline limitations и отдельный нижний блок
-ограничений не повторяются; `INSUFFICIENT`, `NOT_APPLICABLE` и блокирующее состояние сохраняют
-явные объяснения, потому что значения в этих состояниях недоступны.
+Заголовок команды показывает одно сообщение `N из M требуют проверки`, после него без отдельной
+серой сводной плашки расположены максимум три карточки с реальным `ATTENTION`. Карточка не повторяет
+общий статус: она содержит конкретную причину, ориентир и короткие действия `Почему сотрудник в
+списке` и `Открыть сотрудника`; доступные имена действий включают имя сотрудника. Frontend не
+выбирает первого сотрудника автоматически. Метрики, evidence и сравнение эффективности открываются
+по запросу. Сотрудники `LIMITED`, `POSITIVE` и `STABLE` не занимают основной экран.
+
+Evidence, формула чистой выручки, ограничения и подробность сотрудника открываются единым
+`ReviewDetailPanel`: правой панелью на desktop и bottom sheet на mobile. Одновременно существует
+один detail context. Панель закрывается кнопкой, `Escape` или backdrop, удерживает фокус, скрывает
+фон от accessibility tree и возвращает фокус на исходный триггер.
+
+Для `PARTIAL` header показывает нейтральный статус, а под ним находится одна сводка качества.
+Надёжные KPI и секции сохраняются; адресная ссылка у затронутой метрики объясняет только её
+ограничение. Локальные ограничения структуры и команды входят в ту же сводку и доступны из своей
+секции. Если backend не сформировал проверяемое действие, `PARTIAL` не обещает, что дополнительная
+проверка не нужна: экран предлагает сначала уточнить ограничения. Нормальный `READY` не получает
+success-плашку. `BLOCKED` скрывает длинный недостоверный
+отчёт и показывает причину с исправлением; для недоступного менеджеру исправления панель называет
+администратора или ответственного за загрузку данных без ложной кнопки действия. `PREPARING`
+остаётся отдельным состоянием прогресса.
 
 Текущее значение маржи приходит из backend по формуле `grossProfit / netRevenue × 100%`.
 Изменение маржи показывается как абсолютная разница в процентных пунктах, а не как относительный
 процент между двумя значениями маржи.
 
-Пользовательский текст раздела использует только букву `е` в спорных написаниях, включая состояния,
-подписи и резервный legacy-экран.
-
-На desktop блок сотрудников использует master–detail: компактный список с одним главным показателем
-слева и единая область выбранного сотрудника справа. Дополнительные метрики, динамика и сравнение с
-командой образуют один плоский аналитический уровень; вложенные карточки и одновременное раскрытие
-нескольких сотрудников не создают конкурирующую визуальную иерархию.
-
-На tablet и mobile список сотрудников становится горизонтальным селектором над выбранным
-сотрудником. На mobile ключевые результаты остаются сеткой 2×2, статистика команды — строкой из трех
-показателей, а сигналы недели объединяются в один контейнер. Страница не создает горизонтальный
-overflow и сохраняет доступные области нажатия.
+На mobile KPI остаются сеткой 2×2, decision-блоки идут последовательно, структура превращается в
+двухколоночные строки, а detail panel становится нижним листом. В плотном сценарии сначала видны
+один вторичный фактор и один сотрудник; остальные из уже ограниченных трёх раскрываются кнопками
+`Ещё N изменений` и `Ещё N сотрудников` в том же DOM. На tablet/desktop эти элементы сразу видны
+полностью. Интерактивные элементы сохраняют доступную область нажатия; страница не создаёт
+горизонтальный overflow. Графиков в этой версии нет, поскольку weekly-review endpoint не
+предоставляет согласованный временной ряд.
 
 ## Telegram boundary
 
@@ -193,12 +296,19 @@ overflow и сохраняет доступные области нажатия.
 
 ## Ошибки и неполные данные
 
+- Quality counters для Weekly Review вычисляются только по текущей и предыдущей сравниваемым
+  неделям. Открытая store-wide проблема вне этих периодов не переводит отчёт в `PARTIAL`.
 - `BLOCKED` snapshot не передаётся AI и получает `NOT_APPLICABLE`.
 - Невалидный provider response не публикуется.
 - Budget, deadline, request-size и context-window violations завершаются fail-closed.
+- Ошибка чтения weekly-review endpoint не маскируется legacy-представлением.
 - Ошибка чтения отдельного enrichment логируется без раскрытия payload; следующий candidate может
   быть проверен, после чего остаётся deterministic fallback.
 - `PARTIAL` допускает AI только при наличии deterministic outcome и явно сохраняет ограничение.
+- Отсутствие смен не является store-wide quality issue и не должно скрывать доступные sales-выводы.
+- У сотрудника, уже попавшего в список по независимому sales-сигналу, отсутствие time-оценки
+  объясняется локально: `Часть смен не заполнена — оценка по часам недоступна`. Эта подпись не
+  меняет attention, action или report state.
 
 ## Расхождения и открытые решения
 
