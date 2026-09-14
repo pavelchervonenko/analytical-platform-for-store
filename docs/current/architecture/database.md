@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - operator
-last_verified: 2026-09-10
+last_verified: 2026-09-14
 requirement_sources:
   - docs/archive/legacy-contracts/database-design.md
 implementation_sources:
@@ -36,7 +36,7 @@ superseded_by: null
 ## Источник истины
 
 Результирующую схему определяет упорядоченная цепочка Flyway migrations, а не этот текст и не JPA.
-Текущий source-tree заканчивается V48 и включает отдельную decimal-версию V39.1. Применённую в
+Текущий source-tree заканчивается V50 и включает отдельную decimal-версию V39.1. Применённую в
 конкретной БД версию можно утверждать только после чтения `flyway_schema_history`.
 
 ## Основные слои
@@ -73,6 +73,18 @@ review artifacts append-only; корректировка создаёт нову
 `sync_jobs`, `sync_runs`, report/AI jobs, notification outbox и
 `livesklad_webhook_receipts` — изменяемые lifecycle records. Завершённый бизнес-артефакт и его job
 имеют разные правила неизменяемости.
+
+### Доступ пользователей
+
+`user_store_accesses` задаёт доступ руководителя к магазинам, а V50-таблица
+`user_feature_access` — независимый глобальный доступ к функциям `PLAN`, `SHIFTS`, `PAYROLL`.
+Составной primary key `(user_id, feature)` запрещает дубли, check constraint ограничивает набор,
+а `ON DELETE CASCADE` удаляет права вместе с пользователем. Администратор не хранит явные строки:
+для него все функции разрешены неявно.
+
+V50 выдаёт все три функции существующим руководителям, сохраняя прежнее поведение. Новые
+руководители получают только явно выбранные функции; пустой набор допустим. Изменение магазина или
+функции увеличивает `app_users.security_version`, поэтому прежняя session перестаёт действовать.
 
 ## Инварианты LiveSklad
 

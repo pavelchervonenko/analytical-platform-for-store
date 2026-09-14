@@ -1,5 +1,6 @@
 package com.storeanalytics.auth.web;
 
+import com.storeanalytics.auth.model.UserFeature;
 import com.storeanalytics.auth.model.UserRole;
 import java.time.Instant;
 import java.util.List;
@@ -14,6 +15,7 @@ public record AdminUserResponse(
         boolean passwordChangeRequired,
         boolean allStores,
         List<UUID> storeIds,
+        List<UserFeature> features,
         Instant lastLoginAt,
         long version
 ) {

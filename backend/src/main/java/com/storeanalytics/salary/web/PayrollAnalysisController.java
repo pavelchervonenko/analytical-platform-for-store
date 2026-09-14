@@ -29,7 +29,8 @@ public class PayrollAnalysisController {
     }
 
     @GetMapping("/{storeId}/payroll/{month}/readiness")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_PAYROLL')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     PayrollReadinessView readiness(
             @PathVariable UUID storeId,
             @PathVariable @DateTimeFormat(pattern = "yyyy-MM") YearMonth month
@@ -38,7 +39,8 @@ public class PayrollAnalysisController {
     }
 
     @GetMapping("/{storeId}/payroll/{month}/preview")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_PAYROLL')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     PayrollPreviewView preview(
             @PathVariable UUID storeId,
             @PathVariable @DateTimeFormat(pattern = "yyyy-MM") YearMonth month

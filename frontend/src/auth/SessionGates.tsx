@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from "react-router";
+import { hasUserFeature, type UserFeature } from "../api/contracts";
 import { useAuth } from "./AuthProvider";
 
 function BootScreen() {
@@ -53,6 +54,15 @@ export function AdminGate() {
   const { user } = useAuth();
   const location = useLocation();
   if (user?.role !== "ADMIN") {
+    return <Navigate to={{ pathname: "/overview", search: location.search }} replace />;
+  }
+  return <Outlet />;
+}
+
+export function FeatureGate({ feature }: { feature: UserFeature }) {
+  const { user } = useAuth();
+  const location = useLocation();
+  if (!hasUserFeature(user, feature)) {
     return <Navigate to={{ pathname: "/overview", search: location.search }} replace />;
   }
   return <Outlet />;

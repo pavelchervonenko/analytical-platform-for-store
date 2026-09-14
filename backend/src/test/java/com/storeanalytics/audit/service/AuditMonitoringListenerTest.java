@@ -67,6 +67,8 @@ class AuditMonitoringListenerTest {
     void keepsAlertCategoriesBoundedAndExplicit() {
         assertThat(AuditMonitoringListener.category(AuditAction.USER_CHANGED))
                 .isEqualTo("user_administration");
+        assertThat(AuditMonitoringListener.category(AuditAction.USER_ACCESS_CHANGED))
+                .isEqualTo("user_administration");
         assertThat(AuditMonitoringListener.category(
                 AuditAction.BOOTSTRAP_ADMIN_CREATED
         )).isEqualTo("user_administration");

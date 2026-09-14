@@ -6,7 +6,7 @@ owner: frontend
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-14
 requirement_sources:
   - docs/current/product/README.md
 implementation_sources:
@@ -46,6 +46,10 @@ Frontend не подменяет `null` нулём, явно называет у
 смешивает периоды в одной карточке. Решения по Overview period scope и employee return attribution
 закреплены в [ADR-0002](../../decisions/ADR-0002-overview-period-scope.md) и
 [ADR-0001](../../decisions/ADR-0001-return-employee-attribution.md).
+
+Для руководителя operational-разделы отображаются по глобальным функциям `PLAN`, `SHIFTS` и
+`PAYROLL`. Это не только навигация: route guard не открывает прямой URL, а backend независимо
+проверяет функцию вместе с назначением магазина. Администратор имеет все функции неявно.
 
 ## Базовая типографика
 

@@ -6,6 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.storeanalytics.audit.model.AuditLog;
 import com.storeanalytics.auth.model.AppUser;
+import com.storeanalytics.auth.model.UserFeature;
+import com.storeanalytics.auth.model.UserFeatureAccess;
+import com.storeanalytics.auth.model.UserFeatureAccessId;
 import com.storeanalytics.auth.model.UserRole;
 import com.storeanalytics.auth.model.UserStoreAccess;
 import com.storeanalytics.auth.model.UserStoreAccessId;
@@ -69,6 +72,7 @@ class ModelConstructionTest {
             IntegrationConnection.class,
             Store.class,
             AppUser.class,
+            UserFeatureAccess.class,
             UserStoreAccess.class,
             SyncJob.class,
             SyncRun.class,
@@ -93,7 +97,7 @@ class ModelConstructionTest {
 
     @Test
     void everyEntityHasJpaConstructorAndApplicationCreationPath() throws NoSuchMethodException {
-        assertThat(ENTITY_TYPES).hasSize(23);
+        assertThat(ENTITY_TYPES).hasSize(24);
         for (Class<?> entityType : ENTITY_TYPES) {
             assertThat(entityType).hasAnnotation(Entity.class);
             assertThat(Modifier.isProtected(entityType.getDeclaredConstructor().getModifiers()))
@@ -146,12 +150,16 @@ class ModelConstructionTest {
 
         assertThat(new UserStoreAccessId(first, second))
                 .isEqualTo(new UserStoreAccessId(first, second));
+        assertThat(new UserFeatureAccessId(first, UserFeature.PLAN))
+                .isEqualTo(new UserFeatureAccessId(first, UserFeature.PLAN));
         assertThat(new EmployeeStoreAssignmentId(first, second))
                 .isEqualTo(new EmployeeStoreAssignmentId(first, second));
         assertThat(new StoreProductInventoryId(first, second))
                 .isEqualTo(new StoreProductInventoryId(first, second));
 
         assertThatThrownBy(() -> new UserStoreAccessId(null, second))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new UserFeatureAccessId(first, null))
                 .isInstanceOf(NullPointerException.class);
     }
 

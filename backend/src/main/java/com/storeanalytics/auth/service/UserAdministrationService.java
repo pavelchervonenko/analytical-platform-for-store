@@ -8,22 +8,18 @@ import com.storeanalytics.auth.exception.ManagedUserNotFoundException;
 import com.storeanalytics.auth.exception.UserAdministrationConflictException;
 import com.storeanalytics.auth.exception.UserEmailConflictException;
 import com.storeanalytics.auth.model.AppUser;
+import com.storeanalytics.auth.model.UserFeature;
 import com.storeanalytics.auth.model.UserRole;
-import com.storeanalytics.auth.model.UserStoreAccess;
 import com.storeanalytics.auth.repository.AppUserRepository;
-import com.storeanalytics.auth.repository.UserStoreAccessRepository;
+import com.storeanalytics.common.security.SecurityAuditLogger;
 import com.storeanalytics.common.web.PageParameters;
 import com.storeanalytics.common.web.PageResponse;
-import com.storeanalytics.common.security.SecurityAuditLogger;
-import com.storeanalytics.store.model.Store;
-import com.storeanalytics.store.repository.StoreRepository;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.springframework.data.domain.Sort;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,8 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserAdministrationService {
 
     private final AppUserRepository userRepository;
-    private final UserStoreAccessRepository accessRepository;
-    private final StoreRepository storeRepository;
+    private final UserAccessAssignmentService accessAssignmentService;
     private final PasswordEncoder passwordEncoder;
     private final PasswordPolicy passwordPolicy;
     private final SecurityAuditLogger securityAuditLogger;
@@ -41,16 +36,14 @@ public class UserAdministrationService {
 
     public UserAdministrationService(
             AppUserRepository userRepository,
-            UserStoreAccessRepository accessRepository,
-            StoreRepository storeRepository,
+            UserAccessAssignmentService accessAssignmentService,
             PasswordEncoder passwordEncoder,
             PasswordPolicy passwordPolicy,
             SecurityAuditLogger securityAuditLogger,
             AuditLogService auditLogService
     ) {
         this.userRepository = userRepository;
-        this.accessRepository = accessRepository;
-        this.storeRepository = storeRepository;
+        this.accessAssignmentService = accessAssignmentService;
         this.passwordEncoder = passwordEncoder;
         this.passwordPolicy = passwordPolicy;
         this.securityAuditLogger = securityAuditLogger;
@@ -62,21 +55,15 @@ public class UserAdministrationService {
         var users = userRepository.findAdminPage(
                 new PageParameters(page, size).pageable(Sort.unsorted())
         );
-        Map<UUID, List<UUID>> storeIdsByUser = accessRepository
-                .findAllByIdUserIdIn(users.stream().map(AppUser::getId).toList())
-                .stream()
-                .collect(Collectors.groupingBy(
-                        access -> access.getId().getUserId(),
-                        Collectors.mapping(
-                                access -> access.getId().getStoreId(),
-                                Collectors.collectingAndThen(
-                                        Collectors.toList(),
-                                        ids -> ids.stream().sorted().toList()
-                                )
-                        )
-                ));
+        List<UUID> userIds = users.stream().map(AppUser::getId).toList();
+        Map<UUID, List<UUID>> storeIdsByUser = accessAssignmentService
+                .storeIdsByUser(userIds);
+        Map<UUID, List<UserFeature>> featuresByUser = accessAssignmentService
+                .featuresByUser(userIds);
         return PageResponse.from(users.map(user -> createView(
-                user, storeIdsByUser.getOrDefault(user.getId(), List.of())
+                user,
+                storeIdsByUser.getOrDefault(user.getId(), List.of()),
+                featuresByUser.getOrDefault(user.getId(), List.of())
         )));
     }
 
@@ -94,7 +81,8 @@ public class UserAdministrationService {
                 command.role()
         );
         userRepository.save(user);
-        replaceStoreAccesses(user, command.storeIds(), actor);
+        accessAssignmentService.replaceStoreAccesses(user, command.storeIds(), actor);
+        accessAssignmentService.replaceFeatureAccesses(user, command.features(), actor);
         AdminUserView result = createView(user);
         auditLogService.record(
                 actorId,
@@ -111,7 +99,8 @@ public class UserAdministrationService {
 
     @Transactional
     public AdminUserView update(UUID userId, UpdateUserCommand command, UUID actorId) {
-        AppUser user = requireUser(userId);
+        AppUser user = requireUserForUpdate(userId);
+        requireCurrentVersion(user, command.version());
         if (userId.equals(actorId)
                 && (command.role() != user.getRole() || !command.active())) {
             throw new UserAdministrationConflictException(
@@ -120,20 +109,42 @@ public class UserAdministrationService {
         }
         protectLastAdministrator(user, command.role(), command.active());
         Map<String, Object> before = userSummary(createView(user));
+        UserRole previousRole = user.getRole();
+        Set<UUID> previousStoreIds = accessAssignmentService.assignedStoreIds(user.getId());
+        Set<UserFeature> previousFeatures = accessAssignmentService.assignedFeatures(user.getId());
+        Set<UUID> requestedStoreIds = Set.copyOf(command.storeIds());
+        Set<UserFeature> requestedFeatures = Set.copyOf(command.features());
+        validateAdministratorAccess(command.role(), requestedStoreIds, requestedFeatures);
+        Set<UUID> desiredStoreIds = command.role() == UserRole.ADMIN
+                ? Set.of()
+                : requestedStoreIds;
+        Set<UserFeature> desiredFeatures = command.role() == UserRole.ADMIN
+                ? Set.of()
+                : requestedFeatures;
+        boolean accessChanged = !previousStoreIds.equals(desiredStoreIds)
+                || !previousFeatures.equals(desiredFeatures);
         user.updateProfile(command.displayName(), command.role());
         if (command.active()) {
             user.activate();
         } else {
             user.deactivate();
         }
-        if (command.role() == UserRole.ADMIN) {
-            removeStoreAccesses(user.getId());
+        AppUser actor = requireUser(actorId);
+        if (!previousStoreIds.equals(desiredStoreIds)) {
+            accessAssignmentService.replaceStoreAccesses(user, desiredStoreIds, actor);
         }
+        if (!previousFeatures.equals(desiredFeatures)) {
+            accessAssignmentService.replaceFeatureAccesses(user, desiredFeatures, actor);
+        }
+        if (accessChanged && previousRole == command.role()) {
+            user.recordAccessPolicyChange();
+        }
+        userRepository.flush();
         AdminUserView result = createView(user);
         auditLogService.record(
                 actorId,
                 null,
-                AuditAction.USER_CHANGED,
+                accessChanged ? AuditAction.USER_ACCESS_CHANGED : AuditAction.USER_CHANGED,
                 new AuditTarget(AuditEntityType.USER, userId),
                 null,
                 before,
@@ -144,11 +155,23 @@ public class UserAdministrationService {
     }
 
     @Transactional
-    public AdminUserView replaceStoreAccesses(UUID userId, Set<UUID> storeIds, UUID actorId) {
-        AppUser user = requireUser(userId);
+    public AdminUserView replaceStoreAccesses(
+            UUID userId,
+            Set<UUID> storeIds,
+            long version,
+            UUID actorId
+    ) {
+        AppUser user = requireUserForUpdate(userId);
+        requireCurrentVersion(user, version);
         AppUser actor = requireUser(actorId);
         Map<String, Object> before = userSummary(createView(user));
-        replaceStoreAccesses(user, storeIds, actor);
+        Set<UUID> previousStoreIds = accessAssignmentService.assignedStoreIds(userId);
+        Set<UUID> desiredStoreIds = Set.copyOf(storeIds);
+        if (!previousStoreIds.equals(desiredStoreIds)) {
+            accessAssignmentService.replaceStoreAccesses(user, desiredStoreIds, actor);
+            user.recordAccessPolicyChange();
+        }
+        userRepository.flush();
         AdminUserView result = createView(user);
         auditLogService.record(
                 actorId,
@@ -174,6 +197,7 @@ public class UserAdministrationService {
         AppUser user = requireUser(userId);
         Map<String, Object> before = userSummary(createView(user));
         user.resetPassword(passwordEncoder.encode(temporaryPassword));
+        userRepository.flush();
         AdminUserView result = createView(user);
         auditLogService.record(
                 actorId,
@@ -188,34 +212,16 @@ public class UserAdministrationService {
         return result;
     }
 
-    private void replaceStoreAccesses(AppUser user, Set<UUID> requestedStoreIds, AppUser actor) {
-        Set<UUID> storeIds = requestedStoreIds == null ? Set.of() : Set.copyOf(requestedStoreIds);
-        if (user.getRole() == UserRole.ADMIN) {
-            if (!storeIds.isEmpty()) {
-                throw new UserAdministrationConflictException(
-                        "Administrators automatically have access to all stores"
-                );
-            }
-            removeStoreAccesses(user.getId());
-            return;
+    private void validateAdministratorAccess(
+            UserRole role,
+            Set<UUID> storeIds,
+            Set<UserFeature> features
+    ) {
+        if (role == UserRole.ADMIN && (!storeIds.isEmpty() || !features.isEmpty())) {
+            throw new UserAdministrationConflictException(
+                    "Administrators automatically have access to all stores and features"
+            );
         }
-
-        List<Store> stores = storeRepository.findAllById(storeIds);
-        Set<UUID> foundStoreIds = new HashSet<>();
-        stores.forEach(store -> foundStoreIds.add(store.getId()));
-        if (!foundStoreIds.equals(storeIds)) {
-            throw new UserAdministrationConflictException("One or more stores do not exist");
-        }
-
-        removeStoreAccesses(user.getId());
-        accessRepository.saveAll(stores.stream()
-                .map(store -> new UserStoreAccess(user, store, actor))
-                .toList());
-    }
-
-    private void removeStoreAccesses(UUID userId) {
-        accessRepository.deleteAllByIdUserId(userId);
-        accessRepository.flush();
     }
 
     private void protectLastAdministrator(AppUser user, UserRole newRole, boolean newActive) {
@@ -231,14 +237,20 @@ public class UserAdministrationService {
     }
 
     private AdminUserView createView(AppUser user) {
-        List<UUID> storeIds = accessRepository.findAllByIdUserId(user.getId()).stream()
-                .map(access -> access.getId().getStoreId())
+        List<UUID> storeIds = accessAssignmentService.assignedStoreIds(user.getId()).stream()
                 .sorted()
                 .toList();
-        return createView(user, storeIds);
+        List<UserFeature> features = accessAssignmentService.assignedFeatures(user.getId()).stream()
+                .sorted()
+                .toList();
+        return createView(user, storeIds, features);
     }
 
-    private AdminUserView createView(AppUser user, List<UUID> assignedStoreIds) {
+    private AdminUserView createView(
+            AppUser user,
+            List<UUID> assignedStoreIds,
+            List<UserFeature> assignedFeatures
+    ) {
         boolean allStores = user.getRole() == UserRole.ADMIN;
         return new AdminUserView(
                 user.getId(),
@@ -249,6 +261,9 @@ public class UserAdministrationService {
                 user.isPasswordChangeRequired(),
                 allStores,
                 allStores ? List.of() : assignedStoreIds,
+                allStores
+                        ? java.util.EnumSet.allOf(UserFeature.class).stream().toList()
+                        : assignedFeatures,
                 user.getLastLoginAt(),
                 user.getVersion()
         );
@@ -262,12 +277,24 @@ public class UserAdministrationService {
                 "passwordChangeRequired", user.passwordChangeRequired(),
                 "allStores", user.allStores(),
                 "storeIds", user.storeIds(),
+                "features", user.features(),
                 "version", user.version()
         );
     }
 
+    private void requireCurrentVersion(AppUser user, long expectedVersion) {
+        if (user.getVersion() != expectedVersion) {
+            throw new ObjectOptimisticLockingFailureException(AppUser.class, user.getId());
+        }
+    }
+
     private AppUser requireUser(UUID userId) {
         return userRepository.findById(userId)
+                .orElseThrow(() -> new ManagedUserNotFoundException(userId));
+    }
+
+    private AppUser requireUserForUpdate(UUID userId) {
+        return userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new ManagedUserNotFoundException(userId));
     }
 }

@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-14
 requirement_sources:
   - docs/archive/legacy-contracts/store-plan-progress-api.md
 implementation_sources:
@@ -34,7 +34,8 @@ superseded_by: null
 
 `GET /api/stores/{storeId}/performance-plans/{yyyy-MM}/progress?asOf=YYYY-MM-DD&scope=SELLERS|STORE`
 всегда считает month-to-`asOf`. Это не произвольный выбранный range и не значение только одного
-дня. Transport default `STORE` сохраняет совместимость прежних потребителей.
+дня. Transport default `STORE` сохраняет совместимость прежних потребителей. Endpoint, чтение и
+изменение самого плана требуют и назначения магазина, и функции `PLAN`.
 
 План в базе один. `SELLERS` применяет его к факту `rankingEligible`, `STORE` — ко всему магазину.
 Revenue, direction amount, daily actuals, share, forecast и target amount внутри одного response

@@ -5,7 +5,7 @@ status: current
 owner: frontend
 audience:
   - developer
-last_verified: 2026-09-09
+last_verified: 2026-09-14
 requirement_sources:
   - contracts/openapi/current.json
 implementation_sources:
@@ -39,6 +39,11 @@ idempotency, timeout и structured error с correlation ID/Retry-After.
 Общий `QueryError` различает отсутствие доступа/данных, конфликт версии, временный transport
 failure и несовместимый response contract. Для 403/404 бесполезный retry не показывается;
 correlation ID выводится только как ссылка для обращения в поддержку.
+
+OpenAPI v12 делает `features` обязательным в session/admin user responses и в create/update user
+commands; combined update также требует `active`, `storeIds` и optimistic `version`. Runtime-схема
+при чтении допускает неизвестное enum-значение как `UNKNOWN`, но fail-closed админка не сохраняет
+такого пользователя старым набором полей.
 
 ## Gaps
 

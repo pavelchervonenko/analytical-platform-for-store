@@ -33,7 +33,7 @@ superseded_by: null
 разрешённых stores: scope всегда вычисляет backend.
 
 Элементы содержат identity, name, nullable address, timezone, business-day/store-hours settings и
-active state согласно OpenAPI v11. Список сортируется по name case-insensitively и UUID. Session с
+active state согласно OpenAPI v12. Список сортируется по name case-insensitively и UUID. Session с
 `PASSWORD_CHANGE_REQUIRED` не получает directory.
 
 Endpoint является единственным backend-owned источником store switcher. Frontend не сохраняет

@@ -6,7 +6,7 @@ owner: frontend
 audience:
   - developer
   - manager
-last_verified: 2026-09-09
+last_verified: 2026-09-14
 requirement_sources:
   - docs/current/product/business-metrics.md
   - docs/current/product/plans-and-shifts.md
@@ -51,6 +51,9 @@ superseded_by: null
 подписаны как отклонение «к цели», а денежное отклонение — как «выше цели» или «не хватает».
 В week/custom тёмный блок показывает только selected-period amount, quantity и share, чтобы не
 смешивать недельный факт с месячной целью.
+
+Для руководителя без `PLAN` главная не запрашивает plan progress и полностью исключает блок
+«План месяца»; остальные KPI и аналитика продолжают работать. Администратор имеет `PLAN` неявно.
 
 «Структура продаж» использует тот же выбранный scope, а attach-map
 намеренно остаётся STORE и имеет явную подпись. `null` GP/margin не показывается как zero.

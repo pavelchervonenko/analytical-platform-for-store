@@ -17,4 +17,21 @@ public record EmployeeCardView(
         EmployeeRatingDynamics dynamics,
         EmployeePayrollContextView payroll
 ) {
+
+    public EmployeeCardView withoutPayroll() {
+        return new EmployeeCardView(
+                storeId,
+                employeeId,
+                periodStart,
+                periodEnd,
+                previousPeriodStart,
+                previousPeriodEnd,
+                formula,
+                plan,
+                current,
+                previous,
+                dynamics,
+                null
+        );
+    }
 }

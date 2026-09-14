@@ -6,7 +6,7 @@ owner: frontend
 audience:
   - developer
   - manager
-last_verified: 2026-09-09
+last_verified: 2026-09-14
 requirement_sources:
   - docs/current/product/payroll.md
   - docs/current/product/reports.md
@@ -32,6 +32,13 @@ superseded_by: null
 ---
 
 # Зарплата и отчёты в интерфейсе
+
+Раздел `/payroll` и его прямые API требуют функции `PAYROLL`; без неё пункт меню скрыт, прямой URL
+перенаправляется на обзор, а зарплатный блок карточки сотрудника отсутствует. Корректирующие ссылки
+из readiness на план или смены показываются только при наличии `PLAN` или `SHIFTS` соответственно.
+
+Архив `/reports` намеренно не зависит от `PAYROLL`: руководитель с доступом к магазину продолжает
+видеть опубликованные отчёты и содержащиеся в них зарплатные значения.
 
 | View | Endpoint | Период | Cohort | Null/partial | Label |
 |---|---|---|---|---|---|

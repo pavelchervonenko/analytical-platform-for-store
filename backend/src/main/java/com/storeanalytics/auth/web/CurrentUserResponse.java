@@ -1,5 +1,6 @@
 package com.storeanalytics.auth.web;
 
+import com.storeanalytics.auth.model.UserFeature;
 import com.storeanalytics.auth.model.UserRole;
 import java.util.List;
 import java.util.UUID;
@@ -11,6 +12,7 @@ public record CurrentUserResponse(
         UserRole role,
         boolean passwordChangeRequired,
         boolean allStores,
-        List<UUID> storeIds
+        List<UUID> storeIds,
+        List<UserFeature> features
 ) {
 }

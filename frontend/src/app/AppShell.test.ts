@@ -3,7 +3,8 @@ import { navigationGroupsFor } from "./AppShell";
 
 describe("application navigation", () => {
   it("shows plan and shifts as separate management destinations", () => {
-    const management = navigationGroupsFor("MANAGER").find((group) => group.label === "Управление");
+    const management = navigationGroupsFor("MANAGER", ["PLAN", "SHIFTS", "PAYROLL"])
+      .find((group) => group.label === "Управление");
 
     expect(management?.items.map((item) => [item.to, item.label])).toEqual([
       ["/plan", "План"],
@@ -13,11 +14,21 @@ describe("application navigation", () => {
     ]);
   });
 
+  it("hides only the operational sections not granted to a manager", () => {
+    const management = navigationGroupsFor("MANAGER", ["SHIFTS"])
+      .find((group) => group.label === "Управление");
+
+    expect(management?.items.map((item) => item.label)).toEqual(["Смены", "Отчеты"]);
+  });
+
   it("shows the System group only to administrators", () => {
     expect(navigationGroupsFor("MANAGER").map((group) => group.label)).not.toContain("Система");
     expect(navigationGroupsFor("UNKNOWN").map((group) => group.label)).not.toContain("Система");
 
     const systemGroup = navigationGroupsFor("ADMIN").find((group) => group.label === "Система");
     expect(systemGroup?.items.map((item) => item.label)).toEqual(["Качество данных", "Настройки"]);
+    expect(navigationGroupsFor("ADMIN")
+      .find((group) => group.label === "Управление")?.items.map((item) => item.label))
+      .toEqual(["План", "Смены", "Зарплата", "Отчеты"]);
   });
 });

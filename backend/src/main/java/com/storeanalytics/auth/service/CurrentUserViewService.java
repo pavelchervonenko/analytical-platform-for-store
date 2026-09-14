@@ -34,7 +34,8 @@ public class CurrentUserViewService {
                 principal.getRole(),
                 principal.isPasswordChangeRequired(),
                 allStores,
-                storeIds
+                storeIds,
+                principal.getFeatures().stream().sorted().toList()
         );
     }
 }

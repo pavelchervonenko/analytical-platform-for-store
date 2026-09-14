@@ -1,5 +1,6 @@
 package com.storeanalytics.auth.service;
 
+import com.storeanalytics.auth.model.UserFeature;
 import com.storeanalytics.auth.model.UserRole;
 import java.util.Set;
 import java.util.UUID;
@@ -9,6 +10,7 @@ public record CreateUserCommand(
         String temporaryPassword,
         String displayName,
         UserRole role,
-        Set<UUID> storeIds
+        Set<UUID> storeIds,
+        Set<UserFeature> features
 ) {
 }

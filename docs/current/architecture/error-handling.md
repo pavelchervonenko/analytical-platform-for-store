@@ -99,7 +99,7 @@ Frontend различает три уровня. Блокирующая крас
 
 ## Известный transport gap
 
-OpenAPI v11 пока не описывает общий `ApiError`, 401/403 responses и security schemes полностью.
+OpenAPI v12 пока не описывает общий `ApiError`, 401/403 responses и security schemes полностью.
 Фактическая защита реализована в Spring Security и тестах, но generated client не должен считать
 отсутствие этих элементов отсутствием auth/error contract. Gap должен быть закрыт изменением
 OpenAPI и consumer checks, а не копированием другого response shape в feature-документы.

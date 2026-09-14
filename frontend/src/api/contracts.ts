@@ -53,6 +53,10 @@ export const systemStatusSchema = z.object({
 
 export type SystemStatus = z.infer<typeof systemStatusSchema>;
 
+export const userFeatureValues = ["PLAN", "SHIFTS", "PAYROLL"] as const;
+export type UserFeature = typeof userFeatureValues[number];
+export const userFeatureSchema = forwardCompatibleEnum(userFeatureValues);
+
 export const currentUserSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
@@ -60,10 +64,21 @@ export const currentUserSchema = z.object({
   role: forwardCompatibleEnum(["ADMIN", "MANAGER"]),
   passwordChangeRequired: z.boolean(),
   allStores: z.boolean(),
-  storeIds: z.array(z.string().uuid())
+  storeIds: z.array(z.string().uuid()),
+  features: z.array(userFeatureSchema)
 });
 
 export type CurrentUser = z.infer<typeof currentUserSchema>;
+
+export function hasUserFeature(
+  user: {
+    role: CurrentUser["role"] | undefined;
+    features: CurrentUser["features"];
+  } | null | undefined,
+  feature: UserFeature
+): boolean {
+  return user?.role === "ADMIN" || user?.features.includes(feature) === true;
+}
 
 export const activeSessionSchema = z.object({
   sessionReference: z.string().min(1).max(256),

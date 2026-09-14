@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router";
 import { ChangePasswordPage } from "../auth/ChangePasswordPage";
 import { LoginPage } from "../auth/LoginPage";
-import { AdminGate, AnonymousGate, PasswordChangeGate, SessionGate } from "../auth/SessionGates";
+import { AdminGate, AnonymousGate, FeatureGate, PasswordChangeGate, SessionGate } from "../auth/SessionGates";
 import { AppShell } from "./AppShell";
 
 const OverviewPage = lazy(async () => { const module = await import("../dashboard/OverviewPage"); return { default: module.OverviewPage }; });
@@ -30,10 +30,16 @@ export function App() {
       <Route path="/overview" element={<OverviewPage />} />
       <Route path="/employees" element={<EmployeesPage />} />
       <Route path="/employees/:employeeId" element={<EmployeeCardPage />} />
-      <Route path="/plan" element={<PlanPage />} />
-      <Route path="/plan/settings" element={<PlanSettingsPage />} />
-      <Route path="/shifts" element={<ShiftsPage />} />
-      <Route path="/payroll" element={<PayrollPage />} />
+      <Route element={<FeatureGate feature="PLAN" />}>
+        <Route path="/plan" element={<PlanPage />} />
+        <Route path="/plan/settings" element={<PlanSettingsPage />} />
+      </Route>
+      <Route element={<FeatureGate feature="SHIFTS" />}>
+        <Route path="/shifts" element={<ShiftsPage />} />
+      </Route>
+      <Route element={<FeatureGate feature="PAYROLL" />}>
+        <Route path="/payroll" element={<PayrollPage />} />
+      </Route>
       <Route path="/reports" element={<ReportsPage />} />
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/insights" element={<InsightsPreviewPage />} />

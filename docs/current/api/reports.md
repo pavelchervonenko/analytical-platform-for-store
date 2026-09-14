@@ -50,6 +50,6 @@ Dashboard за текущий период — dynamic projection и не рав
 report-а также не следует считать полной сверкой всех store facts, если report schema включает
 только payroll/rating roster.
 
-Administrative backfill endpoints из OpenAPI v11 являются отдельным durable workflow с lease,
+Administrative backfill endpoints из OpenAPI v12 являются отдельным durable workflow с lease,
 cursor и cancellation. Их наличие не разрешает запуск без отдельного operations runbook и точного
 target.

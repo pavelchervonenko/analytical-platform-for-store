@@ -184,9 +184,9 @@ class StoreSyncIntegrationTest {
                 Integer.class
         );
 
-        assertThat(tableCount).isEqualTo(64);
-        assertThat(entityManagerFactory.getMetamodel().getEntities()).hasSize(39);
-        assertThat(applicationContext.getBeanNamesForType(JpaRepository.class)).hasSize(39);
+        assertThat(tableCount).isEqualTo(65);
+        assertThat(entityManagerFactory.getMetamodel().getEntities()).hasSize(40);
+        assertThat(applicationContext.getBeanNamesForType(JpaRepository.class)).hasSize(40);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM integration_connections WHERE connection_key = 'livesklad-default'",
                 Integer.class
@@ -1725,5 +1725,3 @@ class StoreSyncIntegrationTest {
 
     }
 }
-
-

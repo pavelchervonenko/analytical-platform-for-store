@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, BarChart3, CalendarDays, CheckCircle2, CircleDollarSign, Clock3, Info, Link2, Target, Trophy, WalletCards } from "lucide-react";
 import { Link, useLocation, useParams } from "react-router";
+import { hasUserFeature } from "../api/contracts";
 import { getEmployeeCard, queryKeys, type EmployeeComparisonMode } from "../api/queries";
+import { useAuth } from "../auth/AuthProvider";
 import { formatDate } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
 import { QueryError, StaleDataNote } from "../shared/QueryState";
@@ -71,6 +73,7 @@ function CardSkeleton() {
 }
 
 export function EmployeeCardPage() {
+  const { user } = useAuth();
   const { employeeId = "" } = useParams();
   const location = useLocation();
   const { selectedStore, periodStart, periodEnd, periodMode } = useWorkspace();
@@ -201,7 +204,7 @@ export function EmployeeCardPage() {
         <aside className="employee-card-aside">
           <section className="panel employee-context-panel"><span className="context-icon"><Target /></span><p className="eyebrow">План магазина</p><h2>{card.plan.complete ? formatPercent(card.plan.revenueAchievementPercent) : "Неполный план"}</h2><p>{formatMoney(card.plan.actualStoreRevenue)} из {formatMoney(card.plan.proratedRevenueTarget)}</p><dl><div><dt>Аксессуары</dt><dd>{formatPercent(card.plan.accessoryShareTarget)}</dd></div><div><dt>Услуги</dt><dd>{formatPercent(card.plan.serviceShareTarget)}</dd></div><div><dt>Доп. выручка</dt><dd>{formatPercent(card.plan.additionalShareTarget)}</dd></div></dl><small><Info size={13} />План общий для магазина, персональных планов нет.</small></section>
           <section className="panel employee-context-panel"><span className="context-icon"><CalendarDays /></span><p className="eyebrow">Рабочее время</p><h2>{formatNumber(employee.workedHours)} ч</h2><p>{employee.shiftCount} смен, {formatMoney(employee.revenuePerShift)} за смену</p><dl><div><dt>Прошлый период</dt><dd>{formatNumber(previous?.workedHours)} ч</dd></div><div><dt>Выручка / час</dt><dd>{formatMoney(employee.revenuePerHour)}</dd></div></dl></section>
-          <section className="panel employee-context-panel employee-payroll-card">
+          {hasUserFeature(user, "PAYROLL") && <section className="panel employee-context-panel employee-payroll-card">
             <span className="context-icon"><WalletCards /></span><p className="eyebrow">Зарплата</p>
             {card.payroll ? <>
               <h2>{formatMoney(card.payroll.statement.payableAmount)}</h2>
@@ -219,7 +222,7 @@ export function EmployeeCardPage() {
               <p>{periodMode === "MONTH" ? "Для выбранного месяца ведомость сотрудника не рассчитана." : "Выберите календарный месяц, чтобы увидеть начисления и сумму к выплате."}</p>
             </>}
             <small><CheckCircle2 size={13} />Рейтинг не влияет на формулу зарплаты.</small>
-          </section>
+          </section>}
         </aside>
       </div>
     </div>

@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - operator
-last_verified: 2026-09-09
+last_verified: 2026-09-14
 requirement_sources:
   - docs/maintenance/documentation-policy.md
 implementation_sources:
@@ -31,7 +31,7 @@ superseded_by: null
 
 ## Источник истины
 
-[`contracts/openapi/current.json`](../../../contracts/openapi/current.json), версия `11`, —
+[`contracts/openapi/current.json`](../../../contracts/openapi/current.json), версия `12`, —
 transport authority для публичных paths, methods, parameters и schemas. Документы этого каталога
 описывают semantics, access, null/partial behaviour и stable errors; они не заменяют OpenAPI.
 
@@ -49,12 +49,12 @@ transport authority для публичных paths, methods, parameters и sche
 - Ошибки используют единый контракт из
   [`../architecture/error-handling.md`](../architecture/error-handling.md).
 
-## Подтверждённые gaps OpenAPI v11
+## Подтверждённые gaps OpenAPI v12
 
 В baseline отсутствуют полноценные `securitySchemes`, общие 401/403 responses и reusable
 `ApiError`. Spring Security и backend tests обеспечивают фактическую защиту, но transport baseline
 ещё не выражает её полностью. `POST /api/auth/logout`, обслуживаемый security filter, также не
-представлен как path в OpenAPI v11.
+представлен как path в OpenAPI v12.
 
 До исправления gap:
 

@@ -22,7 +22,8 @@ public class PayrollRevisionComparisonController {
     }
 
     @GetMapping("/{storeId}/payroll-runs/{previousRunId}/compare/{currentRunId}")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_PAYROLL')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     PayrollRevisionComparisonView compare(
             @PathVariable UUID storeId,
             @PathVariable UUID previousRunId,

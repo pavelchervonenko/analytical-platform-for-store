@@ -38,7 +38,8 @@ public class WorkScheduleController {
     }
 
     @GetMapping("/{storeId}/work-schedule")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_SHIFTS')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     List<EmployeeShiftView> find(
             @PathVariable UUID storeId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
@@ -59,7 +60,8 @@ public class WorkScheduleController {
             )
     ))
     @GetMapping("/{storeId}/work-schedule/{workDate}")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_SHIFTS')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     ResponseEntity<WorkScheduleDayView> getDay(
             @PathVariable UUID storeId,
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
@@ -83,7 +85,8 @@ public class WorkScheduleController {
             )
     ))
     @PutMapping("/{storeId}/work-schedule/{workDate}")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_SHIFTS')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     ResponseEntity<WorkScheduleDayView> replaceDay(
             @PathVariable UUID storeId,
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)

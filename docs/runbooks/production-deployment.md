@@ -5,7 +5,7 @@ status: draft
 owner: operations
 audience:
   - operator
-last_verified: 2026-08-31
+last_verified: 2026-09-14
 last_rehearsed: null
 verification_levels:
   - static
@@ -70,6 +70,8 @@ production-read-only preflight и владелец не подтвердил п�
   выключенной reconciliation все три значения пусты/нулевые.
 - Recorded source schema входит в migration range, packaged target совпадает с `SCHEMA_VERSION`.
 - Назначены observer, rollback/forward-fix owner и окно наблюдения.
+- Для релиза с V50 изменение прав руководителей начинается только после успешного запуска новых
+  API и web: migration сначала сохраняет прежний доступ всем существующим руководителям.
 
 ## Критерии остановки
 
@@ -144,6 +146,12 @@ Deploy не считается полностью идемпотентным и�
 Application rollback не откатывает БД. `rollback.sh` допустим только при числовом schema state и
 явной совместимости previous runtime. Иначе применяется reviewed compatible forward-fix. Restore
 используется только по DR runbook и не выполняется поверх production.
+
+Особый случай V50: предыдущий runtime не знает `user_feature_access` и снова разрешит
+руководителю план, смены и зарплату по одному назначению магазина. После настройки хотя бы одного
+ограниченного руководителя application rollback на такую версию не сохраняет policy. Перед ним
+оператор либо временно деактивирует затронутые учётные записи с подтверждением security owner,
+либо применяет совместимый forward-fix. Таблицу и строки V50 при rollback не удаляют.
 
 ## Evidence и известные пробелы
 

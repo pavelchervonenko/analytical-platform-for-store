@@ -15,6 +15,10 @@ vi.mock("@tanstack/react-query", () => ({
   })
 }));
 
+vi.mock("../auth/AuthProvider", () => ({
+  useAuth: () => ({ user: { role: "MANAGER", features: ["PLAN"] } })
+}));
+
 vi.mock("../stores/WorkspaceProvider", () => ({
   useWorkspace: () => ({
     selectedStore: { id: "store-1", name: "Магазин" },

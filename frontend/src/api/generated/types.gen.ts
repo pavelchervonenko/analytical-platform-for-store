@@ -98,7 +98,10 @@ export type TelegramDeliverySettingsView = {
 export type UpdateUserRequest = {
     displayName: string;
     role: 'ADMIN' | 'MANAGER';
-    active?: boolean;
+    active: boolean;
+    storeIds: Array<string>;
+    features: Array<'PLAN' | 'SHIFTS' | 'PAYROLL'>;
+    version: number;
 };
 
 export type AdminUserResponse = {
@@ -110,12 +113,14 @@ export type AdminUserResponse = {
     passwordChangeRequired?: boolean;
     allStores?: boolean;
     storeIds?: Array<string>;
+    features?: Array<'PLAN' | 'SHIFTS' | 'PAYROLL'>;
     lastLoginAt?: string;
     version?: number;
 };
 
 export type StoreAccessRequest = {
     storeIds: Array<string>;
+    version: number;
 };
 
 export type SyncJobView = {
@@ -446,6 +451,7 @@ export type CurrentUserResponse = {
     passwordChangeRequired?: boolean;
     allStores?: boolean;
     storeIds?: Array<string>;
+    features?: Array<'PLAN' | 'SHIFTS' | 'PAYROLL'>;
 };
 
 export type ChangePasswordRequest = {
@@ -487,6 +493,7 @@ export type CreateUserRequest = {
     displayName: string;
     role: 'ADMIN' | 'MANAGER';
     storeIds: Array<string>;
+    features: Array<'PLAN' | 'SHIFTS' | 'PAYROLL'>;
 };
 
 export type ResetPasswordRequest = {
@@ -1016,6 +1023,23 @@ export type AnnualEmployeeTotals = {
     payableAmount?: number;
 };
 
+export type AnnualReportMonthView = {
+    snapshotId?: string;
+    revision?: number;
+    payloadHash?: string;
+    report?: MonthlyReportView;
+};
+
+export type AnnualReportView = {
+    schemaVersion?: number;
+    header?: ReportHeader;
+    totals?: AnnualStoreTotals;
+    categories?: Array<AnnualCategoryTotals>;
+    attachRates?: Array<AnnualAttachRateTotals>;
+    employees?: Array<AnnualEmployeeTotals>;
+    months?: Array<AnnualReportMonthView>;
+};
+
 export type AnnualStoreTotals = {
     monthCount?: number;
     netRevenue?: number;
@@ -1103,6 +1127,141 @@ export type CategoryKpiResult = {
     categories?: Array<CategoryKpiEntry>;
 };
 
+export type MonthlyReportView = {
+    schemaVersion?: number;
+    header?: ReportHeader;
+    storeKpi?: StoreKpiResult;
+    categoryKpi?: CategoryKpiResult;
+    averageKpi?: ReportAverageKpi;
+    attachRates?: AttachRateResult;
+    planProgress?: StorePlanProgressView;
+    employeeRating?: EmployeeRatingResult;
+    payroll?: PayrollRunDetailView;
+};
+
+export type ReportAverageKpi = {
+    formulaVersion?: string;
+    averageReceipt?: AverageMetricSnapshot;
+    additionalRevenuePerPhone?: AverageMetricSnapshot;
+    categoryAveragePrices?: Array<ReportCategoryAverage>;
+};
+
+export type ReportCategoryAverage = {
+    categoryCode?: string;
+    categoryName?: string;
+    categoryActive?: boolean;
+    averageUnitPrice?: AverageMetricSnapshot;
+};
+
+export type ReportDetailView = {
+    report?: ReportSummaryView;
+    monthly?: MonthlyReportView;
+    annual?: AnnualReportView;
+};
+
+export type ReportHeader = {
+    storeId?: string;
+    storeName?: string;
+    storeAddress?: string;
+    reportingStartedOn?: string;
+    periodStart?: string;
+    periodEnd?: string;
+    coverage?: 'COMPLETE' | 'PARTIAL_FIRST_YEAR';
+    templateVersion?: string;
+    dataContractVersion?: string;
+    generatedAt?: string;
+    finalizedBy?: ReportActorView;
+};
+
+export type StoreKpiDataQuality = {
+    completeCostData?: boolean;
+    includedItemCount?: number;
+    unmappedItemCount?: number;
+    missingCostItemCount?: number;
+    unexpectedZeroCostItemCount?: number;
+    periodOpenConsistencyIssueCount?: number;
+    storeOpenQualityIssueCount?: number;
+};
+
+export type StoreKpiResult = {
+    storeId?: string;
+    periodStart?: string;
+    periodEnd?: string;
+    formulaVersion?: string;
+    netRevenue?: number;
+    netQuantity?: number;
+    costAmount?: number;
+    grossProfit?: number;
+    marginPercent?: number;
+    dataQuality?: StoreKpiDataQuality;
+};
+
+export type StorePlanDailyDirectionView = {
+    actualAmount?: number;
+    actualSharePercent?: number;
+    targetAmount?: number;
+    targetSharePercent?: number;
+    cumulativeGapAmount?: number;
+};
+
+export type StorePlanDailyTargetView = {
+    date?: string;
+    completed?: boolean;
+    revenueBasisAmount?: number;
+    revenueBasisProjected?: boolean;
+    accessory?: StorePlanDailyDirectionView;
+    service?: StorePlanDailyDirectionView;
+};
+
+export type StorePlanDirectionView = {
+    code?: 'REVENUE' | 'ACCESSORY' | 'SERVICE' | 'ADDITIONAL';
+    criterionType?: 'AMOUNT' | 'SHARE';
+    actualAmount?: number;
+    targetAmount?: number;
+    amountCompletionPercent?: number;
+    currentDailyPace?: number;
+    expectedAmountToDate?: number;
+    paceGapAmount?: number;
+    projectedAmount?: number;
+    projectedAmountCompletionPercent?: number;
+    remainingAmount?: number;
+    requiredPerRemainingDay?: number;
+    actualSharePercent?: number;
+    targetSharePercent?: number;
+    shareGapPercentagePoints?: number;
+    criterionCompletionPercent?: number;
+    achieved?: boolean;
+    status?: 'ACHIEVED' | 'ON_TRACK' | 'AT_RISK' | 'MISSED' | 'NOT_AVAILABLE';
+};
+
+export type StorePlanProgressDataQuality = {
+    freshnessStatus?: 'NOT_SYNCED' | 'CURRENT' | 'STALE' | 'SYNCING' | 'ERROR';
+    dataThroughDate?: string;
+    completeThroughAsOf?: boolean;
+    classificationComplete?: boolean;
+    unmappedItemCount?: number;
+    openQualityIssueCount?: number;
+};
+
+export type StorePlanProgressView = {
+    storeId?: string;
+    periodStart?: string;
+    periodEnd?: string;
+    asOfDate?: string;
+    totalDays?: number;
+    elapsedDays?: number;
+    remainingDays?: number;
+    formulaVersion?: string;
+    plan?: StorePerformancePlanView;
+    dataQuality?: StorePlanProgressDataQuality;
+    achievedDirectionCount?: number;
+    allDirectionsAchieved?: boolean;
+    focusDirections?: Array<'REVENUE' | 'ACCESSORY' | 'SERVICE' | 'ADDITIONAL'>;
+    directions?: Array<StorePlanDirectionView>;
+    dailyTargets?: Array<StorePlanDailyTargetView>;
+    calculatedAt?: string;
+};
+
 export type PeriodPayrollQualityView = {
     readinessStatus?: 'READY' | 'NEEDS_CORRECTION' | 'BLOCKED';
     canCalculate?: boolean;
@@ -1176,63 +1335,6 @@ export type PeriodSourceDataQualityView = {
     openQualityIssueCount?: number;
 };
 
-export type ReportAverageKpi = {
-    formulaVersion?: string;
-    averageReceipt?: AverageMetricSnapshot;
-    additionalRevenuePerPhone?: AverageMetricSnapshot;
-    categoryAveragePrices?: Array<ReportCategoryAverage>;
-};
-
-export type ReportCategoryAverage = {
-    categoryCode?: string;
-    categoryName?: string;
-    categoryActive?: boolean;
-    averageUnitPrice?: AverageMetricSnapshot;
-};
-
-export type ReportDetailView = {
-    report?: ReportSummaryView;
-    monthly?: MonthlyReportView;
-    annual?: AnnualReportView;
-};
-
-export type ReportHeader = {
-    storeId?: string;
-    storeName?: string;
-    storeAddress?: string;
-    reportingStartedOn?: string;
-    periodStart?: string;
-    periodEnd?: string;
-    coverage?: 'COMPLETE' | 'PARTIAL_FIRST_YEAR';
-    templateVersion?: string;
-    dataContractVersion?: string;
-    generatedAt?: string;
-    finalizedBy?: ReportActorView;
-};
-
-export type StoreKpiDataQuality = {
-    completeCostData?: boolean;
-    includedItemCount?: number;
-    unmappedItemCount?: number;
-    missingCostItemCount?: number;
-    unexpectedZeroCostItemCount?: number;
-    periodOpenConsistencyIssueCount?: number;
-    storeOpenQualityIssueCount?: number;
-};
-
-export type StoreKpiResult = {
-    storeId?: string;
-    periodStart?: string;
-    periodEnd?: string;
-    formulaVersion?: string;
-    netRevenue?: number;
-    netQuantity?: number;
-    costAmount?: number;
-    grossProfit?: number;
-    marginPercent?: number;
-    dataQuality?: StoreKpiDataQuality;
-};
-
 export type StorePeriodQualityView = {
     storeId?: string;
     periodMonth?: string;
@@ -1248,72 +1350,6 @@ export type StorePeriodQualityView = {
     payroll?: PeriodPayrollQualityView;
     issues?: Array<PeriodQualityIssueView>;
     checkedAt?: string;
-};
-
-export type StorePlanDailyDirectionView = {
-    actualAmount?: number;
-    actualSharePercent?: number;
-    targetAmount?: number;
-    targetSharePercent?: number;
-    cumulativeGapAmount?: number;
-};
-
-export type StorePlanDailyTargetView = {
-    date?: string;
-    completed?: boolean;
-    revenueBasisAmount?: number;
-    revenueBasisProjected?: boolean;
-    accessory?: StorePlanDailyDirectionView;
-    service?: StorePlanDailyDirectionView;
-};
-
-export type StorePlanDirectionView = {
-    code?: 'REVENUE' | 'ACCESSORY' | 'SERVICE' | 'ADDITIONAL';
-    criterionType?: 'AMOUNT' | 'SHARE';
-    actualAmount?: number;
-    targetAmount?: number;
-    amountCompletionPercent?: number;
-    currentDailyPace?: number;
-    expectedAmountToDate?: number;
-    paceGapAmount?: number;
-    projectedAmount?: number;
-    projectedAmountCompletionPercent?: number;
-    remainingAmount?: number;
-    requiredPerRemainingDay?: number;
-    actualSharePercent?: number;
-    targetSharePercent?: number;
-    shareGapPercentagePoints?: number;
-    criterionCompletionPercent?: number;
-    achieved?: boolean;
-    status?: 'ACHIEVED' | 'ON_TRACK' | 'AT_RISK' | 'MISSED' | 'NOT_AVAILABLE';
-};
-
-export type StorePlanProgressDataQuality = {
-    freshnessStatus?: 'NOT_SYNCED' | 'CURRENT' | 'STALE' | 'SYNCING' | 'ERROR';
-    dataThroughDate?: string;
-    completeThroughAsOf?: boolean;
-    classificationComplete?: boolean;
-    unmappedItemCount?: number;
-    openQualityIssueCount?: number;
-};
-
-export type StorePlanProgressView = {
-    storeId?: string;
-    periodStart?: string;
-    periodEnd?: string;
-    asOfDate?: string;
-    totalDays?: number;
-    elapsedDays?: number;
-    remainingDays?: number;
-    formulaVersion?: string;
-    plan?: StorePerformancePlanView;
-    dataQuality?: StorePlanProgressDataQuality;
-    achievedDirectionCount?: number;
-    allDirectionsAchieved?: boolean;
-    focusDirections?: Array<'REVENUE' | 'ACCESSORY' | 'SERVICE' | 'ADDITIONAL'>;
-    directions?: Array<StorePlanDirectionView>;
-    dailyTargets?: Array<StorePlanDailyTargetView>;
-    calculatedAt?: string;
 };
 
 export type PayrollMissingCostIssue = {
@@ -1681,7 +1717,6 @@ export type JsonNode = {
     container?: boolean;
     number?: boolean;
     missingNode?: boolean;
-    floatingPointNumber?: boolean;
     valueNode?: boolean;
     nodeType?: 'ARRAY' | 'BINARY' | 'BOOLEAN' | 'MISSING' | 'NULL' | 'NUMBER' | 'OBJECT' | 'POJO' | 'STRING';
     object?: boolean;
@@ -1699,6 +1734,7 @@ export type JsonNode = {
     textual?: boolean;
     boolean?: boolean;
     binary?: boolean;
+    floatingPointNumber?: boolean;
     embeddedValue?: boolean;
 };
 
@@ -1829,30 +1865,14 @@ export type EmployeePayrollContextView = {
     statement?: PayrollStatementView;
 };
 
-export type StoreDataStatusView = {
+export type ManagerStoreDataStatusView = {
     storeId?: string;
     status?: 'NOT_SYNCED' | 'CURRENT' | 'STALE' | 'SYNCING' | 'ERROR';
     expectedThroughDate?: string;
     dataThroughDate?: string;
-    salesDataThroughDate?: string;
-    returnsDataThroughDate?: string;
     lagDays?: number;
-    lastCompletedSyncAt?: string;
-    synchronization?: StoreSyncActivityView;
-    openQualityIssueCount?: number;
-    lastError?: string;
-    lastErrorAt?: string;
+    updating?: boolean;
     checkedAt?: string;
-};
-
-export type StoreSyncActivityView = {
-    active?: boolean;
-    id?: string;
-    type?: 'JOB' | 'DIRECT_RUN';
-    status?: string;
-    phase?: string;
-    startedAt?: string;
-    nextAttemptAt?: string;
 };
 
 export type DataQualityIssueView = {
@@ -1884,6 +1904,32 @@ export type StoreDataQualityView = {
     summary?: StoreDataQualitySummaryView;
     dataStatus?: StoreDataStatusView;
     issues?: Array<DataQualityIssueView>;
+};
+
+export type StoreDataStatusView = {
+    storeId?: string;
+    status?: 'NOT_SYNCED' | 'CURRENT' | 'STALE' | 'SYNCING' | 'ERROR';
+    expectedThroughDate?: string;
+    dataThroughDate?: string;
+    salesDataThroughDate?: string;
+    returnsDataThroughDate?: string;
+    lagDays?: number;
+    lastCompletedSyncAt?: string;
+    synchronization?: StoreSyncActivityView;
+    openQualityIssueCount?: number;
+    lastError?: string;
+    lastErrorAt?: string;
+    checkedAt?: string;
+};
+
+export type StoreSyncActivityView = {
+    active?: boolean;
+    id?: string;
+    type?: 'JOB' | 'DIRECT_RUN';
+    status?: string;
+    phase?: string;
+    startedAt?: string;
+    nextAttemptAt?: string;
 };
 
 export type DataQualityOverviewView = {
@@ -2039,45 +2085,6 @@ export type LlmOperationsView = {
     configuration?: LlmOperationsConfigurationView;
     summary?: LlmOperationsSummaryView;
     incidents?: Array<LlmJobIncidentView>;
-};
-
-export type ManagerStoreDataStatusView = {
-    storeId?: string;
-    status?: 'NOT_SYNCED' | 'CURRENT' | 'STALE' | 'SYNCING' | 'ERROR';
-    expectedThroughDate?: string;
-    dataThroughDate?: string;
-    lagDays?: number;
-    updating?: boolean;
-    checkedAt?: string;
-};
-
-export type MonthlyReportView = {
-    schemaVersion?: number;
-    header?: ReportHeader;
-    storeKpi?: StoreKpiResult;
-    categoryKpi?: CategoryKpiResult;
-    averageKpi?: ReportAverageKpi;
-    attachRates?: AttachRateResult;
-    planProgress?: StorePlanProgressView;
-    employeeRating?: EmployeeRatingResult;
-    payroll?: PayrollRunDetailView;
-};
-
-export type AnnualReportMonthView = {
-    snapshotId?: string;
-    revision?: number;
-    payloadHash?: string;
-    report?: MonthlyReportView;
-};
-
-export type AnnualReportView = {
-    schemaVersion?: number;
-    header?: ReportHeader;
-    totals?: AnnualStoreTotals;
-    categories?: Array<AnnualCategoryTotals>;
-    attachRates?: Array<AnnualAttachRateTotals>;
-    employees?: Array<AnnualEmployeeTotals>;
-    months?: Array<AnnualReportMonthView>;
 };
 
 export type GetDayData = {

@@ -46,7 +46,7 @@ describe("frontend consumer contract", () => {
       apiContractVersion: openApi.info.version,
       time: "2026-07-26T12:00:00Z"
     });
-    expect(status.apiContractVersion).toBe("11");
+    expect(status.apiContractVersion).toBe("12");
     expect(openApi.components.schemas.SystemStatusView?.properties?.apiContractVersion).toBeDefined();
   });
 
@@ -58,7 +58,8 @@ describe("frontend consumer contract", () => {
       role: "AUDITOR",
       passwordChangeRequired: false,
       allStores: false,
-      storeIds: []
+      storeIds: [],
+      features: ["PLAN", "FUTURE_FEATURE"]
     });
     const report = reportSummarySchema.parse({
       id: "30df06fb-71fe-4477-b6b9-bbc712b1ab26",
@@ -79,6 +80,7 @@ describe("frontend consumer contract", () => {
       finalizedBy: null
     });
     expect(user.role).toBe("UNKNOWN");
+    expect(user.features).toEqual(["PLAN", "UNKNOWN"]);
     expect(report.type).toBe("UNKNOWN");
     expect(report.coverage).toBe("UNKNOWN");
     expect(report.status).toBe("UNKNOWN");

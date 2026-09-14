@@ -79,7 +79,7 @@ public class AuditMonitoringListener {
 
     static String category(AuditAction action) {
         return switch (action) {
-            case USER_CREATED, USER_CHANGED, USER_STORE_ACCESS_CHANGED,
+            case USER_CREATED, USER_CHANGED, USER_STORE_ACCESS_CHANGED, USER_ACCESS_CHANGED,
                     USER_PASSWORD_RESET,
                     BOOTSTRAP_ADMIN_CREATED -> "user_administration";
             case BREAK_GLASS_LOGIN_SUCCEEDED -> "break_glass";

@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - operator
-last_verified: 2026-08-31
+last_verified: 2026-09-14
 requirement_sources:
   - docs/archive/legacy-contracts/database-design.md
   - docs/maintenance/documentation-policy.md
@@ -36,7 +36,7 @@ superseded_by: null
 ## Действующий контракт
 
 Backend вычисляет максимальную ожидаемую schema version из packaged migration resources. В
-source-tree максимальная версия — V48; цепочка также содержит V39.1, которая сортируется между V39
+source-tree максимальная версия — V50; цепочка также содержит V39.1, которая сортируется между V39
 и V40. Runtime API/WORKER не мигрирует БД и должен только read-only проверить фактическую историю.
 
 Production deploy сначала проверяет immutable images и packaged schema, затем останавливает worker
@@ -52,6 +52,7 @@ migration writers остаются остановленными до диагн�
 | V43 | Lease/retry/terminal state и orphan return до появления исходной продажи |
 | V44 | Audited, idempotent validated return recovery |
 | V45–V48 | Weekly-review snapshots, AI enrichment/jobs/attempts и contract hardening |
+| V50 | Глобальные функциональные права руководителей с backfill прежнего доступа |
 
 ## Политика изменения
 
@@ -72,8 +73,8 @@ oracle packaged version.
 
 ## Что не доказано
 
-- Не существует полного populated upgrade matrix из каждой V1–V47 в V48.
-- Downgrade V48 в предыдущую schema не реализован и не репетировался.
+- Не существует полного populated upgrade matrix из каждой V1–V49 в V50.
+- Downgrade V50 в предыдущую schema не реализован и не репетировался.
 - Release scripts используют локальный state-файл для compatibility decision. После failed
   migration marker `MIGRATION_IN_PROGRESS` нельзя автоматически примирить с реальным
   `flyway_schema_history`; штатный recovery runbook для этого ещё не подтверждён.

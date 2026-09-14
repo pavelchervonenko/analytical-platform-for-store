@@ -1,35 +1,35 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiClientError } from "../api/client";
 import type { OverviewMetrics } from "../api/contracts";
 import { OverviewPage } from "./OverviewPage";
 
-const { useQueryMock } = vi.hoisted(() => ({ useQueryMock: vi.fn() }));
-
-vi.mock("@tanstack/react-query", () => ({ useQuery: useQueryMock }));
-
-vi.mock("../auth/AuthProvider", () => ({
-  useAuth: () => ({ user: { role: "MANAGER", features: ["PLAN"] } })
+const { auth, useQueryMock } = vi.hoisted(() => ({
+  auth: { features: ["PLAN"] as string[] },
+  useQueryMock: vi.fn()
 }));
 
+vi.mock("@tanstack/react-query", () => ({ useQuery: useQueryMock }));
+vi.mock("../auth/AuthProvider", () => ({
+  useAuth: () => ({ user: { role: "MANAGER", features: auth.features } })
+}));
 vi.mock("../stores/WorkspaceProvider", () => ({
   useWorkspace: () => ({
     selectedStore: { id: "store-1", name: "Магазин", timezone: "Europe/Moscow" },
     month: "2026-09",
     periodMode: "MONTH",
     periodStart: "2026-09-01",
-    periodEnd: "2026-09-08",
+    periodEnd: "2026-09-30",
     periodLabel: "сентябрь 2026 г.",
-    asOfDate: "2026-09-08"
+    asOfDate: "2026-09-30"
   })
 }));
 
-const metrics: OverviewMetrics = {
+const metrics = {
   storeId: "store-1",
   periodStart: "2026-09-01",
-  periodEnd: "2026-09-08",
-  scope: "SELLERS",
+  periodEnd: "2026-09-30",
+  scope: "STORE",
   formulaVersion: "overview-v1",
   netRevenue: 100_000,
   netQuantity: 10,
@@ -50,31 +50,31 @@ const metrics: OverviewMetrics = {
     storeOpenQualityIssueCount: 0,
     reconciliationPassed: true
   }
-};
+} satisfies OverviewMetrics;
 
-function queryResult(data: unknown, isError = false) {
-  return {
-    data,
-    error: isError ? new ApiClientError("Нет соединения", { status: 0, code: "NETWORK_ERROR" }) : null,
-    isError,
-    isPending: false,
-    refetch: vi.fn()
-  };
+function queryResult(data: unknown) {
+  return { data, error: null, isError: false, isPending: false, refetch: vi.fn() };
 }
 
-describe("overview query degradation", () => {
+describe("overview plan permissions", () => {
   beforeEach(() => {
-    useQueryMock.mockImplementation(({ queryKey }: { queryKey: readonly unknown[] }) => {
-      if (queryKey.includes("overview-metrics")) return queryResult(metrics, true);
-      return queryResult(undefined, true);
+    auth.features = ["PLAN"];
+    useQueryMock.mockReset().mockImplementation(({ queryKey }: { queryKey: readonly unknown[] }) => {
+      if (queryKey.includes("overview-metrics")) return queryResult(metrics);
+      if (queryKey.includes("plan-progress")) return queryResult(null);
+      return queryResult(undefined);
     });
   });
 
-  it("keeps the last successful dashboard when a background refresh fails", () => {
-    render(<MemoryRouter><OverviewPage /></MemoryRouter>);
+  it("does not request or render plan progress without plan access", () => {
+    auth.features = ["SHIFTS"];
+    render(<MemoryRouter initialEntries={["/overview?overviewScope=STORE"]}><OverviewPage /></MemoryRouter>);
 
-    expect(screen.getByText("Чистая выручка")).toBeInTheDocument();
-    expect(screen.getByText("100 000 ₽")).toBeInTheDocument();
-    expect(screen.getByText("Показаны последние доступные данные.", { exact: false })).toBeInTheDocument();
+    expect(useQueryMock).toHaveBeenCalledWith(expect.objectContaining({
+      queryKey: ["stores", "store-1", "plan-progress", "2026-09", "2026-09-30", "STORE"],
+      enabled: false
+    }));
+    expect(screen.queryByRole("heading", { name: "План месяца — весь магазин" }))
+      .not.toBeInTheDocument();
   });
 });

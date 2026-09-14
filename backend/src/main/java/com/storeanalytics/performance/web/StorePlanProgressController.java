@@ -23,7 +23,8 @@ public class StorePlanProgressController {
     }
 
     @GetMapping("/api/stores/{storeId}/performance-plans/{month}/progress")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_PLAN')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     StorePlanProgressView get(
             @PathVariable UUID storeId,
             @PathVariable @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,

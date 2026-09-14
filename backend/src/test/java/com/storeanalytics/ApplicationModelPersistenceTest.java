@@ -7,6 +7,8 @@ import com.storeanalytics.audit.model.AuditLog;
 import com.storeanalytics.audit.model.AuditRetention;
 import com.storeanalytics.audit.model.AuditRetentionClass;
 import com.storeanalytics.auth.model.AppUser;
+import com.storeanalytics.auth.model.UserFeature;
+import com.storeanalytics.auth.model.UserFeatureAccess;
 import com.storeanalytics.auth.model.UserRole;
 import com.storeanalytics.auth.model.UserStoreAccess;
 import com.storeanalytics.common.idempotency.IdempotencyRequest;
@@ -396,6 +398,8 @@ class ApplicationModelPersistenceTest {
     ) {
         graph.userStoreAccess =
                 new UserStoreAccess(graph.user, graph.store, graph.user);
+        graph.userFeatureAccess =
+                new UserFeatureAccess(graph.user, UserFeature.PLAN, graph.user);
         graph.employeeStoreAssignment =
                 new EmployeeStoreAssignment(graph.employee, graph.store, true);
         StorePerformancePlan performancePlan = new StorePerformancePlan(
@@ -459,6 +463,7 @@ class ApplicationModelPersistenceTest {
         graph.salesDocument = createSalesDocument(graph, now, businessDate);
 
         entityManager.persist(graph.userStoreAccess);
+        entityManager.persist(graph.userFeatureAccess);
         entityManager.persist(graph.employeeStoreAssignment);
         entityManager.persist(performancePlan);
         entityManager.persist(workShift);
@@ -858,7 +863,7 @@ class ApplicationModelPersistenceTest {
     }
 
     private void assertEveryEntityWasPersisted() {
-        assertThat(entityManager.getMetamodel().getEntities()).hasSize(39);
+        assertThat(entityManager.getMetamodel().getEntities()).hasSize(40);
         for (EntityType<?> entityType : entityManager.getMetamodel().getEntities()) {
             Long count = entityManager.createQuery(
                     "select count(entity) from " + entityType.getName() + " entity",
@@ -889,6 +894,7 @@ class ApplicationModelPersistenceTest {
         private ProductCategoryAssignment categoryAssignment;
         private SalesDocument salesDocument;
         private UserStoreAccess userStoreAccess;
+        private UserFeatureAccess userFeatureAccess;
         private EmployeeStoreAssignment employeeStoreAssignment;
         private StoreProductInventory inventory;
     }

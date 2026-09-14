@@ -33,7 +33,8 @@ public class PayrollController {
     }
 
     @PostMapping("/{storeId}/payroll/{month}/calculate")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_PAYROLL')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     PayrollRunDetailView calculate(
             @PathVariable UUID storeId,
             @PathVariable @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,
@@ -51,7 +52,8 @@ public class PayrollController {
     }
 
     @GetMapping("/{storeId}/payroll/{month}")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_PAYROLL')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     PayrollRunDetailView latest(
             @PathVariable UUID storeId,
             @PathVariable @DateTimeFormat(pattern = "yyyy-MM") YearMonth month
@@ -60,7 +62,8 @@ public class PayrollController {
     }
 
     @GetMapping("/{storeId}/payroll-runs")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_PAYROLL')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     PageResponse<PayrollRunListItemView> list(
             @PathVariable UUID storeId,
             @RequestParam(required = false)
@@ -72,7 +75,8 @@ public class PayrollController {
     }
 
     @GetMapping("/{storeId}/payroll-runs/{runId}")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_PAYROLL')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     PayrollRunDetailView get(
             @PathVariable UUID storeId,
             @PathVariable UUID runId
@@ -81,7 +85,8 @@ public class PayrollController {
     }
 
     @PostMapping("/{storeId}/payroll-runs/{runId}/adjustments")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_PAYROLL')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     PayrollRunDetailView addAdjustment(
             @PathVariable UUID storeId,
             @PathVariable UUID runId,
@@ -102,7 +107,8 @@ public class PayrollController {
     }
 
     @PostMapping("/{storeId}/payroll-runs/{runId}/adjustments/{adjustmentId}/void")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_PAYROLL')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     PayrollRunDetailView voidAdjustment(
             @PathVariable UUID storeId,
             @PathVariable UUID runId,
@@ -126,7 +132,8 @@ public class PayrollController {
     }
 
     @PostMapping("/{storeId}/payroll-runs/{runId}/approve")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_PAYROLL')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     PayrollRunDetailView approve(
             @PathVariable UUID storeId,
             @PathVariable UUID runId,
@@ -144,7 +151,8 @@ public class PayrollController {
     }
 
     @PostMapping("/{storeId}/payroll-runs/{runId}/paid")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_PAYROLL')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     PayrollRunDetailView markPaid(
             @PathVariable UUID storeId,
             @PathVariable UUID runId,

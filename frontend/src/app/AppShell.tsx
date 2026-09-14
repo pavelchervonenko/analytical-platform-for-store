@@ -2,6 +2,7 @@ import { BarChart3, CalendarDays, ChevronDown, CircleDollarSign, DatabaseZap, Fi
 import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { InitialStoreSetup } from "../admin/InitialStoreSetup";
+import { hasUserFeature, type CurrentUser } from "../api/contracts";
 import { useAuth } from "../auth/AuthProvider";
 import { RangePeriodSelector } from "../stores/RangePeriodSelector";
 import { WorkspaceProvider, useWorkspace } from "../stores/WorkspaceProvider";
@@ -18,9 +19,9 @@ const navigationGroups = [
   {
     label: "Управление",
     items: [
-      { to: "/plan", label: "План", icon: Target, visibility: "all" },
-      { to: "/shifts", label: "Смены", icon: CalendarDays, visibility: "all" },
-      { to: "/payroll", label: "Зарплата", icon: CircleDollarSign, visibility: "all" },
+      { to: "/plan", label: "План", icon: Target, visibility: "all", feature: "PLAN" },
+      { to: "/shifts", label: "Смены", icon: CalendarDays, visibility: "all", feature: "SHIFTS" },
+      { to: "/payroll", label: "Зарплата", icon: CircleDollarSign, visibility: "all", feature: "PAYROLL" },
       { to: "/reports", label: "Отчеты", icon: FileArchive, visibility: "all" }
     ]
   },
@@ -35,11 +36,18 @@ const navigationGroups = [
 
 type NavigationRole = "ADMIN" | "MANAGER" | "UNKNOWN" | undefined;
 
-export function navigationGroupsFor(role: NavigationRole) {
+export function navigationGroupsFor(
+  role: NavigationRole,
+  features: CurrentUser["features"] = []
+) {
   return navigationGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => item.visibility !== "admin" || role === "ADMIN")
+      items: group.items.filter((item) => {
+        if (item.visibility === "admin") return role === "ADMIN";
+        if (!("feature" in item)) return true;
+        return hasUserFeature({ role, features }, item.feature);
+      })
     }))
     .filter((group) => group.items.length > 0);
 }
@@ -64,7 +72,7 @@ function ShellContent() {
         <div className="sidebar__brand"><span className="brand-mark">S</span><span><strong>Store</strong><small>Analytics</small></span></div>
         <button className="sidebar__close" type="button" onClick={() => setMobileMenuOpen(false)} aria-label="Закрыть меню"><X /></button>
         <nav>
-          {navigationGroupsFor(user?.role).map((group) => (
+          {navigationGroupsFor(user?.role, user?.features).map((group) => (
             <div className="nav-group" key={group.label}>
               <span className="nav-caption">{group.label}</span>
               {group.items.map(({ to, label, icon: Icon }) => (

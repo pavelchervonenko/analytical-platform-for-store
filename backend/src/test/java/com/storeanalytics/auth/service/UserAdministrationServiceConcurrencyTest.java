@@ -9,9 +9,7 @@ import com.storeanalytics.auth.exception.UserAdministrationConflictException;
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.auth.model.UserRole;
 import com.storeanalytics.auth.repository.AppUserRepository;
-import com.storeanalytics.auth.repository.UserStoreAccessRepository;
 import com.storeanalytics.common.security.SecurityAuditLogger;
-import com.storeanalytics.store.repository.StoreRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -25,7 +23,7 @@ class UserAdministrationServiceConcurrencyTest {
         AppUserRepository userRepository = mock(AppUserRepository.class);
         AppUser administrator = mock(AppUser.class);
         UUID userId = UUID.randomUUID();
-        when(userRepository.findById(userId)).thenReturn(Optional.of(administrator));
+        when(userRepository.findByIdForUpdate(userId)).thenReturn(Optional.of(administrator));
         when(userRepository.findAllActiveByRoleForUpdate(UserRole.ADMIN))
                 .thenReturn(List.of(administrator));
         when(administrator.getRole()).thenReturn(UserRole.ADMIN);
@@ -33,8 +31,7 @@ class UserAdministrationServiceConcurrencyTest {
 
         UserAdministrationService service = new UserAdministrationService(
                 userRepository,
-                mock(UserStoreAccessRepository.class),
-                mock(StoreRepository.class),
+                mock(UserAccessAssignmentService.class),
                 mock(PasswordEncoder.class),
                 new PasswordPolicy(password -> false),
                 mock(SecurityAuditLogger.class),
@@ -44,7 +41,10 @@ class UserAdministrationServiceConcurrencyTest {
         UpdateUserCommand command = new UpdateUserCommand(
                 "Administrator",
                 UserRole.MANAGER,
-                true
+                true,
+                java.util.Set.of(),
+                java.util.Set.of(),
+                0
         );
 
         assertThatThrownBy(() -> service.update(userId, command, UUID.randomUUID()))

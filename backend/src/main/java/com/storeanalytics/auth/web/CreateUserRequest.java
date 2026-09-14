@@ -1,5 +1,6 @@
 package com.storeanalytics.auth.web;
 
+import com.storeanalytics.auth.model.UserFeature;
 import com.storeanalytics.auth.model.UserRole;
 import com.storeanalytics.auth.service.PasswordPolicy;
 import jakarta.validation.constraints.Email;
@@ -17,6 +18,7 @@ public record CreateUserRequest(
         ) String temporaryPassword,
         @NotBlank @Size(max = 200) String displayName,
         @NotNull UserRole role,
-        @NotNull Set<UUID> storeIds
+        @NotNull Set<@NotNull UUID> storeIds,
+        @NotNull Set<@NotNull UserFeature> features
 ) {
 }

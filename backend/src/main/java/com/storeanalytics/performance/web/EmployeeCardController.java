@@ -1,5 +1,7 @@
 package com.storeanalytics.performance.web;
 
+import com.storeanalytics.auth.model.UserFeature;
+import com.storeanalytics.auth.security.AppUserPrincipal;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.performance.service.EmployeeCardService;
 import com.storeanalytics.performance.service.EmployeeCardView;
@@ -9,6 +11,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -49,13 +52,21 @@ public class EmployeeCardController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
             LocalDate periodEnd,
             @RequestParam(defaultValue = "PREVIOUS_PERIOD")
-            EmployeeComparisonMode comparisonMode
+            EmployeeComparisonMode comparisonMode,
+            Authentication authentication
     ) {
-        return cardService.card(
+        EmployeeCardView result = cardService.card(
                 storeId,
                 employeeId,
                 new StoreKpiPeriod(periodStart, periodEnd),
                 comparisonMode
         );
+        return principal(authentication).hasFeature(UserFeature.PAYROLL)
+                ? result
+                : result.withoutPayroll();
+    }
+
+    private AppUserPrincipal principal(Authentication authentication) {
+        return (AppUserPrincipal) authentication.getPrincipal();
     }
 }
