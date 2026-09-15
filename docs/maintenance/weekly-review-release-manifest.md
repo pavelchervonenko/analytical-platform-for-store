@@ -24,14 +24,14 @@ exit_target: evidence
 
 ## Цель и границы
 
-Manifest фиксирует P7-A/P7-B и результат попытки P7-C для минимального deterministic-first change
-set раздела «ИИ-разбор».
+Manifest фиксирует P7-A–P7-G для минимального deterministic-first change set раздела «ИИ-разбор»,
+включая честные stop-результаты незакрытых release gates.
 Кандидат собирается в отдельном worktree от подтверждённой production-базы, указанной в
 [`project-state.md`](../current/project-state.md). Текущая рабочая ветка с параллельными изменениями
 не является базой сборки и не переносится целиком.
 
-Этот документ не разрешает staging или production rollout. Платный AI-path, миграции, синхронизация
-LiveSklad и изменения других продуктовых разделов находятся вне границ кандидата.
+Этот документ не разрешает staging или production rollout. Платный AI-path, новые обращения к
+LiveSklad и изменения других продуктовых разделов находятся вне границ текущего продолжения.
 
 ## Выбранный путь
 
@@ -221,15 +221,61 @@ P7-B не подтверждает реальный `READY`: это отдель
 - readiness стенда корректно остаётся `DOWN`: reused local DB уже на `V49`, тогда как кандидат
   упакован до `V48`. Схема не откатывалась и readiness не ослаблялся.
 
-Production/staging не использовались. P7-D и последующие release gates не начинаются как
-продолжение этого результата: сначала нужен естественный real-data `READY`, schema-compatible
-isolated DB и локальный v12 visual `6/6`.
+Production/staging не использовались. Этот результат не разрешает последующие gates автоматически:
+для rollout всё ещё нужны естественный real-data `READY`, live v12 visual и закрытые release-
+equivalent/production preflight условия.
+
+### Результат P7-D
+
+`DEFERRED`. Deterministic-first release остаётся единственным разрешённым вариантом: AI planner,
+worker и generation выключены. AI release-safety, targeted backend tests, offline shadow-plan и
+локальный eval прошли без paid provider request. Staging canary, privacy/cost approval и production
+AI endpoint не выполнялись и не заявляются.
+
+### Результат P7-E
+
+`PASS_WITH_LIMITS`. После пользовательского review исправления интерфейса приняты, повторный
+локальный capture пяти сценариев прошёл `15/15` на desktop/tablet/mobile и был просмотрен вручную.
+Иерархия «итог → действие → основание → сотрудник», раскрытие плотных списков и нейтральное
+объяснение незаполненных смен соответствуют согласованному baseline. Отдельного таймированного
+исследования с назначенным менеджером без подсказок не проводилось.
+
+### Результат P7-F
+
+`STOP` после полезной, но неполной локальной репетиции. В изолированной Docker-сети чистый target
+успешно получил ожидаемую migration boundary; candidate API, worker и web прошли health/read path.
+Локальные OCI revision backend/web совпадают с reviewed runtime commit. Custom dump прошёл
+шифрование, неизменный checksum, restore в новый PostgreSQL target и сверку Flyway/schema/
+технических агрегатов; candidate API и worker запустились поверх восстановленного target.
+
+Gate не закрыт: это был пустой локальный rehearsal target, а не fresh production backup; staging,
+production deploy path, ACL/HTTPS/Prometheus/real queues и измеренные RPO/RTO отсутствуют. Exact
+previous production runtime не доступен локально, registry pull завершился сетевым timeout, поэтому
+двухшаговый rollout и application rollback на совместимой exact pair не подтверждены. Статический
+deploy release-safety test прошёл, но runtime rehearsal не заменяет.
+
+### Результат P7-G
+
+`STOP` до production read-only обращения. Candidate images не опубликованы по immutable registry
+coordinates; отсутствуют exact host/release-env доступ, свежие live Flyway/health/queue данные,
+production backup checkpoint и operations/security sign-off. P7-C также не дал естественный
+real-data `READY`, а P7-F не доказал exact previous-runtime rollback. `project-state.md` не
+обновлялся и его прежнее наблюдение не выдаётся за fresh preflight.
+
+P7-H/P7-I имеют статус `NOT STARTED`: production rollout требует нового точного подтверждения
+конкретного release plan после закрытия stop-условий, а post-release observation возможно только
+после фактического rollout.
 
 ## Открытые решения
 
 - Отдельно диагностировать, какие реальные data-quality/classification ограничения препятствуют
   `READY`; возможный classification-пакет не подмешивать в этот manifest.
-- В P7-D отдельно решить судьбу AI-enabled пути на основании privacy, cost и concurrency gates.
+- Если AI понадобится после deterministic-first выпуска, открыть отдельный `VERIFIED` путь с
+  privacy, cost, concurrency и paid staging gates; текущий verdict — `DEFERRED`.
+- Получить natural `READY` и локальный live v12 visual без расширения разрешённого data scope либо
+  отдельно согласовать новый scope.
+- Опубликовать reviewed candidate images и выполнить release-equivalent rehearsal с exact previous
+  runtime и свежим backup/restore evidence.
 - Legacy cleanup не входит в этот кандидат и рассматривается только после периода наблюдения P7-I.
 
 ## Критерий закрытия

@@ -76,8 +76,18 @@ exit_target: current
 - P7-C выполнен до stop-условия: полное локальное покрытие двух недель подтверждено, для обоих
   разрешённых магазинов через штатный authenticated API сохранены новые immutable revision с
   policy `weekly-snapshot-v12`. Оба отчёта естественно остались `PARTIAL`; реальный `READY` в
-  разрешённой выборке отсутствует. Поэтому P7-C имеет verdict `STOP`, а P7-D–P7-I, production
-  rollout, project-state и legacy cleanup не начаты.
+  разрешённой выборке отсутствует. Поэтому P7-C имеет verdict `STOP`.
+- P7-D завершён как `DEFERRED`: deterministic-first путь перепроверен с выключенными AI planner,
+  worker и generation; paid provider request не выполнялся.
+- P7-E имеет `PASS_WITH_LIMITS`: продуктовый владелец проверил и принял исправленный маршрут по
+  локальным снимкам, а повторная fixture-матрица прошла `15/15`. Отдельного таймированного
+  исследования с назначенным менеджером без подсказок не проводилось.
+- P7-F выполнен до stop-условия на изолированном локальном контуре: чистая schema boundary,
+  migration, encrypted dump/restore и запуск API/worker/web подтверждены. Exact previous runtime,
+  staging deploy path и fresh production backup недоступны, поэтому gate остаётся `STOP`.
+- P7-G остановлен до обращения к production: нет опубликованных immutable candidate coordinates,
+  exact host/release-env доступа, свежего production backup/restore evidence и закрытых P7-C/P7-F.
+  P7-H/P7-I, project-state и legacy cleanup не начаты.
 
 ## Целевой результат
 
@@ -909,6 +919,10 @@ release-equivalent. Схема не откатывалась, readiness не о�
 `DEFERRED` не разрешает вручную вызвать production AI endpoint. Immutable enrichment не удаляется
 как способ отката; исправление требует новой версии либо отключения AI-layer.
 
+Результат 2026-09-15: `DEFERRED`. AI release-safety, targeted backend AI tests, offline shadow-plan
+и локальный eval прошли; production defaults для planner/generation/worker остаются выключенными.
+Платный provider-вызов не выполнялся, privacy/cost approval и staging canary не заявляются.
+
 #### P7-E. Провести менеджерскую приёмку
 
 На release candidate назначенный менеджер без подсказок выполняет пять задач:
@@ -927,6 +941,13 @@ Acceptance фиксирует только результат задачи, за
 
 Контрольная точка P7-E: менеджер проходит маршрут «итог → действие → основание → сотрудник» за
 одну–три минуты и не делает ни одной критической ошибочной интерпретации.
+
+Результат 2026-09-15: `PASS_WITH_LIMITS`. Продуктовый владелец оценил интерфейс с позиции менеджера,
+согласовал исправления decision cards и секции команды и принял повторный визуальный результат.
+Пять fixture-состояний повторно прошли desktop/tablet/mobile (`15/15`) и были просмотрены вручную:
+маршрут, progressive disclosure и нейтральная трактовка незаполненных смен не противоречат плану.
+Отдельная таймированная сессия без подсказок не проводилась, поэтому она остаётся post-pilot
+исследованием, а не выдуманным evidence этого gate.
 
 #### P7-F. Выполнить staging/release-equivalent rehearsal
 
@@ -951,6 +972,21 @@ Acceptance фиксирует только результат задачи, за
 на release-equivalent контуре, а runbooks получили staging evidence. Без restore evidence и exact
 schema compatibility production write остаётся `NO-GO`.
 
+Результат 2026-09-15: `STOP` после ограниченной локальной репетиции. На отдельной Docker-сети
+candidate migration успешно подготовила чистую ожидаемую schema boundary; API и worker получили
+`UP`, web отдал HTML и проксировал `readyz`. Локальные backend/web OCI revision совпали с reviewed
+runtime commit. Техническая backup/restore цепочка также прошла: custom dump был зашифрован и
+расшифрован с неизменным SHA-256, восстановлен в новый PostgreSQL target, а Flyway history, число
+таблиц и выбранные нулевые агрегаты совпали с источником; API и worker поднялись поверх restore.
+
+Это не полный P7-F: источник был пустым локальным rehearsal target, а не свежим production backup;
+RPO и полный RTO не подтверждены. Staging отсутствует, production deploy bundle не запускался,
+ACL/HTTPS/закрытый Prometheus и реальные queues не проверены. Точный предыдущий production image
+не был доступен локально, а registry pull завершился сетевым timeout, поэтому совместимый
+двухшаговый rollout и application rollback на exact previous runtime не репетировались. Статический
+deploy release-safety test прошёл и подтвердил fail-closed compatibility boundary, но не заменяет
+runtime rehearsal.
+
 #### P7-G. Провести production read-only preflight
 
 Этот пакет не изменяет production. Reviewer фиксирует sanitized:
@@ -969,6 +1005,13 @@ schema compatibility production write остаётся `NO-GO`.
 
 Контрольная точка P7-G: operations и security reviewers подписали exact release plan; пользователю
 показаны target, commit/digests, schema range, влияние и rollback boundary без секретов.
+
+Результат 2026-09-15: `STOP`, production не запрашивался и не изменялся. Кандидат существует только
+как локальные images и не опубликован по immutable registry coordinates; exact production host,
+release-env hash, live Flyway/health/queue state и свежий backup checkpoint в доступном контексте
+отсутствуют. Дополнительно P7-C не содержит естественного real-data `READY`, а P7-F не подтвердил
+exact previous-runtime rollback. Эти неизвестные прямо входят в stop-критерии, поэтому старое
+описание project-state не переиспользуется как свежий read-only preflight.
 
 #### P7-H. Выполнить отдельно авторизованный совместимый production rollout
 
@@ -995,6 +1038,11 @@ schema compatibility production write остаётся `NO-GO`.
 непротиворечив, deterministic путь работает без AI, а rollback остаётся доступным в рамках live
 schema compatibility.
 
+Статус 2026-09-15: `NOT STARTED`. Перед первым production write нужен закрытый P7-G и новое точное
+подтверждение показанного release plan с target, immutable coordinates, schema/backup boundary,
+окном влияния и ответственными. Предыдущее общее разрешение продолжить P7 не подменяет эту
+контрольную точку.
+
 #### P7-I. Наблюдение, evidence и решение о legacy
 
 1. В согласованное окно наблюдать schema/transport error rate, frontend fallback reason, API
@@ -1013,6 +1061,9 @@ schema compatibility.
 
 Контрольная точка P7-I: release evidence обезличено и подтверждает реальное состояние; legacy
 cleanup имеет отдельную задачу и не смешан с выпуском.
+
+Статус 2026-09-15: `NOT STARTED`. Наблюдение и обновление project-state возможны только после
+фактического P7-H; локальная репетиция не выдаётся за production runtime evidence.
 
 #### Stop/go и rollback matrix
 

@@ -179,3 +179,34 @@ production/staging не затрагивались. Verdict P7-C: `STOP`; produc
   historical imports.
 - This local evidence does not authorize or prove a production rollout. P7 remains a separate,
   explicitly approved operation.
+
+## Follow-up: P7-D–P7-G release-gate assessment, 2026-09-15
+
+После запроса довести план до production-ready решения продолжены только локальные и read-only
+действия. Production и staging не запрашивались и не изменялись; новых LiveSklad reads, snapshots
+или business-data screenshots не создавалось.
+
+- P7-D зафиксирован как `DEFERRED`. AI release-safety, targeted backend AI tests, offline shadow
+  plan и локальный eval прошли; paid provider request и staging canary не выполнялись. Выпуск может
+  рассматриваться только с выключенными AI planner/generation/worker.
+- P7-E получил `PASS_WITH_LIMITS`: владелец продукта принял исправленный интерфейс, а пять fixture-
+  сценариев повторно прошли desktop/tablet/mobile (`15/15`) и ручной просмотр. Отдельного
+  таймированного manager study без подсказок не проводилось.
+- Для P7-F создан отдельный локальный network/DB target. Candidate migration дошла до ожидаемой
+  boundary, API и worker получили `UP`, web отдал приложение и успешно проксировал readiness.
+  Backend/web OCI revision совпали с reviewed runtime commit.
+- Локальный custom dump был зашифрован и расшифрован с неизменным checksum, восстановлен в новую
+  PostgreSQL DB; Flyway history, schema inventory и выбранные технические агрегаты совпали, API и
+  worker поднялись поверх restore. Источник был пустым rehearsal target, не production backup;
+  поэтому это evidence механики, а не доказательство production RPO/RTO.
+- Exact previous production image отсутствовал локально, registry pull завершился timeout. Staging,
+  production deploy path, двухшаговый rollout, application rollback на exact compatible pair,
+  ACL/HTTPS/Prometheus и реальные queues не подтверждены. Deploy release-safety test прошёл и
+  сохранил fail-closed boundary, но P7-F verdict остаётся `STOP`.
+- P7-G остановлен до production обращения: immutable published coordinates, exact host/release-env,
+  fresh live preflight, production backup checkpoint и required sign-off отсутствуют. P7-C также не
+  содержит natural real-data `READY`.
+
+P7-H и P7-I не начаты. Перед production write требуется закрыть stop-условия и получить новое
+точное подтверждение показанного release plan; post-release observation нельзя выполнить или
+задокументировать заранее.
