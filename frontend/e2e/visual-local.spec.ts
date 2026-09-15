@@ -8,6 +8,7 @@ import type {
   WeeklyReviewStructureNode
 } from "../src/api/weeklyReviewContract";
 import { makeWeeklyReview } from "../src/test/weeklyReviewFixture";
+import { visualWeeklyReview } from "./weekly-review-visual-fixtures";
 
 const email = process.env.VISUAL_EMAIL?.trim() || process.env.E2E_ADMIN_EMAIL?.trim();
 const password = process.env.VISUAL_PASSWORD || process.env.E2E_ADMIN_PASSWORD;
@@ -1205,9 +1206,11 @@ test.describe("local frontend visual review", () => {
         }
       });
 
-      if (!useFixtureApi
-          && !useLiveWeeklyReview
-          && new URL(route, "http://local.test").pathname === "/insights") {
+      if (
+        !useFixtureApi
+        && !useLiveWeeklyReview
+        && new URL(route, "http://local.test").pathname === "/insights"
+      ) {
         await page.route("**/api/stores/*/weekly-reviews/current", async (requestRoute) => {
           await requestRoute.fulfill({
             status: 200,
@@ -1396,8 +1399,9 @@ test.describe("local frontend visual review", () => {
             await expect(employeesToggle).toHaveText("Ещё 2 сотрудника");
             await employeesToggle.click();
             await expect(employeesToggle).toHaveAttribute("aria-expanded", "true");
+            await expect(employeesToggle).toBeFocused();
             await expect(page.locator(".weekly-review-exception:visible")).toHaveCount(3);
-            await page.locator(".weekly-review-team").screenshot({
+            await page.locator(".weekly-review-exception-list").screenshot({
               path: resolve(screenshotDirectory, screenshotName(route) + "-more-employees.png"),
               animations: "disabled"
             });
@@ -1410,7 +1414,7 @@ test.describe("local frontend visual review", () => {
           await secondaryActions.focus();
           await page.keyboard.press("Enter");
           await expect(page.locator(".weekly-review-secondary-actions")).toHaveAttribute("open", "");
-          await page.screenshot({
+          await page.locator(".weekly-review-primary-action").screenshot({
             path: resolve(screenshotDirectory, screenshotName(route) + "-secondary-actions.png"),
             animations: "disabled"
           });
@@ -1438,9 +1442,10 @@ test.describe("local frontend visual review", () => {
           await structureSummary.focus();
           await page.keyboard.press("Enter");
           await expect(page.locator(".weekly-review-structure-section")).toHaveAttribute("open", "");
-          await page.locator(".weekly-review-structure-section").screenshot({
+          await page.locator(".weekly-review-structure-section__body").screenshot({
             path: resolve(screenshotDirectory, screenshotName(route) + "-structure-open.png"),
-            animations: "disabled"
+            animations: "disabled",
+            style: ".skip-link, .topbar { visibility: hidden !important; }"
           });
           await page.keyboard.press("Enter");
           await expect(page.locator(".weekly-review-structure-section"))

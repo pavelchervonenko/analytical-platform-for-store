@@ -6,7 +6,7 @@ owner: integrations
 audience:
   - developer
   - operator
-last_verified: 2026-09-14
+last_verified: 2026-09-15
 requirement_sources:
   - docs/archive/legacy-contracts/synchronization-api.md
 implementation_sources:

@@ -263,7 +263,7 @@ class WeeklyReviewTeamEmployeeProjectorTest {
     }
 
     @Test
-    void unattributedReturnsLimitOnlyAggregatePeopleQualityWithoutPersonalLeak() {
+    void explainsUnattributedReturnsWithoutMarkingTheTeamAsLimited() {
         EmployeeRatingEntry employee = employee("Анна", "700.00", 2, "16.00");
 
         WeeklyReviewTeamEmployeeProjector.Projection result = projector.project(
@@ -277,10 +277,11 @@ class WeeklyReviewTeamEmployeeProjectorTest {
         );
 
         assertThat(result.team().state())
-                .isEqualTo(WeeklyReviewResponse.BlockState.LIMITED);
+                .isEqualTo(WeeklyReviewResponse.BlockState.READY);
         assertThat(result.team().limitations()).containsExactly(
-                "Возвраты без продавца исходной продажи: "
-                        + "2 за текущую неделю и 1 за предыдущую"
+                "Часть возвратов не связана с исходной продажей: "
+                        + "2 за текущую неделю и 1 за предыдущую. "
+                        + "Итог магазина учтён, вклад сотрудников показан по доступной связи"
         );
         assertThat(result.team().toString())
                 .doesNotContain("Анна", employee.employeeId().toString());

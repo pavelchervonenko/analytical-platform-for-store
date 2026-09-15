@@ -94,7 +94,7 @@ class WeeklyReviewQualityPolicyV1Test {
     }
 
     @Test
-    void unattributedReturnsLimitOnlyPeopleBlocksAndStayNonBlocking() {
+    void keepsUnattributedReturnsAsOptionalCoverageWithoutAQualityWarning() {
         Decision result = policy.decide(
                 source(StoreDataFreshnessStatus.CURRENT, CURRENT.end(), CURRENT.end(), null),
                 kpi(quality(0, 0, 0, 0)),
@@ -105,18 +105,27 @@ class WeeklyReviewQualityPolicyV1Test {
                 0
         );
 
-        assertThat(result.reportState()).isEqualTo(ReportState.PARTIAL);
+        assertThat(result.reportState()).isEqualTo(ReportState.READY);
         assertThat(result.sourceCoverage()).anySatisfy(coverage -> {
             assertThat(coverage.sourceCode().name()).isEqualTo("EMPLOYEE_ATTRIBUTION");
             assertThat(coverage.requiredForReport()).isFalse();
             assertThat(coverage.affectedBlockIds()).containsExactly("team", "employees");
         });
-        assertThat(result.limitations()).singleElement().satisfies(limitation -> {
-            assertThat(limitation.code()).isEqualTo("RETURN_EMPLOYEE_UNATTRIBUTED");
-            assertThat(limitation.affectedCount()).isEqualTo(2);
-            assertThat(limitation.evidenceRefs())
-                    .containsExactly("EMPLOYEE_ATTRIBUTION.CURRENT");
-        });
+        assertThat(result.limitations()).isEmpty();
+    }
+
+    @Test
+    void treatsZeroCostAsAValidBusinessValue() {
+        Decision result = policy.decide(
+                source(StoreDataFreshnessStatus.CURRENT, CURRENT.end(), CURRENT.end(), null),
+                kpi(quality(0, 0, 2, 0, 0)),
+                kpi(quality(0, 0, 1, 0, 0)),
+                CURRENT,
+                PREVIOUS
+        );
+
+        assertThat(result.reportState()).isEqualTo(ReportState.READY);
+        assertThat(result.limitations()).isEmpty();
     }
 
     @Test
@@ -243,12 +252,22 @@ class WeeklyReviewQualityPolicyV1Test {
             long periodConsistency,
             long globalIssues
     ) {
+        return quality(unmapped, missingCost, 0, periodConsistency, globalIssues);
+    }
+
+    private StoreKpiDataQuality quality(
+            long unmapped,
+            long missingCost,
+            long unexpectedZeroCost,
+            long periodConsistency,
+            long globalIssues
+    ) {
         return new StoreKpiDataQuality(
                 missingCost == 0,
                 1,
                 unmapped,
                 missingCost,
-                0,
+                unexpectedZeroCost,
                 periodConsistency,
                 globalIssues
         );

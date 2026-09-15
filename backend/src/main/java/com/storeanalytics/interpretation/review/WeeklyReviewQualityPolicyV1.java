@@ -88,16 +88,11 @@ public final class WeeklyReviewQualityPolicyV1 {
             addClassificationLimitations(
                     currentKpi, previousKpi, currentRange, previousRange, limitations
             );
-            addCostLimitations(currentKpi, previousKpi, currentRange, previousRange, limitations);
-            addConsistencyLimitations(
+            addMissingCostLimitations(
                     currentKpi, previousKpi, currentRange, previousRange, limitations
             );
-            addEmployeeAttributionLimitations(
-                    currentRange,
-                    previousRange,
-                    currentUnattributedReturns,
-                    previousUnattributedReturns,
-                    limitations
+            addConsistencyLimitations(
+                    currentKpi, previousKpi, currentRange, previousRange, limitations
             );
         }
 
@@ -139,48 +134,8 @@ public final class WeeklyReviewQualityPolicyV1 {
                 current.end(),
                 previous.end(),
                 complete ? CoverageState.COMPLETE : CoverageState.PARTIAL,
-                complete ? null : "Часть возвратов не распределена между сотрудниками"
+                complete ? null : "Связь с сотрудниками доступна не для всех возвратов"
         );
-    }
-
-    private void addEmployeeAttributionLimitations(
-            DateRange current,
-            DateRange previous,
-            long currentCount,
-            long previousCount,
-            List<Limitation> limitations
-    ) {
-        addEmployeeAttributionLimitation(
-                "current", current, currentCount, limitations
-        );
-        addEmployeeAttributionLimitation(
-                "previous", previous, previousCount, limitations
-        );
-    }
-
-    private void addEmployeeAttributionLimitation(
-            String periodCode,
-            DateRange period,
-            long count,
-            List<Limitation> limitations
-    ) {
-        if (count <= 0) {
-            return;
-        }
-        limitations.add(new Limitation(
-                "employee-attribution:" + periodCode,
-                "RETURN_EMPLOYEE_UNATTRIBUTED",
-                "WARNING",
-                "TEAM",
-                null,
-                List.of("team", "employees"),
-                List.of("EMPLOYEE_NET_REVENUE", "EMPLOYEE_ADDITIONAL_REVENUE"),
-                period,
-                Math.toIntExact(count),
-                "Возвраты вошли в итог магазина, но не распределены между сотрудниками",
-                "Связать возвраты с исходными продажами и их продавцами",
-                List.of("EMPLOYEE_ATTRIBUTION." + periodCode.toUpperCase())
-        ));
     }
 
     private SourceCoverage coverage(
@@ -303,7 +258,7 @@ public final class WeeklyReviewQualityPolicyV1 {
         );
     }
 
-    private void addCostLimitations(
+    private void addMissingCostLimitations(
             StoreKpiResult current,
             StoreKpiResult previous,
             DateRange currentPeriod,
@@ -326,24 +281,6 @@ public final class WeeklyReviewQualityPolicyV1 {
                 previousPeriod,
                 previous.dataQuality().missingCostItemCount(),
                 "Для части позиций недели сравнения отсутствует себестоимость",
-                limitations
-        );
-        addCountLimitation(
-                new Issue("cost:zero:current", "UNEXPECTED_ZERO_COST"),
-                List.of("results", "summary"),
-                List.of("GROSS_PROFIT", "MARGIN_PERCENT"),
-                currentPeriod,
-                current.dataQuality().unexpectedZeroCostItemCount(),
-                "Себестоимость части товаров недели требует проверки",
-                limitations
-        );
-        addCountLimitation(
-                new Issue("cost:zero:previous", "UNEXPECTED_ZERO_COST"),
-                List.of("results", "summary"),
-                List.of("GROSS_PROFIT", "MARGIN_PERCENT"),
-                previousPeriod,
-                previous.dataQuality().unexpectedZeroCostItemCount(),
-                "Себестоимость части товаров недели сравнения требует проверки",
                 limitations
         );
     }

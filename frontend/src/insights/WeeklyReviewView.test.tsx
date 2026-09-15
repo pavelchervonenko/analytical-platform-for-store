@@ -308,6 +308,25 @@ describe("WeeklyReviewView", () => {
     );
   });
 
+  it("keeps a normal return-attribution note out of the quality warning", async () => {
+    const user = userEvent.setup();
+    const review = partialReview();
+    const attributionNote = "Итог магазина учтён, вклад сотрудников показан по доступной связи";
+    review.team.state = "READY";
+    review.team.limitations = [attributionNote];
+    renderReview(review);
+
+    await screen.findByText("Разбор по доступным данным");
+    await user.click(screen.getByRole("button", { name: "Подробнее об ограничениях" }));
+    expect(screen.getByRole("dialog", { name: "Ограничения данных" }))
+      .not.toHaveTextContent(attributionNote);
+    await user.keyboard("{Escape}");
+
+    await user.click(screen.getByRole("button", { name: "О данных команды" }));
+    expect(screen.getByRole("dialog", { name: "О данных команды" }))
+      .toHaveTextContent(attributionNote);
+  });
+
   it("does not promote missing shifts to a report warning", async () => {
     const review = makeWeeklyReview();
     review.limitations = [{

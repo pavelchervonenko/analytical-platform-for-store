@@ -23,6 +23,7 @@ function unavailableWorkloadMetric(metric: WeeklyReviewMetric): WeeklyReviewMetr
     previousSample: null
   };
 }
+
 function unavailableBlockedMetric(metric: WeeklyReviewMetric): WeeklyReviewMetric {
   return {
     ...unavailableWorkloadMetric(metric),

@@ -63,8 +63,9 @@ Manifest не разрешает production write, migration, backfill, recovery
 - классификации — одна атомарная bounded transaction на магазин и месяц;
 - после каждого месяца — полная повторная сверка, а не только проверка изменённых строк.
 
-Текущий рабочий каталог нельзя деплоить как есть: он объединяет уже закоммиченные функции,
-незакоммиченный recovery/classification code, Weekly Review, frontend и документацию.
+Исходный dirty scope зафиксирован логическими коммитами и собирается в отдельной
+`codex/store-release-rc`. Эту ветку нельзя деплоить до закрытия интегральных gate, публикации exact
+paired images, staging/release-equivalent rehearsal и fresh production preflight.
 
 ## Состояние месячных сверок
 
@@ -215,9 +216,9 @@ Migration сначала сохраняет прежний доступ суще
 После такой настройки откат на старый runtime policy-несовместим; нужен compatible forward-fix или
 временная деактивация затронутых учётных записей с security approval.
 
-### Другие уже накопленные продуктовые пакеты
+### Другие накопленные продуктовые пакеты
 
-На 2026-09-15 локальная ветка содержит пять commits поверх remote tracking branch:
+В integration candidate включены следующие reviewable commits и пакеты:
 
 | Commit | Пакет | Статус для общего релиза |
 |---|---|---|
@@ -226,11 +227,17 @@ Migration сначала сохраняет прежний доступ суще
 | `a1ce1fe` | Weekly Review classification-quality isolation | интегрировать с чистым Weekly Review candidate |
 | `bf0e32e` | plan workspace redesign | повторить полный frontend и visual acceptance |
 | `70a2d88` | manager feature permissions + V50 | security, migration и rollback review обязательны |
+| `ed0c157`, `63303c8` | monthly plan и overview UI | полный frontend/visual gate |
+| `86192a8` | guarded return recovery + V49/V51 | backend, migration, OpenAPI и staging recovery rehearsal |
+| `db70f15` | analytics classifier v8 | category/STORE/SELLERS regression |
+| `1ba04b8` | auth/payroll/quality/admin UI | frontend, role/error-state и visual gate |
+| `6eff078` | исходный Weekly Review snapshot | заменяется более поздним `41e5dc8` при merge |
+| `31a7a01` | сверки, runbook и release ledger | strict documentation/security review |
+| `a1cd7b9` | production delayed-cash-return hotfix | обязательная база; не дропать при merge |
+| `41e5dc8` | проверенный Weekly Review RC tip | интегрировать с общими recovery/auth/frontend пакетами |
 
-Незакоммиченный каталог дополнительно смешивает R1, C1, Weekly Review, auth, plan, payroll UI,
-quality UI, generated OpenAPI и документацию. Эти изменения сначала делятся на именованные пакеты.
-Любой новый commit добавляется в release ledger только с owner, зависимостями, migration/API/UI
-impact и verification evidence. Неизвестный или «misc» пакет блокирует freeze кандидата.
+После merge новый commit добавляется в release ledger только с owner, зависимостями, migration/API/UI
+impact и verification evidence. Неизвестный или `misc` пакет снова блокирует freeze кандидата.
 
 Weekly Review собирается по отдельному
 [`weekly-review-release-manifest.md`](weekly-review-release-manifest.md): локальная граница P7-A
@@ -464,16 +471,23 @@ failed/active conflicting jobs. Затем данные меняются в сл
 
 ## Current NO-GO evidence
 
-На 2026-09-15:
+На 2026-09-15 после локальной фиксации и интеграции:
 
-- рабочее дерево содержит 120 изменённых tracked files и множество untracked application/docs/
-  operations artifacts;
-- V49 и V51 и часть recovery classes ещё не закоммичены;
-- current relink precondition не покрывает `F000244` и `F000349`;
-- документационный unit suite проходит `25/25`, но strict check падает, потому что inventory уже
-  помечает ряд фактически untracked документов как `tracked`;
-- целевой backend test run в текущей shell-среде не стартует на default JDK 11; exact candidate
-  должен проверяться Java 21 локально/в CI;
+- исходный dirty scope разделён на логические коммиты; Weekly Review RC влит в
+  `codex/store-release-rc` с ручным совмещением общих файлов;
+- guarded relink покрывает nullable, wrong-current и already-correct current employee варианты,
+  включая техническую форму для `F000244`/`F000349`;
+- OpenAPI v12/current/backend-generated и frontend transport types согласованы; новые recovery поля
+  совместимы и не required;
+- интеграционный targeted backend gate на Java 21 и полный frontend contracts/lint/
+  `262/262` tests/build проходят; frontend пока запущен на локальном Node 20, хотя engine
+  candidate требует Node 22.22+;
+- documentation unit/strict gate до merge проходил `25/25` и `413` inventory rows; после merge
+  он должен быть повторён;
+- полный backend `check`, Node 22 frontend rerun, интегральный `visual:local`, immutable image build,
+  staging/release-equivalent rehearsal и fresh production-read-only/backup evidence ещё не закрыты;
+- bounded classification correction scripts с `--preflight/--apply/--verify` ещё не реализованы, а
+  январская parent-sale strategy не выбрана;
 - staging rehearsal и release-specific production-read-only/backup evidence отсутствуют.
 
 Это не означает, что накопленные изменения непригодны. Это означает, что деплоить текущий каталог

@@ -558,11 +558,9 @@ public final class WeeklyReviewTeamEmployeeProjector {
                 .filter(card -> card.attention() != null)
                 .count());
         List<Observation> observations = teamObservations(cards);
-        boolean attributionLimited = currentUnattributedReturns > 0
-                || previousUnattributedReturns > 0;
         BlockState state = cards.isEmpty()
                 ? INSUFFICIENT
-                : limited > 0 || attributionLimited ? LIMITED : READY;
+                : limited > 0 ? LIMITED : READY;
         List<String> limitations = teamLimitations(
                 cards,
                 limited,
@@ -605,9 +603,10 @@ public final class WeeklyReviewTeamEmployeeProjector {
             result.add("Для части сотрудников недостаточно продаж для сравнения");
         }
         if (currentUnattributedReturns > 0 || previousUnattributedReturns > 0) {
-            result.add("Возвраты без продавца исходной продажи: "
+            result.add("Часть возвратов не связана с исходной продажей: "
                     + currentUnattributedReturns + " за текущую неделю и "
-                    + previousUnattributedReturns + " за предыдущую");
+                    + previousUnattributedReturns + " за предыдущую. "
+                    + "Итог магазина учтён, вклад сотрудников показан по доступной связи");
         }
         return List.copyOf(result);
     }

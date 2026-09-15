@@ -1010,6 +1010,15 @@
 }
 
 @media (max-width: 640px) {
+  .insights-preview-heading {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .insights-preview-heading > div {
+    width: 100%;
+  }
+
   .weekly-review {
     gap: 10px;
   }

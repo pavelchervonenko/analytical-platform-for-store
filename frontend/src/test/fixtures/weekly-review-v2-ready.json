@@ -1,9 +1,9 @@
 {
   "contractVersion" : 2,
   "versions" : {
-    "metricsPolicy" : "weekly-metrics-v6",
-    "snapshotPolicy" : "weekly-snapshot-v12",
-    "qualityPolicy" : "weekly-quality-v6"
+    "metricsPolicy" : "weekly-metrics-v7",
+    "snapshotPolicy" : "weekly-snapshot-v13",
+    "qualityPolicy" : "weekly-quality-v7"
   },
   "period" : {
     "timezone" : "Europe/Moscow",
@@ -1368,7 +1368,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1393,7 +1393,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1418,7 +1418,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1443,7 +1443,7 @@
     "currentDenominator" : 18,
     "previousNumerator" : 950.00,
     "previousDenominator" : 18,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1468,7 +1468,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1493,7 +1493,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1518,7 +1518,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1543,7 +1543,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1568,7 +1568,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1593,7 +1593,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1618,7 +1618,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1643,7 +1643,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1668,7 +1668,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1693,7 +1693,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1718,7 +1718,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1743,7 +1743,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1768,7 +1768,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1793,7 +1793,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1818,7 +1818,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1843,7 +1843,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1868,7 +1868,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1893,7 +1893,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1918,7 +1918,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_EVALUATED",
     "available" : true
@@ -1943,7 +1943,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -1968,7 +1968,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -1993,7 +1993,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -2018,7 +2018,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2043,7 +2043,7 @@
     "currentDenominator" : 6,
     "previousNumerator" : 360.00,
     "previousDenominator" : 6,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -2068,7 +2068,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_EVALUATED",
     "available" : true
@@ -2093,7 +2093,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2118,7 +2118,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2143,7 +2143,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2168,7 +2168,7 @@
     "currentDenominator" : 14.00,
     "previousNumerator" : 360.00,
     "previousDenominator" : 14.00,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -2193,7 +2193,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_EVALUATED",
     "available" : true
@@ -2218,7 +2218,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2243,7 +2243,7 @@
     "currentDenominator" : 6,
     "previousNumerator" : 220.00,
     "previousDenominator" : 6,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -2268,7 +2268,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_EVALUATED",
     "available" : true
@@ -2293,7 +2293,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2318,7 +2318,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2343,7 +2343,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2368,7 +2368,7 @@
     "currentDenominator" : 14.00,
     "previousNumerator" : 220.00,
     "previousDenominator" : 14.00,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -2393,7 +2393,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2418,7 +2418,7 @@
     "currentDenominator" : 6,
     "previousNumerator" : 320.00,
     "previousDenominator" : 6,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2443,7 +2443,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_EVALUATED",
     "available" : true
@@ -2468,7 +2468,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2493,7 +2493,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2518,7 +2518,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2543,7 +2543,7 @@
     "currentDenominator" : 14.00,
     "previousNumerator" : 320.00,
     "previousDenominator" : 14.00,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "NOT_MATERIAL",
     "available" : true
@@ -2568,7 +2568,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true
@@ -2593,7 +2593,7 @@
     "currentDenominator" : null,
     "previousNumerator" : null,
     "previousDenominator" : null,
-    "formulaVersion" : "weekly-metrics-v6",
+    "formulaVersion" : "weekly-metrics-v7",
     "sufficiency" : "SUFFICIENT",
     "materiality" : "MATERIAL",
     "available" : true

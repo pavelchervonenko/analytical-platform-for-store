@@ -362,6 +362,44 @@ class WeeklyReviewAssemblerTest {
     }
 
     @Test
+    void unattributedReturnsStayAContextNoteWithoutDowngradingTheReport() {
+        StoreKpiDataQuality completeQuality = quality(true, 0, 0, 0);
+        WeeklyReviewFacts base = facts(
+                completeStatus(), completeQuality, completeQuality
+        );
+        WeeklyReviewResponse result = assembler.assemble(
+                new WeeklyReviewFacts(
+                        base.storeId(),
+                        base.period(),
+                        base.sourceDataStatus(),
+                        withUnattributedReturnDocumentCount(base.current(), 2),
+                        withUnattributedReturnDocumentCount(base.previous(), 1),
+                        base.sourceDataUpdatedAt()
+                ),
+                provenance()
+        );
+
+        assertThat(result.reportState()).isEqualTo(ReportState.READY);
+        assertThat(result.qualitySummary().warningCount()).isZero();
+        assertThat(result.limitations()).isEmpty();
+        assertThat(result.team().state()).isEqualTo(WeeklyReviewResponse.BlockState.READY);
+        assertThat(result.team().limitations()).singleElement().satisfies(message ->
+                assertThat(message)
+                        .contains("Итог магазина учтён")
+                        .contains("по доступной связи")
+        );
+        assertThat(result.sourceCoverage())
+                .filteredOn(coverage -> coverage.sourceCode()
+                        == WeeklyReviewResponse.SourceCode.EMPLOYEE_ATTRIBUTION)
+                .singleElement()
+                .satisfies(coverage -> {
+                    assertThat(coverage.requiredForReport()).isFalse();
+                    assertThat(coverage.state())
+                            .isEqualTo(WeeklyReviewResponse.CoverageState.PARTIAL);
+                });
+    }
+
+    @Test
     void consistencyIssueLimitsNetRevenueAndSummaryOnly() {
         WeeklyReviewResponse result = assembler.assemble(
                 facts(
@@ -385,8 +423,8 @@ class WeeklyReviewAssemblerTest {
     }
 
     @Test
-    void limitedGrossProfitAlsoLimitsSummaryThatIncludesIt() {
-        StoreKpiDataQuality limitedCost = new StoreKpiDataQuality(
+    void zeroCostKeepsProfitAndSummaryReady() {
+        StoreKpiDataQuality zeroCost = new StoreKpiDataQuality(
                 true,
                 10,
                 0,
@@ -398,16 +436,16 @@ class WeeklyReviewAssemblerTest {
         WeeklyReviewResponse result = assembler.assemble(
                 facts(
                         completeStatus(),
-                        limitedCost,
-                        limitedCost
+                        zeroCost,
+                        zeroCost
                 ),
                 provenance()
         );
 
         assertThat(metric(result, "NET_REVENUE").metricState()).isEqualTo(MetricState.READY);
-        assertThat(metric(result, "GROSS_PROFIT").metricState()).isEqualTo(MetricState.LIMITED);
+        assertThat(metric(result, "GROSS_PROFIT").metricState()).isEqualTo(MetricState.READY);
         assertThat(result.summary().state())
-                .isEqualTo(WeeklyReviewResponse.BlockState.LIMITED);
+                .isEqualTo(WeeklyReviewResponse.BlockState.READY);
     }
 
     @Test
