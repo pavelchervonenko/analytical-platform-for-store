@@ -48,16 +48,35 @@ class ProductAutoClassificationRuleEngineTest {
         )).isEmpty();
     }
 
-    @Test
-    void classifiesUnknownServiceBySourceKind() {
+    @ParameterizedTest
+    @MethodSource("sourceKindServiceCases")
+    void classifiesSourceWorkAsServiceBeforeAccessoryOrDeviceRules(String name) {
         var decision = engine.classify(
-                "Работа специалиста",
+                name,
                 ProductSourceKind.SERVICE
         );
 
         assertThat(decision).isPresent();
         assertThat(decision.orElseThrow().categoryCode())
                 .isEqualTo("SETUP_SERVICE");
+        assertThat(decision.orElseThrow().conditionType())
+                .isEqualTo(ProductConditionType.NOT_APPLICABLE);
+        assertThat(decision.orElseThrow().ruleId())
+                .isEqualTo("source-kind-service");
+    }
+
+    @Test
+    void keepsSpecificCommercialServiceRuleAheadOfSourceKindFallback() {
+        var decision = engine.classify(
+                "Расширенная гарантия Future Store",
+                ProductSourceKind.SERVICE
+        );
+
+        assertThat(decision).isPresent();
+        assertThat(decision.orElseThrow().categoryCode())
+                .isEqualTo("WARRANTY_GENERIC");
+        assertThat(decision.orElseThrow().ruleId())
+                .isEqualTo("warranty");
     }
 
     @Test
@@ -72,6 +91,17 @@ class ProductAutoClassificationRuleEngineTest {
                 .isEqualTo("PODS_WATCH_OTHER_DEVICE");
         assertThat(decision.orElseThrow().conditionType())
                 .isEqualTo(ProductConditionType.NEW);
+    }
+
+    private static Stream<Arguments> sourceKindServiceCases() {
+        return Stream.of(
+                Arguments.of("Работа специалиста"),
+                Arguments.of("Замена заднего стекла IPhone"),
+                Arguments.of("Замена стекла дисплея"),
+                Arguments.of("Замена стекла на камеру"),
+                Arguments.of("Чистка тач-пада и клавиатуры с разборкой"),
+                Arguments.of("ЗАМЕНА ДИСПЛЕЯ 13 АЙФОНА")
+        );
     }
 
     private static Stream<Arguments> yandexStationCases() {

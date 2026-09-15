@@ -6,7 +6,7 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-09-10
+last_verified: 2026-09-14
 requirement_sources:
   - docs/archive/discoveries/analytics-business-rules-draft.md
   - docs/history/audits/2026/08/payroll-classification-review.md
@@ -49,6 +49,12 @@ superseded_by: null
 `DEVICE|ACCESSORY|SERVICE|WARRANTY|PROTECTION` и группы. Отсутствие assignment — `UNMAPPED`:
 товар входит в store revenue, но не в группы. `EXCLUDE` исключает из аналитики.
 
+Автоклассификация сначала применяет более специфичные правила коммерческих услуг, например
+гарантий и Care-продуктов. После них подтверждённый source type `SERVICE` имеет приоритет над
+лексическими правилами товаров: работа со словами `стекло`, `камера`, `iPhone`, `клавиатура` и
+подобными относится к `SETUP_SERVICE`, а не к аксессуару или устройству. Лексические правила
+защитных стёкол и других товаров продолжают применяться к source type `PRODUCT`.
+
 ## Attach-rate категория
 
 Использует отдельные numerator/denominator codes. Care-продукт может быть
@@ -60,6 +66,10 @@ superseded_by: null
 Определяет фонд: `TECH_TIER_1`, `TECH_TIER_2`, `ACCESSORY`, `SERVICE`,
 `PLAYSTATION_SUBSCRIPTION`, `PAID_REPAIR`, `EXCLUDE`. Она не исправляет analytics assignment и не
 меняет attach mapping. UI «Категории зарплаты» меняет только payroll category.
+
+Для подтверждённой платной ремонтной работы используется payroll category `PAID_REPAIR`; её
+analytics category при этом остаётся `SETUP_SERVICE`. Назначение одной проекции не создаёт и не
+изменяет назначение другой.
 
 ## Ручное исправление
 

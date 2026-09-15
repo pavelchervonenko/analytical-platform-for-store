@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class ProductAutoClassificationRuleEngine {
 
-    public static final String RULE_VERSION = "livesklad-product-rules-v7";
+    public static final String RULE_VERSION = "livesklad-product-rules-v8";
 
     public Optional<ProductAutoClassificationDecision> classify(Product product) {
         return classify(product.getName(), product.getSourceKind());
@@ -32,6 +32,14 @@ public class ProductAutoClassificationRuleEngine {
             return commercialService;
         }
 
+        if (sourceKind == ProductSourceKind.SERVICE) {
+            return decision(
+                    "SETUP_SERVICE",
+                    ProductConditionType.NOT_APPLICABLE,
+                    "source-kind-service"
+            );
+        }
+
         Optional<ProductAutoClassificationDecision> accessory =
                 classifyAccessory(name);
         if (accessory.isPresent()) {
@@ -43,13 +51,6 @@ public class ProductAutoClassificationRuleEngine {
             return device;
         }
 
-        if (sourceKind == ProductSourceKind.SERVICE) {
-            return decision(
-                    "SETUP_SERVICE",
-                    ProductConditionType.NOT_APPLICABLE,
-                    "source-kind-service"
-            );
-        }
         return Optional.empty();
     }
 
