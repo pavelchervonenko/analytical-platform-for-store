@@ -97,7 +97,7 @@ class StoreKpiIntegrationTest {
     }
 
     @Test
-    void countsOnlyOpenConsistencyIssuesFromTheRequestedPeriod() {
+    void countsOnlyActionableOpenConsistencyIssuesFromTheRequestedPeriod() {
         TestGraph graph = createGraph();
         UUID julyDocumentId = addDocument(graph, document(
                 graph.storeId(), "sale-july", "SALE", PERIOD_START, "100.00", false, null
@@ -134,10 +134,22 @@ class StoreKpiIntegrationTest {
                 graph.storeId(), "RETURN_DOCUMENT", scoped(graph, "return-july-missing"),
                 "RETURN_ORIGINAL_DOCUMENT_MISSING"
         );
+        UUID returnDocumentId = addDocument(graph, document(
+                graph.storeId(), "return-july-item-missing", "RETURN", PERIOD_START,
+                "20.00", false, null
+        ));
+        addItem(graph, item(
+                returnDocumentId, "return-item-without-origin", "IPHONE_NEW_ASIS",
+                "1.000", "20.00", knownCost("10.00")
+        ));
+        addOpenQualityIssue(
+                graph.storeId(), "RETURN_ITEM", scoped(graph, "return-item-without-origin"),
+                "RETURN_ORIGINAL_ITEM_MISSING"
+        );
 
         assertThat(periodQualityIssueRepository.countOpenConsistencyIssues(
                 graph.storeId(), PERIOD_START, PERIOD_END
-        )).isEqualTo(2);
+        )).isOne();
         assertThat(periodQualityIssueRepository.countOpenConsistencyIssues(
                 graph.storeId(), PERIOD_END.plusDays(1), PERIOD_END.plusMonths(1)
         )).isOne();

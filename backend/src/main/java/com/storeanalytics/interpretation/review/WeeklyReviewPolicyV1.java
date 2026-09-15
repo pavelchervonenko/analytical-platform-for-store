@@ -47,9 +47,9 @@ public final class WeeklyReviewPolicyV1 {
 
     public static final int FACTS_SCHEMA_VERSION = 2;
     public static final VersionSet VERSIONS = new VersionSet(
-            "weekly-metrics-v6",
-            "weekly-snapshot-v12",
-            "weekly-quality-v6"
+            "weekly-metrics-v7",
+            "weekly-snapshot-v13",
+            "weekly-quality-v7"
     );
 
     private static final int PERCENT_SCALE = 2;

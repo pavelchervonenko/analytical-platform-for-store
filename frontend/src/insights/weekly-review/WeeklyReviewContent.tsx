@@ -106,7 +106,7 @@ export function WeeklyReviewContent({
                   limitations={model.limitations}
                   localMessages={[
                     ...review.salesStructure.limitations,
-                    ...review.team.limitations
+                    ...(review.team.state === "READY" ? [] : review.team.limitations)
                   ]}
                   openDetail={openDetail}
                 />
@@ -626,16 +626,20 @@ function TeamExceptionsSection({
       <div className="weekly-review-section-actions">
         {review.team.limitations.length > 0 && (
           <DetailButton
-            label="Почему команда ограничена"
+            label={review.team.state === "READY"
+              ? "О данных команды"
+              : "Почему команда ограничена"}
             context={{
               kind: "limitations",
-              title: "Ограничения команды",
+              title: review.team.state === "READY"
+                ? "О данных команды"
+                : "Ограничения команды",
               limitations: [],
               messages: review.team.limitations
             }}
             openDetail={openDetail}
             compact
-            tone="warning"
+            tone={review.team.state === "READY" ? "default" : "warning"}
           />
         )}
         <Link className="weekly-review-section-link" to={{ pathname: "/employees", search: location.search }}>

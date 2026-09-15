@@ -168,6 +168,40 @@ Readiness временного стенда возвращал `DOWN` по ож�
 но стенд не признаётся release-equivalent. Схема не откатывалась, readiness не ослаблялся,
 production/staging не затрагивались. Verdict P7-C: `STOP`; production rollout не разрешён.
 
+## Follow-up: P7-C v13 business-rule correction, 2026-09-15
+
+Владелец продукта уточнил два правила: отсутствие доступной исходной продажи/позиции у части
+возвратов и нулевая себестоимость являются нормальными состояниями. Кандидат был исправлен
+адресно: возвраты сохраняются в результате магазина, ноль участвует в расчёте прибыли, а
+действительно отсутствующая себестоимость и остальные проблемы согласованности сохраняют прежнее
+fail-closed поведение.
+
+Повторная проверка выполнена без нового LiveSklad read на изолированной V48-копии уже разрешённых
+локальных данных. Штатный authenticated admin API создал revision 4 обоих магазинов с policy
+`weekly-metrics-v7` / `weekly-snapshot-v13` / `weekly-quality-v7`; revisions 1–3 не
+переписывались. Обезличенный результат:
+
+- required coverage продаж и возвратов у обоих отчётов — `COMPLETE`;
+- все четыре core KPI каждого отчёта имеют состояние `READY`;
+- согласованные нормальные случаи отсутствуют в root limitations;
+- optional employee attribution coverage остаётся `PARTIAL` и объясняется нейтрально внутри
+  команды, не создавая самостоятельный page-level warning;
+- оба report state остаются естественными `PARTIAL`: один из-за employee sales sufficiency, другой
+  из-за `PRODUCTS_UNCLASSIFIED`.
+
+Business facts не исправлялись ради искусственного статуса. Поэтому семантика v13 подтверждена,
+но отсутствие natural real-data `READY` сохраняет P7-C release verdict `STOP`. Production и
+staging не использовались; финансовые значения, персональные имена и business-data screenshots в
+evidence не сохранялись.
+
+Feature-closeout после этой коррекции подтвердил `44/44` targeted backend checks, включая `4/4`
+`StoreKpiIntegrationTest` с реальным локальным PostgreSQL Testcontainer и `skipped=0`. Полный
+frontend check прошёл contracts, lint, `199/199` tests и production build. `visual:local` прошёл на
+desktop/tablet/mobile, а READY/PARTIAL captures просмотрены вручную; исправлено мобильное
+выравнивание заголовка. Скриншоты не добавлялись в evidence. Supply-chain, checkstyle,
+shell-security и OpenAPI compatibility также прошли; общий production-equivalent rerun оставлен
+отдельным преддеплойным gate по решению владельца продукта.
+
 ## Remaining limits
 
 - Fresh real data did not yield a `READY` report. A production decision must not reinterpret the

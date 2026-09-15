@@ -73,15 +73,23 @@ exit_target: current
   пятисценарная visual-матрица и ручной UI-review прошли; npm audit не обнаружил уязвимостей.
   Локальные backend/web images собраны из одного reviewed commit, OCI revision совпадает, а
   упакованный migration range не отличается от production-базы.
-- P7-C выполнен до stop-условия: полное локальное покрытие двух недель подтверждено, для обоих
-  разрешённых магазинов через штатный authenticated API сохранены новые immutable revision с
-  policy `weekly-snapshot-v12`. Оба отчёта естественно остались `PARTIAL`; реальный `READY` в
-  разрешённой выборке отсутствует. Поэтому P7-C имеет verdict `STOP`.
+- P7-C повторён после уточнения бизнес-правил: v12 evidence сохранён, а штатный authenticated API
+  создал для обоих разрешённых магазинов новые immutable revision с policy
+  `weekly-snapshot-v13`. Нулевая себестоимость и недоступная исходная связь возврата больше не
+  ограничивают отчёт; все четыре core KPI обоих snapshots имеют `READY`. Оба отчёта естественно
+  остались `PARTIAL` из-за независимых содержательных ограничений — employee sales sufficiency и
+  классификации. Реальный `READY` в выборке отсутствует, поэтому release-gate P7-C остаётся `STOP`,
+  хотя согласованная реализация бизнес-правил подтверждена.
 - P7-D завершён как `DEFERRED`: deterministic-first путь перепроверен с выключенными AI planner,
   worker и generation; paid provider request не выполнялся.
 - P7-E имеет `PASS_WITH_LIMITS`: продуктовый владелец проверил и принял исправленный маршрут по
   локальным снимкам, а повторная fixture-матрица прошла `15/15`. Отдельного таймированного
   исследования с назначенным менеджером без подсказок не проводилось.
+- Функциональная часть «ИИ-разбора» после коррекции v13 закрыта отдельно от release gates:
+  targeted backend-набор прошёл `44/44`, включая `4/4` SQL integration с `skipped=0`; полный
+  frontend check прошёл `199/199`, а актуальные desktop/tablet/mobile captures проверены вручную.
+  Мобильный заголовок выровнен влево. Эти результаты подтверждают candidate-код, но не подменяют
+  пользовательский преддеплойный прогон и не переводят P7-H/P7-I в завершённое состояние.
 - P7-F выполнен до stop-условия на изолированном локальном контуре: чистая schema boundary,
   migration, encrypted dump/restore и запуск API/worker/web подтверждены. Exact previous runtime,
   staging deploy path и fresh production backup недоступны, поэтому gate остаётся `STOP`.
@@ -129,6 +137,11 @@ exit_target: current
 11. В первой реализации графиков нет: endpoint не содержит согласованного временного ряда.
 12. Опубликованные prompt/schema не переписываются. Изменение AI-контракта возможно только после
     отдельного semantic review и новой версии runtime-артефакта.
+13. Нулевая себестоимость является допустимым значением и не ограничивает прибыль, маржу или
+    report state; действительно отсутствующая себестоимость сохраняет fail-closed поведение.
+14. Отсутствующая исходная продажа/позиция у части возвратов не считается нарушением store-level
+    согласованности. Возврат учитывается в результате магазина, а недоступная employee attribution
+    объясняется нейтрально только внутри блока команды.
 
 ## Подтверждённое исходное техническое состояние
 
@@ -831,7 +844,7 @@ commit.
 После P7-B выполняются отдельные code review backend/frontend и security/privacy review артефактов.
 При изменении кода после review весь затронутый gate запускается повторно.
 
-#### P7-C. Подтвердить реальные `READY`, `PARTIAL` и snapshot v12
+#### P7-C. Подтвердить реальные `READY`, `PARTIAL` и актуальную snapshot policy
 
 Проверка выполняется сначала только в local/test. Новый read-only scope LiveSklad требует отдельного
 явного разрешения по магазинам и датам; прежнее разрешение на `2026-08-31..2026-09-13` не
@@ -842,7 +855,7 @@ commit.
 2. Через штатный локальный authenticated admin API создать immutable snapshot для каждого
    разрешённого магазина. Не писать в production/staging и не изменять source LiveSklad.
 3. Подтвердить в сохранённом payload:
-   - `snapshotPolicy=weekly-snapshot-v12`;
+   - `snapshotPolicy=weekly-snapshot-v13`;
    - ожидаемый `reportState`, coverage и metric states;
    - ровно одну связь primary action с factor либо сохранение всех факторов при неоднозначности;
    - действие `Проверить чеки и причины возвратов` при соответствующем реальном сигнале;
@@ -859,12 +872,12 @@ Stop-условия P7-C:
 
 - нет полного coverage обеих недель;
 - `READY` удаётся получить только fixture-ом;
-- v12 создаёт противоречивый summary/action/factor или меняет старую revision;
+- v13 создаёт противоречивый summary/action/factor или меняет старую revision;
 - неполные смены создают глобальный warning, employee attention или негативную оценку сами по себе;
 - frontend скрывает schema/transport error legacy fallback-ом.
 
 Контрольная точка P7-C: реальные `READY` и `PARTIAL` подтверждают тот же контракт, что fixtures и
-tests; новый v12 snapshot прочитан актуальным frontend, а ограничения evidence явно зафиксированы.
+tests; новый v13 snapshot прочитан актуальным frontend, а ограничения evidence явно зафиксированы.
 
 Статус: **STOP после разрешённого локального прогона**. Непрерывное покрытие обеих недель уже
 находилось в изолированной локальной БД, поэтому дополнительного обращения к LiveSklad не
@@ -886,6 +899,16 @@ MCR и двух Alpine mirrors. Ранее пройденные `15/15` fixture 
 authenticated API и транзакционная генерация доступны, однако такой стенд не считается
 release-equivalent. Схема не откатывалась, readiness не ослаблялся, production/staging не
 затрагивались.
+
+Повторный прогон 2026-09-15 после продуктового уточнения выполнен на изолированной V48-копии той же
+локальной выборки. Штатный authenticated API создал revision 4 обоих магазинов с версиями
+`weekly-metrics-v7` / `weekly-snapshot-v13` / `weekly-quality-v7`; прежние revisions не
+переписывались. В обоих payload все четыре core KPI имеют `READY`, required coverage продаж и
+возвратов — `COMPLETE`, а нулевая себестоимость и отсутствие исходной связи возврата отсутствуют в
+limitations. Оба отчёта остаются естественными `PARTIAL`: один из-за локальной недостаточности
+employee sales, другой из-за `PRODUCTS_UNCLASSIFIED`. Эти факты не изменялись ради получения
+искусственного `READY`, поэтому release-gate сохраняет честный `STOP`, а реализация согласованных
+правил считается проверенной.
 
 После P7-C проводится новый независимый UI review по обезличенному live-наблюдению. При любом
 изменении presentation поведение возвращается в P6.1 и проходит полную fixture-матрицу повторно.
@@ -1027,14 +1050,14 @@ exact previous-runtime rollback. Эти неизвестные прямо вхо
    выполняются только штатным deploy script.
 4. Проверить `/livez`, `/readyz`, exact digests, live schema, queues и отсутствие HTTP `5xx`.
 5. Поскольку production snapshot planner сейчас может быть выключен, не предполагать автоматическое
-   создание v12. Для одного exact store/week выполнить либо подтверждённый planner path, либо
+   создание v13. Для одного exact store/week выполнить либо подтверждённый planner path, либо
    отдельно разрешённый authenticated admin generation endpoint; затем read-only проверить snapshot
    и UI. Только после успешного canary переходить ко второму магазину.
 6. AI оставить выключенным при результате P7-D `DEFERRED`. При `VERIFIED` его production canary всё
    равно получает отдельное approval exact snapshot/hash/cost.
 7. Legacy fallback не удалять и не использовать для сокрытия contract error.
 
-Контрольная точка P7-H: новый `WeeklyReviewView` читает старые и новые revisions, v12 canary
+Контрольная точка P7-H: новый `WeeklyReviewView` читает старые и новые revisions, v13 canary
 непротиворечив, deterministic путь работает без AI, а rollback остаётся доступным в рамках live
 schema compatibility.
 
@@ -1069,7 +1092,7 @@ cleanup имеет отдельную задачу и не смешан с вы�
 
 | Ситуация | Решение |
 |---|---|
-| Нет реального `READY` или v12 evidence | `STOP`; fixture не заменяет runtime |
+| Нет реального `READY` или актуального v13 evidence | `STOP`; fixture не заменяет runtime |
 | AI preflight/cost/privacy не закрыты | `GO` только deterministic-first с AI disabled |
 | Frontend contract/UI defect до backend rollout | Откатить web на previous digest |
 | Backend defect, live schema совместима с previous runtime | Штатный application rollback |
@@ -1080,7 +1103,7 @@ cleanup имеет отдельную задачу и не смешан с вы�
 | Target/digest/schema/backup расходятся с change record | `STOP`; production write запрещён |
 
 Финальная контрольная точка P7: production показывает согласованный `WeeklyReviewView`, реальный
-v12 snapshot и deterministic fallback подтверждены, optional AI имеет честный `DEFERRED` или
+v13 snapshot и deterministic fallback подтверждены, optional AI имеет честный `DEFERRED` или
 `VERIFIED` verdict, release evidence обезличено, а legacy остаётся до отдельного доказанного
 cleanup.
 
@@ -1249,7 +1272,10 @@ Rate-limit backfill показал отдельную P2-неэффективн�
 
 Локальная часть P0–P6 извлечена в current-контракты и подтверждена
 [`WEEKLY_REVIEW_LOCAL_PRERELEASE_2026-09-14.md`](../history/audits/2026/09/WEEKLY_REVIEW_LOCAL_PRERELEASE_2026-09-14.md).
-P7-A и P7-B подтверждают границу и воспроизводимость кандидата. P7-C сохранил реальные immutable
-v12 snapshots, но оба отчёта оказались `PARTIAL`; отсутствие естественного `READY`, недоступность
-v12 live visual и schema mismatch локального стенда оставляют контрольную точку в `STOP`.
-Production rollout и legacy cleanup не объявляются завершёнными.
+P7-A и P7-B подтверждают границу и воспроизводимость исходного кандидата. P7-C сохранил реальные
+immutable v12 snapshots, затем после согласованной коррекции бизнес-семантики — новые immutable
+v13 revisions. Во всех v13 snapshots четыре core KPI готовы; оба отчёта остались `PARTIAL` только
+из-за независимых локальных ограничений. Отсутствие естественного `READY` и отдельного live v13
+visual сохраняет release-контрольную точку в `STOP`, но не блокирует завершение согласованной
+реализации блока. Production rollout, post-release observation и legacy cleanup не объявляются
+завершёнными и остаются для отдельного преддеплойного/релизного прогона.

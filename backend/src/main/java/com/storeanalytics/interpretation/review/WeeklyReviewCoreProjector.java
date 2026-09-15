@@ -200,10 +200,6 @@ public final class WeeklyReviewCoreProjector {
                 || !previous.dataQuality().completeCostData()) {
             return new CostState(UNAVAILABLE, INSUFFICIENT);
         }
-        if (current.dataQuality().unexpectedZeroCostItemCount() > 0
-                || previous.dataQuality().unexpectedZeroCostItemCount() > 0) {
-            return new CostState(LIMITED, Sufficiency.LIMITED);
-        }
         return new CostState(READY, SUFFICIENT);
     }
 

@@ -1,7 +1,5 @@
 package com.storeanalytics.interpretation.review;
 
-import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.Materiality.NOT_EVALUATED;
-import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricState.LIMITED;
 import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricState.READY;
 import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricState.UNAVAILABLE;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,7 +58,7 @@ class WeeklyReviewCoreProjectorTest {
     }
 
     @Test
-    void keepsUnexpectedZeroCostVisibleButOutOfFactors() {
+    void treatsZeroCostAsAValidBusinessValue() {
         WeeklyReviewCoreProjector.Projection result = projector.project(
                 kpi("85000.00", "40000.00", "47.06", quality(0, 1)),
                 kpi("85000.00", "38000.00", "44.71", quality(0, 0)),
@@ -68,9 +66,8 @@ class WeeklyReviewCoreProjectorTest {
                 revenue("90000.00", "5000.00", 7, 1)
         );
 
-        assertThat(result.results().get(1).metricState()).isEqualTo(LIMITED);
-        assertThat(result.results().get(1).materiality()).isEqualTo(NOT_EVALUATED);
-        assertThat(result.results().get(2).metricState()).isEqualTo(LIMITED);
+        assertThat(result.results().get(1).metricState()).isEqualTo(READY);
+        assertThat(result.results().get(2).metricState()).isEqualTo(READY);
     }
 
     @Test

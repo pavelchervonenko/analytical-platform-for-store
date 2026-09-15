@@ -51,6 +51,7 @@ generation/planner. Включение AI требует отдельного P7
 - `backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewStructureProjector.java`
 - `backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewSummaryPresenter.java`
 - `backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewTeamEmployeeProjector.java`
+- `backend/src/main/java/com/storeanalytics/quality/repository/PeriodQualityIssueRepository.java`
 
 ### Frontend Weekly Review
 
@@ -75,6 +76,7 @@ generation/planner. Включение AI требует отдельного P7
 - `backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewQualityPolicyV1Test.java`
 - `backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewSnapshotPlanningServiceTest.java`
 - `backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewTeamEmployeeProjectorTest.java`
+- `backend/src/test/java/com/storeanalytics/metrics/repository/StoreKpiIntegrationTest.java`
 - `backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiSemanticValidatorTest.java`
 - `backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiTestFixtures.java`
 
@@ -222,8 +224,41 @@ P7-B не подтверждает реальный `READY`: это отдель
   упакован до `V48`. Схема не откатывалась и readiness не ослаблялся.
 
 Production/staging не использовались. Этот результат не разрешает последующие gates автоматически:
-для rollout всё ещё нужны естественный real-data `READY`, live v12 visual и закрытые release-
+для rollout всё ещё нужны естественный real-data `READY`, live v13 visual и закрытые release-
 equivalent/production preflight условия.
+
+### Коррекция бизнес-семантики после P7-C
+
+Владелец продукта подтвердил, что нулевая себестоимость и отсутствие доступной исходной
+продажи/позиции у части возвратов являются нормальными состояниями. Candidate поэтому переводит
+эти случаи из quality limitation в диагностический контекст: ноль остаётся рассчитанным значением,
+возврат остаётся учтённым в результате магазина, а недоступная связь с сотрудником объясняется
+только в блоке команды. Действительно отсутствующая себестоимость и остальные проблемы
+согласованности сохраняют прежнее fail-closed поведение.
+
+Изменение версионировано как `weekly-metrics-v7`, `weekly-snapshot-v13` и `weekly-quality-v7`;
+существующие v10–v12 snapshots не переписываются. Предыдущий результат P7-C выше остаётся
+историческим evidence для v12.
+
+Повторный authenticated прогон в изолированной локальной V48-копии создал revision 4 обоих
+магазинов. Оба payload имеют актуальные v7/v13/v7 policy versions, полное required coverage и
+`4/4` core metrics в `READY`; согласованные нормальные случаи отсутствуют в limitations. Оба
+report state остались естественными `PARTIAL`: один из-за employee sales sufficiency, другой из-за
+`PRODUCTS_UNCLASSIFIED`. Реальные факты не изменялись, поэтому natural `READY` не подменён fixture.
+
+### Проверки завершения функциональной части
+
+После коррекции v13 targeted backend-набор прошёл `44/44`. В него входят `4/4` проверки
+`StoreKpiIntegrationTest`, выполненные с реальным локальным PostgreSQL Testcontainer и
+`skipped=0`. Полный frontend check прошёл contracts, lint, `199/199` tests и production build.
+Локальный `visual:local` повторно прошёл на desktop/tablet/mobile; актуальные READY/PARTIAL
+captures просмотрены вручную, включая исправленное выравнивание мобильного заголовка. Скриншоты
+остались ignored runtime artifacts и в репозиторий не добавляются.
+
+Composite backend gate дополнительно подтвердил supply-chain и checkstyle; shell-security и
+OpenAPI compatibility выполнены отдельными штатными скриптами из-за различий локальных runner
+images. Полный production-equivalent rerun остаётся обязательным преддеплойным действием и не
+объявляется завершённым этим feature-closeout.
 
 ### Результат P7-D
 
@@ -272,7 +307,7 @@ P7-H/P7-I имеют статус `NOT STARTED`: production rollout требуе
   `READY`; возможный classification-пакет не подмешивать в этот manifest.
 - Если AI понадобится после deterministic-first выпуска, открыть отдельный `VERIFIED` путь с
   privacy, cost, concurrency и paid staging gates; текущий verdict — `DEFERRED`.
-- Получить natural `READY` и локальный live v12 visual без расширения разрешённого data scope либо
+- Получить natural `READY` и локальный live v13 visual без расширения разрешённого data scope либо
   отдельно согласовать новый scope.
 - Опубликовать reviewed candidate images и выполнить release-equivalent rehearsal с exact previous
   runtime и свежим backup/restore evidence.
