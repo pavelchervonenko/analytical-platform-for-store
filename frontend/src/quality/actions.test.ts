@@ -9,8 +9,8 @@ describe("quality action routing", () => {
   });
 
   it("routes correction actions by stable action code", () => {
-    expect(describeQualityAction("SET_STORE_PLAN", false)).toMatchObject({ route: "/plan", view: "plan" });
-    expect(describeQualityAction("UPDATE_WORK_SCHEDULE", false)).toMatchObject({ route: "/plan", view: "shifts" });
+    expect(describeQualityAction("SET_STORE_PLAN", false)).toMatchObject({ route: "/plan" });
+    expect(describeQualityAction("UPDATE_WORK_SCHEDULE", false)).toMatchObject({ route: "/shifts" });
     expect(describeQualityAction("CALCULATE_PAYROLL", false)).toMatchObject({ route: "/payroll" });
   });
 

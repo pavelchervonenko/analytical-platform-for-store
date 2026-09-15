@@ -42,9 +42,7 @@ function actionSearch(currentSearch: string, route: string, view?: string): stri
   if (view) {
     const key = route === "/admin"
       ? "adminView"
-      : route === "/plan"
-        ? "section"
-        : "qualityView";
+      : "qualityView";
     params.set(key, view);
   }
   return params.toString();

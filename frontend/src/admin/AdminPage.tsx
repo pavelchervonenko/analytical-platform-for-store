@@ -16,8 +16,8 @@ const views = [
   { id: "sync", label: "Синхронизация", icon: DatabaseZap },
   { id: "reports", label: "Архив отчетов", icon: FileArchive },
   { id: "schemes", label: "Правила расчетов", icon: Calculator },
-  { id: "classification", label: "Категории товаров", icon: PackageSearch },
-  { id: "category-import", label: "Импорт категорий", icon: PackageOpen },
+  { id: "classification", label: "Категории зарплаты", icon: PackageSearch },
+  { id: "category-import", label: "Категории аналитики", icon: PackageOpen },
   { id: "llm", label: "ИИ-разбор", icon: BrainCircuit },
   { id: "telegram", label: "Telegram", icon: BellRing }
 ] as const;

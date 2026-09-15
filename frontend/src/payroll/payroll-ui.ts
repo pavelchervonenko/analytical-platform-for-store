@@ -1,4 +1,5 @@
-import type { PayrollStatement } from "../api/contracts";
+import { isApiClientError } from "../api/client";
+import type { PayrollReadiness, PayrollStatement } from "../api/contracts";
 
 export interface PayrollTotals {
   earned: number;
@@ -28,6 +29,40 @@ export function validateReason(value: string): string | null {
   if (!reason) return "Укажите причину — она сохранится в истории.";
   if (reason.length > 500) return "Причина не должна превышать 500 символов.";
   return null;
+}
+
+export function payrollErrorMessage(error: unknown): string {
+  if (isApiClientError(error)) {
+    if (error.code === "PAYROLL_SOURCE_DATA_CHANGED") return "Исходные данные изменились. Расчет обновлен. Пересчитайте зарплату и проверьте результат.";
+    if (error.code === "PAYROLL_STATE_CONFLICT") return "Это действие недоступно для текущего статуса расчета. Обновите данные и проверьте этап выплаты.";
+    if (["PRECONDITION_FAILED", "CONCURRENT_MODIFICATION"].includes(error.code)) return "Версия уже изменилась. Данные перечитаны; проверьте актуальную версию и повторите действие.";
+    if (error.status === 409) return "Действие конфликтует с актуальным состоянием расчета. Обновите данные и повторите попытку.";
+    if (error.status === 403) return "Недостаточно прав для изменения этого расчета.";
+    if (error.status === 400) return "Проверьте заполненные поля и повторите действие.";
+    return error.message;
+  }
+  return "Не удалось выполнить действие. Обновите данные и повторите попытку.";
+}
+
+export function payrollReadinessCheckCount(
+  readiness: PayrollReadiness,
+  freshnessProblem = false
+): number {
+  return Number(!readiness.planPresent)
+    + Number(!readiness.schemePresent)
+    + Number(readiness.unmappedItemCount > 0)
+    + Number(readiness.missingCostItemCount > 0)
+    + Number(readiness.daysWithoutShift > 0)
+    + Number(freshnessProblem);
+}
+
+export function formatPayrollCheckCount(count: number): string {
+  const lastTwo = count % 100;
+  const last = count % 10;
+  const noun = lastTwo >= 11 && lastTwo <= 14
+    ? "проверок"
+    : last === 1 ? "проверка" : last >= 2 && last <= 4 ? "проверки" : "проверок";
+  return `${count} ${noun}`;
 }
 
 const payrollCategoryLabels: Readonly<Record<string, string>> = {

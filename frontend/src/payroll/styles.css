@@ -54,6 +54,10 @@
 .payroll-issue-details b { font-size: 12px; white-space: nowrap; }
 
 .payroll-notice { min-height: 50px; display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 10px 14px; border-radius: 15px; color: var(--success); background: var(--success-soft); font-size: 13px; font-weight: 700; }
+.payroll-risk-warning { min-height: 58px; display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 11px 15px; border: 1px solid #ead7b8; border-radius: 16px; color: var(--warning); background: var(--warning-soft); }
+.payroll-risk-warning > svg { flex: 0 0 auto; }
+.payroll-risk-warning strong { font-size: 13px; }
+.payroll-risk-warning p { margin: 4px 0 0; color: var(--text-muted); font-size: 11px; }
 .payroll-notice button { margin-left: auto; padding: 5px; border: 0; color: inherit; background: transparent; }
 .payroll-tabs { min-height: 64px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 14px; padding: 5px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow-sm); }
 .payroll-tabs button { min-width: 0; display: grid; grid-template-columns: 25px minmax(0, auto); grid-template-rows: auto auto; align-content: center; justify-content: center; column-gap: 8px; padding: 8px 12px; border: 0; border-radius: 15px; color: var(--text-muted); background: transparent; text-align: left; font-size: 13px; font-weight: 750; }
