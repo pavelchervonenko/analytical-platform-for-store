@@ -20,6 +20,13 @@ export function monthFromDate(date: string): string {
   return date.slice(0, 7);
 }
 
+export function isIsoMonth(value: string | null): value is string {
+  const match = value ? ISO_MONTH.exec(value) : null;
+  if (!match) return false;
+  const monthNumber = Number(match[2]);
+  return monthNumber >= 1 && monthNumber <= 12;
+}
+
 export function monthRange(month: string): { start: string; end: string } {
   const match = ISO_MONTH.exec(month);
   if (!match) throw new Error("Invalid ISO month");
@@ -28,6 +35,16 @@ export function monthRange(month: string): { start: string; end: string } {
   if (monthNumber < 1 || monthNumber > 12) throw new Error("Invalid ISO month");
   const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
   return { start: `${year}-${pad(monthNumber)}-01`, end: `${year}-${pad(monthNumber)}-${pad(lastDay)}` };
+}
+
+export function planMonthForPeriod(
+  mode: "MONTH" | "WEEK" | "CUSTOM",
+  month: string,
+  periodEnd: string
+): string {
+  const candidate = mode === "MONTH" ? month : monthFromDate(periodEnd);
+  if (!isIsoMonth(candidate)) throw new Error("Invalid plan month");
+  return candidate;
 }
 
 export function isIsoDate(value: string | null): value is string {

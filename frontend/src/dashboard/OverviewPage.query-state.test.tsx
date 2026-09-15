@@ -21,7 +21,9 @@ vi.mock("../stores/WorkspaceProvider", () => ({
     periodStart: "2026-09-01",
     periodEnd: "2026-09-08",
     periodLabel: "сентябрь 2026 г.",
-    asOfDate: "2026-09-08"
+    asOfDate: "2026-09-08",
+    planMonth: "2026-09",
+    planAsOfDate: "2026-09-08"
   })
 }));
 

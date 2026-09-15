@@ -50,6 +50,11 @@ remaining = max(targetAmount - directionAmount, 0)
 neededPerDay = remaining / remainingDays
 ```
 
+Для `REVENUE` статус `ON_TRACK` определяется прогнозом конца месяца. Для долевых направлений
+`ACCESSORY`, `SERVICE` и `ADDITIONAL` текущая реализация не использует прогноз как основание
+статуса: достигнутая доля получает `ACHIEVED`, недостигнутая до конца месяца — `AT_RISK`, а в
+последний день — `MISSED`. Поэтому «Выполнено» для услуги означает достижение доли на текущую дату.
+
 Achievement сравнивает unrounded values. Response также содержит calendar pace, forecast, focus,
 coverage и classification completeness; frontend отображает backend-owned значения и не строит
 другую цель.
@@ -60,3 +65,5 @@ revenue и детерминированно распределяется по б
 
 Overview передаёт scope явно и показывает month target/gap в верхних карточках только в month mode.
 Для week/custom этот endpoint остаётся отдельным блоком «План месяца».
+Отдельный раздел «План» также передаёт scope явно и использует `SELLERS` по умолчанию; transport
+default endpoint остаётся `STORE` только для обратной совместимости других потребителей.

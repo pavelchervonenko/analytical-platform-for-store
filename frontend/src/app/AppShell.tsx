@@ -52,6 +52,23 @@ export function navigationGroupsFor(
     .filter((group) => group.items.length > 0);
 }
 
+export function navigationSearchFor(
+  targetPath: string,
+  currentPath: string,
+  currentSearch: string,
+  planMonth: string
+): string {
+  if (targetPath !== "/plan") return currentSearch;
+  const searchParams = new URLSearchParams(currentSearch);
+  searchParams.set("month", planMonth);
+  searchParams.delete("range");
+  searchParams.delete("periodStart");
+  searchParams.delete("periodEnd");
+  searchParams.delete("overviewScope");
+  if (!currentPath.startsWith("/plan")) searchParams.delete("planScope");
+  return searchParams.toString();
+}
+
 function roleLabel(role: "ADMIN" | "MANAGER" | "UNKNOWN" | undefined): string {
   if (role === "ADMIN") return "Администратор";
   if (role === "MANAGER") return "Руководитель";
@@ -76,7 +93,11 @@ function ShellContent() {
             <div className="nav-group" key={group.label}>
               <span className="nav-caption">{group.label}</span>
               {group.items.map(({ to, label, icon: Icon }) => (
-                <NavLink key={to} to={{ pathname: to, search: location.search }} onClick={() => setMobileMenuOpen(false)}>
+                <NavLink
+                  key={to}
+                  to={{ pathname: to, search: navigationSearchFor(to, location.pathname, location.search, workspace.planMonth) }}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
                   <Icon size={19} /><span>{label}</span>
                 </NavLink>
               ))}

@@ -6,7 +6,7 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-09-03
+last_verified: 2026-09-14
 requirement_sources:
   - docs/archive/discoveries/analytics-business-rules-draft.md
   - docs/decisions/ADR-0002-overview-period-scope.md
@@ -20,6 +20,8 @@ implementation_sources:
   - frontend/src/stores/WorkspaceProvider.tsx
 verification_sources:
   - frontend/src/stores/RangePeriodSelector.test.tsx
+  - frontend/src/stores/WorkspaceProvider.test.tsx
+  - frontend/src/shared/date.test.ts
   - backend/src/test/java/com/storeanalytics/metrics/service/AverageKpiServiceTest.java
   - backend/src/test/java/com/storeanalytics/metrics/service/OverviewMetricsServiceTest.java
   - backend/src/test/java/com/storeanalytics/performance/service/EmployeeCardServiceTest.java
@@ -64,6 +66,11 @@ previous: 2026-08-10..2026-08-16
 месяц; годовой — по финализированным месяцам года. Выбор сегодняшней даты не доказывает
 завершённость дня: дополнительно нужны sync coverage и quality.
 
+Если аналитический период не является целым месяцем, месячный план использует календарный месяц
+даты окончания периода. Это правило применяется к дню, неделе, произвольному диапазону, стыку
+месяцев и стыку годов. Для текущего месяца `asOf` ограничивается последним завершённым и
+загруженным днём; исторический месяц считается до своего последнего дня.
+
 ## Timezone gap
 
 Sales/returns normalization использует `businessZone` из `TimeConfig`, сейчас
@@ -79,5 +86,7 @@ Sales/returns normalization использует `businessZone` из `TimeConfig
 
 В режиме месяца target/gap можно показывать рядом с фактом того же месяца. В `WEEK`/`CUSTOM`
 верхние карточки содержат только факт выбранного периода, а прогресс месячного плана показывается
-отдельно. Правило принято и реализовано в
+отдельно для месяца даты окончания периода. Его scope совпадает с переключателем «Обзора».
+Отдельный раздел «План» имеет независимый scope с `SELLERS` по умолчанию. Правило разделения
+selected-period facts и month plan принято и реализовано в
 [ADR-0002](../../decisions/ADR-0002-overview-period-scope.md).

@@ -71,6 +71,7 @@ describe("plan overview presentation", () => {
     expect(within(block).getByText("Темп ниже плана")).toBeInTheDocument();
     expect(within(block).getByText(/800\s000\s₽/u)).toBeInTheDocument();
     expect(within(block).getByText("Прогноз на конец месяца")).toBeInTheDocument();
+    expect(within(block).getByText("950 тыс. ₽, 95% плана")).toBeInTheDocument();
     expect(within(block).getByText("Нужно в день до конца месяца")).toBeInTheDocument();
     expect(within(block).getByRole("progressbar")).toHaveAccessibleName("Выполнение плана выручки: 80%");
   });
@@ -85,6 +86,7 @@ describe("plan overview presentation", () => {
     expect(within(block).getAllByText("Ниже цели")).toHaveLength(3);
     expect(within(block).getByText("−2 п. п.")).toBeInTheDocument();
     expect(within(block).getAllByText("Фактическая сумма")).toHaveLength(3);
+    expect(within(block).getAllByText("Прогноз суммы на конец месяца")).toHaveLength(3);
     expect(block.querySelectorAll("details")).toHaveLength(3);
   });
 
@@ -137,5 +139,34 @@ describe("plan overview presentation", () => {
   it("does not ask the manager to inspect technical data", () => {
     expect(primaryPlanAction({ ...accessory, status: "NOT_AVAILABLE", requiredPerRemainingDay: null }))
       .toBe("Аксессуары: расчёт появится после обновления данных.");
+  });
+
+  it("suppresses projections that are waiting for complete source data", () => {
+    render(
+      <>
+        <RevenuePlanBlock direction={revenue} monthClosed={false} forecastAvailable={false} />
+        <RevenueStructureBlock
+          directions={[accessory, service, additional]}
+          monthClosed={false}
+          forecastAvailable={false}
+        />
+      </>
+    );
+
+    expect(screen.getByText("Ожидает данных")).toBeInTheDocument();
+    expect(screen.queryByText("950 тыс. ₽, 95% плана")).not.toBeInTheDocument();
+    expect(screen.queryByText("Прогноз суммы на конец месяца")).not.toBeInTheDocument();
+  });
+
+  it("does not format a missing projected completion as a forecast", () => {
+    render(
+      <RevenuePlanBlock
+        direction={{ ...revenue, projectedAmountCompletionPercent: null }}
+        monthClosed={false}
+      />
+    );
+
+    expect(screen.getByText("Ожидает данных")).toBeInTheDocument();
+    expect(screen.queryByText("950 тыс. ₽, — плана")).not.toBeInTheDocument();
   });
 });

@@ -11,8 +11,10 @@ import {
   formatMonth,
   inclusiveDayCount,
   isIsoDate,
+  isIsoMonth,
   monthFromDate,
   monthRange,
+  planMonthForPeriod,
   weekRange
 } from "../shared/date";
 
@@ -33,6 +35,8 @@ interface WorkspaceContextValue {
   periodEnd: string;
   periodLabel: string;
   asOfDate: string;
+  planMonth: string;
+  planAsOfDate: string;
   dataThroughDate: string | null;
   completedThroughDate: string;
   currentMonth: string;
@@ -90,7 +94,7 @@ export function WorkspaceProvider({
   const today = selectedStore ? currentDateInTimeZone(selectedStore.timezone) : "";
   const currentMonth = today ? monthFromDate(today) : "";
   const requestedMonth = searchParams.get("month");
-  const month = requestedMonth && /^\d{4}-\d{2}$/u.test(requestedMonth) && requestedMonth <= currentMonth
+  const month = isIsoMonth(requestedMonth) && requestedMonth <= currentMonth
     ? requestedMonth
     : currentMonth;
 
@@ -116,6 +120,12 @@ export function WorkspaceProvider({
     periodStart = requestedStart;
     periodEnd = requestedEnd as string;
   }
+  const planMonth = month && periodEnd
+    ? planMonthForPeriod(periodMode, month, periodEnd)
+    : month;
+  const planAsOfDate = planMonth && today
+    ? effectiveMonthRange(planMonth, today, dataThroughDate).end
+    : "";
 
   useEffect(() => {
     if (!selectedStore || !month) return;
@@ -140,13 +150,15 @@ export function WorkspaceProvider({
     periodEnd,
     periodLabel: periodLabel(periodMode, periodStart, periodEnd, month),
     asOfDate: effectiveMonthRange(month, today, dataThroughDate).end,
+    planMonth,
+    planAsOfDate,
     dataThroughDate,
     completedThroughDate,
     currentMonth,
     today,
     selectStore: (storeId) => setSearchParams((current) => updateSearchParams(current, { store: storeId })),
     selectMonth: (nextMonth) => {
-      if (/^\d{4}-\d{2}$/u.test(nextMonth) && nextMonth <= currentMonth) {
+      if (isIsoMonth(nextMonth) && nextMonth <= currentMonth) {
         setSearchParams((current) => updateSearchParams(current, { month: nextMonth, range: null, periodStart: null, periodEnd: null }));
       }
     },

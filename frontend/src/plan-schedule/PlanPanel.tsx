@@ -1,20 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
 import { RefreshCw, Settings2 } from "lucide-react";
-import { Link, useLocation } from "react-router";
-import type { PlanDirection } from "../api/contracts";
+import type { ReactNode } from "react";
+import { Link, useSearchParams } from "react-router";
+import type { OverviewMetricScope, PlanDirection } from "../api/contracts";
 import { getPlanProgress, queryKeys } from "../api/queries";
 import { formatDate, formatMonth } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatPercent } from "../shared/format";
 import { InlineQueryError, StaleDataNote } from "../shared/QueryState";
 import { useWorkspace } from "../stores/WorkspaceProvider";
 import { DailyPlanTable } from "./DailyPlanTable";
-
-const directionLabels: Record<string, string> = {
-  REVENUE: "Выручка",
-  ACCESSORY: "Аксессуары",
-  SERVICE: "Услуги",
-  ADDITIONAL: "Доп. выручка"
-};
+import {
+  formatPercentagePoints,
+  hasRevenueForecast,
+  isRevenueDirection,
+  planDirectionLabels,
+  revenueForecastValue
+} from "./planPresentation";
 
 const directionPriority: Record<string, number> = {
   MISSED: 0,
@@ -31,10 +32,6 @@ function statusTone(status: string): string {
   return "warning";
 }
 
-function isRevenueDirection(direction: PlanDirection): boolean {
-  return direction.criterionType === "AMOUNT" || direction.code === "REVENUE";
-}
-
 export function directionStatusLabel(direction: PlanDirection, monthClosed: boolean): string {
   if (direction.status === "ACHIEVED") {
     return monthClosed ? "Цель выполнена" : "Цель достигнута на текущую дату";
@@ -49,7 +46,7 @@ export function directionStatusLabel(direction: PlanDirection, monthClosed: bool
 
 export function primaryPlanAction(direction: PlanDirection | undefined): string {
   if (!direction) return "";
-  const label = directionLabels[direction.code] ?? "Направление";
+  const label = planDirectionLabels[direction.code] ?? "Направление";
   if (direction.status === "MISSED") return `${label}: итог месяца, цель не выполнена.`;
   if (direction.status === "NOT_AVAILABLE") return `${label}: расчёт появится после обновления данных.`;
   if (direction.remainingAmount <= 0) return `${label}: цель достигнута на текущую дату.`;
@@ -94,16 +91,15 @@ export function getPlanSummary(
   };
 }
 
-function formatPercentagePoints(value: number | null): string {
-  if (value == null) return "—";
-  const formatted = new Intl.NumberFormat("ru-RU", {
-    maximumFractionDigits: 1,
-    signDisplay: "exceptZero"
-  }).format(value).replace("-", "−");
-  return `${formatted} п. п.`;
-}
-
-export function RevenuePlanBlock({ direction, monthClosed }: { direction: PlanDirection; monthClosed: boolean }) {
+export function RevenuePlanBlock({
+  direction,
+  monthClosed,
+  forecastAvailable = true
+}: {
+  direction: PlanDirection;
+  monthClosed: boolean;
+  forecastAvailable?: boolean;
+}) {
   const completion = direction.criterionCompletionPercent;
   const dailyRequirement = direction.remainingAmount > 0
     ? formatCompactMoney(direction.requiredPerRemainingDay)
@@ -138,12 +134,12 @@ export function RevenuePlanBlock({ direction, monthClosed }: { direction: PlanDi
               <dt>Итоговый недобор</dt>
               <dd>{direction.remainingAmount > 0 ? formatCompactMoney(direction.remainingAmount) : "Недобора нет"}</dd>
             </div>
-          ) : (
+          ) : forecastAvailable && hasRevenueForecast(direction) ? (
             <>
-              <div><dt>Прогноз на конец месяца</dt><dd>{formatCompactMoney(direction.projectedAmount)}</dd></div>
+              <div><dt>Прогноз на конец месяца</dt><dd>{revenueForecastValue(direction)}</dd></div>
               <div><dt>Нужно в день до конца месяца</dt><dd>{dailyRequirement}</dd></div>
             </>
-          )}
+          ) : <div><dt>Прогноз</dt><dd>Ожидает данных</dd></div>}
         </dl>
       </div>
     </section>
@@ -152,12 +148,14 @@ export function RevenuePlanBlock({ direction, monthClosed }: { direction: PlanDi
 
 export function StructureDirectionRow({
   direction,
-  monthClosed
+  monthClosed,
+  forecastAvailable = true
 }: {
   direction: PlanDirection;
   monthClosed: boolean;
+  forecastAvailable?: boolean;
 }) {
-  const label = directionLabels[direction.code] ?? "Направление";
+  const label = planDirectionLabels[direction.code] ?? "Направление";
   return (
     <details className="plan-structure-row">
       <summary>
@@ -180,7 +178,7 @@ export function StructureDirectionRow({
       <dl className="plan-structure-details">
         <div><dt>Фактическая сумма</dt><dd>{formatMoney(direction.actualAmount)}</dd></div>
         <div><dt>Ориентир при текущей выручке</dt><dd>{formatMoney(direction.targetAmount)}</dd></div>
-        {!monthClosed && (
+        {!monthClosed && forecastAvailable && direction.status !== "NOT_AVAILABLE" && (
           <div><dt>Прогноз суммы на конец месяца</dt><dd>{formatCompactMoney(direction.projectedAmount)}</dd></div>
         )}
         <div>
@@ -202,10 +200,12 @@ export function StructureDirectionRow({
 
 export function RevenueStructureBlock({
   directions,
-  monthClosed
+  monthClosed,
+  forecastAvailable = true
 }: {
   directions: PlanDirection[];
   monthClosed: boolean;
+  forecastAvailable?: boolean;
 }) {
   const shareDirections = ["ACCESSORY", "SERVICE", "ADDITIONAL"]
     .map((code) => directions.find((direction) => direction.code === code))
@@ -221,7 +221,12 @@ export function RevenueStructureBlock({
       </div>
       <div className="plan-structure-list">
         {shareDirections.map((direction) => (
-          <StructureDirectionRow direction={direction} monthClosed={monthClosed} key={direction.code} />
+          <StructureDirectionRow
+            direction={direction}
+            monthClosed={monthClosed}
+            forecastAvailable={forecastAvailable}
+            key={direction.code}
+          />
         ))}
       </div>
     </section>
@@ -238,26 +243,57 @@ function PlanSkeleton() {
   );
 }
 
+export function planScopeFromSearchParams(searchParams: URLSearchParams): OverviewMetricScope {
+  return searchParams.get("planScope") === "STORE" ? "STORE" : "SELLERS";
+}
+
+export function PlanScopeToggle({
+  scope,
+  onChange
+}: {
+  scope: OverviewMetricScope;
+  onChange: (scope: OverviewMetricScope) => void;
+}) {
+  return (
+    <div className="plan-scope-control">
+      <span>План для</span>
+      <div role="group" aria-label="Охват плана">
+        <button type="button" aria-pressed={scope === "SELLERS"} onClick={() => onChange("SELLERS")}>Только продавцы</button>
+        <button type="button" aria-pressed={scope === "STORE"} onClick={() => onChange("STORE")}>Весь магазин</button>
+      </div>
+    </div>
+  );
+}
+
 export function PlanPanel() {
   const { selectedStore, month, asOfDate } = useWorkspace();
-  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const storeId = selectedStore.id;
+  const planScope = planScopeFromSearchParams(searchParams);
+  const selectPlanScope = (scope: OverviewMetricScope) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (scope === "SELLERS") next.delete("planScope");
+      else next.set("planScope", "STORE");
+      return next;
+    });
+  };
   const progressQuery = useQuery({
-    queryKey: queryKeys.planProgress(storeId, month, asOfDate),
-    queryFn: () => getPlanProgress(storeId, month, asOfDate)
+    queryKey: queryKeys.planProgress(storeId, month, asOfDate, planScope),
+    queryFn: () => getPlanProgress(storeId, month, asOfDate, planScope)
   });
 
-  if (progressQuery.isPending && progressQuery.data === undefined) return <PlanSkeleton />;
-  if (progressQuery.isError && progressQuery.data === undefined) {
-    return <InlineQueryError error={progressQuery.error} onRetry={() => void progressQuery.refetch()} />;
-  }
-
   const progress = progressQuery.data;
-  const settingsSearch = new URLSearchParams(location.search);
+  const settingsSearch = new URLSearchParams(searchParams);
   settingsSearch.delete("section");
 
-  if (!progress) {
-    return (
+  let content: ReactNode;
+  if (progressQuery.isPending && progress === undefined) {
+    content = <PlanSkeleton />;
+  } else if (progressQuery.isError && progress === undefined) {
+    content = <InlineQueryError error={progressQuery.error} onRetry={() => void progressQuery.refetch()} />;
+  } else if (!progress) {
+    content = (
       <section className="panel plan-empty-panel">
         <span className="plan-empty-panel__icon"><Settings2 /></span>
         <div>
@@ -270,15 +306,13 @@ export function PlanPanel() {
         </Link>
       </section>
     );
-  }
-
-  const summary = getPlanSummary(progress.directions, progress.allDirectionsAchieved, progress.remainingDays);
-  const revenue = progress.directions.find((direction) => direction.code === "REVENUE");
-  const monthClosed = progress.remainingDays === 0;
-
-  return (
-    <div className="plan-panel-view">
-      {progressQuery.isError && progressQuery.data !== undefined && (
+  } else {
+    const summary = getPlanSummary(progress.directions, progress.allDirectionsAchieved, progress.remainingDays);
+    const revenue = progress.directions.find((direction) => direction.code === "REVENUE");
+    const monthClosed = progress.remainingDays === 0;
+    content = (
+      <>
+      {progressQuery.isError && (
         <StaleDataNote error={progressQuery.error} onRetry={() => void progressQuery.refetch()} />
       )}
       {(!progress.dataQuality.completeThroughAsOf || !progress.dataQuality.classificationComplete) && (
@@ -296,17 +330,33 @@ export function PlanPanel() {
       )}
       <section className={`plan-progress-heading plan-progress-heading--${summary.tone}`}>
         <div>
-          <p className="eyebrow">План на {formatMonth(month)}. Данные на {formatDate(progress.asOfDate)}</p>
+          <p className="eyebrow">Данные по {formatDate(progress.asOfDate)}</p>
           <h2>{summary.label}</h2>
           <p>{summary.description}</p>
           <small>{progress.remainingDays > 0 ? `До конца месяца ${progress.remainingDays} дн.` : "Месяц завершён."}</small>
         </div>
       </section>
       <div className="plan-overview-grid">
-        {revenue && <RevenuePlanBlock direction={revenue} monthClosed={monthClosed} />}
-        <RevenueStructureBlock directions={progress.directions} monthClosed={monthClosed} />
+        {revenue && <RevenuePlanBlock
+          direction={revenue}
+          monthClosed={monthClosed}
+          forecastAvailable={progress.dataQuality.completeThroughAsOf}
+        />}
+        <RevenueStructureBlock
+          directions={progress.directions}
+          monthClosed={monthClosed}
+          forecastAvailable={progress.dataQuality.completeThroughAsOf && progress.dataQuality.classificationComplete}
+        />
       </div>
       <DailyPlanTable targets={progress.dailyTargets} />
+      </>
+    );
+  }
+
+  return (
+    <div className="plan-panel-view">
+      <PlanScopeToggle scope={planScope} onChange={selectPlanScope} />
+      {content}
     </div>
   );
 }

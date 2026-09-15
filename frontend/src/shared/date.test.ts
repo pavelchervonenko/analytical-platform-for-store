@@ -4,7 +4,9 @@ import {
   clampCompletedAsOfDate,
   completedDataThroughDate,
   effectiveMonthRange,
+  isIsoMonth,
   monthRange,
+  planMonthForPeriod,
   shiftMonth
 } from "./date";
 
@@ -16,6 +18,24 @@ describe("calendar date helpers", () => {
   it("moves between years without constructing local-time intervals", () => {
     expect(shiftMonth("2026-01", -1)).toBe("2025-12");
     expect(shiftMonth("2026-12", 1)).toBe("2027-01");
+  });
+
+  it("rejects malformed and out-of-range calendar months", () => {
+    expect(isIsoMonth("2026-09")).toBe(true);
+    expect(isIsoMonth("2026-00")).toBe(false);
+    expect(isIsoMonth("2026-13")).toBe(false);
+    expect(isIsoMonth("2026-9")).toBe(false);
+    expect(isIsoMonth(null)).toBe(false);
+  });
+
+  it("anchors partial and cross-boundary periods to the month of their end date", () => {
+    expect(planMonthForPeriod("MONTH", "2026-09", "2026-09-13")).toBe("2026-09");
+    expect(planMonthForPeriod("CUSTOM", "2026-08", "2026-09-13")).toBe("2026-09");
+    expect(planMonthForPeriod("WEEK", "2026-12", "2027-01-03")).toBe("2027-01");
+  });
+
+  it("keeps a full selected month even when its data coverage is partial", () => {
+    expect(planMonthForPeriod("MONTH", "2026-09", "2026-09-08")).toBe("2026-09");
   });
 
   it("keeps as-of inside the requested month", () => {

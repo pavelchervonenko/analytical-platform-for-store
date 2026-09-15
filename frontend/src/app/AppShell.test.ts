@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { navigationGroupsFor } from "./AppShell";
+import { navigationGroupsFor, navigationSearchFor } from "./AppShell";
 
 describe("application navigation", () => {
   it("shows plan and shifts as separate management destinations", () => {
@@ -30,5 +30,25 @@ describe("application navigation", () => {
     expect(navigationGroupsFor("ADMIN")
       .find((group) => group.label === "Управление")?.items.map((item) => item.label))
       .toEqual(["План", "Смены", "Зарплата", "Отчеты"]);
+  });
+
+  it("opens plan on the anchor month without carrying an analytics range or scope", () => {
+    const search = navigationSearchFor(
+      "/plan",
+      "/overview",
+      "?store=store-1&month=2026-08&range=CUSTOM&periodStart=2026-08-15&periodEnd=2026-09-13&overviewScope=STORE",
+      "2026-09"
+    );
+
+    expect(search).toBe("store=store-1&month=2026-09");
+  });
+
+  it("keeps the selected plan scope when navigating inside the plan section", () => {
+    expect(navigationSearchFor(
+      "/plan",
+      "/plan/settings",
+      "?store=store-1&month=2026-09&planScope=STORE",
+      "2026-09"
+    )).toBe("store=store-1&month=2026-09&planScope=STORE");
   });
 });

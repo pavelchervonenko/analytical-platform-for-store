@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Package, RefreshCw, ShieldCheck, Smartphone, Target, TrendingUp, TriangleAlert } from "lucide-react";
+import { Package, RefreshCw, ShieldCheck, Smartphone, TrendingUp, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { hasUserFeature, type CategoryKpi, type OverviewMetricScope } from "../api/contracts";
@@ -16,10 +16,11 @@ import {
 import { useAuth } from "../auth/AuthProvider";
 import { averageGrossProfitPerDeviceUnit } from "./categoryPresentation";
 import { formatDate } from "../shared/date";
-import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
+import { formatMoney, formatNumber, formatPercent } from "../shared/format";
 import { InlineQueryError, PanelSkeleton, QueryError, StaleDataNote } from "../shared/QueryState";
 import { useWorkspace, type AnalyticsPeriodMode } from "../stores/WorkspaceProvider";
 import { AttachRateMatrix, EmployeePerformanceSection, ManagementSummary } from "./OverviewManagementSections";
+import { OverviewPlanPanel } from "./OverviewPlanPanel";
 
 const groupLabels: Record<string, { label: string; icon: ReactNode }> = {
   PHONES: { label: "Телефоны", icon: <Smartphone size={18} /> },
@@ -76,21 +77,6 @@ export function SalesStructure({ groups }: { groups: SalesGroup[] }) {
   );
 }
 
-const directionLabels: Record<string, string> = {
-  REVENUE: "Выручка",
-  ACCESSORY: "Аксессуары",
-  SERVICE: "Услуги",
-  ADDITIONAL: "Дополнительная выручка"
-};
-
-const directionStatusLabels: Record<string, string> = {
-  ACHIEVED: "Выполнено",
-  ON_TRACK: "По графику",
-  AT_RISK: "Есть риск",
-  MISSED: "Не выполнено",
-  NOT_AVAILABLE: "Недостаточно данных"
-};
-
 const freshnessLabels: Record<string, string> = {
   CURRENT: "Данные актуальны",
   SYNCING: "Идет синхронизация",
@@ -122,7 +108,7 @@ function OverviewSkeleton() {
 
 export function OverviewPage() {
   const { user } = useAuth();
-  const { selectedStore, month, periodMode, periodStart, periodEnd, periodLabel, asOfDate } = useWorkspace();
+  const { selectedStore, periodMode, periodStart, periodEnd, periodLabel, planMonth, planAsOfDate } = useWorkspace();
   const [searchParams, setSearchParams] = useSearchParams();
   const storeId = selectedStore.id;
   const metricScope: OverviewMetricScope = searchParams.get("overviewScope") === "STORE"
@@ -145,7 +131,7 @@ export function OverviewPage() {
   const overviewMetricsQuery = useQuery({ queryKey: queryKeys.overviewMetrics(storeId, periodStart, periodEnd, metricScope), queryFn: () => getOverviewMetrics(storeId, periodStart, periodEnd, metricScope) });
   const categoriesQuery = useQuery({ queryKey: queryKeys.categories(storeId, periodStart, periodEnd), queryFn: () => getCategoryKpi(storeId, periodStart, periodEnd) });
   const planAllowed = hasUserFeature(user, "PLAN");
-  const planQuery = useQuery({ queryKey: queryKeys.planProgress(storeId, month, asOfDate, metricScope), queryFn: () => getPlanProgress(storeId, month, asOfDate, metricScope), enabled: planAllowed });
+  const planQuery = useQuery({ queryKey: queryKeys.planProgress(storeId, planMonth, planAsOfDate, metricScope), queryFn: () => getPlanProgress(storeId, planMonth, planAsOfDate, metricScope), enabled: planAllowed });
   const attachQuery = useQuery({ queryKey: queryKeys.attachRates(storeId, periodStart, periodEnd), queryFn: () => getAttachRates(storeId, periodStart, periodEnd), staleTime: 2 * 60_000 });
 
   const employeeRatingQuery = useQuery({ queryKey: queryKeys.employeeRating(storeId, periodStart, periodEnd), queryFn: () => getEmployeeRating(storeId, periodStart, periodEnd), staleTime: 2 * 60_000 });
@@ -162,12 +148,13 @@ export function OverviewPage() {
   const categories = categoriesQuery.data;
   const plan = planQuery.data;
   const freshnessTone = toneForStatus(status?.status ?? "WARNING");
+  const planSearch = new URLSearchParams({ store: storeId, month: planMonth }).toString();
 
   return (
     <div className="overview-page">
       <header className="page-heading">
         <div><h1>Обзор</h1><p>{formatOverviewPeriodLabel(periodMode, periodLabel)}</p></div>
-        <div className="page-heading__period"><small>Данные по</small><strong>{formatDate(asOfDate)}</strong></div>
+        <div className="page-heading__period"><small>Данные по</small><strong>{formatDate(periodEnd)}</strong></div>
       </header>
 
       {staleQuery && <StaleDataNote
@@ -204,29 +191,15 @@ export function OverviewPage() {
           <SalesStructure groups={overviewMetrics?.salesGroups ?? []} />
         </section>
 
-        {planAllowed && <section className="panel plan-panel">
-          <div className="panel__heading"><h2>План месяца — {metricScope === "SELLERS" ? "только продавцы" : "весь магазин"}</h2>{plan && <span>{plan.achievedDirectionCount} из {plan.directions.length}</span>}</div>
-          {planQuery.data === undefined && planQuery.isPending ? (
-            <PanelSkeleton rows={3} />
-          ) : planQuery.data === undefined && planQuery.isError ? (
-            <InlineQueryError error={planQuery.error} onRetry={() => void planQuery.refetch()} />
-          ) : !plan ? (
-            <div className="panel-empty"><Target size={24} /><strong>План не задан</strong><p>Задайте цели на месяц.</p></div>
-          ) : (
-            <div className="direction-list">
-              {plan.directions.map((direction) => {
-                const completion = direction.criterionCompletionPercent;
-                return (
-                  <article key={direction.code} className="direction-row">
-                    <div className="direction-row__top"><strong>{directionLabels[direction.code] ?? "Другое направление"}</strong><span className={`status status--${toneForStatus(direction.status)}`}>{directionStatusLabels[direction.status] ?? "Неизвестный статус"}</span></div>
-                    <progress className="progress" value={Math.max(0, completion ?? 0)} max={100} aria-label={`Выполнение направления ${directionLabels[direction.code] ?? "Другое направление"}`} />
-                    <div className="direction-row__meta"><span>{formatPercent(completion)} критерия</span><span>прогноз {formatCompactMoney(direction.projectedAmount)}</span></div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </section>}
+        {planAllowed && <OverviewPlanPanel
+          scope={metricScope}
+          plan={plan}
+          isPending={planQuery.isPending}
+          isError={planQuery.isError}
+          error={planQuery.error}
+          onRetry={() => void planQuery.refetch()}
+          planSearch={planSearch}
+        />}
       </div>
 
       {employeeRatingQuery.data === undefined && employeeRatingQuery.isError ? (

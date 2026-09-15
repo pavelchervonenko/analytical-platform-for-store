@@ -14,10 +14,14 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics/service/OverviewMetricsService.java
   - frontend/src/dashboard/OverviewPage.tsx
   - frontend/src/dashboard/OverviewManagementSections.tsx
+  - frontend/src/dashboard/OverviewPlanPanel.tsx
   - frontend/src/api/queries.ts
 verification_sources:
   - frontend/src/dashboard/OverviewPage.test.tsx
   - frontend/src/dashboard/OverviewPage.query-state.test.tsx
+  - frontend/src/dashboard/OverviewPage.plan-context.test.tsx
+  - frontend/src/dashboard/OverviewPlanPanel.test.tsx
+  - frontend/e2e/visual-local.spec.ts
 runtime_evidence: []
 required_reviewers:
   - frontend
@@ -38,7 +42,7 @@ superseded_by: null
 | Revenue/GP/margin | `/overview-metrics` | Selected | SELLERS by default / STORE | GP/margin nullable | Selected period |
 | Accessories/services/additional | `/overview-metrics` | Selected | Same selected scope | Share nullable | Selected period |
 | Sales structure | `/overview-metrics` | Selected | Same selected scope | GP/margin nullable | Selected period + scope |
-| Plan | `/performance-plans/{month}/progress?scope=` | Month..asOf | Same selected scope | No plan state | «План месяца» |
+| Plan | `/performance-plans/{planMonth}/progress?scope=` | planMonth-01..asOf | Same selected scope | No plan state | «План месяца» |
 | Team | `/kpi/employees` + `/employee-ratings` | Selected | Overview roster | Score/rank nullable | «Основные продавцы» |
 | Attach map | `/kpi/attach-rates` + rating | Selected | Store + roster | Rate/base nullable | Empty-state reason |
 
@@ -52,8 +56,27 @@ superseded_by: null
 В week/custom тёмный блок показывает только selected-period amount, quantity и share, чтобы не
 смешивать недельный факт с месячной целью.
 
+Компактный блок «План месяца» не показывает счётчик выполненных направлений. Ссылка «Открыть план»
+ведёт на `/plan` для выбранного магазина и опорного календарного месяца; параметры аналитического
+диапазона и `overviewScope` не переносятся. Отдельный раздел открывается в `SELLERS` по умолчанию
+и позволяет явно переключиться на `STORE`. Ссылка остаётся доступной и при отсутствии плана.
+
 Для руководителя без `PLAN` главная не запрашивает plan progress и полностью исключает блок
 «План месяца»; остальные KPI и аналитика продолжают работать. Администратор имеет `PLAN` неявно.
+
+В month mode опорным является выбранный `month`. В week/custom `planMonth` равен месяцу
+`periodEnd`, включая диапазоны на стыке месяцев и годов. Боковой переход в «План» применяет то же
+правило и очищает параметры аналитического диапазона. Сам блок остаётся месячным и не показывает
+дополнительный выбор периода.
+
+Для открытого месяца выручка показывает факт, процент выполнения, прогноз суммы и прогноз
+выполнения плана. Для закрытого месяца вместо прогноза показываются итог и денежное отклонение.
+Аксессуары, услуги и дополнительная выручка показывают фактическую долю, целевую долю, отклонение
+в процентных пунктах и прогноз суммы. Если доля недоступна, прогноз не выдаётся за надёжный
+результат. При неполном покрытии скрываются все прогнозы, при незавершённой классификации только
+прогнозы направлений; причина сообщается одной спокойной заметкой. Статусы открытого месяца
+являются промежуточными, а формулировки «Выполнено» и
+«Не выполнено» используются только после закрытия месяца.
 
 «Структура продаж» использует тот же выбранный scope, а attach-map
 намеренно остаётся STORE и имеет явную подпись. `null` GP/margin не показывается как zero.

@@ -10,27 +10,29 @@ const { auth, useQueryMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({ useQuery: useQueryMock }));
+
 vi.mock("../auth/AuthProvider", () => ({
   useAuth: () => ({ user: { role: "MANAGER", features: auth.features } })
 }));
+
 vi.mock("../stores/WorkspaceProvider", () => ({
   useWorkspace: () => ({
     selectedStore: { id: "store-1", name: "Магазин", timezone: "Europe/Moscow" },
     month: "2026-09",
-    periodMode: "MONTH",
-    periodStart: "2026-09-01",
-    periodEnd: "2026-09-30",
-    periodLabel: "сентябрь 2026 г.",
+    periodMode: "WEEK",
+    periodStart: "2026-09-28",
+    periodEnd: "2026-10-04",
+    periodLabel: "28 сент. 2026 г. — 4 окт. 2026 г.",
     asOfDate: "2026-09-30",
-    planMonth: "2026-09",
-    planAsOfDate: "2026-09-30"
+    planMonth: "2026-10",
+    planAsOfDate: "2026-10-03"
   })
 }));
 
 const metrics = {
   storeId: "store-1",
-  periodStart: "2026-09-01",
-  periodEnd: "2026-09-30",
+  periodStart: "2026-09-28",
+  periodEnd: "2026-10-04",
   scope: "STORE",
   formulaVersion: "overview-v1",
   netRevenue: 100_000,
@@ -58,7 +60,7 @@ function queryResult(data: unknown) {
   return { data, error: null, isError: false, isPending: false, refetch: vi.fn() };
 }
 
-describe("overview plan permissions", () => {
+describe("overview plan context", () => {
   beforeEach(() => {
     auth.features = ["PLAN"];
     useQueryMock.mockReset().mockImplementation(({ queryKey }: { queryKey: readonly unknown[] }) => {
@@ -73,10 +75,22 @@ describe("overview plan permissions", () => {
     render(<MemoryRouter initialEntries={["/overview?overviewScope=STORE"]}><OverviewPage /></MemoryRouter>);
 
     expect(useQueryMock).toHaveBeenCalledWith(expect.objectContaining({
-      queryKey: ["stores", "store-1", "plan-progress", "2026-09", "2026-09-30", "STORE"],
+      queryKey: ["stores", "store-1", "plan-progress", "2026-10", "2026-10-03", "STORE"],
       enabled: false
     }));
     expect(screen.queryByRole("heading", { name: "План месяца — весь магазин" }))
       .not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Открыть план" })).not.toBeInTheDocument();
+  });
+
+  it("uses the end month of a cross-boundary range and the overview scope", () => {
+    render(<MemoryRouter initialEntries={["/overview?overviewScope=STORE"]}><OverviewPage /></MemoryRouter>);
+
+    expect(useQueryMock).toHaveBeenCalledWith(expect.objectContaining({
+      queryKey: ["stores", "store-1", "plan-progress", "2026-10", "2026-10-03", "STORE"]
+    }));
+    expect(screen.getByRole("heading", { name: "План месяца — весь магазин" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Открыть план" }))
+      .toHaveAttribute("href", "/plan?store=store-1&month=2026-10");
   });
 });

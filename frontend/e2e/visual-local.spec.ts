@@ -26,7 +26,8 @@ async function installFixtureApi(page: Page) {
     role: "MANAGER",
     passwordChangeRequired: false,
     allStores: false,
-    storeIds: [visualStoreId]
+    storeIds: [visualStoreId],
+    features: ["PLAN"]
   }));
   await page.route("**/api/auth/sessions", async (route) => json(route, {
     sessions: [{
@@ -184,6 +185,7 @@ async function installFixtureApi(page: Page) {
   });
   await page.route("**/api/stores/*/performance-plans/*/progress?*", async (route) => {
     const requestSearchParams = new URL(route.request().url()).searchParams;
+    const planQuality = new URL(page.url()).searchParams.get("planQuality");
     expect(requestSearchParams.get("asOf")).toBe("2026-09-09");
     const scope = requestSearchParams.get("scope") === "STORE"
       ? "STORE"
@@ -370,8 +372,8 @@ async function installFixtureApi(page: Page) {
       dataQuality: {
         freshnessStatus: "CURRENT",
         dataThroughDate: "2026-09-09",
-        completeThroughAsOf: true,
-        classificationComplete: true,
+        completeThroughAsOf: planQuality !== "coverage",
+        classificationComplete: planQuality !== "classification",
         unmappedItemCount: 0,
         openQualityIssueCount: 0
       },
@@ -775,7 +777,8 @@ test.describe("local frontend visual review", () => {
           page.getByRole("dialog", { name: "Выбор периода" })
         ).toHaveCount(0);
       }
-      if (new URL(route, "http://local.test").pathname === "/overview") {
+      const routeUrl = new URL(route, "http://local.test");
+      if (routeUrl.pathname === "/overview") {
         await expect(page.getByText("Замечаний по данным: 28")).toHaveCount(0);
         await expect(page.getByRole("heading", {
           name: "Структура продаж — только продавцы"
@@ -793,6 +796,23 @@ test.describe("local frontend visual review", () => {
         await expect(page.getByRole("heading", {
           name: "План месяца — весь магазин"
         })).toBeVisible();
+        const planPanel = page.locator(".plan-panel");
+        await expect(planPanel.getByRole("link", { name: "Открыть план" })).toHaveAttribute(
+          "href",
+          `/plan?store=${visualStoreId}&month=2026-09`
+        );
+        await expect(planPanel).toContainText("% плана");
+        if (routeUrl.searchParams.get("planQuality") === "classification") {
+          await expect(planPanel).not.toContainText("Прогноз суммы");
+          await expect(planPanel).toContainText("Прогнозы по направлениям обновятся");
+        } else {
+          await expect(planPanel).toContainText("Прогноз суммы");
+        }
+        await expect(planPanel).not.toContainText("критерия");
+        await planPanel.screenshot({
+          path: resolve(screenshotDirectory, screenshotName(route) + "-plan-summary.png"),
+          animations: "disabled"
+        });
         await page.locator(".overview-summary").screenshot({
           path: resolve(screenshotDirectory, screenshotName(route) + "-store-scope.png"),
           animations: "disabled"
@@ -812,13 +832,22 @@ test.describe("local frontend visual review", () => {
           });
         }
       }
-      const routePath = new URL(route, "http://local.test").pathname;
+      const routePath = routeUrl.pathname;
       if (routePath === "/plan" || routePath === "/plan/settings") {
         await expect(page.getByRole("link", { name: "Обзор плана", exact: true })).toBeVisible();
         await expect(page.getByRole("link", { name: "Настройка плана", exact: true })).toBeVisible();
       }
       if (routePath === "/plan") {
         await expect(page.locator(".plan-panel-view")).toBeVisible();
+        const expectedScope = routeUrl.searchParams.get("planScope") === "STORE"
+          ? "Весь магазин"
+          : "Только продавцы";
+        await expect(page.getByRole("button", { name: expectedScope }))
+          .toHaveAttribute("aria-pressed", "true");
+        await expect(page.getByRole("group", { name: "Охват плана" })).toBeVisible();
+        if (routeUrl.searchParams.get("planQuality") === "coverage") {
+          await expect(page.getByText("Ожидает данных", { exact: true })).toBeVisible();
+        }
         await expect(page.getByText("Ориентир на ближайший день", { exact: true })).toBeVisible();
       }
       if (routePath === "/plan/settings") {

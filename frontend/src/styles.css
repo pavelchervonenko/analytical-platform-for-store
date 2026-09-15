@@ -225,6 +225,9 @@ svg { flex: 0 0 auto; }
 .panel__heading > :first-child { min-width: 0; }
 .panel__heading h2 { margin: 0; overflow-wrap: anywhere; font-size: 19px; letter-spacing: -.03em; }
 .panel__heading > span { color: var(--text-faint); font-size: 12px; text-align: right; }
+.plan-panel__link { flex: 0 0 auto; color: var(--primary); font-size: 12px; font-weight: 750; text-decoration: none; white-space: nowrap; }
+.plan-panel__link:hover { text-decoration: underline; }
+.plan-panel__data-note { margin: 4px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.45; }
 .group-list, .direction-list, .attach-list, .quality-list { display: grid; gap: 9px; }
 .group-row { min-height: 70px; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 11px; border-radius: 16px; background: var(--surface-muted); }
 .group-row__icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 13px; color: var(--primary); background: var(--primary-soft); }
@@ -237,6 +240,8 @@ svg { flex: 0 0 auto; }
 .direction-row__top strong { font-size: 14px; }
 .direction-row .progress { margin-top: 10px; }
 .direction-row__meta { margin-top: 6px; color: var(--text-faint); font-size: 11px; }
+.direction-row__meta > span { min-width: 0; line-height: 1.35; }
+.direction-row__meta > span:last-child { text-align: right; }
 .panel-empty { min-height: 220px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: var(--text-muted); text-align: center; }
 .panel-empty > svg { color: var(--primary); }
 .panel-empty strong { color: var(--text); font-size: 15px; }
@@ -367,6 +372,8 @@ td:first-child small { margin-top: 4px; color: var(--text-faint); font-size: 11p
   .metric-card { min-height: 160px; }
   .panel__heading { flex-direction: column; }
   .panel__heading > span { text-align: left; }
+  .direction-row__meta { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .direction-row__meta > span:last-child { text-align: left; }
   .group-row { grid-template-columns: 40px minmax(0, 1fr); }
   .group-row__values { grid-column: 2; justify-items: start; text-align: left; }
   .query-error { align-items: flex-start; flex-direction: column; }
