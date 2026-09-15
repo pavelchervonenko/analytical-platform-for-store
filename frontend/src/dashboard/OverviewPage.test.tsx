@@ -367,18 +367,17 @@ describe("management overview", () => {
       group("ADDITIONAL_REVENUE", 19500, 13)
     ]} />);
 
-    const devices = screen.getByLabelText("Техника и её состав");
+    const devices = screen.getByLabelText("Техника и ее состав");
     expect(within(devices).getByText("Техника")).toBeInTheDocument();
     expect(within(devices).getByText("Телефоны")).toBeInTheDocument();
-    expect(within(devices).getByText("Итого по категории")).toBeInTheDocument();
-    expect(within(devices).getByText("В том числе")).toBeInTheDocument();
 
-    const additional = screen.getByLabelText("Дополнительная выручка и её состав");
+    const additional = screen.getByLabelText("Дополнительная выручка и ее состав");
     expect(within(additional).getByText("Дополнительная выручка")).toBeInTheDocument();
-    expect(within(additional).getByText("Подытог")).toBeInTheDocument();
     expect(within(additional).getByText("Аксессуары")).toBeInTheDocument();
     expect(within(additional).getByText("Услуги")).toBeInTheDocument();
-    expect(within(additional).getAllByText("В том числе")).toHaveLength(2);
+    expect(screen.queryByText("Итого по категории")).not.toBeInTheDocument();
+    expect(screen.queryByText("В том числе")).not.toBeInTheDocument();
+    expect(screen.queryByText("Подытог")).not.toBeInTheDocument();
     expect(screen.queryByText(/Вложенные строки уже входят в итог/u)).not.toBeInTheDocument();
   });
 
@@ -398,6 +397,11 @@ describe("management overview", () => {
     expect(screen.getByText("Лидер по допам")).toBeInTheDocument();
     expect(screen.getByText("Зона внимания")).toBeInTheDocument();
     expect(screen.getByLabelText("Краткие показатели по продавцам")).toHaveTextContent("Анна");
+    expect(screen.queryByText("Команда")).not.toBeInTheDocument();
+    expect(screen.queryByText("Выручка, валовая прибыль и структура допродаж за выбранный период."))
+      .not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Показатели по продавцам" }).closest("details"))
+      .toHaveAttribute("open");
   });
 
   it("does not invent an attention zone when every seller meets the plan", () => {
@@ -426,6 +430,9 @@ describe("management overview", () => {
     const map = screen.getByText("Карта допродаж").closest("details");
     expect(map).not.toBeNull();
     expect(map).not.toHaveAttribute("open");
+    expect(screen.queryByText("Допродажи", { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText("Сравнение attach-rate магазина и продавцов по каждому показателю."))
+      .not.toBeInTheDocument();
     expect(screen.getByText("1 показатель", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("Все продажи")).toBeInTheDocument();
     expect(screen.getByText("Вне рейтинга")).toBeInTheDocument();
@@ -534,7 +541,7 @@ describe("management overview", () => {
       employees: rating.employees.map((entry) => ({ ...entry, attachRates: [] }))
     }} storeName="Магазин" /></MemoryRouter>);
 
-    expect(screen.getByText("Нет данных для расчёта допродаж")).toBeInTheDocument();
+    expect(screen.getByText("Нет данных для расчета допродаж")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Package, RefreshCw, ShieldCheck, Smartphone, TrendingUp, TriangleAlert } from "lucide-react";
+import { ChevronDown, Package, RefreshCw, ShieldCheck, Smartphone, TrendingUp, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { hasUserFeature, type CategoryKpi, type OverviewMetricScope } from "../api/contracts";
@@ -32,13 +32,12 @@ const groupLabels: Record<string, { label: string; icon: ReactNode }> = {
 
 type SalesGroup = CategoryKpi["groups"][number];
 
-function SalesGroupRow({ group, relation }: { group: SalesGroup; relation: string }) {
+function SalesGroupRow({ group, nested = false }: { group: SalesGroup; nested?: boolean }) {
   const info = groupLabels[group.groupCode] ?? { label: group.groupName, icon: <Package size={18} /> };
   return (
-    <article className={`group-row ${relation === "В том числе" ? "group-row--child" : "group-row--total"}`}>
+    <article className={`group-row ${nested ? "group-row--child" : "group-row--total"}`}>
       <span className="group-row__icon">{info.icon}</span>
       <div className="group-row__copy">
-        <span className="group-row__relation">{relation}</span>
         <strong>{info.label}</strong>
         <small>{formatNumber(group.metrics.netQuantity)} ед.</small>
       </div>
@@ -60,19 +59,19 @@ export function SalesStructure({ groups }: { groups: SalesGroup[] }) {
   return (
     <div className="group-list group-list--hierarchical">
       {(devices || phones) && (
-        <section className="group-branch" aria-label="Техника и её состав">
-          {devices && <SalesGroupRow group={devices} relation="Итого по категории" />}
-          {phones && <SalesGroupRow group={phones} relation="В том числе" />}
+        <section className="group-branch" aria-label="Техника и ее состав">
+          {devices && <SalesGroupRow group={devices} />}
+          {phones && <SalesGroupRow group={phones} nested />}
         </section>
       )}
       {(additionalRevenue || accessory || service) && (
-        <section className="group-branch" aria-label="Дополнительная выручка и её состав">
-          {additionalRevenue && <SalesGroupRow group={additionalRevenue} relation="Подытог" />}
-          {accessory && <SalesGroupRow group={accessory} relation="В том числе" />}
-          {service && <SalesGroupRow group={service} relation="В том числе" />}
+        <section className="group-branch" aria-label="Дополнительная выручка и ее состав">
+          {additionalRevenue && <SalesGroupRow group={additionalRevenue} />}
+          {accessory && <SalesGroupRow group={accessory} nested />}
+          {service && <SalesGroupRow group={service} nested />}
         </section>
       )}
-      {otherGroups.map((group) => <SalesGroupRow group={group} relation="Отдельная категория" key={group.groupCode} />)}
+      {otherGroups.map((group) => <SalesGroupRow group={group} key={group.groupCode} />)}
     </div>
   );
 }
@@ -187,7 +186,9 @@ export function OverviewPage() {
 
       <div className={`overview-grid ${planAllowed ? "" : "overview-grid--single"}`}>
         <section className="panel groups-panel">
-          <div className="panel__heading"><h2>Структура продаж — {metricScope === "SELLERS" ? "только продавцы" : "весь магазин"}</h2></div>
+          <div className="panel__heading">
+            <h2>Структура продаж — {metricScope === "SELLERS" ? "только продавцы" : "весь магазин"}</h2>
+          </div>
           <SalesStructure groups={overviewMetrics?.salesGroups ?? []} />
         </section>
 
@@ -225,12 +226,18 @@ export function OverviewPage() {
       )}
 
       <section className="overview-details" aria-label="Подробные показатели">
-        <details className="disclosure-panel">
-          <summary><span>Категории продаж</span><small>{categories?.categories.length ?? 0}</small></summary>
-          <div className="disclosure-panel__content table-scroll">
+        <details className="panel overview-disclosure">
+          <summary className="overview-disclosure__summary">
+            <h2>Категории продаж</h2>
+            <span className="overview-disclosure__summary-meta">
+              <small>{categories?.categories.length ?? 0}</small>
+              <ChevronDown className="overview-disclosure__chevron" size={18} aria-hidden="true" />
+            </span>
+          </summary>
+          <div className="overview-disclosure__content overview-disclosure__content--table table-scroll">
             {categoriesQuery.data === undefined && categoriesQuery.isPending ? <PanelSkeleton rows={4} />
               : categoriesQuery.data === undefined && categoriesQuery.isError ? <InlineQueryError error={categoriesQuery.error} onRetry={() => void categoriesQuery.refetch()} />
-                : <>{categories?.categories.some((category) => !category.metrics.dataQuality.completeCostData) && <p className="overview-data-note">Знак «—» в прибыли означает, что себестоимости пока недостаточно для расчёта.</p>}<table>
+                : <>{categories?.categories.some((category) => !category.metrics.dataQuality.completeCostData) && <p className="overview-data-note">Знак «—» в прибыли означает, что себестоимости пока недостаточно для расчета.</p>}<table>
               <thead><tr><th>Категория</th><th>Выручка</th><th>Количество</th><th>Валовая прибыль</th><th>Вал / ед. техники</th><th>Маржа</th></tr></thead>
               <tbody>
                 {categories?.categories.map((category) => (

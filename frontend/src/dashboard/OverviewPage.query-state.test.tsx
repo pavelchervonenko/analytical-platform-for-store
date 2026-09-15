@@ -78,5 +78,10 @@ describe("overview query degradation", () => {
     expect(screen.getByText("Чистая выручка")).toBeInTheDocument();
     expect(screen.getByText("100 000 ₽")).toBeInTheDocument();
     expect(screen.getByText("Показаны последние доступные данные.", { exact: false })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Структура продаж — только продавцы" }).closest("details"))
+      .toBeNull();
+    expect(screen.getByRole("heading", { name: "Категории продаж" }).closest("details"))
+      .not.toHaveAttribute("open");
+    expect(screen.queryByRole("heading", { name: "Качество данных" })).not.toBeInTheDocument();
   });
 });

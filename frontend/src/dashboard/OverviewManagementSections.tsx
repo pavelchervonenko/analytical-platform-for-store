@@ -277,18 +277,24 @@ export function EmployeePerformanceSection({
     : null;
 
   return (
-    <section className="panel overview-team-panel" aria-labelledby="overview-team-title">
-      <div className="panel__heading overview-section-heading">
-        <div>
-          <p className="eyebrow">Команда</p>
-          <h2 id="overview-team-title">Показатели по продавцам</h2>
-          <p>Выручка, валовая прибыль и структура допродаж за выбранный период.</p>
-        </div>
-        <Link to={{ pathname: "/employees", search: location.search }}>Открыть рейтинг <ArrowRight size={15} /></Link>
-      </div>
+    <details className="panel overview-team-panel overview-disclosure" aria-labelledby="overview-team-title" open>
+      <summary className="overview-disclosure__summary">
+        <h2 id="overview-team-title">Показатели по продавцам</h2>
+        <span className="overview-disclosure__summary-meta">
+          <Link
+            className="overview-disclosure__summary-link"
+            to={{ pathname: "/employees", search: location.search }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span>Открыть рейтинг</span>
+            <ArrowRight size={15} />
+          </Link>
+          <ChevronDown className="overview-disclosure__chevron" size={18} aria-hidden="true" />
+        </span>
+      </summary>
 
       {rows.length === 0 ? (
-        <div className="panel-empty"><Users size={24} /><strong>Нет продавцов для отображения</strong><p>На главной показываются активные сотрудники, включённые в рейтинг.</p></div>
+        <div className="panel-empty"><Users size={24} /><strong>Нет продавцов для отображения</strong><p>На главной показываются активные сотрудники, включенные в рейтинг.</p></div>
       ) : (
         <>
           <div className="overview-team-summary">
@@ -372,10 +378,10 @@ export function EmployeePerformanceSection({
               </Link>
             ))}
           </div>
-          <p className="overview-team-footnote">Показаны активные сотрудники, включённые в рейтинг. Проценты рассчитаны от полной чистой выручки каждого продавца.</p>
+          <p className="overview-team-footnote">Показаны активные сотрудники, включенные в рейтинг. Проценты рассчитаны от полной чистой выручки каждого продавца.</p>
         </>
       )}
-    </section>
+    </details>
   );
 }
 
@@ -524,17 +530,16 @@ export function AttachRateMatrix({
   });
 
   return (
-    <details className="panel attach-map-panel" aria-labelledby="attach-map-title">
-      <summary className="panel__heading overview-section-heading attach-map__summary">
-        <div>
-          <p className="eyebrow">Допродажи</p>
-          <h2 id="attach-map-title">Карта допродаж</h2>
-          <p>Сравнение attach-rate магазина и продавцов по каждому показателю.</p>
-        </div>
-        <span className="attach-map__summary-meta"><span>{employees.length} продавцов, {metricCountLabel(visibleMetricCodes.length)}</span><ChevronDown size={18} /></span>
+    <details className="panel attach-map-panel overview-disclosure" aria-labelledby="attach-map-title">
+      <summary className="overview-disclosure__summary">
+        <h2 id="attach-map-title">Карта допродаж</h2>
+        <span className="overview-disclosure__summary-meta">
+          <small>{employees.length} продавцов, {metricCountLabel(visibleMetricCodes.length)}</small>
+          <ChevronDown className="overview-disclosure__chevron" size={18} aria-hidden="true" />
+        </span>
       </summary>
       <div className="attach-map__content">
-        {visibleMetricCodes.length === 0 ? <div className="panel-empty attach-map__empty"><TrendingUp /><strong>Нет данных для расчёта допродаж</strong><p>За выбранный период не было релевантных продаж техники.</p></div> : <>
+        {visibleMetricCodes.length === 0 ? <div className="panel-empty attach-map__empty"><TrendingUp /><strong>Нет данных для расчета допродаж</strong><p>За выбранный период не было релевантных продаж техники.</p></div> : <>
         <p className="attach-map__scroll-hint">Прокрутите таблицу по горизонтали, чтобы увидеть всех продавцов.</p>
         <div className="table-scroll attach-map-wrap">
           <table className="attach-map">

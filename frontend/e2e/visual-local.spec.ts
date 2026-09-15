@@ -821,6 +821,27 @@ test.describe("local frontend visual review", () => {
         await sellerScope.click();
         await expect(sellerScope).toHaveAttribute("aria-pressed", "true");
         await page.waitForLoadState("networkidle");
+        const teamPanel = page.locator(".overview-team-panel");
+        const categoriesPanel = page.locator(".overview-details .overview-disclosure");
+        await expect(teamPanel).toHaveAttribute("open", "");
+        await expect(categoriesPanel).not.toHaveAttribute("open", "");
+        await teamPanel.locator(":scope > summary").click();
+        await expect(teamPanel).not.toHaveAttribute("open", "");
+        const collapsedHeights = await Promise.all(
+          [teamPanel, categoriesPanel].map(async (panel) => (
+            await panel.boundingBox()
+          )?.height ?? 0)
+        );
+        expect(collapsedHeights.every((height) => height > 0)).toBe(true);
+        collapsedHeights.slice(1).forEach((height) => {
+          expect(Math.abs(height - collapsedHeights[0]!)).toBeLessThanOrEqual(1);
+        });
+        await page.screenshot({
+          path: resolve(screenshotDirectory, screenshotName(route) + "-collapsed-sections.png"),
+          fullPage: true,
+          animations: "disabled"
+        });
+        await teamPanel.locator(":scope > summary").click();
         const attachMap = page.locator(".attach-map-panel");
         if (await attachMap.count() > 0) {
           await attachMap.locator(":scope > summary").click();
