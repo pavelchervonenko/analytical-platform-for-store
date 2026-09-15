@@ -419,21 +419,23 @@ class ReturnSyncIntegrationTest {
         seedSale(sale);
         ReturnSyncResult relinked =
                 returnSyncService.relinkExistingOrphanReturn(
-                        source.externalId(),
-                        "R-1",
-                        money("50.00"),
-                        1,
-                        null,
-                        sale.externalId(),
-                        "employee-1",
-                        List.of(new ReturnRelinkPositionExpectation(
-                                "return-position",
-                                sale.positionExternalId(),
-                                sale.productExternalId(),
-                                new BigDecimal("1.000"),
+                        new ReturnOrphanRelinkExpectation(
+                                source.externalId(),
+                                "R-1",
                                 money("50.00"),
-                                money("20.00")
-                        ))
+                                1,
+                                null,
+                                sale.externalId(),
+                                "employee-1",
+                                List.of(new ReturnRelinkPositionExpectation(
+                                        "return-position",
+                                        sale.positionExternalId(),
+                                        sale.productExternalId(),
+                                        new BigDecimal("1.000"),
+                                        money("50.00"),
+                                        money("20.00")
+                                ))
+                        )
                 );
 
         assertThat(relinked.status()).isEqualTo(SyncStatus.SUCCESS);
@@ -535,21 +537,23 @@ class ReturnSyncIntegrationTest {
 
         ReturnSyncResult relinked =
                 returnSyncService.relinkExistingOrphanReturn(
-                        source.externalId(),
-                        "R-1",
-                        money("50.00"),
-                        1,
-                        currentEmployeeExternalId,
-                        sale.externalId(),
-                        "employee-1",
-                        List.of(new ReturnRelinkPositionExpectation(
-                                "return-position",
-                                sale.positionExternalId(),
-                                sale.productExternalId(),
-                                new BigDecimal("1.000"),
+                        new ReturnOrphanRelinkExpectation(
+                                source.externalId(),
+                                "R-1",
                                 money("50.00"),
-                                money("20.00")
-                        ))
+                                1,
+                                currentEmployeeExternalId,
+                                sale.externalId(),
+                                "employee-1",
+                                List.of(new ReturnRelinkPositionExpectation(
+                                        "return-position",
+                                        sale.positionExternalId(),
+                                        sale.productExternalId(),
+                                        new BigDecimal("1.000"),
+                                        money("50.00"),
+                                        money("20.00")
+                                ))
+                        )
                 );
 
         assertThat(relinked.status()).isEqualTo(SyncStatus.SUCCESS);
@@ -609,21 +613,23 @@ class ReturnSyncIntegrationTest {
 
         assertThatThrownBy(() ->
                 returnSyncService.relinkExistingOrphanReturn(
-                        source.externalId(),
-                        "R-1",
-                        money("50.00"),
-                        1,
-                        null,
-                        sale.externalId(),
-                        "employee-1",
-                        List.of(new ReturnRelinkPositionExpectation(
-                                "return-position",
-                                sale.positionExternalId(),
-                                sale.productExternalId(),
-                                new BigDecimal("1.000"),
+                        new ReturnOrphanRelinkExpectation(
+                                source.externalId(),
+                                "R-1",
                                 money("50.00"),
-                                money("20.00")
-                        ))
+                                1,
+                                null,
+                                sale.externalId(),
+                                "employee-1",
+                                List.of(new ReturnRelinkPositionExpectation(
+                                        "return-position",
+                                        sale.positionExternalId(),
+                                        sale.productExternalId(),
+                                        new BigDecimal("1.000"),
+                                        money("50.00"),
+                                        money("20.00")
+                                ))
+                        )
                 )
         ).isInstanceOf(ReturnSyncException.class);
 
@@ -678,21 +684,23 @@ class ReturnSyncIntegrationTest {
 
         assertThatThrownBy(() ->
                 returnSyncService.relinkExistingOrphanReturn(
-                        source.externalId(),
-                        "R-1",
-                        money("50.00"),
-                        1,
-                        null,
-                        sale.externalId(),
-                        "employee-1",
-                        List.of(new ReturnRelinkPositionExpectation(
-                                "return-position",
-                                sale.positionExternalId(),
-                                sale.productExternalId(),
-                                new BigDecimal("1.000"),
+                        new ReturnOrphanRelinkExpectation(
+                                source.externalId(),
+                                "R-1",
                                 money("50.00"),
-                                money("20.00")
-                        ))
+                                1,
+                                null,
+                                sale.externalId(),
+                                "employee-1",
+                                List.of(new ReturnRelinkPositionExpectation(
+                                        "return-position",
+                                        sale.positionExternalId(),
+                                        sale.productExternalId(),
+                                        new BigDecimal("1.000"),
+                                        money("50.00"),
+                                        money("20.00")
+                                ))
+                        )
                 )
         ).isInstanceOf(ReturnSyncException.class)
                 .hasMessage("Return synchronization failed");

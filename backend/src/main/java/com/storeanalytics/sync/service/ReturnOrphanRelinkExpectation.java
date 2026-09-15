@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.Set;
 import org.springframework.util.StringUtils;
 
-record ReturnOrphanRelinkExpectation(
+public record ReturnOrphanRelinkExpectation(
         String externalId,
         String documentNumber,
         BigDecimal netAmount,
@@ -23,7 +23,7 @@ record ReturnOrphanRelinkExpectation(
         List<ReturnRelinkPositionExpectation> positions
 ) implements ReturnTargetExpectation {
 
-    ReturnOrphanRelinkExpectation {
+    public ReturnOrphanRelinkExpectation {
         new ReturnRecoveryExpectation(
                 externalId,
                 documentNumber,

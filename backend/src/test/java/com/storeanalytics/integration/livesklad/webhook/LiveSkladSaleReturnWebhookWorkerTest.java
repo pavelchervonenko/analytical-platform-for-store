@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import tools.jackson.databind.ObjectMapper;
 import com.storeanalytics.common.exception.InvalidRequestException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladHttpException;
+import com.storeanalytics.sync.service.ReturnOrphanRelinkExpectation;
 import com.storeanalytics.sync.service.ReturnRelinkPositionExpectation;
 import com.storeanalytics.sync.service.ReturnSyncService;
 import java.math.BigDecimal;
@@ -234,21 +235,23 @@ class LiveSkladSaleReturnWebhookWorkerTest {
         worker.processNext();
 
         verify(returnSyncService).relinkExistingOrphanReturn(
-                "6a5ce976c30937c4371a0af1",
-                "F000349",
-                new BigDecimal("46990.00"),
-                1,
-                "6912f4ab09e647f3125d14ba",
-                "69875ed7a44502f84130f263",
-                "6912f4ab09e647f3125d14ba",
-                List.of(new ReturnRelinkPositionExpectation(
-                        link.returnPositionExternalId(),
-                        link.originalSalePositionExternalId(),
-                        link.productExternalId(),
-                        link.expectedQuantity(),
-                        link.expectedNetAmount(),
-                        link.expectedCostAmount()
-                ))
+                new ReturnOrphanRelinkExpectation(
+                        "6a5ce976c30937c4371a0af1",
+                        "F000349",
+                        new BigDecimal("46990.00"),
+                        1,
+                        "6912f4ab09e647f3125d14ba",
+                        "69875ed7a44502f84130f263",
+                        "6912f4ab09e647f3125d14ba",
+                        List.of(new ReturnRelinkPositionExpectation(
+                                link.returnPositionExternalId(),
+                                link.originalSalePositionExternalId(),
+                                link.productExternalId(),
+                                link.expectedQuantity(),
+                                link.expectedNetAmount(),
+                                link.expectedCostAmount()
+                        ))
+                )
         );
         verify(returnSyncService, never()).recoverReturn(
                 anyString(), anyString(), any(), any(Integer.class)

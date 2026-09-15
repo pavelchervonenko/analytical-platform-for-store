@@ -120,26 +120,13 @@ public class ReturnSyncService {
     }
 
     public ReturnSyncResult relinkExistingOrphanReturn(
-            String externalId,
-            String documentNumber,
-            BigDecimal netAmount,
-            int positionCount,
-            String currentEmployeeExternalId,
-            String originalSaleExternalId,
-            String originalEmployeeExternalId,
-            List<ReturnRelinkPositionExpectation> positions
+            ReturnOrphanRelinkExpectation expectation
     ) {
-        ReturnOrphanRelinkExpectation expectation =
-                new ReturnOrphanRelinkExpectation(
-                        externalId,
-                        documentNumber,
-                        netAmount,
-                        positionCount,
-                        currentEmployeeExternalId,
-                        originalSaleExternalId,
-                        originalEmployeeExternalId,
-                        positions
-                );
+        if (expectation == null) {
+            throw new IllegalArgumentException(
+                    "return orphan relink expectation is required"
+            );
+        }
         return syncMetrics.record(
                 SyncScope.RETURNS,
                 SyncTriggerType.REPROCESS,
