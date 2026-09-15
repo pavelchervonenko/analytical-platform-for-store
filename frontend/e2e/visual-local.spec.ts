@@ -1235,6 +1235,16 @@ test.describe("local frontend visual review", () => {
         await expect(page.locator(".schedule-panel-view")).toBeVisible();
       }
       await captureVisualArtifacts(page, screenshotDirectory, screenshotName(route));
+      if (routePath === "/employees") {
+        const participants = page.locator("#rating-participants");
+        await expect(participants).not.toHaveAttribute("open", "");
+        await participants.locator(":scope > summary").click();
+        await expect(participants).toHaveAttribute("open", "");
+        await participants.screenshot({
+          path: resolve(screenshotDirectory, screenshotName(route) + "-participants-open.png"),
+          animations: "disabled"
+        });
+      }
       if (routePath === "/plan") {
         const structureRow = page.locator(".plan-structure-row").first();
         await structureRow.locator(":scope > summary").click();

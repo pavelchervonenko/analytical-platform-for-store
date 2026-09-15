@@ -23,6 +23,7 @@ import com.storeanalytics.store.model.Store;
 import com.storeanalytics.store.repository.StoreRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -172,6 +173,86 @@ class WorkScheduleServiceTest {
         verify(existing).setWorkedHours(hours, actor);
         verify(shiftRepository).flush();
         assertThat(result.revision()).isOne();
+    }
+
+    @Test
+    void allowsAnotherUserToReplaceAndThenClearAnExistingScheduleDay() {
+        UUID storeId = UUID.randomUUID();
+        UUID originalEmployeeId = UUID.randomUUID();
+        UUID replacementEmployeeId = UUID.randomUUID();
+        UUID secondActorId = UUID.randomUUID();
+        LocalDate workDate = LocalDate.of(2026, 9, 15);
+        Store store = mock(Store.class);
+        Employee originalEmployee = mock(Employee.class);
+        Employee replacementEmployee = mock(Employee.class);
+        EmployeeStoreAssignment originalAssignment = mock(EmployeeStoreAssignment.class);
+        EmployeeStoreAssignment replacementAssignment = mock(EmployeeStoreAssignment.class);
+        AppUser originalActor = mock(AppUser.class);
+        AppUser secondActor = mock(AppUser.class);
+        EmployeeWorkShift originalShift = new EmployeeWorkShift(
+                store, originalEmployee, workDate, originalActor
+        );
+        WorkScheduleDayRevision revision = new WorkScheduleDayRevision(
+                store, workDate, originalActor
+        );
+        List<EmployeeWorkShift> storedShifts = new ArrayList<>(List.of(originalShift));
+
+        when(store.getId()).thenReturn(storeId);
+        when(originalEmployee.getId()).thenReturn(originalEmployeeId);
+        when(originalEmployee.getFullName()).thenReturn("Анна");
+        when(originalEmployee.isActive()).thenReturn(true);
+        when(replacementEmployee.getId()).thenReturn(replacementEmployeeId);
+        when(replacementEmployee.getFullName()).thenReturn("Борис");
+        when(replacementEmployee.isActive()).thenReturn(true);
+        when(originalAssignment.getEmployee()).thenReturn(originalEmployee);
+        when(originalAssignment.isActive()).thenReturn(true);
+        when(replacementAssignment.getEmployee()).thenReturn(replacementEmployee);
+        when(replacementAssignment.isActive()).thenReturn(true);
+        when(storeRepository.findByIdForUpdate(storeId)).thenReturn(Optional.of(store));
+        when(userRepository.findById(secondActorId)).thenReturn(Optional.of(secondActor));
+        when(assignmentRepository.findAllByStoreId(storeId))
+                .thenReturn(List.of(originalAssignment, replacementAssignment));
+        when(shiftRepository.findAllByStoreIdAndWorkDate(storeId, workDate))
+                .thenAnswer(invocation -> List.copyOf(storedShifts));
+        when(shiftRepository.save(any(EmployeeWorkShift.class))).thenAnswer(invocation -> {
+            EmployeeWorkShift saved = invocation.getArgument(0);
+            storedShifts.add(saved);
+            return saved;
+        });
+        when(revisionRepository.findByStoreIdAndWorkDate(storeId, workDate))
+                .thenReturn(Optional.of(revision));
+        when(revisionRepository.saveAndFlush(revision)).thenReturn(revision);
+
+        WorkScheduleDayView replaced = service.replaceDay(
+                storeId,
+                workDate,
+                List.of(new WorkShiftInput(replacementEmployeeId, new BigDecimal("7.50"))),
+                WorkScheduleService.etag(storeId, workDate, 1),
+                secondActorId
+        );
+
+        assertThat(replaced.shifts()).singleElement().satisfies(shift -> {
+            assertThat(shift.employeeId()).isEqualTo(replacementEmployeeId);
+            assertThat(shift.workedHours()).isEqualByComparingTo("7.50");
+        });
+        assertThat(originalShift.isActive()).isFalse();
+        assertThat(originalShift.getUpdatedBy()).isSameAs(secondActor);
+        assertThat(storedShifts.get(1).getUpdatedBy()).isSameAs(secondActor);
+
+        WorkScheduleDayView cleared = service.replaceDay(
+                storeId,
+                workDate,
+                List.of(),
+                WorkScheduleService.etag(storeId, workDate, 2),
+                secondActorId
+        );
+
+        assertThat(cleared.shifts()).isEmpty();
+        assertThat(cleared.revision()).isEqualTo(3);
+        assertThat(storedShifts).allSatisfy(shift -> {
+            assertThat(shift.isActive()).isFalse();
+            assertThat(shift.getUpdatedBy()).isSameAs(secondActor);
+        });
     }
 
     @Test

@@ -6,7 +6,7 @@ owner: frontend
 audience:
   - developer
   - manager
-last_verified: 2026-09-09
+last_verified: 2026-09-15
 requirement_sources:
   - docs/current/product/employees-and-rating.md
   - docs/current/product/periods.md
@@ -16,6 +16,7 @@ implementation_sources:
   - frontend/src/api/queries.ts
   - backend/src/main/java/com/storeanalytics/performance/service/EmployeeCardService.java
 verification_sources:
+  - frontend/src/employees/EmployeesPage.test.tsx
   - frontend/src/employees/EmployeeCardPage.test.tsx
   - backend/src/test/java/com/storeanalytics/performance/service/EmployeeCardServiceTest.java
   - backend/src/test/java/com/storeanalytics/performance/service/EmployeeRatingServiceTest.java
@@ -40,10 +41,14 @@ superseded_by: null
 | Full KPI | `/kpi/employees` | Selected | Full financial cohort | GP nullable | «Все факты» |
 | Rating | `/employee-ratings` | Selected | Eligible/candidate | Score/rank nullable | Причина без места |
 
-На странице есть блок «Участники рейтинга и смен»: менеджер может включить активного сотрудника с
-активным назначением или исключить его с optimistic `version`. Изменение обновляет рейтинг,
-календарь смен и готовность зарплаты. «Без места» — фактический фильтр; отсутствие места не
-объявляется «требующим внимания», а таблица показывает конкретную причину.
+После блока «Результаты сотрудников» находится раскрываемый блок «Участники рейтинга и смен».
+По умолчанию он свёрнут; переход по `#rating-participants` из календаря смен раскрывает его и
+прокручивает страницу к настройкам. Менеджер может включить активного сотрудника с активным
+назначением или исключить его с optimistic `version`. Изменение обновляет рейтинг, календарь смен
+и готовность зарплаты. Состояние доступного сотрудника показывает сама кнопка «Включен»/«Выключен»;
+поясняющая строка остаётся только для недоступного профиля или назначения. «Без места» —
+фактический фильтр; отсутствие места не объявляется «требующим внимания», а таблица показывает
+конкретную причину.
 Endpoint directory возвращает назначения магазина, а таблица результатов дополнительно оставляет
 только записи с `participatesInRanking=true`. Отдельный блок управления участниками показывает и
 выключенных сотрудников, чтобы их можно было включить обратно.

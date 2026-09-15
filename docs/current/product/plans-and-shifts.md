@@ -6,7 +6,7 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-09-14
+last_verified: 2026-09-15
 requirement_sources:
   - docs/archive/legacy-contracts/store-plan-progress-api.md
   - docs/archive/discoveries/analytics-business-rules-draft.md
@@ -21,11 +21,13 @@ implementation_sources:
   - frontend/src/plan-schedule/SchedulePanel.tsx
   - frontend/src/plan-schedule/forms.ts
 verification_sources:
+  - backend/src/test/java/com/storeanalytics/performance/service/WorkScheduleServiceTest.java
   - backend/src/test/java/com/storeanalytics/performance/service/StorePlanProgressServiceTest.java
   - backend/src/test/java/com/storeanalytics/performance/web/StorePlanProgressControllerTest.java
   - frontend/src/plan-schedule/PlanPanel.test.tsx
   - frontend/src/plan-schedule/PlanSettingsPanel.test.tsx
   - frontend/src/plan-schedule/DailyPlanTable.test.tsx
+  - frontend/src/plan-schedule/SchedulePanel.test.tsx
   - frontend/src/plan-schedule/forms.test.ts
 runtime_evidence: []
 required_reviewers:
@@ -131,6 +133,11 @@ future target меняется после синхронизации.
 активных сотрудников с активным назначением и `participatesInRanking=true`. Ранее сохранённая смена
 сотрудника, который позже перестал соответствовать roster, остаётся видимой, но недоступна для
 повторного выбора; её удаляют явным редактированием дня.
+
+Состав дня общий для магазина, а не принадлежит создавшему его пользователю. Любой пользователь с
+доступом к сменам этого магазина может заменить состав, изменить часы и очистить день независимо
+от автора предыдущей версии. Strong `ETag` защищает только от настоящего одновременного
+перезаписывания: после конфликта нужно взять актуальную версию и подтвердить новое изменение.
 
 Для рейтинга нужна минимум одна смена. В payroll дневной фонд делится поровну между сотрудниками
 смены: часы используются для учёта/эффективности, но не как вес фонда. День фонда без смен снижает

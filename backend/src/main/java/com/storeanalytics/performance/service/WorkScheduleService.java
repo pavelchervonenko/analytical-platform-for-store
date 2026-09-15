@@ -223,7 +223,7 @@ public class WorkScheduleService {
         }
         if (!etag(storeId, workDate, revision).equals(ifMatch.trim())) {
             throw new PreconditionFailedException(
-                    "Work schedule day was changed by another user"
+                    "Work schedule day was changed after it was loaded"
             );
         }
     }

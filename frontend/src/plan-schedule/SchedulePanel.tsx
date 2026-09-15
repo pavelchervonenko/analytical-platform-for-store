@@ -27,7 +27,7 @@ function normalizedShifts(shifts: EmployeeShift[]): string {
   return JSON.stringify(shifts.map((shift) => [shift.employeeId, shift.workedHours]).sort(([left], [right]) => String(left).localeCompare(String(right))));
 }
 
-function ShiftDayEditor({
+export function ShiftDayEditor({
   workDate,
   dayShifts,
   etag,
@@ -50,9 +50,12 @@ function ShiftDayEditor({
   const { selectedStore, month } = useWorkspace();
   const storeId = selectedStore.id;
   const queryClient = useQueryClient();
+  const [baselineShifts, setBaselineShifts] = useState(dayShifts);
+  const [currentEtag, setCurrentEtag] = useState(etag);
   const [draft, setDraft] = useState<Record<string, string>>(() => Object.fromEntries(dayShifts.map((shift) => [shift.employeeId, String(shift.workedHours)])));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [clearConfirmation, setClearConfirmation] = useState(false);
+  const [concurrentUpdateLoaded, setConcurrentUpdateLoaded] = useState(false);
 
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -73,25 +76,48 @@ function ShiftDayEditor({
         employeeId: setting.employeeId, displayName: setting.displayName, eligible: true
       });
     }
-    for (const shift of dayShifts) if (!employees.has(shift.employeeId)) employees.set(shift.employeeId, { employeeId: shift.employeeId, displayName: shift.employeeName, eligible: false });
+    for (const shift of baselineShifts) if (!employees.has(shift.employeeId)) employees.set(shift.employeeId, { employeeId: shift.employeeId, displayName: shift.employeeName, eligible: false });
     return [...employees.values()].sort((left, right) => Number(right.eligible) - Number(left.eligible) || left.displayName.localeCompare(right.displayName, "ru-RU"));
-  }, [dayShifts, settings]);
+  }, [baselineShifts, settings]);
+
+  const updateCachedDay = (shifts: EmployeeShift[]) => {
+    queryClient.setQueryData<EmployeeShift[]>(scheduleKey, (current) => [
+      ...(current ?? []).filter((shift) => shift.workDate !== workDate),
+      ...shifts
+    ].sort((left, right) => left.workDate.localeCompare(right.workDate)
+      || left.employeeName.localeCompare(right.employeeName, "ru-RU")));
+  };
 
   const mutation = useMutation({
-    mutationFn: (shifts: WorkShiftInput[]) => replaceWorkScheduleDay(storeId, workDate, etag, shifts),
+    mutationFn: (shifts: WorkShiftInput[]) => replaceWorkScheduleDay(storeId, workDate, currentEtag, shifts),
     onSuccess: async (saved) => {
-      queryClient.setQueryData<EmployeeShift[]>(scheduleKey, (current) => [...(current ?? []).filter((shift) => shift.workDate !== workDate), ...saved.value.shifts].sort((left, right) => left.workDate.localeCompare(right.workDate) || left.employeeName.localeCompare(right.employeeName, "ru-RU")));
+      updateCachedDay(saved.value.shifts);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.employees(storeId) }),
         queryClient.invalidateQueries({ queryKey: ["stores", storeId, "period-quality"] }),
         queryClient.invalidateQueries({ queryKey: ["stores", storeId, "payroll"] })
       ]);
       onSaved(workDate);
+    },
+    onError: async (error) => {
+      if (!isApiClientError(error) || error.status !== 412) return;
+      try {
+        const latest = await getWorkScheduleDay(storeId, workDate);
+        setCurrentEtag(latest.etag);
+        setBaselineShifts(latest.value.shifts);
+        setDraft(Object.fromEntries(latest.value.shifts.map((shift) => [shift.employeeId, String(shift.workedHours)])));
+        updateCachedDay(latest.value.shifts);
+        setErrors({});
+        setClearConfirmation(false);
+        setConcurrentUpdateLoaded(true);
+      } catch {
+        setConcurrentUpdateLoaded(false);
+      }
     }
   });
 
   const currentNormalized = JSON.stringify(Object.entries(draft).map(([employeeId, hours]) => [employeeId, parseWorkedHours(hours)]).sort(([left], [right]) => String(left).localeCompare(String(right))));
-  const dirty = currentNormalized !== normalizedShifts(dayShifts);
+  const dirty = currentNormalized !== normalizedShifts(baselineShifts);
   const selectedCount = Object.keys(draft).length;
 
   const requestClose = () => {
@@ -117,6 +143,8 @@ function ShiftDayEditor({
     }
   };
   const toggle = (employee: RosterEmployee) => {
+    mutation.reset();
+    setConcurrentUpdateLoaded(false);
     setDraft((current) => {
       const next = { ...current };
       if (employee.employeeId in next) delete next[employee.employeeId];
@@ -127,6 +155,8 @@ function ShiftDayEditor({
     setClearConfirmation(false);
   };
   const save = () => {
+    mutation.reset();
+    setConcurrentUpdateLoaded(false);
     const nextErrors: Record<string, string> = {};
     const inputs: WorkShiftInput[] = [];
     for (const [employeeId, value] of Object.entries(draft)) {
@@ -145,6 +175,8 @@ function ShiftDayEditor({
       return;
     }
     setClearConfirmation(false);
+    mutation.reset();
+    setConcurrentUpdateLoaded(false);
     mutation.mutate([]);
   };
 
@@ -157,8 +189,8 @@ function ShiftDayEditor({
           const selected = employee.employeeId in draft;
           return <article className={`${selected ? "shift-roster-row--selected" : ""} ${!employee.eligible ? "shift-roster-row--unavailable" : ""}`} key={employee.employeeId}><button className="shift-check" type="button" aria-pressed={selected} disabled={!employee.eligible && !selected} onClick={() => toggle(employee)}><span>{selected && <Check />}</span><i>{employee.displayName.slice(0, 1).toUpperCase()}</i><strong>{employee.displayName}</strong></button><label><span>Часов</span><input type="text" inputMode="decimal" value={draft[employee.employeeId] ?? ""} disabled={!selected || !employee.eligible} onChange={(event) => { setDraft((current) => ({ ...current, [employee.employeeId]: event.target.value })); setErrors((current) => ({ ...current, [employee.employeeId]: "" })); }} aria-invalid={Boolean(errors[employee.employeeId])} /></label>{selected && employee.eligible && <button className="full-shift-button" type="button" onClick={() => setDraft((current) => ({ ...current, [employee.employeeId]: "11" }))} aria-label={`Установить полную смену для ${employee.displayName}`}>11 часов</button>}{!employee.eligible && <small>Недоступен для новых смен</small>}{errors[employee.employeeId] && <p role="alert">{errors[employee.employeeId]}</p>}</article>;
         })}</div>}
-        {mutation.isError && <div className="form-alert" role="alert">{isApiClientError(mutation.error) && mutation.error.status === 412 ? "Этот день уже изменен другим пользователем. Закройте редактор и откройте день снова." : isApiClientError(mutation.error) ? mutation.error.message : "Не удалось сохранить смены. Обновите данные и повторите действие."}</div>}
-        <footer><div>{dayShifts.length > 0 && <>{clearConfirmation && <span className="clear-confirmation">Очистить весь день?</span>}<button className="button button--ghost button--danger-ghost" type="button" disabled={mutation.isPending} onClick={clear}><Eraser size={15} />{clearConfirmation ? "Подтвердить" : "Очистить день"}</button>{clearConfirmation && <button className="button button--ghost" type="button" onClick={() => setClearConfirmation(false)}>Отмена</button>}</>}</div><button className="button button--primary" type="button" disabled={!dirty || mutation.isPending} onClick={save}><Save size={16} />{mutation.isPending ? "Сохраняем…" : "Сохранить день"}</button></footer>
+        {mutation.isError && <div className="form-alert" role="alert">{isApiClientError(mutation.error) && mutation.error.status === 412 ? concurrentUpdateLoaded ? "Состав дня обновился после открытия. Мы загрузили актуальную версию — проверьте её и внесите изменение снова." : "Состав дня обновился после открытия. Не удалось загрузить актуальную версию — закройте редактор и откройте день снова." : isApiClientError(mutation.error) ? mutation.error.message : "Не удалось сохранить смены. Обновите данные и повторите действие."}</div>}
+        <footer><div>{baselineShifts.length > 0 && <>{clearConfirmation && <span className="clear-confirmation">Очистить весь день?</span>}<button className="button button--ghost button--danger-ghost" type="button" disabled={mutation.isPending} onClick={clear}><Eraser size={15} />{clearConfirmation ? "Подтвердить" : "Очистить день"}</button>{clearConfirmation && <button className="button button--ghost" type="button" onClick={() => setClearConfirmation(false)}>Отмена</button>}</>}</div><button className="button button--primary" type="button" disabled={!dirty || mutation.isPending} onClick={save}><Save size={16} />{mutation.isPending ? "Сохраняем…" : "Сохранить день"}</button></footer>
       </section>
     </div>
   );
