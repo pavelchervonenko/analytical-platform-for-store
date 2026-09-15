@@ -1,10 +1,15 @@
 package com.storeanalytics.integration.livesklad.webhook;
 
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,9 +21,14 @@ import org.springframework.transaction.annotation.Transactional;
 class LiveSkladWebhookStore {
 
     private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
 
-    LiveSkladWebhookStore(JdbcTemplate jdbcTemplate) {
+    LiveSkladWebhookStore(
+            JdbcTemplate jdbcTemplate,
+            ObjectMapper objectMapper
+    ) {
         this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
     }
 
     void record(LiveSkladWebhookReceipt receipt) {
@@ -91,18 +101,49 @@ class LiveSkladWebhookStore {
                     recovery_expected_document_number,
                     recovery_expected_net_amount,
                     recovery_expected_position_count,
+                    recovery_mode,
+                    recovery_expected_current_employee_external_id,
+                    recovery_expected_original_sale_external_id,
+                    recovery_expected_original_employee_external_id,
+                    recovery_expected_original_links,
                     recovery_reason,
                     recovery_requested_at,
                     available_at
                 ) VALUES (
-                    ?, 'SALE_RETURN', ?, 'manualRecovery', ?::jsonb, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    ?,
+                    'SALE_RETURN',
+                    ?,
+                    'manualRecovery',
+                    ?::jsonb,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?::jsonb,
+                    ?,
+                    ?,
+                    ?
                 )
                 RETURNING id,
                           source_document_id,
                           recovery_expected_document_number,
                           recovery_expected_net_amount,
                           recovery_expected_position_count,
+                          recovery_mode,
+                          recovery_expected_current_employee_external_id,
+                          recovery_expected_original_sale_external_id,
+                          recovery_expected_original_employee_external_id,
+                          recovery_expected_original_links::text,
                           processing_status,
                           processing_attempt_count,
                           terminal_failure,
@@ -124,6 +165,11 @@ class LiveSkladWebhookStore {
                 request.documentNumber(),
                 request.netAmount(),
                 request.positionCount(),
+                request.mode().name(),
+                request.currentEmployeeExternalId(),
+                request.originalSaleExternalId(),
+                request.originalEmployeeExternalId(),
+                originalLinksJson(request),
                 request.reason(),
                 Timestamp.from(request.requestedAt()),
                 Timestamp.from(request.requestedAt())
@@ -144,15 +190,18 @@ class LiveSkladWebhookStore {
         );
     }
 
-    Optional<LiveSkladReturnRecoveryView> findRecoveryByExternalId(
-            String externalId
+    Optional<LiveSkladReturnRecoveryView> findRecoveryByExternalIdAndMode(
+            String externalId,
+            LiveSkladReturnRecoveryMode mode
     ) {
         return recovery(
                 """
                 WHERE recovery_requested_by IS NOT NULL
                   AND source_document_id = ?
+                  AND recovery_mode = ?
                 """,
-                externalId
+                externalId,
+                mode.name()
         );
     }
 
@@ -177,6 +226,11 @@ class LiveSkladWebhookStore {
                        recovery_expected_document_number,
                        recovery_expected_net_amount,
                        recovery_expected_position_count,
+                       recovery_mode,
+                       recovery_expected_current_employee_external_id,
+                       recovery_expected_original_sale_external_id,
+                       recovery_expected_original_employee_external_id,
+                       recovery_expected_original_links::text,
                        processing_status,
                        processing_attempt_count,
                        terminal_failure,
@@ -201,6 +255,19 @@ class LiveSkladWebhookStore {
                 resultSet.getString("recovery_expected_document_number"),
                 resultSet.getBigDecimal("recovery_expected_net_amount"),
                 resultSet.getInt("recovery_expected_position_count"),
+                LiveSkladReturnRecoveryMode.valueOf(
+                        resultSet.getString("recovery_mode")
+                ),
+                resultSet.getString(
+                        "recovery_expected_current_employee_external_id"
+                ),
+                resultSet.getString(
+                        "recovery_expected_original_sale_external_id"
+                ),
+                resultSet.getString(
+                        "recovery_expected_original_employee_external_id"
+                ),
+                originalLinks(resultSet),
                 resultSet.getString("processing_status"),
                 resultSet.getInt("processing_attempt_count"),
                 resultSet.getBoolean("terminal_failure"),
@@ -311,7 +378,12 @@ class LiveSkladWebhookStore {
                           receipt.source_document_id,
                           receipt.recovery_expected_document_number,
                           receipt.recovery_expected_net_amount,
-                          receipt.recovery_expected_position_count
+                          receipt.recovery_expected_position_count,
+                          receipt.recovery_mode,
+                          receipt.recovery_expected_current_employee_external_id,
+                          receipt.recovery_expected_original_sale_external_id,
+                          receipt.recovery_expected_original_employee_external_id,
+                          receipt.recovery_expected_original_links::text
                 """,
                 (resultSet, rowNumber) -> new LiveSkladWebhookClaim(
                         resultSet.getObject("id", UUID.class),
@@ -329,7 +401,18 @@ class LiveSkladWebhookStore {
                         resultSet.getObject(
                                 "recovery_expected_position_count",
                                 Integer.class
-                        )
+                        ),
+                        recoveryMode(resultSet),
+                        resultSet.getString(
+                                "recovery_expected_current_employee_external_id"
+                        ),
+                        resultSet.getString(
+                                "recovery_expected_original_sale_external_id"
+                        ),
+                        resultSet.getString(
+                                "recovery_expected_original_employee_external_id"
+                        ),
+                        originalLinks(resultSet)
                 ),
                 kind.name(),
                 Timestamp.from(now),
@@ -338,6 +421,83 @@ class LiveSkladWebhookStore {
                 Timestamp.from(now.plus(leaseDuration))
         );
         return claims.stream().findFirst();
+    }
+
+    private String originalLinksJson(
+            LiveSkladReturnRecoveryRequest request
+    ) {
+        if (request.mode() == LiveSkladReturnRecoveryMode.MISSING_RETURN) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(request.originalLinks());
+        } catch (JacksonException exception) {
+            throw new IllegalStateException(
+                    "Return recovery link expectations cannot be serialized",
+                    exception
+            );
+        }
+    }
+
+    private LiveSkladReturnRecoveryMode recoveryMode(
+            ResultSet resultSet
+    ) throws SQLException {
+        String value = resultSet.getString("recovery_mode");
+        return value == null ? null
+                : LiveSkladReturnRecoveryMode.valueOf(value);
+    }
+
+    private List<RecoverLiveSkladReturnLinkExpectation> originalLinks(
+            ResultSet resultSet
+    ) throws SQLException {
+        String value = resultSet.getString(
+                "recovery_expected_original_links"
+        );
+        if (value == null) {
+            return List.of();
+        }
+        try {
+            JsonNode root = objectMapper.readTree(value);
+            if (root == null || !root.isArray()) {
+                throw new SQLException(
+                        "Return recovery link expectations are not an array"
+                );
+            }
+            List<RecoverLiveSkladReturnLinkExpectation> result =
+                    new ArrayList<>();
+            for (JsonNode node : root) {
+                result.add(canonicalLink(objectMapper.convertValue(
+                        node, RecoverLiveSkladReturnLinkExpectation.class
+                )));
+            }
+            return List.copyOf(result);
+        } catch (JacksonException | IllegalArgumentException
+                | ArithmeticException | NullPointerException exception) {
+            throw new SQLException(
+                    "Return recovery link expectations cannot be read",
+                    exception
+            );
+        }
+    }
+
+    private RecoverLiveSkladReturnLinkExpectation canonicalLink(
+            RecoverLiveSkladReturnLinkExpectation value
+    ) {
+        return new RecoverLiveSkladReturnLinkExpectation(
+                value.returnPositionExternalId(),
+                value.originalSalePositionExternalId(),
+                value.productExternalId(),
+                value.expectedQuantity().setScale(
+                        3, RoundingMode.UNNECESSARY
+                ),
+                value.expectedNetAmount().setScale(
+                        2, RoundingMode.UNNECESSARY
+                ),
+                value.expectedCostAmount() == null ? null
+                        : value.expectedCostAmount().setScale(
+                        2, RoundingMode.UNNECESSARY
+                )
+        );
     }
 
     void recordSourceDocument(

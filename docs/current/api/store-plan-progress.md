@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-14
 requirement_sources:
   - docs/archive/legacy-contracts/store-plan-progress-api.md
 implementation_sources:
@@ -16,6 +16,7 @@ implementation_sources:
 verification_sources:
   - backend/src/test/java/com/storeanalytics/performance/service/StorePlanProgressServiceTest.java
   - backend/src/test/java/com/storeanalytics/performance/web/StorePlanProgressControllerTest.java
+  - backend/src/test/java/com/storeanalytics/store/web/StoreDataStatusSecurityIntegrationTest.java
 runtime_evidence: []
 required_reviewers:
   - backend-data
@@ -34,7 +35,8 @@ superseded_by: null
 
 `GET /api/stores/{storeId}/performance-plans/{yyyy-MM}/progress?asOf=YYYY-MM-DD&scope=SELLERS|STORE`
 всегда считает month-to-`asOf`. Это не произвольный выбранный range и не значение только одного
-дня. Transport default `STORE` сохраняет совместимость прежних потребителей.
+дня. Transport default `STORE` сохраняет совместимость прежних потребителей. Endpoint, чтение и
+изменение самого плана требуют и назначения магазина, и функции `PLAN`.
 
 План в базе один. `SELLERS` применяет его к факту `rankingEligible`, `STORE` — ко всему магазину.
 Revenue, direction amount, daily actuals, share, forecast и target amount внутри одного response
@@ -49,6 +51,11 @@ remaining = max(targetAmount - directionAmount, 0)
 neededPerDay = remaining / remainingDays
 ```
 
+Для `REVENUE` статус `ON_TRACK` определяется прогнозом конца месяца. Для долевых направлений
+`ACCESSORY`, `SERVICE` и `ADDITIONAL` текущая реализация не использует прогноз как основание
+статуса: достигнутая доля получает `ACHIEVED`, недостигнутая до конца месяца — `AT_RISK`, а в
+последний день — `MISSED`. Поэтому «Выполнено» для услуги означает достижение доли на текущую дату.
+
 Achievement сравнивает unrounded values. Response также содержит calendar pace, forecast, focus,
 coverage и classification completeness; frontend отображает backend-owned значения и не строит
 другую цель.
@@ -59,3 +66,5 @@ revenue и детерминированно распределяется по б
 
 Overview передаёт scope явно и показывает month target/gap в верхних карточках только в month mode.
 Для week/custom этот endpoint остаётся отдельным блоком «План месяца».
+Отдельный раздел «План» также передаёт scope явно и использует `SELLERS` по умолчанию; transport
+default endpoint остаётся `STORE` только для обратной совместимости других потребителей.

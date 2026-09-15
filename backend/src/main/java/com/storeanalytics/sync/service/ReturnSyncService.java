@@ -119,6 +119,23 @@ public class ReturnSyncService {
         );
     }
 
+    public ReturnSyncResult relinkExistingOrphanReturn(
+            ReturnOrphanRelinkExpectation expectation
+    ) {
+        if (expectation == null) {
+            throw new IllegalArgumentException(
+                    "return orphan relink expectation is required"
+            );
+        }
+        return syncMetrics.record(
+                SyncScope.RETURNS,
+                SyncTriggerType.REPROCESS,
+                () -> synchronizeTargetedReturnInternal(
+                        expectation.externalId(), expectation
+                )
+        );
+    }
+
     private ReturnSyncResult synchronizeWebhookReturnInternal(
             String returnExternalId
     ) {
@@ -127,7 +144,7 @@ public class ReturnSyncService {
 
     private ReturnSyncResult synchronizeTargetedReturnInternal(
             String returnExternalId,
-            ReturnRecoveryExpectation expectation
+            ReturnTargetExpectation expectation
     ) {
         IntegrationConnection connection = activeLiveSkladConnection();
         LiveSkladReturnDetailPayload detail =
@@ -162,11 +179,15 @@ public class ReturnSyncService {
                 clock.instant()
         ));
         try {
-            ReturnSyncBatchResult batch = persistence.synchronizeTargeted(
-                    syncRun.getId(),
-                    store,
-                    new LiveSkladReturnSource(List.of(), detail)
+            LiveSkladReturnSource source = new LiveSkladReturnSource(
+                    List.of(), detail
             );
+            ReturnSyncBatchResult batch = expectation
+                    instanceof ReturnOrphanRelinkExpectation relinkExpectation
+                    ? persistence.relinkExistingOrphan(
+                    syncRun.getId(), store, source, relinkExpectation)
+                    : persistence.synchronizeTargeted(
+                    syncRun.getId(), store, source);
             if (batch.unresolvedDocuments() > 0) {
                 syncRun.completePartial(
                         1,

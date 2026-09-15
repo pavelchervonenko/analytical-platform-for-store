@@ -2,11 +2,8 @@ package com.storeanalytics.interpretation.review;
 
 import static com.storeanalytics.common.validation.ModelValidation.requireNonNull;
 import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.AiState.DISABLED;
-import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.BlockState.INSUFFICIENT;
-import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.BlockState.LIMITED;
 import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.BlockState.READY;
 import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.Effect.NEGATIVE;
-import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.Effect.NEUTRAL;
 import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.Effect.POSITIVE;
 import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.GeneratedBy.DETERMINISTIC;
 import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.Materiality.MATERIAL;
@@ -15,16 +12,14 @@ import com.storeanalytics.interpretation.review.WeeklyReviewCoreProjector.Projec
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Action;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.ActionTarget;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.AiEnhancement;
-import com.storeanalytics.interpretation.review.WeeklyReviewResponse.BlockState;
-import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Effect;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.EmployeeCard;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Evidence;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Factor;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Materiality;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricComparison;
-import com.storeanalytics.interpretation.review.WeeklyReviewResponse.NarrativeItem;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Observation;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Provenance;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.QualitySummary;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.ReportState;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.RevenueDecomposition;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.SalesStructureBlock;
@@ -38,9 +33,12 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /** Creates the direct UI model without requiring an AI provider. */
 public final class WeeklyReviewAssembler {
@@ -52,6 +50,7 @@ public final class WeeklyReviewAssembler {
     private final WeeklyReviewStructureProjector structureProjector;
     private final WeeklyReviewTeamEmployeeProjector teamEmployeeProjector;
     private final WeeklyReviewQualityPolicyV1 qualityPolicy;
+    private final WeeklyReviewSummaryPresenter summaryPresenter;
 
     public WeeklyReviewAssembler(WeeklyReviewPolicyV1 policy) {
         WeeklyReviewPolicyV1 validated = requireNonNull(policy, "policy");
@@ -59,17 +58,12 @@ public final class WeeklyReviewAssembler {
         this.structureProjector = new WeeklyReviewStructureProjector(validated);
         this.teamEmployeeProjector = new WeeklyReviewTeamEmployeeProjector(validated);
         this.qualityPolicy = new WeeklyReviewQualityPolicyV1();
+        this.summaryPresenter = new WeeklyReviewSummaryPresenter();
     }
 
     public WeeklyReviewResponse assemble(WeeklyReviewFacts facts, Provenance provenance) {
         WeeklyReviewFacts source = requireNonNull(facts, "facts");
         Provenance snapshot = requireNonNull(provenance, "provenance");
-        Projection core = coreProjector.project(
-                source.current().store(),
-                source.previous().store(),
-                source.current().revenue(),
-                source.previous().revenue()
-        );
         WeeklyReviewQualityPolicyV1.Decision quality = qualityPolicy.decide(
                 source.sourceDataStatus(),
                 source.current().store(),
@@ -79,35 +73,54 @@ public final class WeeklyReviewAssembler {
                 source.current().unattributedReturnDocumentCount(),
                 source.previous().unattributedReturnDocumentCount()
         );
-        SalesStructureBlock structure = structureProjector.project(
+        boolean sourceAnalyticsBlocked = quality.reportState() == ReportState.BLOCKED;
+        Projection core = coreProjector.project(
                 source.current().store(),
                 source.previous().store(),
-                source.current().categories(),
-                source.previous().categories(),
-                source.current().attachRates(),
-                source.previous().attachRates()
+                source.current().revenue(),
+                source.previous().revenue(),
+                sourceAnalyticsBlocked
         );
-        WeeklyReviewTeamEmployeeProjector.Projection people = teamEmployeeProjector.project(
-                source.current().employeeFacts(),
-                source.previous().employeeFacts(),
-                source.current().employeeSalesSamples(),
-                source.previous().employeeSalesSamples(),
-                source.current().unattributedReturnDocumentCount(),
-                source.previous().unattributedReturnDocumentCount(),
-                attachLabels(source)
-        );
+        SalesStructureBlock structure = sourceAnalyticsBlocked
+                ? structureProjector.unavailable()
+                : structureProjector.project(
+                        source.current().store(),
+                        source.previous().store(),
+                        source.current().categories(),
+                        source.previous().categories(),
+                        source.current().attachRates(),
+                        source.previous().attachRates()
+                );
+        WeeklyReviewTeamEmployeeProjector.Projection people = sourceAnalyticsBlocked
+                ? teamEmployeeProjector.unavailable()
+                : teamEmployeeProjector.project(
+                        source.current().employeeFacts(),
+                        source.previous().employeeFacts(),
+                        source.current().employeeSalesSamples(),
+                        source.previous().employeeSalesSamples(),
+                        source.current().unattributedReturnDocumentCount(),
+                        source.previous().unattributedReturnDocumentCount(),
+                        attachLabels(source)
+                );
         ReportState reportState = reportState(quality, structure, people.team());
+        QualitySummary qualitySummary = qualitySummary(
+                reportState,
+                quality,
+                structure,
+                people.team()
+        );
         List<Factor> factors = reportState == ReportState.BLOCKED
                 ? List.of()
                 : factors(core.revenueDecomposition(), structure);
         List<Action> actions = actions(factors);
-        SummaryBlock summary = summary(reportState, core.results(), factors);
+        SummaryBlock summary = summaryPresenter.present(reportState, core.results(), factors);
         List<Evidence> evidence = evidence(
                 source,
                 core,
                 structure,
                 people.team(),
-                people.employees()
+                people.employees(),
+                sourceAnalyticsBlocked
         );
         return new WeeklyReviewResponse(
                 2,
@@ -115,7 +128,7 @@ public final class WeeklyReviewAssembler {
                 source.period(),
                 snapshot,
                 reportState,
-                quality.qualitySummary(),
+                qualitySummary,
                 quality.sourceCoverage(),
                 summary,
                 core.results(),
@@ -147,66 +160,31 @@ public final class WeeklyReviewAssembler {
         return ReportState.READY;
     }
 
-    private SummaryBlock summary(
+    private QualitySummary qualitySummary(
             ReportState reportState,
-            List<MetricComparison> results,
-            List<Factor> factors
+            WeeklyReviewQualityPolicyV1.Decision quality,
+            SalesStructureBlock structure,
+            TeamBlock team
     ) {
-        if (reportState == ReportState.BLOCKED) {
-            return new SummaryBlock(
-                    "summary",
-                    INSUFFICIENT,
-                    null,
-                    null,
-                    null,
-                    DETERMINISTIC
-            );
+        if (reportState != ReportState.PARTIAL) {
+            return quality.qualitySummary();
         }
-        MetricComparison revenue = metric(results, "NET_REVENUE");
-        MetricComparison profit = metric(results, "GROSS_PROFIT");
-        StringBuilder outcome = new StringBuilder("Чистая выручка за неделю — ")
-                .append(format(revenue.current(), revenue.unit()))
-                .append(comparisonText(revenue));
-        List<String> outcomeEvidence = new ArrayList<>(revenue.evidenceRefs());
-        if (profit.metricState() != WeeklyReviewResponse.MetricState.UNAVAILABLE
-                && profit.current() != null) {
-            outcome.append(". Валовая прибыль — ")
-                    .append(format(profit.current(), profit.unit()))
-                    .append(comparisonText(profit));
-            outcomeEvidence.addAll(profit.evidenceRefs());
+        Set<String> affectedBlocks = quality.limitations().stream()
+                .flatMap(limitation -> limitation.affectedBlockIds().stream())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        int localWarningCount = 0;
+        if (structure.state() != READY && affectedBlocks.add(structure.blockId())) {
+            localWarningCount++;
         }
-        NarrativeItem positive = factors.stream()
-                .filter(factor -> factor.effect() == POSITIVE)
-                .findFirst()
-                .map(factor -> narrative("summary:positive", factor))
-                .orElse(null);
-        NarrativeItem risk = factors.stream()
-                .filter(factor -> factor.effect() == NEGATIVE)
-                .findFirst()
-                .map(factor -> narrative("summary:risk", factor))
-                .orElse(null);
-        BlockState state = reportState == ReportState.PARTIAL ? LIMITED : READY;
-        return new SummaryBlock(
-                "summary",
-                state,
-                new NarrativeItem(
-                        "summary:outcome",
-                        outcome.toString(),
-                        effect(revenue),
-                        outcomeEvidence.stream().distinct().toList()
-                ),
-                positive,
-                risk,
-                DETERMINISTIC
-        );
-    }
-
-    private NarrativeItem narrative(String itemId, Factor factor) {
-        return new NarrativeItem(
-                itemId,
-                factor.detail(),
-                factor.effect(),
-                factor.evidenceRefs()
+        if (team.state() != READY && affectedBlocks.add(team.blockId())) {
+            localWarningCount++;
+        }
+        int warningCount = quality.qualitySummary().warningCount() + localWarningCount;
+        return new QualitySummary(
+                quality.qualitySummary().blockingCount(),
+                warningCount,
+                affectedBlocks.size(),
+                "Надёжные показатели сохранены; ограничений: " + warningCount
         );
     }
 
@@ -334,7 +312,7 @@ public final class WeeklyReviewAssembler {
     private String actionTitle(MetricComparison metric) {
         if ("RETURN_REVENUE".equals(metric.code())
                 && metric.direction() == WeeklyReviewResponse.Direction.UP) {
-            return "Разобрать рост возвратов";
+            return "Проверить чеки и причины возвратов";
         }
         return metric.direction() == WeeklyReviewResponse.Direction.DOWN
                 ? "Разобрать снижение «" + metric.label() + "»"
@@ -346,7 +324,8 @@ public final class WeeklyReviewAssembler {
             Projection core,
             SalesStructureBlock structure,
             TeamBlock team,
-            List<EmployeeCard> employees
+            List<EmployeeCard> employees,
+            boolean sourceAnalyticsBlocked
     ) {
         EvidenceCollector collector = new EvidenceCollector(source);
         core.results().forEach(metric -> collector.metric(metric, "STORE", null));
@@ -362,7 +341,9 @@ public final class WeeklyReviewAssembler {
         ));
         employees.forEach(employee -> collectEmployee(collector, employee));
         team.observations().forEach(collector::teamObservation);
-        collector.employeeAttribution();
+        if (!sourceAnalyticsBlocked) {
+            collector.employeeAttribution();
+        }
         return collector.values();
     }
 
@@ -385,7 +366,10 @@ public final class WeeklyReviewAssembler {
                 metric.comparison(), "EMPLOYEE", employee.employeePublicId()
         ));
         if (employee.peerComparison() != null) {
-            collector.teamMedian(employee.peerComparison().benchmarkValue());
+            collector.teamMedian(
+                    employee.peerComparison().metricCode(),
+                    employee.peerComparison().benchmarkValue()
+            );
         }
     }
 
@@ -407,19 +391,6 @@ public final class WeeklyReviewAssembler {
                 categoryNames.getOrDefault(rate.numeratorCategoryCode(), rate.metricCode())
         ));
         return result;
-    }
-
-    private MetricComparison metric(List<MetricComparison> metrics, String code) {
-        return metrics.stream()
-                .filter(metric -> code.equals(metric.code()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Missing metric: " + code));
-    }
-
-    private Effect effect(MetricComparison metric) {
-        return metric.effect() == WeeklyReviewResponse.Effect.UNKNOWN
-                ? NEUTRAL
-                : metric.effect();
     }
 
     private String comparisonText(MetricComparison metric) {
@@ -493,14 +464,17 @@ public final class WeeklyReviewAssembler {
             }
         }
 
-        private void teamMedian(BigDecimal median) {
-            String reference = "TEAM.MEDIAN.NET_REVENUE";
+        private void teamMedian(String metricCode, BigDecimal median) {
+            String reference = "TEAM.MEDIAN." + metricCode;
+            String label = "REVENUE_PER_HOUR".equals(metricCode)
+                    ? "Медиана выручки в час сотрудников"
+                    : "Медиана чистой выручки сотрудников";
             evidence.putIfAbsent(reference, new Evidence(
                     reference,
                     "TEAM",
                     null,
-                    "NET_REVENUE_MEDIAN",
-                    "Медиана чистой выручки сотрудников",
+                    metricCode + "_MEDIAN",
+                    label,
                     Unit.RUB,
                     source.period().current(),
                     source.period().previous(),

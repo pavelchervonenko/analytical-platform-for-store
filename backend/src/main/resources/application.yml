@@ -247,6 +247,7 @@ app:
   product-classification:
     reconciliation:
       enabled: ${PRODUCT_CLASSIFICATION_RECONCILIATION_ENABLED:false}
+      connection-id: ${PRODUCT_CLASSIFICATION_RECONCILIATION_CONNECTION_ID:}
       external-product-ids: ${PRODUCT_CLASSIFICATION_RECONCILIATION_PRODUCT_IDS:}
       expected-item-count: ${PRODUCT_CLASSIFICATION_RECONCILIATION_EXPECTED_ITEMS:0}
   resources:

@@ -45,13 +45,15 @@ class WeeklyReviewTeamEmployeeProjectorTest {
         assertThat(result.team().roster().activeAssignedWithActivity()).isEqualTo(3);
         assertThat(result.team().roster().participatesInBenchmark()).isEqualTo(3);
         assertThat(result.team().benchmarkPolicy().label())
-                .isEqualTo("Медиана магазина, 3 сотрудников");
+                .isEqualTo("Медиана выручки в час, 3 сотрудников");
         assertThat(result.team().toString())
                 .doesNotContain("Анна", "Борис", "Вера", anna.employeeId().toString());
         assertThat(result.employees()).extracting(EmployeeCard::displayName)
                 .containsExactly("Вера", "Анна", "Борис");
         assertThat(card(result, "Анна").peerComparison().benchmarkValue())
-                .isEqualByComparingTo("500.00");
+                .isEqualByComparingTo("31.25");
+        assertThat(card(result, "Анна").peerComparison().metricCode())
+                .isEqualTo("REVENUE_PER_HOUR");
     }
 
     @Test
@@ -91,8 +93,150 @@ class WeeklyReviewTeamEmployeeProjectorTest {
         assertThat(result.ownDynamics()).isEmpty();
         assertThat(result.action()).isNull();
         assertThat(result.limitations())
-                .contains("Недостаточно продаж для сравнения: 2 и 2")
-                .anyMatch(message -> message.contains("смен"));
+                .containsExactly("Недостаточно продаж для сравнения: 2 и 2");
+    }
+
+    @Test
+    void lowSalesCannotCreateAttentionThroughRevenuePerHour() {
+        EmployeeRatingEntry current = employee("Анна", "100.00", 2, "16.00");
+        EmployeeRatingEntry previous = copy(current, "1000.00");
+
+        EmployeeCard result = projector.project(
+                ratings(current),
+                ratings(previous),
+                sales(current, 2),
+                sales(previous, 2),
+                0,
+                0,
+                Map.of()
+        ).employees().getFirst();
+
+        assertThat(result.metrics().revenuePerHour().metricState())
+                .isEqualTo(WeeklyReviewResponse.MetricState.UNAVAILABLE);
+        assertThat(result.metrics().revenuePerHour().sufficiency())
+                .isEqualTo(WeeklyReviewResponse.Sufficiency.INSUFFICIENT);
+        assertThat(result.metrics().revenuePerHour().current()).isNull();
+        assertThat(result.metrics().revenuePerHour().previous()).isNull();
+        assertThat(result.metrics().revenuePerHour().currentSample()).isNull();
+        assertThat(result.metrics().revenuePerHour().previousSample()).isNull();
+        assertThat(result.attention()).isNull();
+        assertThat(result.action()).isNull();
+        assertThat(result.sortGroup()).isEqualTo("LIMITED");
+    }
+
+    @Test
+    void lowSalesInPreviousWeekMakesEfficiencyUnavailableWithoutLeakingValues() {
+        EmployeeRatingEntry current = employee("Анна", "700.00", 2, "16.00");
+        EmployeeRatingEntry previous = copy(current, "600.00");
+
+        EmployeeCard result = projector.project(
+                ratings(current),
+                ratings(previous),
+                sales(current, 6),
+                sales(previous, 2),
+                0,
+                0,
+                Map.of()
+        ).employees().getFirst();
+
+        assertThat(result.metrics().revenuePerHour().metricState())
+                .isEqualTo(WeeklyReviewResponse.MetricState.UNAVAILABLE);
+        assertThat(result.metrics().revenuePerHour().sufficiency())
+                .isEqualTo(WeeklyReviewResponse.Sufficiency.INSUFFICIENT);
+        assertThat(result.metrics().revenuePerHour().current()).isNull();
+        assertThat(result.metrics().revenuePerHour().previous()).isNull();
+        assertThat(result.metrics().revenuePerHour().currentSample()).isNull();
+        assertThat(result.metrics().revenuePerHour().previousSample()).isNull();
+        assertThat(result.peerComparison()).isNull();
+        assertThat(result.attention()).isNull();
+        assertThat(result.action()).isNull();
+    }
+
+    @Test
+    void missingShiftsLimitOnlyWorkloadMetrics() {
+        EmployeeRatingEntry current = employee("Анна", "700.00", 0, "0.00");
+        EmployeeRatingEntry previous = copy(current, "600.00");
+
+        WeeklyReviewTeamEmployeeProjector.Projection result = projector.project(
+                ratings(current),
+                ratings(previous),
+                sales(current, 6),
+                sales(previous, 6),
+                0,
+                0,
+                Map.of()
+        );
+
+        EmployeeCard card = result.employees().getFirst();
+        assertThat(card.sortGroup()).isEqualTo("POSITIVE");
+        assertThat(card.limitations()).isEmpty();
+        assertThat(card.peerComparison()).isNull();
+        assertThat(card.action()).isNull();
+        assertThat(card.metrics().netRevenue().metricState())
+                .isEqualTo(WeeklyReviewResponse.MetricState.READY);
+        assertThat(card.metrics().workedHours().metricState())
+                .isEqualTo(WeeklyReviewResponse.MetricState.UNAVAILABLE);
+        assertThat(card.metrics().workedHours().current()).isNull();
+        assertThat(card.metrics().workedHours().previous()).isNull();
+        assertThat(card.metrics().shiftCount().current()).isNull();
+        assertThat(card.metrics().shiftCount().previous()).isNull();
+        assertThat(card.metrics().revenuePerHour().metricState())
+                .isEqualTo(WeeklyReviewResponse.MetricState.UNAVAILABLE);
+        assertThat(result.team().state()).isEqualTo(WeeklyReviewResponse.BlockState.READY);
+        assertThat(result.team().limitations()).isEmpty();
+    }
+
+    @Test
+    void limitedWorkloadDoesNotEnterEfficiencyBenchmark() {
+        EmployeeRatingEntry anna = employee("Анна", "700.00", 1, "8.00");
+        EmployeeRatingEntry boris = employee("Борис", "500.00", 2, "16.00");
+        EmployeeRatingEntry vera = employee("Вера", "300.00", 2, "16.00");
+
+        WeeklyReviewTeamEmployeeProjector.Projection result = projector.project(
+                ratings(anna, boris, vera),
+                ratings(copy(anna, "600.00"), copy(boris, "500.00"), copy(vera, "300.00")),
+                sales(anna, boris, vera, 6),
+                sales(anna, boris, vera, 6),
+                0,
+                0,
+                Map.of()
+        );
+
+        assertThat(result.team().roster().participatesInBenchmark()).isEqualTo(2);
+        assertThat(result.employees()).allMatch(card -> card.peerComparison() == null);
+        assertThat(card(result, "Анна").metrics().revenuePerHour().metricState())
+                .isEqualTo(WeeklyReviewResponse.MetricState.LIMITED);
+        assertThat(card(result, "Анна").limitations()).isEmpty();
+        assertThat(result.team().state()).isEqualTo(WeeklyReviewResponse.BlockState.READY);
+    }
+
+    @Test
+    void incompletePreviousWorkloadExcludesEmployeesFromPeerComparison() {
+        EmployeeRatingEntry anna = employee("Анна", "700.00", 2, "16.00");
+        EmployeeRatingEntry boris = employee("Борис", "500.00", 2, "16.00");
+        EmployeeRatingEntry vera = employee("Вера", "300.00", 2, "16.00");
+
+        WeeklyReviewTeamEmployeeProjector.Projection result = projector.project(
+                ratings(anna, boris, vera),
+                ratings(
+                        withoutWorkload(copy(anna, "600.00")),
+                        withoutWorkload(copy(boris, "500.00")),
+                        withoutWorkload(copy(vera, "300.00"))
+                ),
+                sales(anna, boris, vera, 6),
+                sales(anna, boris, vera, 6),
+                0,
+                0,
+                Map.of()
+        );
+
+        assertThat(result.team().roster().participatesInBenchmark()).isZero();
+        assertThat(result.employees()).allMatch(card -> card.peerComparison() == null);
+        assertThat(result.employees()).allMatch(card ->
+                card.metrics().revenuePerHour().metricState()
+                        == WeeklyReviewResponse.MetricState.UNAVAILABLE
+        );
+        assertThat(result.team().state()).isEqualTo(WeeklyReviewResponse.BlockState.READY);
     }
 
     @Test
@@ -119,7 +263,7 @@ class WeeklyReviewTeamEmployeeProjectorTest {
     }
 
     @Test
-    void unattributedReturnsLimitOnlyAggregatePeopleQualityWithoutPersonalLeak() {
+    void explainsUnattributedReturnsWithoutMarkingTheTeamAsLimited() {
         EmployeeRatingEntry employee = employee("Анна", "700.00", 2, "16.00");
 
         WeeklyReviewTeamEmployeeProjector.Projection result = projector.project(
@@ -133,10 +277,11 @@ class WeeklyReviewTeamEmployeeProjectorTest {
         );
 
         assertThat(result.team().state())
-                .isEqualTo(WeeklyReviewResponse.BlockState.LIMITED);
+                .isEqualTo(WeeklyReviewResponse.BlockState.READY);
         assertThat(result.team().limitations()).containsExactly(
-                "Возвраты без продавца исходной продажи: "
-                        + "2 за текущую неделю и 1 за предыдущую"
+                "Часть возвратов не связана с исходной продажей: "
+                        + "2 за текущую неделю и 1 за предыдущую. "
+                        + "Итог магазина учтён, вклад сотрудников показан по доступной связи"
         );
         assertThat(result.team().toString())
                 .doesNotContain("Анна", employee.employeeId().toString());
@@ -274,9 +419,11 @@ class WeeklyReviewTeamEmployeeProjectorTest {
 
     private EmployeeRatingEntry copy(EmployeeRatingEntry source, String revenue) {
         BigDecimal amount = new BigDecimal(revenue);
-        BigDecimal perHour = amount.divide(
-                source.workedHours(), 2, java.math.RoundingMode.HALF_UP
-        );
+        BigDecimal perHour = source.workedHours().signum() == 0
+                ? null
+                : amount.divide(
+                        source.workedHours(), 2, java.math.RoundingMode.HALF_UP
+                );
         return new EmployeeRatingEntry(
                 source.employeeId(),
                 source.displayName(),
@@ -300,6 +447,33 @@ class WeeklyReviewTeamEmployeeProjectorTest {
                 false,
                 null,
                 List.of()
+        );
+    }
+
+    private EmployeeRatingEntry withoutWorkload(EmployeeRatingEntry source) {
+        return new EmployeeRatingEntry(
+                source.employeeId(),
+                source.displayName(),
+                source.employeeActive(),
+                source.assignmentActive(),
+                source.participatesInRanking(),
+                source.ratingEligible(),
+                0,
+                BigDecimal.ZERO,
+                source.netRevenue(),
+                source.storeRevenueSharePercent(),
+                null,
+                null,
+                source.accessoryRevenue(),
+                source.accessorySharePercent(),
+                source.serviceRevenue(),
+                source.serviceSharePercent(),
+                source.additionalRevenue(),
+                source.additionalSharePercent(),
+                source.scores(),
+                source.ranked(),
+                source.rank(),
+                source.attachRates()
         );
     }
 

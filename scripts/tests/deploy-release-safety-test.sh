@@ -146,11 +146,13 @@ if release_validate_product_classification_reconciliation "${release_env}" \
   fail_test 'reconciliation without an approved scope was accepted'
 fi
 printf '%s\n' \
+  'PRODUCT_CLASSIFICATION_RECONCILIATION_CONNECTION_ID=00000000-0000-4000-8000-000000000001' \
   'PRODUCT_CLASSIFICATION_RECONCILIATION_PRODUCT_IDS=product-a,product-b' \
   'PRODUCT_CLASSIFICATION_RECONCILIATION_EXPECTED_ITEMS=3' \
   >>"${release_env}"
 release_validate_product_classification_reconciliation "${release_env}" \
   || fail_test 'valid reconciliation scope was rejected'
+sed -i '$d' "${release_env}"
 sed -i '$d' "${release_env}"
 sed -i '$d' "${release_env}"
 sed -i '$d' "${release_env}"

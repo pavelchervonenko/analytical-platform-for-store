@@ -49,7 +49,7 @@ class WeeklyReviewV48MigrationIntegrationTest {
 
         flyway(null).migrate();
 
-        assertThat(currentVersion()).isEqualTo("48");
+        assertThat(currentVersion()).isEqualTo("51");
         assertThat(providerOutcome(FINAL_ATTEMPT_ID))
                 .isEqualTo("RESPONSE_RECEIVED");
         assertThat(providerOutcome(STARTED_ATTEMPT_ID)).isNull();

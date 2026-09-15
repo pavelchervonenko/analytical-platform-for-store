@@ -12,8 +12,8 @@ public final class WeeklySnapshotPolicyV3 extends WeeklySnapshotPolicyV2 {
     public static final Versions VERSIONS = new Versions(
             1,
             "weekly-metrics-v3",
-            "weekly-snapshot-v6",
-            "weekly-quality-v3"
+            "weekly-snapshot-v7",
+            "weekly-quality-v4"
     );
 
     static final int MAX_CATEGORY_DIRECTIONS = 2;

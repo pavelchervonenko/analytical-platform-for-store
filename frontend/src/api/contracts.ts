@@ -53,6 +53,10 @@ export const systemStatusSchema = z.object({
 
 export type SystemStatus = z.infer<typeof systemStatusSchema>;
 
+export const userFeatureValues = ["PLAN", "SHIFTS", "PAYROLL"] as const;
+export type UserFeature = typeof userFeatureValues[number];
+export const userFeatureSchema = forwardCompatibleEnum(userFeatureValues);
+
 export const currentUserSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
@@ -60,10 +64,21 @@ export const currentUserSchema = z.object({
   role: forwardCompatibleEnum(["ADMIN", "MANAGER"]),
   passwordChangeRequired: z.boolean(),
   allStores: z.boolean(),
-  storeIds: z.array(z.string().uuid())
+  storeIds: z.array(z.string().uuid()),
+  features: z.array(userFeatureSchema)
 });
 
 export type CurrentUser = z.infer<typeof currentUserSchema>;
+
+export function hasUserFeature(
+  user: {
+    role: CurrentUser["role"] | undefined;
+    features: CurrentUser["features"];
+  } | null | undefined,
+  feature: UserFeature
+): boolean {
+  return user?.role === "ADMIN" || user?.features.includes(feature) === true;
+}
 
 export const activeSessionSchema = z.object({
   sessionReference: z.string().min(1).max(256),
@@ -148,29 +163,13 @@ export const storeSummarySchema = z.object({
 export const storeListSchema = z.array(storeSummarySchema);
 export type StoreSummary = z.infer<typeof storeSummarySchema>;
 
-const storeSyncActivitySchema = z.object({
-  active: z.boolean(),
-  id: z.string().uuid().nullable(),
-  type: z.string().nullable(),
-  status: z.string().nullable(),
-  phase: z.string().nullable(),
-  startedAt: z.string().nullable(),
-  nextAttemptAt: z.string().nullable()
-});
-
 export const storeDataStatusSchema = z.object({
   storeId: z.string().uuid(),
   status: z.string(),
   expectedThroughDate: z.string(),
   dataThroughDate: z.string().nullable(),
-  salesDataThroughDate: z.string().nullable(),
-  returnsDataThroughDate: z.string().nullable(),
   lagDays: z.number().int().nullable(),
-  lastCompletedSyncAt: z.string().nullable(),
-  synchronization: storeSyncActivitySchema,
-  openQualityIssueCount: z.number().int().nonnegative(),
-  lastError: z.string().nullable(),
-  lastErrorAt: z.string().nullable(),
+  updating: z.boolean(),
   checkedAt: z.string()
 });
 
@@ -998,8 +997,7 @@ export const monthlyReportPayloadSchema = z.object({
   attachRates: attachRateSchema,
   planProgress: planProgressSchema,
   employeeRating: employeeRatingResultSchema,
-  payroll: payrollRunDetailSchema,
-  quality: periodQualitySchema
+  payroll: payrollRunDetailSchema
 });
 
 const annualStoreTotalsSchema = z.object({

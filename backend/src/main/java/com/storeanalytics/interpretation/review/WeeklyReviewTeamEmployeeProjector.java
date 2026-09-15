@@ -81,7 +81,7 @@ public final class WeeklyReviewTeamEmployeeProjector {
         current.employees().forEach(employee -> employeeIds.add(employee.employeeId()));
         previous.employees().forEach(employee -> employeeIds.add(employee.employeeId()));
 
-        Benchmark benchmark = benchmark(currentById, sales);
+        Benchmark benchmark = benchmark(currentById, previousById, sales, beforeSales);
         List<EmployeeCard> cards = employeeIds.stream()
                 .map(employeeId -> card(
                         currentById.get(employeeId),
@@ -102,6 +102,25 @@ public final class WeeklyReviewTeamEmployeeProjector {
                 previousUnattributedReturns
         );
         return new Projection(team, cards);
+    }
+
+    public Projection unavailable() {
+        return new Projection(
+                new TeamBlock(
+                        "team",
+                        INSUFFICIENT,
+                        new RosterSummary(0, 0, 0, 0, 0),
+                        List.of(),
+                        0,
+                        new BenchmarkPolicy(
+                                "MEDIAN",
+                                3,
+                                "Для сравнения выручки в час нужны минимум 3 сотрудника"
+                        ),
+                        List.of("Командный разбор недоступен без полного покрытия данных")
+                ),
+                List.of()
+        );
     }
 
     private EmployeeCard card(
@@ -167,17 +186,14 @@ public final class WeeklyReviewTeamEmployeeProjector {
                         ))
                         .findFirst()
                         .orElse(null);
-        List<String> limitations = limitations(
+        List<String> limitations = salesLimitations(
                 currentSales,
                 previousSales,
-                salesSufficiency,
-                current,
-                previous,
-                workloadSufficiency
+                salesSufficiency
         );
         boolean participatesInBenchmark = benchmark.employeeIds().contains(employeeId);
         PeerComparison peer = participatesInBenchmark && benchmark.allowed()
-                ? peerComparison(publicId, revenue(current), benchmark)
+                ? peerComparison(publicId, perHour(current), benchmark)
                 : null;
         String sortGroup = attention != null
                 ? "ATTENTION"
@@ -283,9 +299,9 @@ public final class WeeklyReviewTeamEmployeeProjector {
                 CONTEXT,
                 RELATIVE,
                 policy.employeeRelativeThreshold(),
-                BigDecimal.valueOf(shifts(current)),
-                BigDecimal.valueOf(shifts(previous)),
-                MetricState.READY,
+                workloadShiftCount(current),
+                workloadShiftCount(previous),
+                workloadMetricState(workloadSufficiency),
                 workloadSufficiency,
                 null,
                 null,
@@ -299,9 +315,9 @@ public final class WeeklyReviewTeamEmployeeProjector {
                 CONTEXT,
                 RELATIVE,
                 policy.employeeRelativeThreshold(),
-                hours(current),
-                hours(previous),
-                MetricState.READY,
+                workloadHours(current),
+                workloadHours(previous),
+                workloadMetricState(workloadSufficiency),
                 workloadSufficiency,
                 null,
                 null,
@@ -309,6 +325,8 @@ public final class WeeklyReviewTeamEmployeeProjector {
         ));
         BigDecimal currentPerHour = perHour(current);
         BigDecimal previousPerHour = perHour(previous);
+        Sufficiency efficiencySufficiency = weakest(salesSufficiency, workloadSufficiency);
+        boolean efficiencyAvailable = efficiencySufficiency != Sufficiency.INSUFFICIENT;
         MetricComparison revenuePerHour = comparison(new ComparisonInput(
                 employeePublicId,
                 "REVENUE_PER_HOUR",
@@ -317,14 +335,14 @@ public final class WeeklyReviewTeamEmployeeProjector {
                 HIGHER_IS_BETTER,
                 RELATIVE,
                 policy.employeeRelativeThreshold(),
-                currentPerHour,
-                previousPerHour,
-                available(currentPerHour, previousPerHour),
-                workloadSufficiency,
-                currentPerHour == null ? null : new Sample(
+                efficiencyAvailable ? currentPerHour : null,
+                efficiencyAvailable ? previousPerHour : null,
+                workloadMetricState(efficiencySufficiency),
+                efficiencySufficiency,
+                !efficiencyAvailable || currentPerHour == null ? null : new Sample(
                         revenue(current), hours(current), "Выручка", "Отработанные часы"
                 ),
-                previousPerHour == null ? null : new Sample(
+                !efficiencyAvailable || previousPerHour == null ? null : new Sample(
                         revenue(previous), hours(previous), "Выручка", "Отработанные часы"
                 ),
                 evidencePrefix + "REVENUE_PER_HOUR"
@@ -457,7 +475,7 @@ public final class WeeklyReviewTeamEmployeeProjector {
     }
 
     private Observation observation(String employeePublicId, MetricComparison comparison) {
-        String direction = comparison.effect() == Effect.NEGATIVE ? "снизился" : "вырос";
+        String direction = comparison.effect() == Effect.NEGATIVE ? "снизилась" : "выросла";
         String detail = "Текущая неделя: " + format(comparison.current(), comparison.unit())
                 + "; предыдущая: " + format(comparison.previous(), comparison.unit());
         return new Observation(
@@ -494,10 +512,10 @@ public final class WeeklyReviewTeamEmployeeProjector {
 
     private PeerComparison peerComparison(
             String employeePublicId,
-            BigDecimal employeeRevenue,
+            BigDecimal employeeRevenuePerHour,
             Benchmark benchmark
     ) {
-        BigDecimal delta = employeeRevenue.subtract(benchmark.median());
+        BigDecimal delta = employeeRevenuePerHour.subtract(benchmark.median());
         BigDecimal changePercent = benchmark.median().signum() <= 0
                 ? null
                 : delta.multiply(HUNDRED).divide(
@@ -507,8 +525,8 @@ public final class WeeklyReviewTeamEmployeeProjector {
                 ? Effect.POSITIVE
                 : delta.signum() < 0 ? Effect.NEGATIVE : Effect.NEUTRAL;
         return new PeerComparison(
-                "NET_REVENUE",
-                employeeRevenue,
+                "REVENUE_PER_HOUR",
+                employeeRevenuePerHour,
                 benchmark.median(),
                 "MEDIAN",
                 benchmark.employeeIds().size(),
@@ -516,8 +534,8 @@ public final class WeeklyReviewTeamEmployeeProjector {
                 changePercent,
                 effect,
                 List.of(
-                        "EMP:" + employeePublicId + ".NET_REVENUE",
-                        "TEAM.MEDIAN.NET_REVENUE"
+                        "EMP:" + employeePublicId + ".REVENUE_PER_HOUR",
+                        "TEAM.MEDIAN.REVENUE_PER_HOUR"
                 )
         );
     }
@@ -540,11 +558,9 @@ public final class WeeklyReviewTeamEmployeeProjector {
                 .filter(card -> card.attention() != null)
                 .count());
         List<Observation> observations = teamObservations(cards);
-        boolean attributionLimited = currentUnattributedReturns > 0
-                || previousUnattributedReturns > 0;
         BlockState state = cards.isEmpty()
                 ? INSUFFICIENT
-                : limited > 0 || attributionLimited ? LIMITED : READY;
+                : limited > 0 ? LIMITED : READY;
         List<String> limitations = teamLimitations(
                 cards,
                 limited,
@@ -567,8 +583,8 @@ public final class WeeklyReviewTeamEmployeeProjector {
                         "MEDIAN",
                         3,
                         benchmark.allowed()
-                                ? "Медиана магазина, " + participates + " сотрудников"
-                                : "Для медианы магазина нужно минимум 3 сотрудника"
+                                ? "Медиана выручки в час, " + participates + " сотрудников"
+                                : "Для сравнения выручки в час нужны минимум 3 сотрудника"
                 ),
                 limitations
         );
@@ -584,12 +600,13 @@ public final class WeeklyReviewTeamEmployeeProjector {
         if (cards.isEmpty()) {
             result.add("Нет сотрудников с продажами или сменами за сравниваемые недели");
         } else if (limitedEmployees > 0) {
-            result.add("Для части сотрудников недостаточно продаж или смен");
+            result.add("Для части сотрудников недостаточно продаж для сравнения");
         }
         if (currentUnattributedReturns > 0 || previousUnattributedReturns > 0) {
-            result.add("Возвраты без продавца исходной продажи: "
+            result.add("Часть возвратов не связана с исходной продажей: "
                     + currentUnattributedReturns + " за текущую неделю и "
-                    + previousUnattributedReturns + " за предыдущую");
+                    + previousUnattributedReturns + " за предыдущую. "
+                    + "Итог магазина учтён, вклад сотрудников показан по доступной связи");
         }
         return List.copyOf(result);
     }
@@ -615,7 +632,7 @@ public final class WeeklyReviewTeamEmployeeProjector {
     }
 
     private Observation teamObservation(TeamSignal signal, long count) {
-        String direction = signal.effect() == Effect.NEGATIVE ? "снизился" : "вырос";
+        String direction = signal.effect() == Effect.NEGATIVE ? "снизилась" : "выросла";
         String label = label(signal.metricCode());
         return new Observation(
                 "team:" + signal.metricCode().toLowerCase(Locale.ROOT)
@@ -645,7 +662,9 @@ public final class WeeklyReviewTeamEmployeeProjector {
 
     private Benchmark benchmark(
             Map<UUID, EmployeeRatingEntry> current,
-            EmployeeSalesSampleFacts sales
+            Map<UUID, EmployeeRatingEntry> previous,
+            EmployeeSalesSampleFacts sales,
+            EmployeeSalesSampleFacts previousSales
     ) {
         List<EmployeeRatingEntry> eligible = current.values().stream()
                 .filter(employee -> employee.employeeActive()
@@ -654,10 +673,25 @@ public final class WeeklyReviewTeamEmployeeProjector {
                 .filter(employee -> policy.salesSufficiency(
                         sales.completedSales(employee.employeeId())
                 ) == Sufficiency.SUFFICIENT)
+                .filter(employee -> policy.salesSufficiency(
+                        previousSales.completedSales(employee.employeeId())
+                ) == Sufficiency.SUFFICIENT)
+                .filter(employee -> policy.workloadSufficiency(
+                        employee.shiftCount(), employee.workedHours()
+                ) == Sufficiency.SUFFICIENT)
+                .filter(employee -> employee.revenuePerHour() != null)
+                .filter(employee -> {
+                    EmployeeRatingEntry before = previous.get(employee.employeeId());
+                    return before != null
+                            && policy.workloadSufficiency(
+                                    before.shiftCount(), before.workedHours()
+                            ) == Sufficiency.SUFFICIENT
+                            && before.revenuePerHour() != null;
+                })
                 .sorted(Comparator.comparing(EmployeeRatingEntry::employeeId))
                 .toList();
         List<BigDecimal> values = eligible.stream()
-                .map(EmployeeRatingEntry::netRevenue)
+                .map(EmployeeRatingEntry::revenuePerHour)
                 .sorted()
                 .toList();
         BigDecimal median = values.isEmpty() ? null : median(values);
@@ -678,25 +712,25 @@ public final class WeeklyReviewTeamEmployeeProjector {
                 .divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
     }
 
-    private List<String> limitations(
+    private List<String> salesLimitations(
             long currentSales,
             long previousSales,
-            Sufficiency salesSufficiency,
-            EmployeeRatingEntry current,
-            EmployeeRatingEntry previous,
-            Sufficiency workloadSufficiency
+            Sufficiency salesSufficiency
     ) {
         List<String> result = new ArrayList<>();
         if (salesSufficiency != Sufficiency.SUFFICIENT) {
             result.add("Недостаточно продаж для сравнения: "
                     + currentSales + " и " + previousSales);
         }
-        if (workloadSufficiency != Sufficiency.SUFFICIENT) {
-            result.add(shifts(current) == 0 || shifts(previous) == 0
-                    ? "Нет смен для расчёта эффективности в одной из недель"
-                    : "Недостаточно смен или часов для сравнения эффективности");
-        }
         return List.copyOf(result);
+    }
+
+    private MetricState workloadMetricState(Sufficiency sufficiency) {
+        return switch (sufficiency) {
+            case SUFFICIENT -> MetricState.READY;
+            case LIMITED -> MetricState.LIMITED;
+            case INSUFFICIENT, NOT_EVALUATED -> MetricState.UNAVAILABLE;
+        };
     }
 
     private boolean sufficientByAnyMetric(EmployeeMetricSet metrics) {
@@ -758,6 +792,19 @@ public final class WeeklyReviewTeamEmployeeProjector {
 
     private BigDecimal perHour(EmployeeRatingEntry employee) {
         return employee == null ? null : employee.revenuePerHour();
+    }
+
+    private BigDecimal workloadShiftCount(EmployeeRatingEntry employee) {
+        return employee == null || employee.shiftCount() == 0
+                ? null
+                : BigDecimal.valueOf(employee.shiftCount());
+    }
+
+    private BigDecimal workloadHours(EmployeeRatingEntry employee) {
+        return employee == null || employee.workedHours() == null
+                || employee.workedHours().signum() <= 0
+                ? null
+                : employee.workedHours();
     }
 
     private BigDecimal share(BigDecimal part, BigDecimal total) {

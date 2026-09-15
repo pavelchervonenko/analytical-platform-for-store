@@ -11,12 +11,15 @@ import static org.mockito.Mockito.when;
 import tools.jackson.databind.ObjectMapper;
 import com.storeanalytics.common.exception.InvalidRequestException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladHttpException;
+import com.storeanalytics.sync.service.ReturnOrphanRelinkExpectation;
+import com.storeanalytics.sync.service.ReturnRelinkPositionExpectation;
 import com.storeanalytics.sync.service.ReturnSyncService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -138,7 +141,12 @@ class LiveSkladSaleReturnWebhookWorkerTest {
                 "6a6daeadaa17fa79fe127335",
                 "F000381",
                 new BigDecimal("15030.00"),
-                2
+                2,
+                LiveSkladReturnRecoveryMode.MISSING_RETURN,
+                null,
+                null,
+                null,
+                List.of()
         )));
 
         worker.processNext();
@@ -167,7 +175,12 @@ class LiveSkladSaleReturnWebhookWorkerTest {
                 "6a6daeadaa17fa79fe127335",
                 "F000381",
                 new BigDecimal("15030.00"),
-                2
+                2,
+                LiveSkladReturnRecoveryMode.MISSING_RETURN,
+                null,
+                null,
+                null,
+                List.of()
         )));
         when(returnSyncService.recoverReturn(
                 "6a6daeadaa17fa79fe127335",
@@ -186,6 +199,64 @@ class LiveSkladSaleReturnWebhookWorkerTest {
                 anyString()
         );
         verify(store, never()).complete(any(), anyString(), any());
+    }
+
+    @Test
+    void processesExistingOrphanRelinkWithAllExpectedLinks() {
+        UUID receiptId = UUID.randomUUID();
+        RecoverLiveSkladReturnLinkExpectation link =
+                new RecoverLiveSkladReturnLinkExpectation(
+                        "6a5ce976c3093727ca1a0af0",
+                        "69875b2ba44502026430bc2d",
+                        "695bd5e1214c11471133b70a",
+                        new BigDecimal("1.000"),
+                        new BigDecimal("46990.00"),
+                        new BigDecimal("43750.00")
+                );
+        when(store.claimNextSaleReturn(
+                anyString(), eq(NOW), eq(Duration.ofMinutes(2)), eq(8)
+        )).thenReturn(Optional.of(new LiveSkladWebhookClaim(
+                receiptId,
+                "manual-relink-1",
+                "{}",
+                false,
+                1,
+                "6a5ce976c30937c4371a0af1",
+                "F000349",
+                new BigDecimal("46990.00"),
+                1,
+                LiveSkladReturnRecoveryMode.EXISTING_ORPHAN_RELINK,
+                "6912f4ab09e647f3125d14ba",
+                "69875ed7a44502f84130f263",
+                "6912f4ab09e647f3125d14ba",
+                List.of(link)
+        )));
+
+        worker.processNext();
+
+        verify(returnSyncService).relinkExistingOrphanReturn(
+                new ReturnOrphanRelinkExpectation(
+                        "6a5ce976c30937c4371a0af1",
+                        "F000349",
+                        new BigDecimal("46990.00"),
+                        1,
+                        "6912f4ab09e647f3125d14ba",
+                        "69875ed7a44502f84130f263",
+                        "6912f4ab09e647f3125d14ba",
+                        List.of(new ReturnRelinkPositionExpectation(
+                                link.returnPositionExternalId(),
+                                link.originalSalePositionExternalId(),
+                                link.productExternalId(),
+                                link.expectedQuantity(),
+                                link.expectedNetAmount(),
+                                link.expectedCostAmount()
+                        ))
+                )
+        );
+        verify(returnSyncService, never()).recoverReturn(
+                anyString(), anyString(), any(), any(Integer.class)
+        );
+        verify(store).complete(eq(receiptId), anyString(), eq(NOW));
     }
 
 }

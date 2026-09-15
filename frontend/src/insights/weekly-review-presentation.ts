@@ -85,17 +85,20 @@ export function metricStateText(metric: WeeklyReviewMetric): string | null {
 
 export function actionTargetText(action: WeeklyReviewAction): string {
   const operator = action.target.operator === "AT_MOST" ? "не выше" : "не ниже";
-  return `${operator} ${formatValue(
+  const value = formatValue(
     action.target.value,
     action.target.unit
-  )}`;
+  );
+  return `${operator} ${value}${
+    action.metricCode === "REVENUE_PER_HOUR" && action.target.unit === "RUB" ? "/ч" : ""
+  }`;
 }
 
 export function reviewStateLabel(
   state: "PREPARING" | "READY" | "PARTIAL" | "BLOCKED"
 ): string {
   if (state === "READY") return "Данные готовы";
-  if (state === "PARTIAL") return "Есть ограничения";
+  if (state === "PARTIAL") return "Разбор по доступным данным";
   if (state === "BLOCKED") return "Нужны данные";
   return "Формируется";
 }

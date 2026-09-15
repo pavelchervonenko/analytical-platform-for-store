@@ -6,7 +6,7 @@ owner: operations
 audience:
   - operator
   - developer
-last_verified: 2026-08-31
+last_verified: 2026-09-04
 requirement_sources:
   - docs/maintenance/documentation-policy.md
 implementation_sources:
@@ -32,6 +32,7 @@ production write/migration/recovery процедуры ниже остаются
 
 ## Release, database и host
 
+- [Production SSH-доступ и восстановление owner key](production-ssh-access.md)
 - [Production deployment](production-deployment.md)
 - [Migration failure и forward-fix](migration-failure-and-forward-fix.md)
 - [Application rollback](application-rollback.md)
@@ -51,6 +52,7 @@ production write/migration/recovery процедуры ниже остаются
 
 - [Webhook canary и обработка](livesklad-webhooks.md)
 - [Return recovery](livesklad-return-recovery.md)
+- [Bounded historical classification corrections](bounded-classification-corrections.md)
 
 ## AI и Telegram
 

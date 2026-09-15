@@ -262,6 +262,22 @@ public class SalesDocument extends AbstractMutableEntity {
         return employee;
     }
 
+    public SalesDocument getOriginalDocument() {
+        return originalDocument;
+    }
+
+    public String getDocumentNumber() {
+        return documentNumber;
+    }
+
+    public BigDecimal getNetAmount() {
+        return netAmount;
+    }
+
+    public BigDecimal getCostAmount() {
+        return costAmount;
+    }
+
     public Instant getOccurredAt() {
         return occurredAt;
     }

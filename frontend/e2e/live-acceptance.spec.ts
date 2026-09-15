@@ -57,8 +57,10 @@ test("ADMIN открывает все пользовательские разд�
 
   for (const [path, heading] of [
     ["/overview", "Обзор"],
+    ["/insights", "ИИ-разбор"],
     ["/employees", "Сотрудники и рейтинг"],
-    ["/plan", "План и смены"],
+    ["/plan", "План"],
+    ["/shifts", "Смены"],
     ["/payroll", "Зарплата"],
     ["/reports", "Отчеты"],
     ["/quality", "Качество данных"],
@@ -77,12 +79,6 @@ test("ADMIN открывает все пользовательские разд�
   for (const details of await page.locator(".overview-details details").all()) {
     if (await details.getAttribute("open") === null) await details.locator("summary").click();
     await expect(details).toHaveAttribute("open", "");
-  }
-  await page.goto("/plan");
-  for (const tab of ["Смены", "План магазина"]) {
-    const button = page.getByRole("button", { name: new RegExp(tab, "u") });
-    await button.click();
-    await expect(button).toHaveAttribute("aria-current", "page");
   }
   await page.goto("/payroll");
   for (const tab of ["Дневные фонды", "История", "Ведомость"]) {
@@ -188,8 +184,10 @@ test("ADMIN проводит MANAGER через полный жизненный 
   await expect(page.getByRole("link", { name: "Настройки", exact: true })).toHaveCount(0);
   for (const [path, heading] of [
     ["/overview", "Обзор"],
+    ["/insights", "ИИ-разбор"],
     ["/employees", "Сотрудники и рейтинг"],
-    ["/plan", "План и смены"],
+    ["/plan", "План"],
+    ["/shifts", "Смены"],
     ["/payroll", "Зарплата"],
     ["/reports", "Отчеты"],
     ["/quality", "Качество данных"],

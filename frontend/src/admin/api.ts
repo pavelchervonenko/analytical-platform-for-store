@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { apiClient } from "../api/client";
-import { pageResponseSchema, type PageResponse } from "../api/contracts";
+import { pageResponseSchema, userFeatureSchema, type PageResponse, type UserFeature } from "../api/contracts";
 import { forwardCompatibleEnum } from "../api/enumSchema";
 
 const roleSchema = forwardCompatibleEnum(["ADMIN", "MANAGER"]);
 const adminUserSchema = z.object({
   id: z.string().uuid(), email: z.string().email(), displayName: z.string(), role: roleSchema, active: z.boolean(),
   passwordChangeRequired: z.boolean(), allStores: z.boolean(), storeIds: z.array(z.string().uuid()),
+  features: z.array(userFeatureSchema),
   lastLoginAt: z.string().nullable(), version: z.number().int().nonnegative()
 });
 const adminUsersSchema = pageResponseSchema(adminUserSchema);
@@ -25,7 +26,8 @@ const productCategoryImportResultSchema = z.object({
   requested: z.number().int().positive(),
   productsCreated: z.number().int().nonnegative(),
   assignmentsCreated: z.number().int().nonnegative(),
-  assignmentsUnchanged: z.number().int().nonnegative()
+  assignmentsUnchanged: z.number().int().nonnegative(),
+  affectedStoreIds: z.array(z.string().uuid()).default([])
 });
 const syncClassificationReadinessSchema = z.object({
   connectionKey: z.string(),
@@ -113,8 +115,8 @@ export type ReportBackfillJob = z.infer<typeof reportBackfillJobSchema>;
 export type TelegramDeliveryOperations = z.infer<typeof telegramDeliveryOperationsSchema>;
 export type ManualTelegramResend = z.infer<typeof manualTelegramResendSchema>;
 
-export interface CreateAdminUserInput { email: string; temporaryPassword: string; displayName: string; role: "ADMIN" | "MANAGER"; storeIds: string[]; }
-export interface UpdateAdminUserInput { displayName: string; role: "ADMIN" | "MANAGER"; active: boolean; }
+export interface CreateAdminUserInput { email: string; temporaryPassword: string; displayName: string; role: "ADMIN" | "MANAGER"; storeIds: string[]; features: UserFeature[]; }
+export interface UpdateAdminUserInput { displayName: string; role: "ADMIN" | "MANAGER"; active: boolean; storeIds: string[]; features: UserFeature[]; version: number; }
 export interface RatingSchemeInput { code: string; effectiveFrom: string; contributionWeight: number; efficiencyWeight: number; structureWeight: number; attachWeight: number; accessoryStructureWeight: number; serviceStructureWeight: number; minimumAttachDenominator: number; scoreCap: number; minimumCoveragePercent: number; }
 export interface PayrollSchemeInput { code: string; effectiveFrom: string; achievedPercentage: number; missedPercentage: number; achievedTier1Rate: number; missedTier1Rate: number; achievedTier2Rate: number; missedTier2Rate: number; advanceAmount: number; }
 
@@ -131,7 +133,6 @@ export const getAdminUsers = (page = 0, size = 20): Promise<PageResponse<AdminUs
 );
 export const createAdminUser = (input: CreateAdminUserInput): Promise<AdminUser> => apiClient.request("/api/admin/users", { method: "POST", body: input, schema: adminUserSchema });
 export const updateAdminUser = (id: string, input: UpdateAdminUserInput): Promise<AdminUser> => apiClient.request(`/api/admin/users/${encodeURIComponent(id)}`, { method: "PUT", body: input, schema: adminUserSchema });
-export const replaceUserStoreAccess = (id: string, storeIds: string[]): Promise<AdminUser> => apiClient.request(`/api/admin/users/${encodeURIComponent(id)}/store-access`, { method: "PUT", body: { storeIds }, schema: adminUserSchema });
 export const resetAdminUserPassword = (id: string, temporaryPassword: string): Promise<AdminUser> => apiClient.request(`/api/admin/users/${encodeURIComponent(id)}/reset-password`, { method: "POST", body: { temporaryPassword }, schema: adminUserSchema });
 
 export const getSyncJobs = (): Promise<SyncJob[]> => apiClient.request("/api/sync/jobs?limit=50", { schema: z.array(syncJobSchema) });
@@ -149,6 +150,15 @@ export const importProductCategories = (
   `/api/integration-connections/${encodeURIComponent(connectionKey)}/product-category-imports`,
   { method: "POST", body: input, schema: productCategoryImportResultSchema, timeoutMs: 120_000 }
 );
+export const generateWeeklyReview = (storeId: string): Promise<unknown> =>
+  apiClient.request(
+    `/api/admin/weekly-reviews/stores/${encodeURIComponent(storeId)}/generate`,
+    {
+      method: "POST",
+      idempotencyScope: `weekly-review:generate:${storeId}`,
+      schema: z.unknown()
+    }
+  );
 export const getReportBackfillJobs = (): Promise<ReportBackfillJob[]> => apiClient.request(
   "/api/admin/reports/backfill?limit=50", { schema: z.array(reportBackfillJobSchema) }
 );

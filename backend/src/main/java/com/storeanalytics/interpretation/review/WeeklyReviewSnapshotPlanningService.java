@@ -124,6 +124,9 @@ public class WeeklyReviewSnapshotPlanningService {
             PersistedWeeklyReviewSnapshot latest,
             SourceSync source
     ) {
+        if (!WeeklyReviewPolicyV1.VERSIONS.equals(latest.response().versions())) {
+            return false;
+        }
         Instant sourceUpdatedAt = latest.response()
                 .provenance()
                 .sourceDataUpdatedAt();

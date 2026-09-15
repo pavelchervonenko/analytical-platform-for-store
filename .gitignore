@@ -27,5 +27,6 @@ __pycache__/
 
 # Customer-derived classification and discovery artifacts are local/confidential.
 outputs/
+/.codex-prod-recovery/
 
 docker/postgres-data/

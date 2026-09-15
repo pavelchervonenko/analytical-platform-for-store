@@ -79,7 +79,9 @@ public final class WeeklySnapshotDraftBuilder {
         SnapshotQualityDecision quality = policy.quality(
                 source.sourceDataStatus(),
                 source.current().store().dataQuality(),
+                source.previous().store().dataQuality(),
                 source.current().attachRates().dataQuality(),
+                source.previous().attachRates().dataQuality(),
                 source.query().period().end()
         );
         List<SnapshotEmployeeMembership> memberships = memberships(source);

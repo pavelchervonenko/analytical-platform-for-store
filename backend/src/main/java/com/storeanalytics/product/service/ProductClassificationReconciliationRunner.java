@@ -37,6 +37,7 @@ public class ProductClassificationReconciliationRunner
     public void run(ApplicationArguments arguments) {
         ProductClassificationReconciliationResult result =
                 service.reconcileApprovedScope(
+                        properties.connectionId(),
                         properties.externalProductIds(),
                         properties.expectedItemCount()
                 );

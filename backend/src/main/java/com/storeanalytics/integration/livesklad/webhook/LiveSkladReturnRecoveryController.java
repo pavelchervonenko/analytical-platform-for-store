@@ -37,11 +37,7 @@ public class LiveSkladReturnRecoveryController {
         return service.request(
                 principal.getUserId(),
                 idempotencyKey,
-                request.externalId(),
-                request.expectedDocumentNumber(),
-                request.expectedNetAmount(),
-                request.expectedPositionCount(),
-                request.reason()
+                request
         );
     }
 

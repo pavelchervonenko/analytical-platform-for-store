@@ -1,26 +1,26 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, ArrowRight, CheckCircle2, Package, RefreshCw, ShieldCheck, Smartphone, Target, TrendingUp, TriangleAlert } from "lucide-react";
+import { ChevronDown, Package, RefreshCw, ShieldCheck, Smartphone, TrendingUp, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { useSearchParams } from "react-router";
-import type { CategoryKpi, OverviewMetricScope } from "../api/contracts";
+import { hasUserFeature, type CategoryKpi, type OverviewMetricScope } from "../api/contracts";
 import {
   getAttachRates,
   getCategoryKpi,
   getEmployeeKpi,
   getEmployeeRating,
   getOverviewMetrics,
-  getPeriodQuality,
   getPlanProgress,
   getStoreStatus,
   queryKeys
 } from "../api/queries";
+import { useAuth } from "../auth/AuthProvider";
 import { averageGrossProfitPerDeviceUnit } from "./categoryPresentation";
-import { qualityIssueMessage, qualityStatusLabel } from "../quality/presentation";
 import { formatDate } from "../shared/date";
-import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
-import { PanelSkeleton, QueryError } from "../shared/QueryState";
+import { formatMoney, formatNumber, formatPercent } from "../shared/format";
+import { InlineQueryError, PanelSkeleton, QueryError, StaleDataNote } from "../shared/QueryState";
 import { useWorkspace, type AnalyticsPeriodMode } from "../stores/WorkspaceProvider";
 import { AttachRateMatrix, EmployeePerformanceSection, ManagementSummary } from "./OverviewManagementSections";
+import { OverviewPlanPanel } from "./OverviewPlanPanel";
 
 const groupLabels: Record<string, { label: string; icon: ReactNode }> = {
   PHONES: { label: "Телефоны", icon: <Smartphone size={18} /> },
@@ -32,13 +32,12 @@ const groupLabels: Record<string, { label: string; icon: ReactNode }> = {
 
 type SalesGroup = CategoryKpi["groups"][number];
 
-function SalesGroupRow({ group, relation }: { group: SalesGroup; relation: string }) {
+function SalesGroupRow({ group, nested = false }: { group: SalesGroup; nested?: boolean }) {
   const info = groupLabels[group.groupCode] ?? { label: group.groupName, icon: <Package size={18} /> };
   return (
-    <article className={`group-row ${relation === "В том числе" ? "group-row--child" : "group-row--total"}`}>
+    <article className={`group-row ${nested ? "group-row--child" : "group-row--total"}`}>
       <span className="group-row__icon">{info.icon}</span>
       <div className="group-row__copy">
-        <span className="group-row__relation">{relation}</span>
         <strong>{info.label}</strong>
         <small>{formatNumber(group.metrics.netQuantity)} ед.</small>
       </div>
@@ -60,37 +59,22 @@ export function SalesStructure({ groups }: { groups: SalesGroup[] }) {
   return (
     <div className="group-list group-list--hierarchical">
       {(devices || phones) && (
-        <section className="group-branch" aria-label="Техника и её состав">
-          {devices && <SalesGroupRow group={devices} relation="Итого по категории" />}
-          {phones && <SalesGroupRow group={phones} relation="В том числе" />}
+        <section className="group-branch" aria-label="Техника и ее состав">
+          {devices && <SalesGroupRow group={devices} />}
+          {phones && <SalesGroupRow group={phones} nested />}
         </section>
       )}
       {(additionalRevenue || accessory || service) && (
-        <section className="group-branch" aria-label="Дополнительная выручка и её состав">
-          {additionalRevenue && <SalesGroupRow group={additionalRevenue} relation="Подытог" />}
-          {accessory && <SalesGroupRow group={accessory} relation="В том числе" />}
-          {service && <SalesGroupRow group={service} relation="В том числе" />}
+        <section className="group-branch" aria-label="Дополнительная выручка и ее состав">
+          {additionalRevenue && <SalesGroupRow group={additionalRevenue} />}
+          {accessory && <SalesGroupRow group={accessory} nested />}
+          {service && <SalesGroupRow group={service} nested />}
         </section>
       )}
-      {otherGroups.map((group) => <SalesGroupRow group={group} relation="Отдельная категория" key={group.groupCode} />)}
+      {otherGroups.map((group) => <SalesGroupRow group={group} key={group.groupCode} />)}
     </div>
   );
 }
-
-const directionLabels: Record<string, string> = {
-  REVENUE: "Выручка",
-  ACCESSORY: "Аксессуары",
-  SERVICE: "Услуги",
-  ADDITIONAL: "Дополнительная выручка"
-};
-
-const directionStatusLabels: Record<string, string> = {
-  ACHIEVED: "Выполнено",
-  ON_TRACK: "По графику",
-  AT_RISK: "Есть риск",
-  MISSED: "Не выполнено",
-  NOT_AVAILABLE: "Недостаточно данных"
-};
 
 const freshnessLabels: Record<string, string> = {
   CURRENT: "Данные актуальны",
@@ -122,7 +106,8 @@ function OverviewSkeleton() {
 }
 
 export function OverviewPage() {
-  const { selectedStore, month, periodMode, periodStart, periodEnd, periodLabel, asOfDate } = useWorkspace();
+  const { user } = useAuth();
+  const { selectedStore, periodMode, periodStart, periodEnd, periodLabel, planMonth, planAsOfDate } = useWorkspace();
   const [searchParams, setSearchParams] = useSearchParams();
   const storeId = selectedStore.id;
   const metricScope: OverviewMetricScope = searchParams.get("overviewScope") === "STORE"
@@ -140,55 +125,54 @@ export function OverviewPage() {
     queryKey: queryKeys.storeStatus(storeId),
     queryFn: () => getStoreStatus(storeId),
     refetchOnWindowFocus: true,
-    refetchInterval: (query) => query.state.data?.status === "SYNCING" ? 10_000 : false
+    refetchInterval: (query) => query.state.data?.updating ? 10_000 : false
   });
   const overviewMetricsQuery = useQuery({ queryKey: queryKeys.overviewMetrics(storeId, periodStart, periodEnd, metricScope), queryFn: () => getOverviewMetrics(storeId, periodStart, periodEnd, metricScope) });
   const categoriesQuery = useQuery({ queryKey: queryKeys.categories(storeId, periodStart, periodEnd), queryFn: () => getCategoryKpi(storeId, periodStart, periodEnd) });
-  const planQuery = useQuery({ queryKey: queryKeys.planProgress(storeId, month, asOfDate, metricScope), queryFn: () => getPlanProgress(storeId, month, asOfDate, metricScope) });
-  const qualityQuery = useQuery({ queryKey: queryKeys.periodQuality(storeId, month, asOfDate), queryFn: () => getPeriodQuality(storeId, month, asOfDate) });
+  const planAllowed = hasUserFeature(user, "PLAN");
+  const planQuery = useQuery({ queryKey: queryKeys.planProgress(storeId, planMonth, planAsOfDate, metricScope), queryFn: () => getPlanProgress(storeId, planMonth, planAsOfDate, metricScope), enabled: planAllowed });
   const attachQuery = useQuery({ queryKey: queryKeys.attachRates(storeId, periodStart, periodEnd), queryFn: () => getAttachRates(storeId, periodStart, periodEnd), staleTime: 2 * 60_000 });
 
   const employeeRatingQuery = useQuery({ queryKey: queryKeys.employeeRating(storeId, periodStart, periodEnd), queryFn: () => getEmployeeRating(storeId, periodStart, periodEnd), staleTime: 2 * 60_000 });
   const employeeKpiQuery = useQuery({ queryKey: queryKeys.employeeKpi(storeId, periodStart, periodEnd), queryFn: () => getEmployeeKpi(storeId, periodStart, periodEnd), staleTime: 2 * 60_000 });
-  const criticalQueries = [statusQuery, overviewMetricsQuery, categoriesQuery, planQuery, qualityQuery];
-  if (criticalQueries.every((query) => query.isPending)) return <OverviewSkeleton />;
-
-  const criticalError = criticalQueries.find((query) => query.isError);
-  if (criticalError) {
-    return <QueryError error={criticalError.error} onRetry={() => void Promise.all(criticalQueries.map((query) => query.refetch()))} />;
+  const pageQueries = [statusQuery, overviewMetricsQuery, categoriesQuery, attachQuery, employeeRatingQuery, employeeKpiQuery, ...(planAllowed ? [planQuery] : [])];
+  if (overviewMetricsQuery.data === undefined && overviewMetricsQuery.isPending) return <OverviewSkeleton />;
+  if (overviewMetricsQuery.data === undefined && overviewMetricsQuery.isError) {
+    return <QueryError error={overviewMetricsQuery.error} onRetry={() => void overviewMetricsQuery.refetch()} />;
   }
+  const staleQuery = pageQueries.find((query) => query.isError && query.data !== undefined);
 
   const status = statusQuery.data;
   const overviewMetrics = overviewMetricsQuery.data;
   const categories = categoriesQuery.data;
   const plan = planQuery.data;
-  const quality = qualityQuery.data;
   const freshnessTone = toneForStatus(status?.status ?? "WARNING");
+  const planSearch = new URLSearchParams({ store: storeId, month: planMonth }).toString();
 
   return (
     <div className="overview-page">
       <header className="page-heading">
         <div><h1>Обзор</h1><p>{formatOverviewPeriodLabel(periodMode, periodLabel)}</p></div>
-        <div className="page-heading__period"><small>Данные по</small><strong>{formatDate(asOfDate)}</strong></div>
+        <div className="page-heading__period"><small>Данные по</small><strong>{formatDate(periodEnd)}</strong></div>
       </header>
 
-      {status && (
-        <section className={`freshness-banner freshness-banner--${freshnessTone} ${status.status === "CURRENT" ? "freshness-banner--quiet" : ""}`} aria-live="polite">
+      {staleQuery && <StaleDataNote
+        error={staleQuery.error}
+        onRetry={() => void Promise.all(pageQueries.filter((query) => query.isError).map((query) => query.refetch()))}
+      />}
+
+      {statusQuery.data === undefined && statusQuery.isError && (
+        <InlineQueryError error={statusQuery.error} onRetry={() => void statusQuery.refetch()} />
+      )}
+
+      {status && status.status !== "CURRENT" && (
+        <section className={`freshness-banner freshness-banner--${freshnessTone}`} aria-live="polite">
           <span className="freshness-banner__icon">{freshnessTone === "success" ? <ShieldCheck /> : <TriangleAlert />}</span>
           <div>
             <strong>{freshnessLabels[status.status] ?? "Статус неизвестен"}</strong>
             <p>{status.dataThroughDate ? `По ${formatDate(status.dataThroughDate)}` : "Дата покрытия неизвестна"}{status.lagDays ? `, отставание ${status.lagDays} дн.` : ""}</p>
           </div>
-          {status.synchronization.active && <span className="freshness-banner__sync"><RefreshCw size={15} />Обновление</span>}
-          {status.status !== "CURRENT" && quality && !quality.readyForDecisions && <a className="freshness-banner__action" href="#quality-details">Проверить <ArrowRight size={15} /></a>}
-        </section>
-      )}
-
-      {quality && !quality.readyForDecisions && status?.status === "CURRENT" && (
-        <section className="decision-banner" aria-label="Готовность данных для решений">
-          <TriangleAlert size={20} />
-          <div><strong>Данные требуют проверки</strong><p>{quality.issues.filter((issue) => issue.severity === "ERROR").length} важных замечаний</p></div>
-          <a href="#quality-details">Открыть <ArrowRight size={15} /></a>
+          {status.updating && <span className="freshness-banner__sync"><RefreshCw size={15} />Обновление</span>}
         </section>
       )}
 
@@ -197,56 +181,42 @@ export function OverviewPage() {
         plan={plan}
         scope={metricScope}
         onScopeChange={selectMetricScope}
-        showMonthlyPlan={periodMode === "MONTH"}
+        showMonthlyPlan={planAllowed && periodMode === "MONTH" && planQuery.data !== undefined}
       />
 
-      <div className="overview-grid">
+      <div className={`overview-grid ${planAllowed ? "" : "overview-grid--single"}`}>
         <section className="panel groups-panel">
-          <div className="panel__heading"><h2>Структура продаж — {metricScope === "SELLERS" ? "только продавцы" : "весь магазин"}</h2></div>
+          <div className="panel__heading">
+            <h2>Структура продаж — {metricScope === "SELLERS" ? "только продавцы" : "весь магазин"}</h2>
+          </div>
           <SalesStructure groups={overviewMetrics?.salesGroups ?? []} />
         </section>
 
-        <section className="panel plan-panel">
-          <div className="panel__heading"><h2>План месяца — {metricScope === "SELLERS" ? "только продавцы" : "весь магазин"}</h2>{plan && <span>{plan.achievedDirectionCount} из {plan.directions.length}</span>}</div>
-          {!plan ? (
-            <div className="panel-empty"><Target size={24} /><strong>План не задан</strong><p>Задайте цели на месяц.</p></div>
-          ) : (
-            <div className="direction-list">
-              {plan.directions.map((direction) => {
-                const completion = direction.criterionCompletionPercent;
-                return (
-                  <article key={direction.code} className="direction-row">
-                    <div className="direction-row__top"><strong>{directionLabels[direction.code] ?? "Другое направление"}</strong><span className={`status status--${toneForStatus(direction.status)}`}>{directionStatusLabels[direction.status] ?? "Неизвестный статус"}</span></div>
-                    <progress className="progress" value={Math.max(0, completion ?? 0)} max={100} aria-label={`Выполнение направления ${directionLabels[direction.code] ?? "Другое направление"}`} />
-                    <div className="direction-row__meta"><span>{formatPercent(completion)} критерия</span><span>прогноз {formatCompactMoney(direction.projectedAmount)}</span></div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </section>
+        {planAllowed && <OverviewPlanPanel
+          scope={metricScope}
+          plan={plan}
+          isPending={planQuery.isPending}
+          isError={planQuery.isError}
+          error={planQuery.error}
+          onRetry={() => void planQuery.refetch()}
+          planSearch={planSearch}
+        />}
       </div>
 
-      {employeeRatingQuery.isPending || employeeKpiQuery.isPending || (!employeeRatingQuery.isError && !employeeRatingQuery.data) || (!employeeKpiQuery.isError && !employeeKpiQuery.data) ? (
+      {employeeRatingQuery.data === undefined && employeeRatingQuery.isError ? (
+        <InlineQueryError error={employeeRatingQuery.error} onRetry={() => void employeeRatingQuery.refetch()} />
+      ) : employeeKpiQuery.data === undefined && employeeKpiQuery.isError ? (
+        <InlineQueryError error={employeeKpiQuery.error} onRetry={() => void employeeKpiQuery.refetch()} />
+      ) : employeeRatingQuery.data === undefined || employeeKpiQuery.data === undefined ? (
         <section className="panel overview-team-panel"><PanelSkeleton rows={5} /></section>
-      ) : employeeRatingQuery.isError || employeeKpiQuery.isError ? (
-        <QueryError
-          error={employeeRatingQuery.error ?? employeeKpiQuery.error}
-          onRetry={() => void Promise.all([employeeRatingQuery.refetch(), employeeKpiQuery.refetch()])}
-          compact
-        />
       ) : (
         <EmployeePerformanceSection rating={employeeRatingQuery.data} employeeKpi={employeeKpiQuery.data} />
       )}
 
-      {attachQuery.isPending || employeeRatingQuery.isPending || (!attachQuery.isError && !attachQuery.data) || (!employeeRatingQuery.isError && !employeeRatingQuery.data) ? (
+      {employeeRatingQuery.data === undefined && employeeRatingQuery.isError ? null : attachQuery.data === undefined && attachQuery.isError ? (
+        <InlineQueryError error={attachQuery.error} onRetry={() => void attachQuery.refetch()} />
+      ) : attachQuery.data === undefined || employeeRatingQuery.data === undefined ? (
         <section className="panel attach-map-panel"><PanelSkeleton rows={8} /></section>
-      ) : attachQuery.isError || employeeRatingQuery.isError ? (
-        <QueryError
-          error={attachQuery.error ?? employeeRatingQuery.error}
-          onRetry={() => void Promise.all([attachQuery.refetch(), employeeRatingQuery.refetch()])}
-          compact
-        />
       ) : (
         <AttachRateMatrix
           attach={attachQuery.data}
@@ -256,11 +226,19 @@ export function OverviewPage() {
       )}
 
       <section className="overview-details" aria-label="Подробные показатели">
-        <details className="disclosure-panel">
-          <summary><span>Категории продаж</span><small>{categories?.categories.length ?? 0}</small></summary>
-          <div className="disclosure-panel__content table-scroll">
-            <table>
-              <thead><tr><th>Категория</th><th>Выручка</th><th>Количество</th><th>Валовая прибыль</th><th>Вал / ед. техники</th><th>Маржа</th><th>Качество</th></tr></thead>
+        <details className="panel overview-disclosure">
+          <summary className="overview-disclosure__summary">
+            <h2>Категории продаж</h2>
+            <span className="overview-disclosure__summary-meta">
+              <small>{categories?.categories.length ?? 0}</small>
+              <ChevronDown className="overview-disclosure__chevron" size={18} aria-hidden="true" />
+            </span>
+          </summary>
+          <div className="overview-disclosure__content overview-disclosure__content--table table-scroll">
+            {categoriesQuery.data === undefined && categoriesQuery.isPending ? <PanelSkeleton rows={4} />
+              : categoriesQuery.data === undefined && categoriesQuery.isError ? <InlineQueryError error={categoriesQuery.error} onRetry={() => void categoriesQuery.refetch()} />
+                : <>{categories?.categories.some((category) => !category.metrics.dataQuality.completeCostData) && <p className="overview-data-note">Знак «—» в прибыли означает, что себестоимости пока недостаточно для расчета.</p>}<table>
+              <thead><tr><th>Категория</th><th>Выручка</th><th>Количество</th><th>Валовая прибыль</th><th>Вал / ед. техники</th><th>Маржа</th></tr></thead>
               <tbody>
                 {categories?.categories.map((category) => (
                   <tr key={category.categoryCode} className={!category.categoryActive ? "row-muted" : ""}>
@@ -270,29 +248,10 @@ export function OverviewPage() {
                     <td>{formatMoney(category.metrics.grossProfit)}</td>
                     <td>{formatMoney(averageGrossProfitPerDeviceUnit(category))}</td>
                     <td>{formatPercent(category.metrics.marginPercent)}</td>
-                    <td>{category.metrics.dataQuality.completeCostData ? <span className="quality-ok"><CheckCircle2 size={14} />Полные</span> : <span className="quality-warning"><AlertCircle size={14} />Проверьте</span>}</td>
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
-        </details>
-
-        <details id="quality-details" className="disclosure-panel" open={Boolean(quality?.issues.length)}>
-          <summary><span>Качество данных</span>{quality && <small className={`status status--${toneForStatus(quality.status)}`}>{qualityStatusLabel(quality.status)}</small>}</summary>
-          <div className="disclosure-panel__content">
-            {quality?.issues.length === 0 ? (
-              <div className="disclosure-empty"><ShieldCheck size={20} /><span>Критичных замечаний нет</span></div>
-            ) : (
-              <div className="quality-list">
-                {quality?.issues.slice(0, 5).map((issue) => (
-                  <article key={issue.key}>
-                    <span className={`quality-list__icon quality-list__icon--${toneForStatus(issue.severity)}`}>{issue.severity === "ERROR" ? <AlertCircle size={17} /> : <TriangleAlert size={17} />}</span>
-                    <div><strong>{qualityIssueMessage(issue.code)}</strong>{issue.affectedCount != null && <small>Затронуто: {issue.affectedCount}</small>}</div>
-                  </article>
-                ))}
-              </div>
-            )}
+            </table></>}
           </div>
         </details>
       </section>

@@ -1,7 +1,5 @@
 package com.storeanalytics.interpretation.review;
 
-import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.Materiality.NOT_EVALUATED;
-import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricState.LIMITED;
 import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricState.READY;
 import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricState.UNAVAILABLE;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -13,6 +11,7 @@ import com.storeanalytics.metrics.service.StoreKpiDataQuality;
 import com.storeanalytics.metrics.service.StoreKpiResult;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -59,7 +58,7 @@ class WeeklyReviewCoreProjectorTest {
     }
 
     @Test
-    void keepsUnexpectedZeroCostVisibleButOutOfFactors() {
+    void treatsZeroCostAsAValidBusinessValue() {
         WeeklyReviewCoreProjector.Projection result = projector.project(
                 kpi("85000.00", "40000.00", "47.06", quality(0, 1)),
                 kpi("85000.00", "38000.00", "44.71", quality(0, 0)),
@@ -67,9 +66,8 @@ class WeeklyReviewCoreProjectorTest {
                 revenue("90000.00", "5000.00", 7, 1)
         );
 
-        assertThat(result.results().get(1).metricState()).isEqualTo(LIMITED);
-        assertThat(result.results().get(1).materiality()).isEqualTo(NOT_EVALUATED);
-        assertThat(result.results().get(2).metricState()).isEqualTo(LIMITED);
+        assertThat(result.results().get(1).metricState()).isEqualTo(READY);
+        assertThat(result.results().get(2).metricState()).isEqualTo(READY);
     }
 
     @Test
@@ -84,6 +82,34 @@ class WeeklyReviewCoreProjectorTest {
         MetricComparison averageSale = result.results().get(3);
         assertThat(averageSale.current()).isNull();
         assertThat(averageSale.metricState()).isEqualTo(UNAVAILABLE);
+    }
+
+    @Test
+    void neverExposesComputedZerosWhenRequiredSourceCoverageIsBlocked() {
+        WeeklyReviewCoreProjector.Projection result = projector.project(
+                kpi("0.00", "0.00", null, quality(0, 0)),
+                kpi("0.00", "0.00", null, quality(0, 0)),
+                revenue("0.00", "0.00", 0, 0),
+                revenue("0.00", "0.00", 0, 0),
+                true
+        );
+
+        assertThat(result.results()).allSatisfy(metric -> {
+            assertThat(metric.metricState()).isEqualTo(UNAVAILABLE);
+            assertThat(metric.current()).isNull();
+            assertThat(metric.previous()).isNull();
+        });
+        assertThat(List.of(
+                result.revenueDecomposition().salesRevenue(),
+                result.revenueDecomposition().returnRevenue(),
+                result.revenueDecomposition().netRevenue(),
+                result.revenueDecomposition().saleDocumentCount(),
+                result.revenueDecomposition().returnDocumentCount()
+        )).allSatisfy(metric -> {
+            assertThat(metric.metricState()).isEqualTo(UNAVAILABLE);
+            assertThat(metric.current()).isNull();
+            assertThat(metric.previous()).isNull();
+        });
     }
 
     @Test

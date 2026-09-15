@@ -6,7 +6,7 @@ owner: project
 audience:
   - developer
   - operator
-last_verified: 2026-09-02
+last_verified: 2026-09-13
 requirement_sources:
   - docs/maintenance/documentation-policy.md
 implementation_sources:
@@ -15,8 +15,12 @@ implementation_sources:
   - backend/src/main/resources/application.yml
 verification_sources:
   - docs/history/releases/2026/09/v0.1.0-pilot.30-production-verification.md
+  - docs/history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-08_MAGAZIN.md
+  - docs/history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-08_MOBISFERA.md
 runtime_evidence:
   - docs/history/releases/2026/09/v0.1.0-pilot.30-production-verification.md
+  - docs/history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-08_MAGAZIN.md
+  - docs/history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-08_MOBISFERA.md
 required_reviewers:
   - information-architecture
   - operations
@@ -34,23 +38,28 @@ superseded_by: null
 
 This is the only repository page allowed to summarize the currently verified production release.
 It records an observation, not a live dashboard. Dynamic values below were last observed on
-**2026-09-02** and must be refreshed from sanitized read-only production evidence after every
+**2026-09-13** and must be refreshed from sanitized read-only production evidence after every
 deployment, schema change, relevant flag change or topology change.
 
 ## Verified production snapshot
 
 | Item | Last verified value |
 |---|---|
-| Release | `v0.1.0-pilot.30` |
-| Commit | `24c1d37affb0d48a610cd3eba33f8f8cc2241a4b` |
+| Release | `v0.1.0-pilot.31` |
+| Commit | `a1cd7b9e4377d6ff9ed395f068097fb895f723ff` |
 | Flyway schema | `48` |
 | Topology | `web`, `backend-api`, `backend-worker` |
 | Service health | all three containers healthy at verification time |
-| Backend image | `sha256:bff646c1ff7bb35425b5d587cba15399751c6ecd936445c840a9b0c5a4e90a07` |
-| Web image | `sha256:89009ae282e593b5004716a594a9e21cc959a995b6ad5d4ba284fff1030a7ed4` |
+| Backend image | `sha256:1cfb07e968ce0362702f0c739f3d2341cd0eca1ef8f121065ecbd11e75a5e2d9` |
+| Web image | `sha256:f54cf0ea92769eca818aa844cac88f950e3afe4eea757d2d922263d1b10a6e15` |
 
-Full provenance and limits are in the
-[production verification record](../history/releases/2026/09/v0.1.0-pilot.30-production-verification.md).
+The previous deployment provenance remains in the
+[pilot.30 production verification record](../history/releases/2026/09/v0.1.0-pilot.30-production-verification.md).
+The current runtime identity and sanitized read-only business-data verification are preserved in
+the August LiveSklad reconciliations for
+[МАГАЗИН](../history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-08_MAGAZIN.md)
+and
+[МобиСфера](../history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-08_MOBISFERA.md).
 
 ## Weekly review
 
@@ -86,6 +95,10 @@ Release `v0.1.0-pilot.28` assigns newly synchronized or deliberately reprocessed
 employee of the original sale. It did not run a historical return reprocessing operation. Returns
 whose original sale is not loaded therefore remain unresolved until the missing source periods are
 loaded and a separately approved, scoped reprocessing operation is performed.
+
+Release `v0.1.0-pilot.31` accepts delayed cash-return events without interpreting their absence in
+an earlier fetch as permission to delete the merchandise return. The 2026-09-13 August read-only
+reconciliation found no missing, extra or deleted in-period return facts and required no backfill.
 
 ## Known operational limits
 

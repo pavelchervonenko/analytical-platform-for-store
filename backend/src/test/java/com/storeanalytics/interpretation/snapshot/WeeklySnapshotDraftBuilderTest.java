@@ -72,8 +72,8 @@ class WeeklySnapshotDraftBuilderTest {
         assertThat(first.qualityStatus()).isEqualTo(QualityStatus.READY);
         assertThat(first.factsHash()).isEqualTo(second.factsHash()).hasSize(64);
         assertThat(first.versions().metricContractVersion()).isEqualTo("weekly-metrics-v3");
-        assertThat(first.versions().calculationVersion()).isEqualTo("weekly-snapshot-v6");
-        assertThat(first.versions().qualityPolicyVersion()).isEqualTo("weekly-quality-v3");
+        assertThat(first.versions().calculationVersion()).isEqualTo("weekly-snapshot-v7");
+        assertThat(first.versions().qualityPolicyVersion()).isEqualTo("weekly-quality-v4");
         assertThat(first.payload().manifest().candidateRefs())
                 .containsExactlyElementsOf(
                         first.payload().facts().candidateSignals().stream()

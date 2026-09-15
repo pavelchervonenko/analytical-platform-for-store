@@ -12,7 +12,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,57 +42,112 @@ public class ProductClassificationReconciliationService {
 
     @Transactional
     public ProductClassificationReconciliationResult reconcileApprovedScope(
+            UUID connectionId,
             Set<String> approvedExternalProductIds,
             int expectedItemCount
     ) {
+        if (connectionId == null) {
+            throw new IllegalArgumentException("Approved connection ID must not be null");
+        }
         validateRequestedScope(approvedExternalProductIds, expectedItemCount);
         List<SalesDocumentItem> items = salesItemRepository
-                .findAllActiveUnmappedByProductExternalIdIn(
+                .findAllActiveUnmappedByConnectionIdAndProductExternalIdIn(
+                        connectionId,
                         approvedExternalProductIds
                 );
         validateObservedScope(items, approvedExternalProductIds, expectedItemCount);
+        ProductClassificationReconciliationResult result = reconcile(items, false);
+        if (result.unresolvedItems() > 0) {
+            throw new IllegalStateException(
+                    "Approved reconciliation scope contains unresolved products"
+            );
+        }
+        return result;
+    }
 
+    @Transactional
+    public ProductClassificationReconciliationResult reconcileImportedScope(
+            UUID connectionId,
+            Set<String> importedExternalProductIds
+    ) {
+        if (connectionId == null || importedExternalProductIds == null
+                || importedExternalProductIds.isEmpty()) {
+            throw new IllegalArgumentException("Imported product scope must not be empty");
+        }
+        List<SalesDocumentItem> items = salesItemRepository
+                .findAllActiveUnmappedByConnectionIdAndProductExternalIdIn(
+                        connectionId,
+                        importedExternalProductIds
+                );
+        return reconcile(items, true);
+    }
+
+    private ProductClassificationReconciliationResult reconcile(
+            List<SalesDocumentItem> items,
+            boolean assignmentsOnly
+    ) {
         Map<String, Boolean> productResolution = new HashMap<>();
+        Set<UUID> affectedStoreIds = new HashSet<>();
         int reclassified = 0;
         int unresolved = 0;
-        for (SalesDocumentItem item : items) {
+        List<SalesDocumentItem> orderedItems = items.stream()
+                .sorted(java.util.Comparator.comparing(
+                        item -> item.getOriginalItem() != null
+                ))
+                .toList();
+        for (SalesDocumentItem item : orderedItems) {
             Product product = item.getProduct();
-            var resolved = classificationResolver.resolve(
-                    product,
-                    item.getSalesDocument().getOccurredAt()
+            Optional<SalesItemClassification> classification = classification(
+                    item,
+                    assignmentsOnly
             );
-            if (resolved.isEmpty()) {
+            if (classification.isEmpty()) {
                 unresolved++;
                 productResolution.put(issueEntityId(item), false);
                 continue;
             }
 
-            var classification = resolved.orElseThrow();
-            if (item.reclassify(new SalesItemClassification(
-                    product.getName(),
-                    null,
-                    classification.category(),
-                    classification.assignment(),
-                    classification.version(),
-                    classification.conditionType()
-            ))) {
+            if (item.reclassify(classification.orElseThrow())) {
                 reclassified++;
+                affectedStoreIds.add(item.getSalesDocument().getStore().getId());
             }
             productResolution.putIfAbsent(issueEntityId(item), true);
-        }
-
-        if (unresolved > 0) {
-            throw new IllegalStateException(
-                    "Approved reconciliation scope contains unresolved products"
-            );
         }
         int resolvedIssues = resolveQualityIssues(productResolution);
         return new ProductClassificationReconciliationResult(
                 items.size(),
                 reclassified,
                 unresolved,
-                resolvedIssues
+                resolvedIssues,
+                affectedStoreIds
         );
+    }
+
+    private Optional<SalesItemClassification> classification(
+            SalesDocumentItem item,
+            boolean assignmentsOnly
+    ) {
+        SalesDocumentItem originalItem = item.getOriginalItem();
+        if (originalItem != null) {
+            SalesItemClassification inherited = originalItem.classificationSnapshot();
+            return "UNMAPPED".equals(inherited.analyticsCategory().getCode())
+                    ? Optional.empty()
+                    : Optional.of(inherited);
+        }
+        Product product = item.getProduct();
+        var resolved = assignmentsOnly
+                ? classificationResolver.resolveAssigned(
+                        product, item.getSalesDocument().getOccurredAt())
+                : classificationResolver.resolve(
+                        product, item.getSalesDocument().getOccurredAt());
+        return resolved.map(value -> new SalesItemClassification(
+                product.getName(),
+                null,
+                value.category(),
+                value.assignment(),
+                value.version(),
+                value.conditionType()
+        ));
     }
 
     private void validateRequestedScope(

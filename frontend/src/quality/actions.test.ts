@@ -5,12 +5,12 @@ describe("quality action routing", () => {
   it("keeps administrator-only actions fail closed", () => {
     expect(describeQualityAction("RUN_SYNC", false)?.route).toBeUndefined();
     expect(describeQualityAction("RUN_SYNC", false)?.unavailableReason).toEqual(expect.any(String));
-    expect(describeQualityAction("CLASSIFY_PRODUCTS", true)).toMatchObject({ route: "/admin", view: "classification" });
+    expect(describeQualityAction("CLASSIFY_PRODUCTS", true)).toMatchObject({ route: "/admin", view: "category-import" });
   });
 
   it("routes correction actions by stable action code", () => {
-    expect(describeQualityAction("SET_STORE_PLAN", false)).toMatchObject({ route: "/plan", view: "plan" });
-    expect(describeQualityAction("UPDATE_WORK_SCHEDULE", false)).toMatchObject({ route: "/plan", view: "shifts" });
+    expect(describeQualityAction("SET_STORE_PLAN", false)).toMatchObject({ route: "/plan" });
+    expect(describeQualityAction("UPDATE_WORK_SCHEDULE", false)).toMatchObject({ route: "/shifts" });
     expect(describeQualityAction("CALCULATE_PAYROLL", false)).toMatchObject({ route: "/payroll" });
   });
 
@@ -20,10 +20,11 @@ describe("quality action routing", () => {
   });
 
   it("opens source issues and source synchronization instead of a no-op route", () => {
-    expect(describeQualityAction("REVIEW_DATA_ISSUES", false)).toMatchObject({
+    expect(describeQualityAction("REVIEW_DATA_ISSUES", true)).toMatchObject({
       route: "/quality",
       hash: "#quality-source-issues"
     });
+    expect(describeQualityAction("REVIEW_DATA_ISSUES", false)?.route).toBeUndefined();
     expect(describeQualityAction("REVIEW_SOURCE_DOCUMENT", true)).toMatchObject({
       route: "/admin",
       view: "sync"

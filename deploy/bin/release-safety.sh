@@ -319,10 +319,13 @@ release_validate_ca_file() {
 
 release_validate_product_classification_reconciliation() {
   local env_file="$1"
-  local enabled product_ids expected_items
+  local enabled connection_id product_ids expected_items
 
   enabled="$(release_env_value_or_default \
     "${env_file}" PRODUCT_CLASSIFICATION_RECONCILIATION_ENABLED false)" \
+    || return 1
+  connection_id="$(release_env_value_or_default \
+    "${env_file}" PRODUCT_CLASSIFICATION_RECONCILIATION_CONNECTION_ID '')" \
     || return 1
   product_ids="$(release_env_value_or_default \
     "${env_file}" PRODUCT_CLASSIFICATION_RECONCILIATION_PRODUCT_IDS '')" \
@@ -333,11 +336,14 @@ release_validate_product_classification_reconciliation() {
 
   case "${enabled}" in
   false)
-    [[ -z "${product_ids}" && "${expected_items}" == '0' ]] \
+    [[ -z "${connection_id}" && -z "${product_ids}" && "${expected_items}" == '0' ]] \
       || release_safety_fail \
-        'disabled product classification reconciliation must have an empty scope and zero expected items'
+        'disabled product classification reconciliation must have an empty connection, empty scope and zero expected items'
     ;;
   true)
+    [[ "${connection_id}" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$ ]] \
+      || { release_safety_fail \
+        'enabled product classification reconciliation requires an exact connection UUID'; return 1; }
     [[ "${product_ids}" =~ ^[A-Za-z0-9._:-]+(,[A-Za-z0-9._:-]+)*$ ]] \
       || { release_safety_fail \
         'enabled product classification reconciliation requires a comma-separated product ID allowlist'; return 1; }

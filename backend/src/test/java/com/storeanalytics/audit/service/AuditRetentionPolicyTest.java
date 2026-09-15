@@ -40,6 +40,7 @@ class AuditRetentionPolicyTest {
                 AuditAction.USER_CREATED,
                 AuditAction.USER_CHANGED,
                 AuditAction.USER_STORE_ACCESS_CHANGED,
+                AuditAction.USER_ACCESS_CHANGED,
                 AuditAction.USER_PASSWORD_RESET,
                 AuditAction.BOOTSTRAP_ADMIN_CREATED,
                 AuditAction.BREAK_GLASS_LOGIN_SUCCEEDED,

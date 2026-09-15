@@ -76,21 +76,6 @@ public final class WeeklyReviewQualityPolicyV1 {
                 .filter(item -> item.state() != CoverageState.COMPLETE)
                 .map(item -> sourceLimitation(item, currentRange, previousRange))
                 .forEach(limitations::add);
-        addClassificationLimitations(
-                currentKpi, previousKpi, currentRange, previousRange, limitations
-        );
-        addCostLimitations(currentKpi, previousKpi, currentRange, previousRange, limitations);
-        addConsistencyLimitations(
-                currentKpi, previousKpi, currentRange, previousRange, limitations
-        );
-        addEmployeeAttributionLimitations(
-                currentRange,
-                previousRange,
-                currentUnattributedReturns,
-                previousUnattributedReturns,
-                limitations
-        );
-
         boolean blocked = coverage.stream()
                 .filter(SourceCoverage::requiredForReport)
                 .anyMatch(item ->
@@ -99,6 +84,18 @@ public final class WeeklyReviewQualityPolicyV1 {
                         && item.currentThroughDate() != null
                         && item.currentThroughDate().isBefore(currentRange.end())
         );
+        if (!blocked) {
+            addClassificationLimitations(
+                    currentKpi, previousKpi, currentRange, previousRange, limitations
+            );
+            addMissingCostLimitations(
+                    currentKpi, previousKpi, currentRange, previousRange, limitations
+            );
+            addConsistencyLimitations(
+                    currentKpi, previousKpi, currentRange, previousRange, limitations
+            );
+        }
+
         ReportState reportState = blocked
                 ? ReportState.BLOCKED
                 : limitations.isEmpty() ? ReportState.READY : ReportState.PARTIAL;
@@ -137,48 +134,8 @@ public final class WeeklyReviewQualityPolicyV1 {
                 current.end(),
                 previous.end(),
                 complete ? CoverageState.COMPLETE : CoverageState.PARTIAL,
-                complete ? null : "Часть возвратов не распределена между сотрудниками"
+                complete ? null : "Связь с сотрудниками доступна не для всех возвратов"
         );
-    }
-
-    private void addEmployeeAttributionLimitations(
-            DateRange current,
-            DateRange previous,
-            long currentCount,
-            long previousCount,
-            List<Limitation> limitations
-    ) {
-        addEmployeeAttributionLimitation(
-                "current", current, currentCount, limitations
-        );
-        addEmployeeAttributionLimitation(
-                "previous", previous, previousCount, limitations
-        );
-    }
-
-    private void addEmployeeAttributionLimitation(
-            String periodCode,
-            DateRange period,
-            long count,
-            List<Limitation> limitations
-    ) {
-        if (count <= 0) {
-            return;
-        }
-        limitations.add(new Limitation(
-                "employee-attribution:" + periodCode,
-                "RETURN_EMPLOYEE_UNATTRIBUTED",
-                "WARNING",
-                "TEAM",
-                null,
-                List.of("team", "employees"),
-                List.of("EMPLOYEE_NET_REVENUE", "EMPLOYEE_ADDITIONAL_REVENUE"),
-                period,
-                Math.toIntExact(count),
-                "Возвраты вошли в итог магазина, но не распределены между сотрудниками",
-                "Связать возвраты с исходными продажами и их продавцами",
-                List.of("EMPLOYEE_ATTRIBUTION." + periodCode.toUpperCase())
-        ));
     }
 
     private SourceCoverage coverage(
@@ -198,13 +155,14 @@ public final class WeeklyReviewQualityPolicyV1 {
         return new SourceCoverage(
                 sourceCode,
                 true,
-                List.of("results"),
+                sourceAffectedBlocks(),
                 through,
                 through,
                 state,
                 state == CoverageState.COMPLETE
                         ? null
-                        : "Источник не покрывает обе сравниваемые недели"
+                        : sourceLabel(sourceCode)
+                                + " не покрывают обе сравниваемые недели"
         );
     }
 
@@ -221,14 +179,56 @@ public final class WeeklyReviewQualityPolicyV1 {
                         coverage.sourceCode() + "_COVERAGE_INCOMPLETE"
                 ),
                 currentMissing ? "BLOCKING" : "WARNING",
-                List.of("results"),
-                List.of("NET_REVENUE"),
+                sourceAffectedBlocks(),
+                affectedMetrics(coverage.sourceCode()),
                 currentMissing ? current : previous,
                 1,
                 currentMissing
-                        ? "Источник не покрывает завершённую неделю"
-                        : "Источник не покрывает неделю сравнения"
+                        ? sourceLabel(coverage.sourceCode())
+                                + " не покрывают завершённую неделю"
+                        : sourceLabel(coverage.sourceCode())
+                                + " не покрывают неделю сравнения"
         );
+    }
+
+    private List<String> affectedMetrics(SourceCode sourceCode) {
+        return switch (sourceCode) {
+            case SALES -> List.of(
+                    "SALES_REVENUE",
+                    "SALE_DOCUMENT_COUNT",
+                    "AVERAGE_SALE",
+                    "NET_REVENUE",
+                    "GROSS_PROFIT",
+                    "MARGIN_PERCENT"
+            );
+            case RETURNS -> List.of(
+                    "RETURN_REVENUE",
+                    "RETURN_DOCUMENT_COUNT",
+                    "NET_REVENUE",
+                    "GROSS_PROFIT",
+                    "MARGIN_PERCENT"
+            );
+            default -> List.of();
+        };
+    }
+
+    private List<String> sourceAffectedBlocks() {
+        return List.of(
+                "summary",
+                "results",
+                "revenue-decomposition",
+                "sales-structure",
+                "team",
+                "employees"
+        );
+    }
+
+    private String sourceLabel(SourceCode sourceCode) {
+        return switch (sourceCode) {
+            case SALES -> "Данные о продажах";
+            case RETURNS -> "Данные о возвратах";
+            default -> "Данные источника";
+        };
     }
 
     private void addClassificationLimitations(
@@ -258,7 +258,7 @@ public final class WeeklyReviewQualityPolicyV1 {
         );
     }
 
-    private void addCostLimitations(
+    private void addMissingCostLimitations(
             StoreKpiResult current,
             StoreKpiResult previous,
             DateRange currentPeriod,
@@ -283,24 +283,6 @@ public final class WeeklyReviewQualityPolicyV1 {
                 "Для части позиций недели сравнения отсутствует себестоимость",
                 limitations
         );
-        addCountLimitation(
-                new Issue("cost:zero:current", "UNEXPECTED_ZERO_COST"),
-                List.of("results"),
-                List.of("GROSS_PROFIT", "MARGIN_PERCENT"),
-                currentPeriod,
-                current.dataQuality().unexpectedZeroCostItemCount(),
-                "Себестоимость части товаров недели требует проверки",
-                limitations
-        );
-        addCountLimitation(
-                new Issue("cost:zero:previous", "UNEXPECTED_ZERO_COST"),
-                List.of("results"),
-                List.of("GROSS_PROFIT", "MARGIN_PERCENT"),
-                previousPeriod,
-                previous.dataQuality().unexpectedZeroCostItemCount(),
-                "Себестоимость части товаров недели сравнения требует проверки",
-                limitations
-        );
     }
 
     private void addConsistencyLimitations(
@@ -312,7 +294,7 @@ public final class WeeklyReviewQualityPolicyV1 {
     ) {
         addCountLimitation(
                 new Issue("consistency:current", "SALES_OR_RETURNS_CONSISTENCY_ISSUE"),
-                List.of("results"),
+                List.of("results", "summary", "revenue-decomposition"),
                 List.of("NET_REVENUE"),
                 currentPeriod,
                 current.dataQuality().periodOpenConsistencyIssueCount(),
@@ -321,7 +303,7 @@ public final class WeeklyReviewQualityPolicyV1 {
         );
         addCountLimitation(
                 new Issue("consistency:previous", "SALES_OR_RETURNS_CONSISTENCY_ISSUE"),
-                List.of("results"),
+                List.of("results", "summary", "revenue-decomposition"),
                 List.of("NET_REVENUE"),
                 previousPeriod,
                 previous.dataQuality().periodOpenConsistencyIssueCount(),

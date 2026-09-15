@@ -16,9 +16,11 @@ visual reference and is not imported by this application.
 
 - `/overview`, `/employees` and `/employees/:employeeId` accept month, ISO week or a custom
   inclusive date range. The range is URL-owned and comparisons remain backend-owned.
-- `/plan`, `/payroll` and `/quality` always use the separately retained calendar `month`; custom
-  analytics ranges never change the meaning of monthly workflows.
-- `/quality` maps corrections only from stable backend `recommendedAction` values. Unsupported
+- `/plan`, `/shifts` and `/payroll` always use the separately retained calendar `month`;
+  custom analytics ranges never change the meaning of monthly workflows. Plan and shifts are separate
+  navigation destinations; old `/plan?section=shifts` bookmarks redirect to `/shifts`.
+- `/quality` is administrator-only in both the router and backend authorization and uses that same
+  calendar month. It maps corrections only from stable backend `recommendedAction` values. Unsupported
   mutations, such as manual cost repair, remain explicit diagnostics instead of fake controls.
 - `/reports` reads immutable monthly and annual snapshots with server-side year/type filters;
   report revisions and payload totals are displayed exactly as returned by the backend.
@@ -36,8 +38,8 @@ visual reference and is not imported by this application.
   Mutations invalidate dependent authoritative queries instead of recalculating business data in
   the browser.
 
-- Safe API errors keep diagnostics inside the transport layer; correlation IDs, raw proxy details and
-  server internals are not rendered to store managers.
+- Safe API errors keep diagnostics inside the transport layer. A correlation ID may be shown as a
+  support reference; raw proxy details and server internals are not rendered to store managers.
 
 ## Development
 
@@ -106,6 +108,20 @@ The command captures full-page desktop, tablet and mobile images in `visual-arti
 page-level overflow, query errors, browser runtime errors and HTTP `5xx` responses. The directory
 is ignored by Git because images can contain business data. Inspect the images after every material
 UI change. For an interactive local browser run, use `npm run visual:local:headed`.
+
+By default, an authenticated `/insights` capture keeps the live shell and store context but replaces
+the Weekly Review response with a deterministic fixture. For a pre-release read-path check against
+the running local backend and database, opt in explicitly and select a store through the normal URL
+parameter:
+
+```bash
+VISUAL_USE_LIVE_WEEKLY_REVIEW=true \
+VISUAL_ROUTES='/insights?store=<local-store-uuid>' \
+npm run visual:local
+```
+
+This mode never points at a remote host and does not generate a snapshot; prepare the immutable
+local snapshot through the backend workflow before running it.
 
 The local-only guard rejects production, staging and every other non-loopback `VISUAL_BASE_URL`
 or `DEV_API_TARGET`.

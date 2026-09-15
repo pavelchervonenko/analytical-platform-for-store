@@ -11,7 +11,7 @@ public class PeriodQualityIssueRepository {
 
     private static final String COUNT_OPEN_CONSISTENCY_ISSUES = """
             WITH target_store AS (
-                SELECT id, timezone
+                SELECT id
                 FROM stores
                 WHERE id = :storeId
             ),
@@ -45,15 +45,6 @@ public class PeriodQualityIssueRepository {
                 FROM period_documents document
                 JOIN sales_document_items item ON item.sales_document_id = document.id
                 WHERE NOT item.is_deleted
-            ),
-            period_raw_returns AS (
-                SELECT DISTINCT
-                    raw.connection_id::text || ':' || raw.external_id AS entity_id
-                FROM raw_record_versions raw
-                JOIN target_store store ON store.id = raw.store_id
-                WHERE raw.entity_type = 'RETURN_DOCUMENT'
-                  AND (raw.source_updated_at AT TIME ZONE store.timezone)::date
-                        BETWEEN :periodStart AND :periodEnd
             )
             SELECT COUNT(*)
             FROM data_quality_issues issue
@@ -64,24 +55,15 @@ public class PeriodQualityIssueRepository {
                   'ZERO_UNEXPECTED_COST',
                   'MISSING_COST',
                   'RETURN_ZERO_UNEXPECTED_COST',
-                  'RETURN_MISSING_COST'
+                  'RETURN_MISSING_COST',
+                  'RETURN_ORIGINAL_DOCUMENT_MISSING',
+                  'RETURN_ORIGINAL_ITEM_MISSING'
               )
-              AND (
-                  EXISTS (
-                      SELECT 1
-                      FROM period_entities entity
-                      WHERE entity.entity_type = issue.entity_type
-                        AND entity.entity_id = issue.entity_id
-                  )
-                  OR (
-                      issue.entity_type = 'RETURN_DOCUMENT'
-                      AND issue.issue_code = 'RETURN_ORIGINAL_DOCUMENT_MISSING'
-                      AND EXISTS (
-                          SELECT 1
-                          FROM period_raw_returns raw
-                          WHERE raw.entity_id = issue.entity_id
-                      )
-                  )
+              AND EXISTS (
+                  SELECT 1
+                  FROM period_entities entity
+                  WHERE entity.entity_type = issue.entity_type
+                    AND entity.entity_id = issue.entity_id
               )
             """;
 

@@ -31,7 +31,7 @@ const codeMessages: Readonly<Record<string, string>> = {
   USER_EMAIL_CONFLICT: "Пользователь с такой электронной почтой уже существует.",
   USER_ADMINISTRATION_CONFLICT: "Текущее состояние пользователя не позволяет выполнить это действие.",
   INVALID_CURRENT_PASSWORD: "Текущий пароль указан неверно.",
-  PASSWORD_POLICY_VIOLATION: "Пароль должен содержать не менее 12 символов.",
+  PASSWORD_POLICY_VIOLATION: "Пароль должен содержать 12–128 символов, занимать не более 72 байт, не содержать управляющих символов и не быть распространенным.",
   LOGIN_THROTTLED: "Слишком много попыток входа. Повторите попытку позже.",
   CURRENT_SESSION_REQUIRES_LOGOUT: "Чтобы завершить текущую сессию, выйдите из системы.",
   ACTIVE_SYNC_JOB_EXISTS: "Для этого подключения уже выполняется синхронизация.",

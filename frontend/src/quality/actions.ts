@@ -16,21 +16,19 @@ export function describeQualityAction(action: QualityAction, isAdmin: boolean): 
     case "RUN_SYNC": return isAdmin
       ? { label: "Обновить данные", route: "/admin", view: "sync" }
       : { label: "Нужен администратор", unavailableReason: "Запуск синхронизации доступен только администратору." };
-    case "SET_STORE_PLAN": return { label: "Заполнить план", route: "/plan", view: "plan" };
-    case "UPDATE_WORK_SCHEDULE": return { label: "Заполнить смены", route: "/plan", view: "shifts" };
+    case "SET_STORE_PLAN": return { label: "Заполнить план", route: "/plan" };
+    case "UPDATE_WORK_SCHEDULE": return { label: "Заполнить смены", route: "/shifts" };
     case "REVIEW_EMPLOYEE_ELIGIBILITY": return { label: "Проверить участников", route: "/employees" };
     case "CLASSIFY_PRODUCTS": return isAdmin
-      ? { label: "Исправить категории", route: "/admin", view: "classification" }
+      ? { label: "Исправить категории", route: "/admin", view: "category-import" }
       : { label: "Нужен администратор", unavailableReason: "Классификацию товаров выполняет администратор." };
     case "PROVIDE_COST_DATA": return { label: "Проверить себестоимость", unavailableReason: "Ручное исправление себестоимости пока недоступно. Проверьте источник данных и синхронизацию." };
     case "CALCULATE_PAYROLL": return { label: "Рассчитать зарплату", route: "/payroll" };
     case "RECALCULATE_PAYROLL": return { label: "Пересчитать", route: "/payroll" };
     case "FINALIZE_RATING": return { label: "Зафиксировать рейтинг", route: "/employees" };
-    case "REVIEW_DATA_ISSUES": return {
-      label: "Открыть проблемы",
-      route: "/quality",
-      hash: "#quality-source-issues"
-    };
+    case "REVIEW_DATA_ISSUES": return isAdmin
+      ? { label: "Открыть проблемы", route: "/quality", hash: "#quality-source-issues" }
+      : { label: "Нужен администратор", unavailableReason: "Диагностика качества данных доступна только администратору." };
     case "REVIEW_SOURCE_DOCUMENT": return isAdmin
       ? { label: "Открыть синхронизацию", route: "/admin", view: "sync" }
       : {

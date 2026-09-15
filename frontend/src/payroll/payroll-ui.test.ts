@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { PayrollStatement } from "../api/contracts";
-import { adjustmentTypeLabel, comparisonReasonLabel, parsePayrollAmount, payrollCategoryLabel, summarizeStatements, validateReason } from "./payroll-ui";
+import { ApiClientError } from "../api/client";
+import type { PayrollReadiness, PayrollStatement } from "../api/contracts";
+import { adjustmentTypeLabel, comparisonReasonLabel, formatPayrollCheckCount, parsePayrollAmount, payrollCategoryLabel, payrollErrorMessage, payrollReadinessCheckCount, summarizeStatements, validateReason } from "./payroll-ui";
 
 const statement = (values: Partial<PayrollStatement>): PayrollStatement => ({
   id: "11111111-1111-4111-8111-111111111111",
@@ -47,5 +48,25 @@ describe("payroll UI helpers", () => {
     expect(adjustmentTypeLabel("INVENTORY")).toBe("Инвентаризация");
     expect(adjustmentTypeLabel("FUTURE_TYPE")).toBe("Другое удержание");
     expect(comparisonReasonLabel("FUTURE_REASON")).toBe("Изменились данные расчета");
+  });
+
+  it("counts failed readiness categories rather than affected rows", () => {
+    const readiness = {
+      planPresent: true,
+      schemePresent: true,
+      unmappedItemCount: 17,
+      missingCostItemCount: 4,
+      daysWithoutShift: 2
+    } as PayrollReadiness;
+    expect(payrollReadinessCheckCount(readiness)).toBe(3);
+    expect(formatPayrollCheckCount(3)).toBe("3 проверки");
+    expect(formatPayrollCheckCount(5)).toBe("5 проверок");
+  });
+
+  it("distinguishes an invalid workflow state from a version conflict", () => {
+    expect(payrollErrorMessage(new ApiClientError("", { status: 409, code: "PAYROLL_STATE_CONFLICT" })))
+      .toContain("текущего статуса");
+    expect(payrollErrorMessage(new ApiClientError("", { status: 412, code: "PRECONDITION_FAILED" })))
+      .toContain("Версия уже изменилась");
   });
 });

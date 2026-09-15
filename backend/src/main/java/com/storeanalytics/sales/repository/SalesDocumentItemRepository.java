@@ -28,12 +28,14 @@ public interface SalesDocumentItemRepository extends JpaRepository<SalesDocument
             FROM SalesDocumentItem item
             JOIN FETCH item.product product
             JOIN FETCH item.salesDocument document
-            WHERE product.externalId IN :externalProductIds
+            WHERE product.connection.id = :connectionId
+              AND product.externalId IN :externalProductIds
               AND item.analyticsCategory.code = 'UNMAPPED'
               AND item.deleted = false
               AND document.deleted = false
             """)
-    List<SalesDocumentItem> findAllActiveUnmappedByProductExternalIdIn(
+    List<SalesDocumentItem> findAllActiveUnmappedByConnectionIdAndProductExternalIdIn(
+            @Param("connectionId") UUID connectionId,
             @Param("externalProductIds") Set<String> externalProductIds
     );
 

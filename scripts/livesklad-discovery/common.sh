@@ -61,6 +61,12 @@ load_livesklad_environment() {
         || fail 'DISCOVERY_MAX_RESPONSE_BYTES must be a positive integer'
     ((DISCOVERY_MAX_RESPONSE_BYTES <= 8388608)) \
         || fail 'DISCOVERY_MAX_RESPONSE_BYTES must not exceed 8388608'
+
+    DISCOVERY_CONNECT_TIMEOUT_SECONDS="${DISCOVERY_CONNECT_TIMEOUT_SECONDS:-5}"
+    [[ "${DISCOVERY_CONNECT_TIMEOUT_SECONDS}" =~ ^[1-9][0-9]*$ ]] \
+        || fail 'DISCOVERY_CONNECT_TIMEOUT_SECONDS must be a positive integer'
+    ((DISCOVERY_CONNECT_TIMEOUT_SECONDS <= 30)) \
+        || fail 'DISCOVERY_CONNECT_TIMEOUT_SECONDS must not exceed 30'
 }
 
 livesklad_auth_response() {
@@ -71,7 +77,7 @@ livesklad_auth_response() {
         --fail-with-body \
         --silent \
         --show-error \
-        --connect-timeout 5 \
+        --connect-timeout "${DISCOVERY_CONNECT_TIMEOUT_SECONDS}" \
         --max-time 30 \
         --max-filesize "${DISCOVERY_MAX_RESPONSE_BYTES}" \
         --proto '=https' \
@@ -100,7 +106,7 @@ livesklad_get() {
         --fail-with-body \
         --silent \
         --show-error \
-        --connect-timeout 5 \
+        --connect-timeout "${DISCOVERY_CONNECT_TIMEOUT_SECONDS}" \
         --max-time 30 \
         --max-filesize "${DISCOVERY_MAX_RESPONSE_BYTES}" \
         --proto '=https' \

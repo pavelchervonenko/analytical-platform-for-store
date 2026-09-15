@@ -1,11 +1,24 @@
 import { z } from "zod";
 import { apiClient } from "../api/client";
-import { storeDataStatusSchema } from "../api/contracts";
 import { forwardCompatibleEnum } from "../api/enumSchema";
 
 const healthSchema = forwardCompatibleEnum(["OK", "WARNING", "ERROR"]);
 const freshnessSchema = forwardCompatibleEnum(["NOT_SYNCED", "CURRENT", "STALE", "SYNCING", "ERROR"]);
 const severitySchema = forwardCompatibleEnum(["INFO", "WARNING", "ERROR"]);
+
+const administratorStoreDataStatusSchema = z.object({
+  storeId: z.string().uuid(), status: freshnessSchema, expectedThroughDate: z.string(),
+  dataThroughDate: z.string().nullable(), salesDataThroughDate: z.string().nullable(),
+  returnsDataThroughDate: z.string().nullable(), lagDays: z.number().int().nullable(),
+  lastCompletedSyncAt: z.string().nullable(),
+  synchronization: z.object({
+    active: z.boolean(), id: z.string().uuid().nullable(), type: z.string().nullable(),
+    status: z.string().nullable(), phase: z.string().nullable(), startedAt: z.string().nullable(),
+    nextAttemptAt: z.string().nullable()
+  }),
+  openQualityIssueCount: z.number().int().nonnegative(), lastError: z.string().nullable(),
+  lastErrorAt: z.string().nullable(), checkedAt: z.string()
+});
 
 export const qualityActionSchema = forwardCompatibleEnum(["NONE", "WAIT_FOR_SYNC", "RUN_SYNC", "REVIEW_SOURCE_DOCUMENT"]);
 export const periodQualityActionSchema = forwardCompatibleEnum([
@@ -29,7 +42,7 @@ const overviewSchema = z.object({
 
 const detailSchema = z.object({
   summary: storeSummarySchema,
-  dataStatus: storeDataStatusSchema,
+  dataStatus: administratorStoreDataStatusSchema,
   issues: z.array(z.object({
     key: z.string(), source: forwardCompatibleEnum(["SYNCHRONIZATION", "SALES", "RETURNS", "DATA"]), code: z.string(),
     severity: severitySchema, entityType: z.string(), message: z.string(), detectedAt: z.string().nullable(),

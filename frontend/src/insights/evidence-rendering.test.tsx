@@ -95,7 +95,7 @@ vi.mock("@tanstack/react-query", () => ({
           previousFormattedValue: "1 000 000 ₽",
           absoluteDeltaFormatted: "+200 000 ₽",
           relativeDeltaFormatted: "+20%",
-          comparisonText: "Было 1 000 000 ₽ · изменение +200 000 ₽ (+20%)",
+          comparisonText: "Было 1 000 000 ₽ \u00b7 изменение +200 000 ₽ (+20%)",
           unit: "MONEY",
           sufficiency: "SUFFICIENT",
           scope: "STORE",
@@ -187,7 +187,7 @@ describe("weekly insight evidence rendering", () => {
     ).toBeGreaterThan(0);
     expect(screen.queryByText("Гипотеза")).not.toBeInTheDocument();
     expect(screen.queryByText("Подробности")).not.toBeInTheDocument();
-    expect(document.body).not.toHaveTextContent("·");
+    expect(document.body).not.toHaveTextContent("\u00b7");
   });
 
   it("replaces repeated employee filler and combines its evidence", () => {

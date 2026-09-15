@@ -1,6 +1,6 @@
 import type { EmployeeDirectoryEntry, EmployeeRatingEntry } from "../api/contracts";
 
-export type EmployeeFilter = "all" | "ranked" | "attention";
+export type EmployeeFilter = "all" | "ranked" | "unranked";
 export type EmployeeSort = "rank" | "score" | "revenue" | "improvement";
 
 export const attachRateLabels: Record<string, string> = {
@@ -62,7 +62,7 @@ export function selectEmployeeEntries(
     if (!current.participatesInRanking) return false;
     if (normalizedSearch && !current.displayName.toLocaleLowerCase("ru-RU").includes(normalizedSearch)) return false;
     if (filter === "ranked") return current.ranked;
-    if (filter === "attention") return !current.ranked;
+    if (filter === "unranked") return !current.ranked;
     return true;
   });
 

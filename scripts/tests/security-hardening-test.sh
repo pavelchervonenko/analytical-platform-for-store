@@ -132,6 +132,7 @@ bash -n \
     "${PROJECT_ROOT}/scripts/llm-eval/shadow.sh" \
     "${PROJECT_ROOT}/scripts/telegram-staging-acceptance.sh" \
     "${PROJECT_ROOT}/scripts/yandexgpt-staging-acceptance.sh" \
+    "${PROJECT_ROOT}"/scripts/reconciliation/*.sh \
     "${PROJECT_ROOT}/scripts/lib/shell-security.sh" \
     "${PROJECT_ROOT}"/scripts/livesklad-discovery/*.sh \
     "${PROJECT_ROOT}"/deploy/bin/*.sh
@@ -394,6 +395,7 @@ if grep -F $'\033' "${job_output}" >/dev/null; then
 fi
 
 bash "${PROJECT_ROOT}/scripts/tests/deploy-release-safety-test.sh"
+bash "${PROJECT_ROOT}/scripts/tests/bounded-classification-correction-test.sh"
 bash "${PROJECT_ROOT}/scripts/tests/weekly-review-ai-release-safety-test.sh"
 
 printf 'Operator script security tests passed.\n'

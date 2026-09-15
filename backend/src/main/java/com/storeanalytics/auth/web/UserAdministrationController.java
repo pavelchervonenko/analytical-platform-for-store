@@ -50,7 +50,8 @@ public class UserAdministrationController {
                         request.temporaryPassword(),
                         request.displayName(),
                         request.role(),
-                        request.storeIds()
+                        request.storeIds(),
+                        request.features()
                 ),
                 principal(authentication).getUserId()
         );
@@ -65,7 +66,14 @@ public class UserAdministrationController {
     ) {
         return toResponse(administrationService.update(
                 userId,
-                new UpdateUserCommand(request.displayName(), request.role(), request.active()),
+                new UpdateUserCommand(
+                        request.displayName(),
+                        request.role(),
+                        request.active(),
+                        request.storeIds(),
+                        request.features(),
+                        request.version()
+                ),
                 principal(authentication).getUserId()
         ));
     }
@@ -79,6 +87,7 @@ public class UserAdministrationController {
         return toResponse(administrationService.replaceStoreAccesses(
                 userId,
                 request.storeIds(),
+                request.version(),
                 principal(authentication).getUserId()
         ));
     }
@@ -110,6 +119,7 @@ public class UserAdministrationController {
                 user.passwordChangeRequired(),
                 user.allStores(),
                 user.storeIds(),
+                user.features(),
                 user.lastLoginAt(),
                 user.version()
         );

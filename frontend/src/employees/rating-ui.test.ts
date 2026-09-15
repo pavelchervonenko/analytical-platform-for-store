@@ -70,6 +70,12 @@ describe("employee rating UI selection", () => {
     expect(result.map((item) => item.current.rank)).toEqual([2, null]);
   });
 
+  it("labels the unranked filter as a factual state", () => {
+    const entries = [entry("Без места", null, 500), entry("С местом", 2, 100)];
+    expect(selectEmployeeEntries(entries, "", "unranked", "rank").map((item) => item.current.displayName))
+      .toEqual(["Без места"]);
+  });
+
   it("hides non-participants from every employee list", () => {
     const entries = [entry("Анна", null, 0, { participatesInRanking: false }), entry("Борис", 1, 300)];
     expect(selectEmployeeEntries(entries, "", "all", "rank").map((item) => item.current.displayName)).toEqual(["Борис"]);

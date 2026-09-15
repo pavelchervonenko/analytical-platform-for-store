@@ -147,5 +147,5 @@ export function limitationSummary(value: unknown): string {
 }
 
 export function readableInsightText(value: string): string {
-  return value.replace(/\s*·\s*/gu, ", ");
+  return value.replace(/\s*\u00b7\s*/gu, ", ");
 }

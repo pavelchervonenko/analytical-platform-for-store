@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import {
   AlertTriangle,
-  CheckCircle2,
   ChevronDown,
   Clock3,
   Lightbulb,
@@ -16,7 +15,7 @@ import type {
   WeeklyInsightStore
 } from "../api/weeklyInsightContract";
 import { formatDate } from "../shared/date";
-import { PanelSkeleton, QueryError } from "../shared/QueryState";
+import { PanelSkeleton, QueryError, StaleDataNote } from "../shared/QueryState";
 import {
   actionHorizonLabel,
   analysisStatusLabel,
@@ -79,20 +78,16 @@ function refetchInterval(insight: WeeklyInsight | undefined): number | false {
 function InsightStatus({ insight }: { insight: WeeklyInsight }) {
   const delayed = insight.state === "DELAYED"
     || insight.revisionState === "UPDATE_DELAYED";
-  const ready = insight.state === "READY" && !delayed;
-  const className = ready
-    ? "insight-status insight-status--ready"
-    : delayed
-      ? "insight-status insight-status--warning"
-      : "insight-status";
+  if (insight.state === "READY" && insight.revisionState === "CURRENT") return null;
+  const className = delayed
+    ? "insight-status insight-status--warning"
+    : "insight-status";
 
   return (
     <span className={className} role="status">
-      {ready
-        ? <CheckCircle2 aria-hidden="true" />
-        : delayed
-          ? <AlertTriangle aria-hidden="true" />
-          : <RefreshCw aria-hidden="true" />}
+      {delayed
+        ? <AlertTriangle aria-hidden="true" />
+        : <RefreshCw aria-hidden="true" />}
       {insight.state === "READY"
         ? insight.revisionState === "CURRENT" ? "Актуально" : "Обновляется"
         : insight.state === "DELAYED" ? "Есть задержка" : "Готовится"}
@@ -1022,7 +1017,7 @@ function AvailabilityInsight({ insight }: { insight: WeeklyInsight }) {
           </p>
           {insight.fallback && insight.fallback.dataLimitationCodes.length > 0 && (
             <small>
-              Есть ограничения качества данных. Подробности доступны в разделе качества.
+              Часть выводов появится после обновления исходных данных.
             </small>
           )}
         </div>
@@ -1045,7 +1040,7 @@ export function WeeklyInsightView({ storeId }: { storeId: string }) {
       {query.isPending && (
         <div className="insight-query-state"><PanelSkeleton rows={5} /></div>
       )}
-      {query.isError && (
+      {query.data === undefined && query.isError && (
         <div className="insight-query-state">
           <QueryError
             error={query.error}
@@ -1053,6 +1048,9 @@ export function WeeklyInsightView({ storeId }: { storeId: string }) {
             compact
           />
         </div>
+      )}
+      {query.data !== undefined && query.isError && (
+        <StaleDataNote error={query.error} onRetry={() => void query.refetch()} />
       )}
       {query.data?.state === "READY" && query.data.content
         ? <ReadyInsight insight={{ ...query.data, content: query.data.content }} />

@@ -143,7 +143,7 @@ val checkOpenApiCompatibility by tasks.registering(Exec::class) {
         "node",
         "scripts/check-openapi-compatibility.mjs",
         "--baseline",
-        "contracts/openapi/baselines/v10.json",
+        "contracts/openapi/baselines/v12.json",
         "--committed",
         "contracts/openapi/current.json",
         "--generated",
@@ -178,4 +178,3 @@ tasks.jacocoTestReport {
         html.required.set(true)
     }
 }
-

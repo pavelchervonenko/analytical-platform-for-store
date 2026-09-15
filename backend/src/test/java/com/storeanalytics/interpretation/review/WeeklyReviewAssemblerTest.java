@@ -74,8 +74,12 @@ class WeeklyReviewAssemblerTest {
 
         assertThat(result.reportState()).isEqualTo(ReportState.READY);
         assertThat(result.summary().outcome().text())
-                .contains("Чистая выручка за неделю", "Валовая прибыль")
+                .isEqualTo(
+                        "Неделя завершилась лучше периода сравнения. "
+                                + "Главная зона внимания — возвраты выросли."
+                )
                 .doesNotContain("план", "Автоматическая интерпретация");
+        assertThat(result.summary().outcome().effect()).isEqualTo(Effect.POSITIVE);
         assertThat(result.factors())
                 .extracting(factor -> factor.comparison().code())
                 .containsExactly("RETURN_REVENUE", "DEVICES_REVENUE");
@@ -88,13 +92,143 @@ class WeeklyReviewAssemblerTest {
         assertThat(result.factors().getFirst().effect()).isEqualTo(Effect.NEGATIVE);
         assertThat(result.actions()).singleElement().satisfies(action -> {
             assertThat(action.metricCode()).isEqualTo("RETURN_REVENUE");
-            assertThat(action.title()).isEqualTo("Разобрать рост возвратов");
+            assertThat(action.title())
+                    .isEqualTo("Проверить чеки и причины возвратов");
             assertThat(action.target().operator()).isEqualTo("AT_MOST");
             assertThat(action.target().value()).isEqualByComparingTo("50.00");
+        });
+        assertThat(result.actions()).allSatisfy(action -> {
+            List<WeeklyReviewResponse.Factor> related = result.factors().stream()
+                    .filter(factor -> action.metricCode().equals(factor.comparison().code()))
+                    .filter(factor -> factor.evidenceRefs().containsAll(action.evidenceRefs()))
+                    .toList();
+            assertThat(related).hasSize(1);
         });
         assertThat(result.aiEnhancement().state())
                 .isEqualTo(WeeklyReviewResponse.AiState.DISABLED);
         assertReferencesResolve(result);
+    }
+
+    @Test
+    void describesMixedCoreResultsWithoutCallingThemStable() {
+        StoreKpiDataQuality completeQuality = quality(true, 0, 0, 0);
+        WeeklyReviewFacts base = facts(
+                completeStatus(), completeQuality, completeQuality
+        );
+        PeriodFacts current = base.current();
+        PeriodFacts mixedCurrent = new PeriodFacts(
+                store("1000.00", "700.00", completeQuality),
+                current.categories(),
+                current.attachRates(),
+                current.employeeFacts(),
+                current.employeeSalesSamples(),
+                current.unattributedReturnDocumentCount(),
+                current.revenue()
+        );
+        WeeklyReviewResponse result = assembler.assemble(
+                new WeeklyReviewFacts(
+                        base.storeId(),
+                        base.period(),
+                        base.sourceDataStatus(),
+                        mixedCurrent,
+                        base.previous(),
+                        base.sourceDataUpdatedAt()
+                ),
+                provenance()
+        );
+
+        assertThat(result.summary().outcome().text())
+                .startsWith("Ключевые результаты недели изменились разнонаправленно.")
+                .doesNotContain("существенно не изменились");
+        assertThat(result.summary().outcome().effect()).isEqualTo(Effect.NEUTRAL);
+    }
+
+    @Test
+    void describesAWeakerWeekWithoutRepeatingExactKpiValues() {
+        StoreKpiDataQuality completeQuality = quality(true, 0, 0, 0);
+        WeeklyReviewFacts base = facts(
+                completeStatus(), completeQuality, completeQuality
+        );
+        WeeklyReviewResponse result = assembler.assemble(
+                new WeeklyReviewFacts(
+                        base.storeId(),
+                        base.period(),
+                        base.sourceDataStatus(),
+                        base.previous(),
+                        base.current(),
+                        base.sourceDataUpdatedAt()
+                ),
+                provenance()
+        );
+
+        assertThat(result.summary().outcome().text())
+                .startsWith("Неделя завершилась слабее периода сравнения.")
+                .doesNotContain("₽", "%");
+        assertThat(result.summary().outcome().effect()).isEqualTo(Effect.NEGATIVE);
+    }
+
+    @Test
+    void describesAnUnchangedWeekWithoutInventingAFactor() {
+        StoreKpiDataQuality completeQuality = quality(true, 0, 0, 0);
+        WeeklyReviewFacts base = facts(
+                completeStatus(), completeQuality, completeQuality
+        );
+        WeeklyReviewResponse result = assembler.assemble(
+                new WeeklyReviewFacts(
+                        base.storeId(),
+                        base.period(),
+                        base.sourceDataStatus(),
+                        base.previous(),
+                        base.previous(),
+                        base.sourceDataUpdatedAt()
+                ),
+                provenance()
+        );
+
+        assertThat(result.summary().outcome().text())
+                .isEqualTo("Ключевые результаты недели существенно не изменились.");
+        assertThat(result.summary().outcome().effect()).isEqualTo(Effect.NEUTRAL);
+        assertThat(result.factors()).isEmpty();
+    }
+
+    @Test
+    void includesReadyMaterialAverageSaleInStoreOutcome() {
+        StoreKpiDataQuality completeQuality = quality(true, 0, 0, 0);
+        WeeklyReviewFacts base = facts(
+                completeStatus(), completeQuality, completeQuality
+        );
+        PeriodFacts previous = base.previous();
+        PeriodFacts current = new PeriodFacts(
+                previous.store(),
+                previous.categories(),
+                previous.attachRates(),
+                previous.employeeFacts(),
+                previous.employeeSalesSamples(),
+                previous.unattributedReturnDocumentCount(),
+                revenue("1000.00", "100.00", 24, 1)
+        );
+
+        WeeklyReviewResponse result = assembler.assemble(
+                new WeeklyReviewFacts(
+                        base.storeId(),
+                        base.period(),
+                        base.sourceDataStatus(),
+                        current,
+                        previous,
+                        base.sourceDataUpdatedAt()
+                ),
+                provenance()
+        );
+
+        assertThat(metric(result, "NET_REVENUE").materiality())
+                .isEqualTo(WeeklyReviewResponse.Materiality.NOT_MATERIAL);
+        assertThat(metric(result, "AVERAGE_SALE").materiality())
+                .isEqualTo(WeeklyReviewResponse.Materiality.MATERIAL);
+        assertThat(result.summary().outcome().text())
+                .startsWith("Неделя завершилась слабее периода сравнения.");
+        assertThat(result.summary().outcome().effect()).isEqualTo(Effect.NEGATIVE);
+        assertThat(result.summary().outcome().evidenceRefs())
+                .containsAll(metric(result, "AVERAGE_SALE").evidenceRefs());
     }
 
     @Test
@@ -117,19 +251,72 @@ class WeeklyReviewAssemblerTest {
     }
 
     @Test
-    void blocksReportOnlyWhenSalesOrReturnsDoNotCoverClosedWeek() {
-        StoreDataStatusView incomplete = status(CURRENT.end(), PREVIOUS.end());
-
-        WeeklyReviewResponse result = assembler.assemble(
-                facts(incomplete, quality(true, 0, 0, 0), quality(true, 0, 0, 0)),
-                provenance()
+    void blocksAndMasksCoreAnalyticsWhenSalesOrReturnsDoNotCoverClosedWeek() {
+        List<StoreDataStatusView> incompleteSources = List.of(
+                status(PREVIOUS.end(), CURRENT.end()),
+                status(CURRENT.end(), PREVIOUS.end()),
+                status(PREVIOUS.end(), PREVIOUS.end())
         );
 
-        assertThat(result.reportState()).isEqualTo(ReportState.BLOCKED);
-        assertThat(result.summary().state())
-                .isEqualTo(WeeklyReviewResponse.BlockState.INSUFFICIENT);
-        assertThat(result.factors()).isEmpty();
-        assertThat(result.actions()).isEmpty();
+        incompleteSources.forEach(incomplete -> {
+            WeeklyReviewFacts base = facts(
+                    incomplete,
+                    quality(true, 0, 0, 0),
+                    quality(true, 0, 0, 0)
+            );
+            WeeklyReviewResponse result = assembler.assemble(
+                    new WeeklyReviewFacts(
+                            base.storeId(),
+                            base.period(),
+                            base.sourceDataStatus(),
+                            withUnattributedReturnDocumentCount(base.current(), 2),
+                            withUnattributedReturnDocumentCount(base.previous(), 1),
+                            base.sourceDataUpdatedAt()
+                    ),
+                    provenance()
+            );
+
+            assertThat(result.reportState()).isEqualTo(ReportState.BLOCKED);
+            assertThat(result.summary().state())
+                    .isEqualTo(WeeklyReviewResponse.BlockState.INSUFFICIENT);
+            assertThat(coreMetrics(result)).allSatisfy(metric -> {
+                assertThat(metric.metricState()).isEqualTo(MetricState.UNAVAILABLE);
+                assertThat(metric.sufficiency())
+                        .isEqualTo(WeeklyReviewResponse.Sufficiency.INSUFFICIENT);
+                assertThat(metric.materiality())
+                        .isEqualTo(WeeklyReviewResponse.Materiality.NOT_EVALUATED);
+                assertThat(metric.current()).isNull();
+                assertThat(metric.previous()).isNull();
+                assertThat(metric.absoluteDelta()).isNull();
+                assertThat(metric.changePercent()).isNull();
+                assertThat(metric.currentSample()).isNull();
+                assertThat(metric.previousSample()).isNull();
+            });
+            Set<String> coreEvidenceRefs = coreMetrics(result).stream()
+                    .flatMap(metric -> metric.evidenceRefs().stream())
+                    .collect(Collectors.toSet());
+            assertThat(result.evidence())
+                    .filteredOn(item -> coreEvidenceRefs.contains(item.evidenceRef()))
+                    .allSatisfy(item -> {
+                        assertThat(item.available()).isFalse();
+                        assertThat(item.currentValue()).isNull();
+                        assertThat(item.previousValue()).isNull();
+                    });
+            assertThat(result.salesStructure().state())
+                    .isEqualTo(WeeklyReviewResponse.BlockState.INSUFFICIENT);
+            assertThat(result.salesStructure().attachMetrics()).isEmpty();
+            assertThat(result.team().state())
+                    .isEqualTo(WeeklyReviewResponse.BlockState.INSUFFICIENT);
+            assertThat(result.employees()).isEmpty();
+            assertThat(result.evidence()).allSatisfy(item -> {
+                assertThat(item.available()).isFalse();
+                assertThat(item.currentValue()).isNull();
+                assertThat(item.previousValue()).isNull();
+            });
+            assertThat(result.factors()).isEmpty();
+            assertThat(result.actions()).isEmpty();
+            assertReferencesResolve(result);
+        });
     }
 
     @Test
@@ -153,6 +340,144 @@ class WeeklyReviewAssemblerTest {
     }
 
     @Test
+    void classificationLimitsOnlySalesStructure() {
+        WeeklyReviewResponse result = assembler.assemble(
+                facts(
+                        completeStatus(),
+                        quality(true, 0, 1, 0),
+                        quality(true, 0, 1, 0)
+                ),
+                provenance()
+        );
+
+        assertThat(result.reportState()).isEqualTo(ReportState.PARTIAL);
+        assertThat(result.summary().state())
+                .isEqualTo(WeeklyReviewResponse.BlockState.READY);
+        assertThat(result.salesStructure().state())
+                .isEqualTo(WeeklyReviewResponse.BlockState.LIMITED);
+        assertThat(result.team().state())
+                .isEqualTo(WeeklyReviewResponse.BlockState.READY);
+        assertThat(result.results())
+                .allMatch(metric -> metric.metricState() == MetricState.READY);
+    }
+
+    @Test
+    void unattributedReturnsStayAContextNoteWithoutDowngradingTheReport() {
+        StoreKpiDataQuality completeQuality = quality(true, 0, 0, 0);
+        WeeklyReviewFacts base = facts(
+                completeStatus(), completeQuality, completeQuality
+        );
+        WeeklyReviewResponse result = assembler.assemble(
+                new WeeklyReviewFacts(
+                        base.storeId(),
+                        base.period(),
+                        base.sourceDataStatus(),
+                        withUnattributedReturnDocumentCount(base.current(), 2),
+                        withUnattributedReturnDocumentCount(base.previous(), 1),
+                        base.sourceDataUpdatedAt()
+                ),
+                provenance()
+        );
+
+        assertThat(result.reportState()).isEqualTo(ReportState.READY);
+        assertThat(result.qualitySummary().warningCount()).isZero();
+        assertThat(result.limitations()).isEmpty();
+        assertThat(result.team().state()).isEqualTo(WeeklyReviewResponse.BlockState.READY);
+        assertThat(result.team().limitations()).singleElement().satisfies(message ->
+                assertThat(message)
+                        .contains("Итог магазина учтён")
+                        .contains("по доступной связи")
+        );
+        assertThat(result.sourceCoverage())
+                .filteredOn(coverage -> coverage.sourceCode()
+                        == WeeklyReviewResponse.SourceCode.EMPLOYEE_ATTRIBUTION)
+                .singleElement()
+                .satisfies(coverage -> {
+                    assertThat(coverage.requiredForReport()).isFalse();
+                    assertThat(coverage.state())
+                            .isEqualTo(WeeklyReviewResponse.CoverageState.PARTIAL);
+                });
+    }
+
+    @Test
+    void consistencyIssueLimitsNetRevenueAndSummaryOnly() {
+        WeeklyReviewResponse result = assembler.assemble(
+                facts(
+                        completeStatus(),
+                        quality(true, 0, 0, 1),
+                        quality(true, 0, 0, 0)
+                ),
+                provenance()
+        );
+
+        assertThat(metric(result, "NET_REVENUE").metricState()).isEqualTo(MetricState.LIMITED);
+        assertThat(metric(result, "GROSS_PROFIT").metricState()).isEqualTo(MetricState.READY);
+        assertThat(result.revenueDecomposition().salesRevenue().metricState())
+                .isEqualTo(MetricState.LIMITED);
+        assertThat(result.revenueDecomposition().returnRevenue().metricState())
+                .isEqualTo(MetricState.LIMITED);
+        assertThat(result.factors())
+                .noneMatch(factor -> "RETURN_CHANGE".equals(factor.kind()));
+        assertThat(result.summary().state())
+                .isEqualTo(WeeklyReviewResponse.BlockState.LIMITED);
+    }
+
+    @Test
+    void zeroCostKeepsProfitAndSummaryReady() {
+        StoreKpiDataQuality zeroCost = new StoreKpiDataQuality(
+                true,
+                10,
+                0,
+                0,
+                1,
+                0,
+                0
+        );
+        WeeklyReviewResponse result = assembler.assemble(
+                facts(
+                        completeStatus(),
+                        zeroCost,
+                        zeroCost
+                ),
+                provenance()
+        );
+
+        assertThat(metric(result, "NET_REVENUE").metricState()).isEqualTo(MetricState.READY);
+        assertThat(metric(result, "GROSS_PROFIT").metricState()).isEqualTo(MetricState.READY);
+        assertThat(result.summary().state())
+                .isEqualTo(WeeklyReviewResponse.BlockState.READY);
+    }
+
+    @Test
+    void explainsPartialCausedOnlyByInsufficientEmployeeSales() {
+        StoreKpiDataQuality completeQuality = quality(true, 0, 0, 0);
+        WeeklyReviewFacts base = facts(
+                completeStatus(), completeQuality, completeQuality
+        );
+        WeeklyReviewResponse result = assembler.assemble(
+                new WeeklyReviewFacts(
+                        base.storeId(),
+                        base.period(),
+                        base.sourceDataStatus(),
+                        withEmployeeSalesCount(base.current(), 2),
+                        withEmployeeSalesCount(base.previous(), 2),
+                        base.sourceDataUpdatedAt()
+                ),
+                provenance()
+        );
+
+        assertThat(result.reportState()).isEqualTo(ReportState.PARTIAL);
+        assertThat(result.limitations()).isEmpty();
+        assertThat(result.team().state()).isEqualTo(WeeklyReviewResponse.BlockState.LIMITED);
+        assertThat(result.team().limitations())
+                .containsExactly("Для части сотрудников недостаточно продаж для сравнения");
+        assertThat(result.qualitySummary().warningCount()).isOne();
+        assertThat(result.qualitySummary().affectedBlockCount()).isOne();
+        assertThat(result.qualitySummary().message())
+                .isEqualTo("Надёжные показатели сохранены; ограничений: 1");
+    }
+
+    @Test
     void sourceGraphHasNoMonthlyPlanOrRatingServiceDependency() {
         assertThat(List.of(WeeklyReviewFactsSource.class.getDeclaredFields()))
                 .extracting(field -> field.getType().getSimpleName())
@@ -170,6 +495,9 @@ class WeeklyReviewAssemblerTest {
                 .allSatisfy(factor -> assertThat(available).containsAll(factor.evidenceRefs()));
         assertThat(response.actions())
                 .allSatisfy(action -> assertThat(available).containsAll(action.evidenceRefs()));
+        assertThat(response.limitations())
+                .allSatisfy(limitation -> assertThat(available)
+                        .containsAll(limitation.evidenceRefs()));
     }
 
     private WeeklyReviewResponse.MetricComparison metric(
@@ -180,6 +508,22 @@ class WeeklyReviewAssemblerTest {
                 .filter(metric -> code.equals(metric.code()))
                 .findFirst()
                 .orElseThrow();
+    }
+
+    private List<WeeklyReviewResponse.MetricComparison> coreMetrics(
+            WeeklyReviewResponse response
+    ) {
+        return List.of(
+                response.results().get(0),
+                response.results().get(1),
+                response.results().get(2),
+                response.results().get(3),
+                response.revenueDecomposition().salesRevenue(),
+                response.revenueDecomposition().returnRevenue(),
+                response.revenueDecomposition().netRevenue(),
+                response.revenueDecomposition().saleDocumentCount(),
+                response.revenueDecomposition().returnDocumentCount()
+        );
     }
 
     private WeeklyReviewFacts facts(
@@ -237,6 +581,35 @@ class WeeklyReviewAssemblerTest {
                 samples,
                 0,
                 revenue
+        );
+    }
+
+    private PeriodFacts withEmployeeSalesCount(PeriodFacts source, long count) {
+        Map<UUID, Long> sales = source.employeeFacts().employees().stream()
+                .collect(Collectors.toMap(
+                        EmployeeRatingEntry::employeeId,
+                        ignored -> count
+                ));
+        return new PeriodFacts(
+                source.store(),
+                source.categories(),
+                source.attachRates(),
+                source.employeeFacts(),
+                new EmployeeSalesSampleFacts(sales),
+                source.unattributedReturnDocumentCount(),
+                source.revenue()
+        );
+    }
+
+    private PeriodFacts withUnattributedReturnDocumentCount(PeriodFacts source, long count) {
+        return new PeriodFacts(
+                source.store(),
+                source.categories(),
+                source.attachRates(),
+                source.employeeFacts(),
+                source.employeeSalesSamples(),
+                count,
+                source.revenue()
         );
     }
 

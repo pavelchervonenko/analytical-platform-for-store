@@ -1,18 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, Filter, History, LockKeyhole, Search, Trophy, UserCheck, Users } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { ArrowRight, Filter, History, LockKeyhole, Search, Trophy, UserCheck, Users } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import { isApiClientError } from "../api/client";
-import type { EmployeeRatingEntry } from "../api/contracts";
+import type { EmployeeRatingEntry, EmployeeRatingSetting } from "../api/contracts";
 import {
   finalizeEmployeeRating,
   getEmployeeDirectory,
   getEmployeeRating,
-  queryKeys
+  getEmployeeRatingSettings,
+  queryKeys,
+  updateEmployeeRatingSetting
 } from "../api/queries";
 import { currentDateInTimeZone, formatDate } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
-import { QueryError } from "../shared/QueryState";
+import { InlineQueryError, PanelSkeleton, QueryError, StaleDataNote } from "../shared/QueryState";
 import { useWorkspace } from "../stores/WorkspaceProvider";
 import { employeeRatingReason, selectEmployeeEntries, type EmployeeFilter, type EmployeeSort } from "./rating-ui";
 
@@ -58,6 +60,40 @@ export function EmployeesPage() {
     queryKey: queryKeys.employeeRating(storeId, periodStart, periodEnd),
     queryFn: () => getEmployeeRating(storeId, periodStart, periodEnd)
   });
+  const settingsQuery = useQuery({
+    queryKey: queryKeys.employeeRatingSettings(storeId),
+    queryFn: () => getEmployeeRatingSettings(storeId)
+  });
+
+  const participationMutation = useMutation({
+    mutationFn: (setting: EmployeeRatingSetting) => updateEmployeeRatingSetting(
+      storeId,
+      setting.employeeId,
+      !setting.participatesInRanking,
+      setting.version
+    ),
+    onSuccess: async (updated) => {
+      queryClient.setQueryData<EmployeeRatingSetting[]>(
+        queryKeys.employeeRatingSettings(storeId),
+        (current) => current?.map((setting) => setting.employeeId === updated.employeeId ? updated : setting) ?? [updated]
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.employeeDirectory(storeId, periodStart, periodEnd) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.employeeRating(storeId, periodStart, periodEnd) }),
+        queryClient.invalidateQueries({ queryKey: ["stores", storeId, "work-schedule"] }),
+        queryClient.invalidateQueries({ queryKey: ["stores", storeId, "payroll"] })
+      ]);
+    },
+    onError: (error) => {
+      if (isApiClientError(error) && error.status === 409) void settingsQuery.refetch();
+    }
+  });
+
+  useEffect(() => {
+    if (location.hash !== "#rating-participants" || !settingsQuery.data) return;
+    const frame = window.requestAnimationFrame(() => document.getElementById("rating-participants")?.scrollIntoView({ block: "start" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.hash, settingsQuery.data]);
 
   const finalizeMutation = useMutation({
     mutationFn: () => finalizeEmployeeRating(storeId, periodStart, periodEnd),
@@ -73,16 +109,21 @@ export function EmployeesPage() {
 
   const entries = useMemo(() => selectEmployeeEntries(directoryQuery.data?.employees ?? [], search, filter, sort), [directoryQuery.data, filter, search, sort]);
 
-  if (directoryQuery.isPending || ratingQuery.isPending) return <EmployeesSkeleton />;
-  if (directoryQuery.isError || ratingQuery.isError) {
-    const failed = directoryQuery.isError ? directoryQuery : ratingQuery;
-    return <QueryError error={failed.error} onRetry={() => void Promise.all([directoryQuery.refetch(), ratingQuery.refetch()])} />;
+  const directoryAvailable = directoryQuery.data !== undefined;
+  const ratingAvailable = ratingQuery.data !== undefined;
+  if ((!directoryAvailable && directoryQuery.isPending) || (!ratingAvailable && ratingQuery.isPending)) return <EmployeesSkeleton />;
+  if (!directoryAvailable && directoryQuery.isError) {
+    return <QueryError error={directoryQuery.error} onRetry={() => void directoryQuery.refetch()} />;
   }
+  if (!ratingAvailable && ratingQuery.isError) {
+    return <QueryError error={ratingQuery.error} onRetry={() => void ratingQuery.refetch()} />;
+  }
+  const staleQuery = [directoryQuery, ratingQuery, settingsQuery].find((query) => query.isError && query.data !== undefined);
 
-  const rating = ratingQuery.data;
-  const participants = directoryQuery.data.employees.filter(({ current }) => current.participatesInRanking);
+  const rating = ratingQuery.data!;
+  const participants = directoryQuery.data!.employees.filter(({ current }) => current.participatesInRanking);
   const ranked = participants.filter(({ current }) => current.ranked).length;
-  const needAttention = participants.filter(({ current }) => !current.ranked).length;
+  const withoutRank = participants.filter(({ current }) => !current.ranked).length;
   const isFinalized = rating.history.status === "FINALIZED";
   const isLive = rating.history.status === "LIVE";
   const canFinalize = isLive && periodEnd < currentDateInTimeZone(selectedStore.timezone);
@@ -92,12 +133,12 @@ export function EmployeesPage() {
       <header className="page-heading employees-heading">
         <h1>Сотрудники и рейтинг</h1>
         <div className="employees-heading__actions">
-          <span className={`rating-history-badge rating-history-badge--${isFinalized ? "finalized" : isLive ? "live" : "unknown"}`}>{isFinalized ? <LockKeyhole size={15} /> : isLive ? <History size={15} /> : <AlertTriangle size={15} />}{isFinalized ? "Зафиксирован" : isLive ? "Живой расчет" : "Статус неизвестен"}</span>
+          {!isLive && <span className={`rating-history-badge rating-history-badge--${isFinalized ? "finalized" : "unknown"}`}>{isFinalized ? <LockKeyhole size={15} /> : <History size={15} />}{isFinalized ? "Зафиксирован" : "Статус неизвестен"}</span>}
           {canFinalize && <button className="button button--primary" type="button" onClick={() => setFinalizeDialogOpen(true)}><LockKeyhole size={17} />Зафиксировать период</button>}
         </div>
       </header>
 
-      {isFinalized && <section className="rating-snapshot-banner"><LockKeyhole size={18} /><div><strong>Результат периода сохранен</strong><p>Зафиксировал {rating.history.finalizedByName ?? "пользователь"}{rating.history.finalizedAt ? `, ${new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium", timeStyle: "short", timeZone: selectedStore.timezone }).format(new Date(rating.history.finalizedAt))}` : ""}. Новые продажи, смены и настройки не изменят этот результат.</p></div></section>}
+      {staleQuery && <StaleDataNote error={staleQuery.error} onRetry={() => void Promise.all([directoryQuery.refetch(), ratingQuery.refetch(), settingsQuery.refetch()])} />}
 
       {finalizeMutation.isError && (
         <div className="form-alert" role="alert">{isApiClientError(finalizeMutation.error) ? finalizeMutation.error.message : "Не удалось зафиксировать рейтинг. Обновите данные и повторите действие."}</div>
@@ -105,15 +146,32 @@ export function EmployeesPage() {
 
       <section className="employee-summary-grid" aria-label="Сводка рейтинга">
         <SummaryCard icon={<Users size={21} />} label="Сотрудники" value={String(participants.length)} note="Показываются участники рейтинга" featured />
-        <SummaryCard icon={<Trophy size={21} />} label="Получили место" value={String(ranked)} note={needAttention ? `${needAttention} требуют внимания` : "У всех достаточно данных"} />
+        <SummaryCard icon={<Trophy size={21} />} label="Получили место" value={String(ranked)} note={withoutRank ? `${withoutRank} без места — причины указаны в таблице` : "Место присвоено всем участникам"} />
         <SummaryCard icon={<UserCheck size={21} />} label="Покрытие плана" value={formatPercent(rating.plan.coveragePercent)} note={rating.plan.complete ? `Выполнение выручки: ${formatPercent(rating.plan.revenueAchievementPercent)}` : "План задан не на весь период"} />
+      </section>
+
+      <section className="panel rating-participation-panel" id="rating-participants" aria-labelledby="rating-participants-title">
+        <div className="panel__heading"><div><p className="eyebrow">Состав команды</p><h2 id="rating-participants-title">Участники рейтинга и смен</h2><p>Включайте сюда продавцов, которых нужно добавлять в календарь смен и общий рейтинг.</p></div><span>{settingsQuery.data ? `${settingsQuery.data.filter((setting) => setting.participatesInRanking).length} включено` : "—"}</span></div>
+        {settingsQuery.data === undefined && settingsQuery.isPending && <PanelSkeleton rows={3} />}
+        {settingsQuery.data === undefined && settingsQuery.isError && <InlineQueryError error={settingsQuery.error} onRetry={() => void settingsQuery.refetch()} />}
+        {settingsQuery.data && <div className="rating-participation-list">
+          {settingsQuery.data.map((setting) => {
+            const available = setting.employeeActive && setting.assignmentActive;
+            const pending = participationMutation.isPending && participationMutation.variables?.employeeId === setting.employeeId;
+            const failed = participationMutation.isError && participationMutation.variables?.employeeId === setting.employeeId;
+            const failureMessage = isApiClientError(participationMutation.error) && participationMutation.error.status === 409
+              ? "Настройка уже изменилась. Проверьте актуальное значение и повторите."
+              : isApiClientError(participationMutation.error) ? participationMutation.error.message : "Не удалось изменить участие.";
+            return <article key={setting.employeeId}><div><strong>{setting.displayName}</strong><small>{available ? setting.participatesInRanking ? "Участвует в рейтинге и доступен для смен" : "Не участвует и недоступен для новых смен" : !setting.employeeActive ? "Профиль неактивен" : "Нет активного назначения в магазин"}</small>{failed && <p className="rating-participation-error" role="alert">{failureMessage}</p>}</div><button className={`participation-toggle ${setting.participatesInRanking ? "participation-toggle--active" : ""}`} type="button" aria-pressed={setting.participatesInRanking} disabled={!available || pending} onClick={() => participationMutation.mutate(setting)}><span aria-hidden="true"><i /></span>{pending ? "Сохраняем…" : setting.participatesInRanking ? "Включен" : "Выключен"}</button></article>;
+          })}
+        </div>}
       </section>
 
       <section className="employees-panel panel">
         <div className="employees-toolbar">
           <div><p className="eyebrow">Команда</p><h2>Результаты сотрудников</h2></div>
           <label className="employee-search"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Найти сотрудника" aria-label="Найти сотрудника" /></label>
-          <label className="employee-select"><Filter size={15} /><select value={filter} onChange={(event) => setFilter(event.target.value as EmployeeFilter)} aria-label="Фильтр сотрудников"><option value="all">Все участники</option><option value="ranked">С местом</option><option value="attention">Требуют внимания</option></select></label>
+          <label className="employee-select"><Filter size={15} /><select value={filter} onChange={(event) => setFilter(event.target.value as EmployeeFilter)} aria-label="Фильтр сотрудников"><option value="all">Все участники</option><option value="ranked">С местом</option><option value="unranked">Без места</option></select></label>
           <label className="employee-select"><select value={sort} onChange={(event) => setSort(event.target.value as EmployeeSort)} aria-label="Сортировка сотрудников"><option value="rank">По месту</option><option value="score">По общему баллу</option><option value="revenue">По выручке</option><option value="improvement">По росту места</option></select></label>
         </div>
 

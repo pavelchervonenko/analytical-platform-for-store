@@ -12,13 +12,13 @@ record ReturnRecoveryExpectation(
         String documentNumber,
         BigDecimal netAmount,
         int positionCount
-) {
+) implements ReturnTargetExpectation {
 
     ReturnRecoveryExpectation {
         if (!StringUtils.hasText(externalId)
                 || !StringUtils.hasText(documentNumber)
                 || netAmount == null
-                || netAmount.signum() <= 0
+                || netAmount.signum() < 0
                 || positionCount <= 0) {
             throw new InvalidRequestException(
                     "Return recovery expectation is incomplete"
@@ -36,7 +36,8 @@ record ReturnRecoveryExpectation(
         }
     }
 
-    void verify(LiveSkladReturnDetailPayload detail) {
+    @Override
+    public void verify(LiveSkladReturnDetailPayload detail) {
         if (!externalId.equals(detail.externalId())
                 || !documentNumber.equals(detail.documentNumber())
                 || positionCount != detail.positions().size()

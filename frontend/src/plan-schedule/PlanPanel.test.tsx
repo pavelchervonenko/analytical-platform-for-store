@@ -1,7 +1,13 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { PlanDirection } from "../api/contracts";
-import { DirectionCard, primaryPlanAction } from "./PlanPanel";
+import {
+  directionStatusLabel,
+  getPlanSummary,
+  primaryPlanAction,
+  RevenuePlanBlock,
+  RevenueStructureBlock
+} from "./PlanPanel";
 
 const revenue: PlanDirection = {
   code: "REVENUE",
@@ -41,32 +47,126 @@ const accessory: PlanDirection = {
   criterionCompletionPercent: 75
 };
 
-describe("plan direction presentation", () => {
-  it("labels the revenue card as progress toward the full monthly target", () => {
-    render(<DirectionCard direction={revenue} />);
+const service: PlanDirection = {
+  ...accessory,
+  code: "SERVICE",
+  actualSharePercent: 4.5,
+  targetSharePercent: 5,
+  shareGapPercentagePoints: -0.5
+};
 
-    const card = screen.getByText("Выручка").closest("article");
-    expect(card).not.toBeNull();
-    expect(within(card!).getByText("Выполнение месячной цели")).toBeInTheDocument();
-    expect(within(card!).getByText(/Факт к месячной цели:/u)).toBeInTheDocument();
-    expect(within(card!).getByText("Прогноз выручки на конец месяца")).toBeInTheDocument();
-    expect(within(card!).getByText("Осталось до месячной цели")).toBeInTheDocument();
-    expect(within(card!).getByText("До месячного плана в день")).toBeInTheDocument();
-    expect(within(card!).queryByText("Нужно в день")).not.toBeInTheDocument();
-    expect(primaryPlanAction(revenue)).toMatch(/выполнить месячный план/u);
+const additional: PlanDirection = {
+  ...accessory,
+  code: "ADDITIONAL",
+  actualSharePercent: 10.5,
+  targetSharePercent: 13,
+  shareGapPercentagePoints: -2.5
+};
+
+describe("plan overview presentation", () => {
+  it("shows revenue as one focused block with the manager's key values", () => {
+    render(<RevenuePlanBlock direction={revenue} monthClosed={false} />);
+
+    const block = screen.getByRole("region", { name: "Месячная цель" });
+    expect(within(block).getByText("Темп ниже плана")).toBeInTheDocument();
+    expect(within(block).getByText(/800\s000\s₽/u)).toBeInTheDocument();
+    expect(within(block).getByText("Прогноз на конец месяца")).toBeInTheDocument();
+    expect(within(block).getByText("950 тыс. ₽, 95% плана")).toBeInTheDocument();
+    expect(within(block).getByText("Нужно в день до конца месяца")).toBeInTheDocument();
+    expect(within(block).getByRole("progressbar")).toHaveAccessibleName("Выполнение плана выручки: 80%");
   });
 
-  it("labels a share card as recovery of the current accumulated gap", () => {
-    render(<DirectionCard direction={accessory} />);
+  it("groups the three independent share goals and keeps money details secondary", () => {
+    render(<RevenueStructureBlock directions={[revenue, accessory, service, additional]} monthClosed={false} />);
 
-    const card = screen.getByText("Аксессуары").closest("article");
-    expect(card).not.toBeNull();
-    expect(within(card!).getByText("Доля на текущую дату")).toBeInTheDocument();
-    expect(within(card!).getByText(/Факт к ориентиру на текущую выручку:/u)).toBeInTheDocument();
-    expect(within(card!).getByText("Прогноз суммы на конец месяца")).toBeInTheDocument();
-    expect(within(card!).getByText("Текущее отставание")).toBeInTheDocument();
-    expect(within(card!).getByText("Закрыть отставание в день")).toBeInTheDocument();
-    expect(within(card!).queryByText("Нужно в день")).not.toBeInTheDocument();
-    expect(primaryPlanAction(accessory)).toMatch(/закрыть текущее отставание/u);
+    const block = screen.getByRole("region", { name: "Доли направлений" });
+    expect(within(block).getByText("Аксессуары")).toBeInTheDocument();
+    expect(within(block).getByText("Услуги")).toBeInTheDocument();
+    expect(within(block).getByText("Доп. выручка")).toBeInTheDocument();
+    expect(within(block).getAllByText("Ниже цели")).toHaveLength(3);
+    expect(within(block).getByText("−2 п. п.")).toBeInTheDocument();
+    expect(within(block).getAllByText("Фактическая сумма")).toHaveLength(3);
+    expect(within(block).getAllByText("Прогноз суммы на конец месяца")).toHaveLength(3);
+    expect(block.querySelectorAll("details")).toHaveLength(3);
+  });
+
+  it("does not call an open month completed", () => {
+    const achieved = { ...accessory, achieved: true, status: "ACHIEVED" };
+
+    expect(getPlanSummary([achieved], true, 12)).toEqual({
+      label: "Все цели достигнуты на текущую дату",
+      description: "Продолжайте следить за темпом до конца месяца.",
+      tone: "success"
+    });
+    expect(directionStatusLabel(achieved, false)).toBe("Цель достигнута на текущую дату");
+  });
+
+  it("uses final wording only after the month is closed", () => {
+    const achieved = { ...accessory, achieved: true, status: "ACHIEVED" };
+
+    expect(getPlanSummary([achieved], true, 0).label).toBe("План выполнен");
+    expect(directionStatusLabel(achieved, true)).toBe("Цель выполнена");
+  });
+
+  it("replaces daily prescriptions with final gaps after the month is closed", () => {
+    render(
+      <>
+        <RevenuePlanBlock direction={{ ...revenue, status: "MISSED", requiredPerRemainingDay: null }} monthClosed />
+        <RevenueStructureBlock
+          directions={[
+            revenue,
+            { ...accessory, status: "MISSED", requiredPerRemainingDay: null },
+            service,
+            additional
+          ]}
+          monthClosed
+        />
+      </>
+    );
+
+    expect(screen.getByText("Итоговый недобор")).toBeInTheDocument();
+    expect(screen.getAllByText("Итоговое отставание")).toHaveLength(3);
+    expect(screen.queryByText("Прогноз суммы на конец месяца")).not.toBeInTheDocument();
+    expect(screen.queryByText("Нужно в день до конца месяца")).not.toBeInTheDocument();
+    expect(screen.queryByText("Для сокращения отставания в день")).not.toBeInTheDocument();
+  });
+
+  it("does not prescribe a daily pace after a missed month is closed", () => {
+    expect(primaryPlanAction({ ...revenue, status: "MISSED", requiredPerRemainingDay: null }))
+      .toBe("Выручка: итог месяца, цель не выполнена.");
+  });
+
+  it("does not ask the manager to inspect technical data", () => {
+    expect(primaryPlanAction({ ...accessory, status: "NOT_AVAILABLE", requiredPerRemainingDay: null }))
+      .toBe("Аксессуары: расчёт появится после обновления данных.");
+  });
+
+  it("suppresses projections that are waiting for complete source data", () => {
+    render(
+      <>
+        <RevenuePlanBlock direction={revenue} monthClosed={false} forecastAvailable={false} />
+        <RevenueStructureBlock
+          directions={[accessory, service, additional]}
+          monthClosed={false}
+          forecastAvailable={false}
+        />
+      </>
+    );
+
+    expect(screen.getByText("Ожидает данных")).toBeInTheDocument();
+    expect(screen.queryByText("950 тыс. ₽, 95% плана")).not.toBeInTheDocument();
+    expect(screen.queryByText("Прогноз суммы на конец месяца")).not.toBeInTheDocument();
+  });
+
+  it("does not format a missing projected completion as a forecast", () => {
+    render(
+      <RevenuePlanBlock
+        direction={{ ...revenue, projectedAmountCompletionPercent: null }}
+        monthClosed={false}
+      />
+    );
+
+    expect(screen.getByText("Ожидает данных")).toBeInTheDocument();
+    expect(screen.queryByText("950 тыс. ₽, — плана")).not.toBeInTheDocument();
   });
 });

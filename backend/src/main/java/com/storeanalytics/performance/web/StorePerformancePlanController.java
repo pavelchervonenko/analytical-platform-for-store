@@ -45,7 +45,8 @@ public class StorePerformancePlanController {
             )
     ))
     @GetMapping("/{storeId}/performance-plans/{month}")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_PLAN')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     ResponseEntity<StorePerformancePlanView> get(
             @PathVariable UUID storeId,
             @PathVariable @DateTimeFormat(pattern = "yyyy-MM") YearMonth month
@@ -66,7 +67,8 @@ public class StorePerformancePlanController {
             )
     ))
     @PutMapping("/{storeId}/performance-plans/{month}")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_PLAN')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     ResponseEntity<StorePerformancePlanView> upsert(
             @PathVariable UUID storeId,
             @PathVariable @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,

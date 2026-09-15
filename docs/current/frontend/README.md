@@ -6,7 +6,7 @@ owner: frontend
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-14
 requirement_sources:
   - docs/current/product/README.md
 implementation_sources:
@@ -15,8 +15,14 @@ implementation_sources:
   - frontend/src/styles.css
 verification_sources:
   - frontend/src/api/consumerContract.test.ts
+  - frontend/src/app/AppShell.test.ts
+  - frontend/src/auth/SessionGates.test.tsx
+  - frontend/src/admin/UsersPanel.test.tsx
   - frontend/src/dashboard/OverviewPage.test.tsx
-runtime_evidence: []
+  - frontend/src/insights/WeeklyReviewView.test.tsx
+  - frontend/e2e/visual-local.spec.ts
+runtime_evidence:
+  - docs/history/audits/2026/09/WEEKLY_REVIEW_LOCAL_PRERELEASE_2026-09-14.md
 required_reviewers:
   - frontend
   - product
@@ -35,9 +41,10 @@ superseded_by: null
 
 - [Период и scope](period-and-scope-contract.md)
 - [Главная](overview.md)
+- [ИИ-разбор / Weekly Review](../ai/weekly-review.md)
 - [Структура и attach-map](sales-structure-and-attach-map.md)
 - [Сотрудники](employees.md)
-- [План и смены](plan-and-shifts.md)
+- [План и смены: отдельные экраны](plan-and-shifts.md)
 - [Зарплата и отчёты](payroll-and-reports.md)
 - [Quality actions](data-quality-actions.md)
 - [Transport](transport-contracts.md)
@@ -46,6 +53,17 @@ Frontend не подменяет `null` нулём, явно называет у
 смешивает периоды в одной карточке. Решения по Overview period scope и employee return attribution
 закреплены в [ADR-0002](../../decisions/ADR-0002-overview-period-scope.md) и
 [ADR-0001](../../decisions/ADR-0001-return-employee-attribution.md).
+
+## Функциональный доступ руководителя
+
+Сессия возвращает глобальный набор `PLAN`, `SHIFTS`, `PAYROLL`. Для руководителя меню и прямые
+маршруты fail-closed: отсутствующая функция скрывает пункт и перенаправляет прямую ссылку на обзор;
+backend остаётся обязательной границей доступа. Администратор неявно имеет все функции. Неизвестную
+роль или неизвестное право старая админка не редактирует, чтобы не потерять данные новой версии
+сервера. Пустой набор функций отображается как «Только аналитика».
+
+`PAYROLL` не управляет архивом отчётов: зарплатные значения в опубликованных отчётах остаются
+видимыми. Без `PAYROLL` скрыты прямой раздел зарплаты и зарплатный блок карточки сотрудника.
 
 ## Базовая типографика
 

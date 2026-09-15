@@ -1,6 +1,7 @@
 package com.storeanalytics.integration.livesklad.webhook;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 record LiveSkladWebhookClaim(
@@ -12,7 +13,12 @@ record LiveSkladWebhookClaim(
         String sourceDocumentId,
         String recoveryExpectedDocumentNumber,
         BigDecimal recoveryExpectedNetAmount,
-        Integer recoveryExpectedPositionCount
+        Integer recoveryExpectedPositionCount,
+        LiveSkladReturnRecoveryMode recoveryMode,
+        String recoveryExpectedCurrentEmployeeExternalId,
+        String recoveryExpectedOriginalSaleExternalId,
+        String recoveryExpectedOriginalEmployeeExternalId,
+        List<RecoverLiveSkladReturnLinkExpectation> recoveryExpectedOriginalLinks
 ) {
     LiveSkladWebhookClaim(
             UUID id,
@@ -30,12 +36,22 @@ record LiveSkladWebhookClaim(
                 null,
                 null,
                 null,
-                null
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of()
         );
     }
 
-
     boolean recovery() {
         return recoveryExpectedDocumentNumber != null;
+    }
+
+    boolean existingOrphanRelink() {
+        return recovery()
+                && recoveryMode
+                == LiveSkladReturnRecoveryMode.EXISTING_ORPHAN_RELINK;
     }
 }

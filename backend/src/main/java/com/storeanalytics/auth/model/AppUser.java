@@ -129,6 +129,10 @@ public class AppUser extends AbstractMutableEntity {
         }
     }
 
+    public void recordAccessPolicyChange() {
+        securityVersion++;
+    }
+
     private static String normalizeEmail(String value) {
         return requireText(value, "email").trim().toLowerCase(Locale.ROOT);
     }

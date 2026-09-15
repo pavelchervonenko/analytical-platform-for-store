@@ -25,6 +25,25 @@ class ReturnRecoveryExpectationTest {
     }
 
     @Test
+    void acceptsZeroNetItemReturnAndRejectsNegativeExpectation() {
+        ReturnRecoveryExpectation expectation = new ReturnRecoveryExpectation(
+                "69c67dbf35f1a26e5b3bc638",
+                "F000175",
+                new BigDecimal("0.00"),
+                1
+        );
+
+        expectation.verify(zeroNetDetail());
+
+        assertThatThrownBy(() -> new ReturnRecoveryExpectation(
+                "69c67dbf35f1a26e5b3bc638",
+                "F000175",
+                new BigDecimal("-0.01"),
+                1
+        )).isInstanceOf(InvalidRequestException.class);
+    }
+
+    @Test
     void rejectsAnyMismatchBeforeSynchronization() {
         assertThatThrownBy(() -> new ReturnRecoveryExpectation(
                 "6a6daeadaa17fa79fe127335",
@@ -65,6 +84,24 @@ class ReturnRecoveryExpectationTest {
                         position("position-1", "12330.00"),
                         position("position-2", "2700.00")
                 ),
+                null
+        );
+    }
+
+    private LiveSkladReturnDetailPayload zeroNetDetail() {
+        return new LiveSkladReturnDetailPayload(
+                "69c67dbf35f1a26e5b3bc638",
+                "F000175",
+                Instant.parse("2026-03-24T12:00:00Z"),
+                Instant.parse("2026-03-24T12:01:00Z"),
+                "saleReturn",
+                "store-1",
+                "employee-1",
+                "sale-1",
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                List.of(position("zero-net-position", "0.00")),
                 null
         );
     }

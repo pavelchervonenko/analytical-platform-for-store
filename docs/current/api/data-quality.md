@@ -5,8 +5,8 @@ status: current
 owner: backend
 audience:
   - developer
-  - manager
-last_verified: 2026-08-31
+  - operator
+last_verified: 2026-09-09
 requirement_sources:
   - docs/archive/legacy-contracts/data-quality-api.md
 implementation_sources:
@@ -33,8 +33,11 @@ superseded_by: null
 
 ## Endpoints
 
-- `GET /api/data-quality/summary` — сводка по active stores текущего principal.
-- `GET /api/stores/{storeId}/data-quality` — store-scoped detail.
+- `GET /api/data-quality/summary` — сводка по active stores администратора.
+- `GET /api/stores/{storeId}/data-quality` — detail конкретного магазина.
+
+Оба endpoint доступны только `ADMIN`: это обеспечивается request matcher до общего `/api/stores/**`
+и `@PreAuthorize` на контроллере. `MANAGER` получает `403` даже для назначенного ему магазина.
 
 Сводка соединяет производный freshness/sync signal и persisted open
 `data_quality_issues`. Итоговый health имеет приоритет `ERROR > WARNING > OK`; INFO сам по себе не

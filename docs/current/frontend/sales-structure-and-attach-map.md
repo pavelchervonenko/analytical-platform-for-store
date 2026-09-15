@@ -6,7 +6,7 @@ owner: frontend
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-09
 requirement_sources:
   - docs/current/product/business-metrics.md
   - docs/current/product/attach-rate.md
@@ -39,9 +39,10 @@ superseded_by: null
                         └── Услуги
 ```
 
-Родитель — итог/подытог, ребёнок — «В том числе»; layout не должен выглядеть как независимые
-слагаемые. `SELLERS` включает только `rankingEligible` сотрудников, `STORE` — весь магазин;
-переключатель общий с верхними метриками и планом.
+Родитель и вложенные строки различаются фоном, отступом и соединительной линией. Служебные подписи
+«Итого по категории», «В том числе» и «Подытог» в интерфейсе не показываются. Блок остается
+постоянно открытым. `SELLERS` включает только `rankingEligible` сотрудников, `STORE` — весь
+магазин; переключатель общий с верхними метриками и планом.
 
 Attach-map использует `/kpi/attach-rates` для store benchmark и `/employee-ratings` для roster.
 Residual = store facts минус показанный roster; это «вне рейтинга / без сотрудника», не сотрудник.
@@ -49,7 +50,8 @@ Residual = store facts минус показанный roster; это «вне �
 - `rate=null`, base<=0: «Нет продаж для расчёта».
 - Нет положительного store benchmark: «Нет среднего по магазину».
 - Employee base ниже rating threshold: «Недостаточно продаж».
-- Quality counters: число показывается только с quality context.
+- Технические quality counters и количество замечаний на manager overview не показываются;
+  подробности доступны администратору в отдельном разделе качества данных.
 
 14 метрик и premium protection определены в [product/attach-rate](../product/attach-rate.md).
 Employee rows периода с возвратами ограничены ADR-0001; store benchmark — нет.

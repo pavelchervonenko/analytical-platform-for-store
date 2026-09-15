@@ -21,7 +21,7 @@ import {
   revokeTelegramChannel,
   updateTelegramDeliverySettings
 } from "../api/queries";
-import { QueryError } from "../shared/QueryState";
+import { InlineQueryError, StaleDataNote } from "../shared/QueryState";
 import { useAuth } from "./AuthProvider";
 import {
   formatQuietHours,
@@ -171,7 +171,11 @@ export function TelegramNotificationsCard() {
     {channelQuery.isPending && <div className="telegram-loading" aria-live="polite">
       <span className="spinner" />Проверяем подключение…
     </div>}
-    {channelQuery.error && <QueryError
+    {channelQuery.data === undefined && channelQuery.isError && <InlineQueryError
+      error={channelQuery.error}
+      onRetry={() => void channelQuery.refetch()}
+    />}
+    {channelQuery.data !== undefined && channelQuery.isError && <StaleDataNote
       error={channelQuery.error}
       onRetry={() => void channelQuery.refetch()}
     />}

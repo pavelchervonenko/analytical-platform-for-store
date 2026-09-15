@@ -78,7 +78,7 @@ export function ClassificationPanel() {
         <div className="panel__heading">
           <div>
             <p className="eyebrow">{selectedStore.name}, {month}</p>
-            <h2>Неразмеченные товары</h2>
+            <h2>Товары без категории зарплаты</h2>
           </div>
           <span>{products.length}</span>
         </div>
@@ -115,7 +115,7 @@ export function ClassificationPanel() {
                         </div>
                       ) : (
                         <p className="classification-manual-note">
-                          Требуется ручная классификация
+                          Для зарплаты требуется ручная классификация
                         </p>
                       )}
                     </div>
