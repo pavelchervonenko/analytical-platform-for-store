@@ -171,18 +171,20 @@ payroll `PAID_REPAIR`: существующая подсказка распоз�
 Технические timestamps указывают на предшествующий период, но точные source business dates перед
 mutation нужно получить заново.
 
-Обычный backfill API принимает только диапазон дат и не умеет загрузить один exact sale. Поэтому
-нельзя безопасно выполнить четыре relink, пока не принято одно из решений:
+Обычный backfill API принимает только диапазон дат и не умеет загрузить один exact sale. Для
+четырёх relink выбран следующий безопасный путь:
 
-1. **Рекомендуемый путь:** получить три декабрьских отчёта, провести полную сверку декабря и после
-   отдельного разрешения синхронизировать доказанный bounded период. Это сохраняет честную coverage
-   semantics и не создаёт частично заполненный месяц без evidence.
-2. Реализовать и проверить отдельный exact parent-sale/reference-only import с явной семантикой
-   coverage. Это меньшая data mutation, но новый сложный код и новый recovery contract.
+1. Получить три декабрьских отчёта и провести полную сверку декабря.
+2. По source business dates четырёх parent sales определить минимальный доказанный bounded период.
+3. После отдельного разрешения синхронизировать этот период штатным backfill и повторить декабрьскую
+   сверку.
+4. Только после появления exact parent documents/items выполнить четыре январских relink.
 
-Январский backfill не поможет, а ручная вставка parent rows SQL запрещена. До решения этого gate
-январские четыре relink остаются `BLOCKED`; январские payroll assignments можно выполнить отдельно,
-но итоговый январский verdict останется открытым.
+Exact parent-sale/reference-only import отклонён для текущего release train: он добавил бы новый
+recovery contract и создал частично заполненный месяц без полного evidence. Январский backfill не
+поможет, а ручная вставка parent rows SQL запрещена. До получения декабрьских отчётов и отдельного
+разрешения январские четыре relink остаются `BLOCKED`; январские payroll assignments можно выполнить
+отдельно, но итоговый январский verdict останется открытым.
 
 ## Что должно войти в общий релиз
 
@@ -330,9 +332,23 @@ OpenAPI, security и concurrency regression проходит.
 5. Проверить отсутствие approved/paid payroll, finalized reports и conflicting jobs в каждом
    месяце непосредственно перед mutation.
 
-Результат: не выполнено. Bounded classification scripts/manifests ещё не созданы, январская
-parent-sale strategy не выбрана, а fresh факты для data mutations допустимо получать только после
-успешного deployment и нового отдельного разрешения.
+Результат: `PARTIAL`.
+
+- три bounded classification scripts и sanitised manifests созданы; режимы
+  `--preflight/--apply/--verify`, exact source guards, global/operation locks, locked
+  payroll/report и queue guards, одна транзакция на месяц и immutable audit реализованы;
+- manifests повторно сопоставлены с fresh production read-only audits 2026-09-15: январь `4`
+  позиции / 27,000 ₽ / cost 11,200 ₽, февраль `2` / 6,500 ₽ / 3,500 ₽, март `9` / 41,790 ₽ /
+  24,300 ₽; product-level scope не содержит дополнительных строк;
+- изолированный PostgreSQL 16/V51 rehearsal прошёл preflight, mismatch rollback, apply, independent
+  verify и repeat-apply fail-closed на синтетических данных;
+- выбран полный декабрьский reconciliation + bounded sync, а не новый reference-only import;
+- sanitised execution manifests для 22 return operations ещё не созданы, декабрьские отчёты не
+  получены, а classification tooling ещё должен пройти новый CI и production-like rehearsal на
+  fresh backup.
+
+Ни один production write не выполнялся. Fresh apply-preflight допустим только после успешного
+deployment и нового отдельного разрешения exact targets.
 
 ### 4. Выполнить локальные и CI gates на exact candidate
 
@@ -369,6 +385,12 @@ OpenAPI baseline/current/generated types проверяются на чисто�
 
 CI, reproducible immutable image publication и проверка image revisions остаются внешними
 stop-условиями и локальным результатом не закрываются.
+
+PR [#1](https://github.com/pavelchervonenko/analytical-platform-for-store/pull/1) создан для
+`codex/store-release-rc`. Пользователь сообщил о зелёном CI на commit `0db4484`; доступ к GitHub API
+из локальной execution-среды отсутствовал, поэтому это external user-reported evidence. После
+добавления correction tooling commit кандидата изменится, и полный CI обязан пройти повторно до
+review/merge.
 
 ### 5. Выполнить integration/conflict gate
 
@@ -525,13 +547,16 @@ failed/active conflicting jobs. Затем данные меняются в сл
 
 Общий verdict остаётся `NO-GO`, потому что не закрыты обязательные внешние и data-correction gates:
 
-- финальный candidate ещё не прошёл green CI и не опубликован как exact paired immutable images;
+- CI для предыдущего PR head `0db4484` подтверждён пользователем, но новый correction commit ещё не
+  опубликован и не прошёл повторный CI; exact paired immutable images отсутствуют;
 - production-like staging upgrade/recovery rehearsal, server headroom/locks/queues и exact
   previous-runtime rollback не доказаны;
 - отсутствуют fresh production read-only preflight, backup checkpoint/isolated restore evidence и
   operations/security sign-off;
-- bounded classification correction scripts с `--preflight/--apply/--verify` ещё не реализованы;
-- январская parent-sale strategy не выбрана.
+- return execution manifests ещё не подготовлены; classification scripts готовы локально, но не
+  прошли новый PR CI и production-like fresh-backup rehearsal;
+- для выбранной январской стратегии ещё нужны три декабрьских отчёта, сверка и отдельное разрешение
+  bounded sync.
 
 Это означает, что локальный candidate готов к внешнему release pipeline и review, но production
 deployment пока не разрешён.

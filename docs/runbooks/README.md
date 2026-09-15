@@ -52,6 +52,7 @@ production write/migration/recovery процедуры ниже остаются
 
 - [Webhook canary и обработка](livesklad-webhooks.md)
 - [Return recovery](livesklad-return-recovery.md)
+- [Bounded historical classification corrections](bounded-classification-corrections.md)
 
 ## AI и Telegram
 
