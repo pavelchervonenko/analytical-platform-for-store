@@ -7,7 +7,7 @@ audience:
   - developer
   - operator
   - manager
-last_verified: 2026-09-10
+last_verified: 2026-09-15
 requirement_sources:
   - docs/maintenance/documentation-policy.md
   - docs/archive/legacy-contracts/AI_WEEKLY_REDESIGN_STAGE2_CONTRACT.md
@@ -87,6 +87,8 @@ Frontend переходит к legacy-представлению только е
 
 - YandexGPT в `v25` выбирает только разрешённые selector-токены; итоговый текст формирует backend.
 - Facts, evidence references, action IDs и checks остаются backend-owned.
+- Admin-only network-free preflight связывает exact snapshot с canonical input/request hashes и
+  верхней стоимостью до enqueue; generation требует совпадающее явное approval.
 - `weekly_review_ai_enrichments` публикуются как immutable записи; jobs являются изменяемым
   lifecycle-состоянием.
 - Legacy publication атомарно создаёт `llm_interpretations` и weekly `notification_events`.

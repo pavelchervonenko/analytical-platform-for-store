@@ -3,12 +3,13 @@ package com.storeanalytics.interpretation.review.ai;
 import com.storeanalytics.common.exception.BusinessErrorCode;
 import com.storeanalytics.common.exception.BusinessException;
 
-public final class WeeklyReviewAiDisabledException extends BusinessException {
+public final class WeeklyReviewAiPreflightRejectedException
+        extends BusinessException {
 
-    public WeeklyReviewAiDisabledException() {
+    public WeeklyReviewAiPreflightRejectedException() {
         super(
                 BusinessErrorCode.WEEKLY_REVIEW_AI_OPERATIONS_CONFLICT,
-                "Weekly review AI generation is disabled"
+                "Weekly review AI preflight rejected the exact snapshot"
         );
     }
 }

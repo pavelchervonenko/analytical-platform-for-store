@@ -5,7 +5,7 @@ status: draft
 owner: ai
 audience:
   - operator
-last_verified: 2026-08-31
+last_verified: 2026-09-15
 last_rehearsed: null
 verification_levels:
   - static
@@ -25,8 +25,8 @@ source_of_truth:
   - deploy/bin/weekly-review-ai-release-safety.sh
 verification_evidence:
   - level: static
-    scope: API, lifecycle, budget, validation and immutable publication paths reviewed
-    verified_at: 2026-08-31
+    scope: Exact preflight, approval, lifecycle, budget, validation and immutable publication paths reviewed
+    verified_at: 2026-09-15
     evidence: docs/current/ai/weekly-review.md
 required_reviewers:
   - ai-semantic
@@ -49,12 +49,13 @@ superseded_by: null
 выполняет ограниченный provider-вызов и проверяет опубликованный immutable enrichment. Процедура не
 включает массовый planner, не меняет KPI и не разрешает платные вызовы без отдельной авторизации.
 
-**Текущий authorization status: NO-GO для платного canary.** Admin API не предоставляет read-only
-preview exact compacted input/hash и отсутствие конфликтующего job до enqueue: POST сразу создаёт
-job. Поэтому privacy/cost approval до записи и будущего provider-вызова сейчас недоказуем.
+**Текущий authorization status: NO-GO для платного canary.** В candidate реализован read-only
+preflight и exact approval contract, но они ещё не прошли release review, staging rehearsal и
+production deployment. До этого production pilot.32 остаётся с выключенными generation/planner/
+worker flags, а старый POST нельзя считать защищённым новым contract.
 
-Статус остаётся `draft`: кроме этого NO-GO gap, нет сохранённого reusable staging rehearsal и
-production read-only evidence для этой версии процедуры.
+Статус остаётся `draft`: локальная статическая проверка не заменяет reusable staging rehearsal,
+production read-only evidence и отдельное разрешение exact canary с известной стоимостью.
 
 ## Влияние и требуемая авторизация
 
@@ -62,7 +63,8 @@ production read-only evidence для этой версии процедуры.
 - Внешний эффект — платный outbound request в YandexGPT.
 - Нужны operator approval точного snapshot и отдельное явное approval exact case/payload hash,
   максимального числа вызовов и верхней стоимости.
-- Privacy reviewer подтверждает, что input обезличен и не содержит employee scope/PII.
+- Privacy reviewer подтверждает store-only schema verdict и принимает остаточное ограничение:
+  общего PII scrubber для backend-owned подписей пока нет.
 
 ## Предусловия
 
@@ -84,7 +86,7 @@ versions, hashes, status, attempt count, validation codes, token counts, cost и
 
 - Snapshot `BLOCKED`, неизвестен его store/period или content hash изменился.
 - Нет явной авторизации стоимости/обезличенного payload.
-- Exact compacted input/hash и конфликтующий job нельзя проверить read-only до enqueue.
+- Preflight не возвращает exact input/request hashes либо сообщает existing job/enrichment.
 - Provider preflight, budget, context, schema или privacy gate не прошёл.
 - Для snapshot уже существует несовместимый job/enrichment.
 - Worker обрабатывает не активную пару v25/schema4.
@@ -99,8 +101,26 @@ python3 -m unittest scripts/weekly-review-ai-eval/test_review.py
 ```
 
 Последняя команда выполняется только в network-free plan mode. Затем operator через authenticated
-admin read path фиксирует exact snapshot ID/hash/report state. Текущий API не показывает compacted
-input и не предоставляет pre-enqueue job check; поэтому preflight останавливается здесь.
+admin read path вызывает:
+
+```text
+GET /api/admin/weekly-review-ai/snapshots/{snapshotId}/preflight
+```
+
+Endpoint не делает provider-вызов и не создаёт job/enrichment. Он должен вернуть:
+
+- exact snapshot ID/revision/period/content hash и `READY` либо `PARTIAL`;
+- active prompt/input/selection/content versions;
+- `privacy.verdict=PASS_STORE_ONLY_SCHEMA`, `employeeScopeIncluded=false` и
+  `rawInputIncluded=false`;
+- provider code, безопасную model version, canonical input/request hashes, token/context limits и
+  верхнюю стоимость;
+- `existing.jobStatus=NONE`, пустой enrichment и `approvalEligible=true`;
+- `providerCredentialCheck=WORKER_ONLY`.
+
+Последнее значение ожидаемо: API container не получает provider key. Его наличие проверяется
+отдельным root read-only runtime audit, а worker повторно валидирует credential перед outbound
+request. Preflight не является доказательством provider availability или quota.
 
 ## Точный target
 
@@ -116,15 +136,35 @@ input и не предоставляет pre-enqueue job check; поэтому p
 
 ## Процедура
 
-Исполняемой paid-процедуры сейчас нет. До её появления нужно реализовать authenticated read-only
-preflight, который для exact snapshot возвращает canonical input hash, безопасный preview/privacy
-verdict, active version pair, budget maximum и отсутствие conflicting job без enqueue. После этого
-runbook должен быть дополнен проверенным request wrapper, staging rehearsal и только затем
-операциями enqueue/status/readback.
+1. Сохранить sanitized preflight response в закрытый change record и подтвердить, что exact
+   snapshot/hash всё ещё соответствуют выбранному магазину и периоду.
+2. Получить отдельное явное approval, в котором указаны snapshot ID, snapshot/input/request hashes,
+   `approvedMaximumProviderCalls=1`, exact `approvedMaximumTotalCost` из preflight и `RUB`.
+3. Через authenticated admin client отправить:
 
-`POST /api/admin/weekly-review-ai/snapshots/{snapshotId}/generate` до закрытия gate вручную не
-вызывать: он сразу создаёт job. Raw cookie/token нельзя помещать в команды, shell history или
-evidence.
+   ```text
+   POST /api/admin/weekly-review-ai/snapshots/{snapshotId}/generate
+   Content-Type: application/json
+
+   {
+     "snapshotContentHash": "<preflight snapshot.contentHash>",
+     "inputHash": "<preflight request.inputHash>",
+     "requestHash": "<preflight request.requestHash>",
+     "approvedMaximumProviderCalls": 1,
+     "approvedMaximumTotalCost": <preflight budget.estimatedMaximumCostPerCall>,
+     "costCurrency": "RUB"
+   }
+   ```
+
+4. Сохранить возвращённый job ID и читать его через
+   `GET /api/admin/weekly-review-ai/jobs/{jobId}` до terminal state, не создавая второй job.
+5. После `SUCCEEDED` прочитать Weekly Review штатным пользовательским endpoint и выполнить проверки
+   ниже.
+
+Пустой body должен вернуть `428 Precondition Required`. Любое изменение snapshot/request/budget
+между preflight и POST должно вернуть `412 Precondition Failed` без enqueue. Пока candidate не
+выпущен и не отрепетирован, production POST вручную не вызывать. Raw cookie/token, полный provider
+input/response и credentials нельзя помещать в команды, shell history или evidence.
 
 ## Проверка результата
 
@@ -141,9 +181,10 @@ evidence.
 
 ## Повторный запуск и конкурентность
 
-Enqueue по snapshot/prompt/schema идемпотентен на уровне job uniqueness. Не создавать параллельные
-jobs вручную. Повторная запись того же enrichment допустима только при совпадении input/content
-hashes; конфликт означает stop и расследование.
+Approved enqueue блокирует exact snapshot row и повторно проверяет отсутствие job/enrichment;
+уникальность snapshot/prompt/schema закрывает оставшуюся гонку. Не создавать параллельные jobs
+вручную. Повторная запись того же enrichment допустима только при совпадении input/content hashes;
+конфликт означает stop и расследование.
 
 ## Rollback или forward-fix
 
@@ -159,6 +200,8 @@ versions, statuses, validation codes, token/cost totals, до/после backend
 
 ## Репетиция
 
-- Достигнут только `static`.
-- До `current` обязательны staging rehearsal платного вызова и production read-only preflight.
+- Достигнут только `static`: candidate preflight/approval contract прошёл локальные unit,
+  authorization, PostgreSQL concurrency и OpenAPI compatibility проверки.
+- До `current` обязательны release review, staging rehearsal платного вызова и production
+  read-only preflight exact deployed commit.
 - Canary одного магазина/недели не доказывает массовую автоматизацию.

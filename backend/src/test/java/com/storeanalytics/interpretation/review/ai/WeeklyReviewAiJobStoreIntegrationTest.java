@@ -1,10 +1,10 @@
 package com.storeanalytics.interpretation.review.ai;
 
-
 import static com.storeanalytics.interpretation.review.WeeklyReviewTestPayload.snapshotPayload;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.storeanalytics.common.exception.PreconditionFailedException;
 import com.storeanalytics.interpretation.generation.LlmProviderPreflight;
 import com.storeanalytics.interpretation.generation.LlmProviderRequest;
 import com.storeanalytics.interpretation.generation.LlmProviderResponseReceipt;
@@ -13,6 +13,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,6 +23,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -92,6 +96,37 @@ class WeeklyReviewAiJobStoreIntegrationTest {
         )).isZero();
         assertThat(store.findBySnapshot(oldReady)).isEmpty();
         assertThat(store.findBySnapshot(latestBlocked)).isEmpty();
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void concurrentApprovedEnqueueCreatesExactlyOneJob() throws Exception {
+        UUID snapshotId = addSnapshot(
+                addStore("AI approved concurrency"),
+                LocalDate.of(2026, 8, 17),
+                1
+        );
+        CyclicBarrier start = new CyclicBarrier(2);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> approvedEnqueue(
+                    snapshotId, start
+            ));
+            var second = executor.submit(() -> approvedEnqueue(
+                    snapshotId, start
+            ));
+
+            assertThat(java.util.List.of(
+                    first.get(20, TimeUnit.SECONDS),
+                    second.get(20, TimeUnit.SECONDS)
+            )).containsExactlyInAnyOrder("CREATED", "REJECTED");
+            assertThat(store.findBySnapshot(snapshotId))
+                    .get()
+                    .extracting(WeeklyReviewAiJob::maxAttempts)
+                    .isEqualTo(1);
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     @Test
@@ -348,6 +383,26 @@ class WeeklyReviewAiJobStoreIntegrationTest {
                 java.sql.Timestamp.from(createdAt)
         );
         return jobId;
+    }
+
+    private String approvedEnqueue(
+            UUID snapshotId,
+            CyclicBarrier start
+    ) throws Exception {
+        start.await(10, TimeUnit.SECONDS);
+        try {
+            store.enqueueApproved(
+                    snapshotId,
+                    "YANDEX",
+                    "gpt://folder/yandexgpt-5.1",
+                    1,
+                    NOW,
+                    Duration.ofHours(2)
+            );
+            return "CREATED";
+        } catch (PreconditionFailedException expected) {
+            return "REJECTED";
+        }
     }
 
     private PreparedWeeklyReviewAiRequest prepared(

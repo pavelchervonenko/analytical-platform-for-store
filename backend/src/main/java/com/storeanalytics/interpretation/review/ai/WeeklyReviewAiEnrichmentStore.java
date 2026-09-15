@@ -130,6 +130,17 @@ public class WeeklyReviewAiEnrichmentStore {
     }
 
     @Transactional(readOnly = true)
+    public Optional<PersistedWeeklyReviewAiEnrichment> findActive(
+            UUID snapshotId
+    ) {
+        return findInternal(
+                requireNonNull(snapshotId, "snapshotId"),
+                WeeklyReviewAiContract.PROMPT_VERSION,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
+        );
+    }
+
+    @Transactional(readOnly = true)
     public Optional<PersistedWeeklyReviewAiEnrichment> findPublished(
             UUID snapshotId,
             Instant asOf

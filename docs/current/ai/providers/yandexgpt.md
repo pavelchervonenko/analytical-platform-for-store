@@ -6,17 +6,19 @@ owner: ai
 audience:
   - developer
   - operator
-last_verified: 2026-08-31
+last_verified: 2026-09-15
 requirement_sources:
   - docs/maintenance/documentation-policy.md
   - scripts/weekly-review-ai-eval/README.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/integration/llm/yandex/YandexLlmProviderClient.java
+  - backend/src/main/java/com/storeanalytics/integration/llm/yandex/YandexLlmRequestPreflight.java
   - backend/src/main/java/com/storeanalytics/integration/llm/yandex/YandexLlmPolicyProperties.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiBudgetGuard.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiProviderRequestFactory.java
 verification_sources:
   - backend/src/test/java/com/storeanalytics/integration/llm/yandex/YandexLlmProviderClientTest.java
+  - backend/src/test/java/com/storeanalytics/integration/llm/yandex/YandexLlmRequestPreflightTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiBudgetGuardTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiProviderRequestFactoryTest.java
 runtime_evidence: []
@@ -53,6 +55,12 @@ sanitized evidence.
 
 Request material получает SHA-256. Retry prompt добавляет только проверенные violation codes.
 Provider API key не входит в request hash, логи, документацию или evidence.
+
+`YandexLlmRequestPreflight` отделяет network-free часть provider gate от transport client. Он
+проверяет соответствие exact versioned model конфигурации, response schema, оценивает context и
+верхнюю стоимость без API key и без сетевого обращения. Благодаря этому API runtime может показать
+sanitized approval material, не получая provider credential. Worker по-прежнему проверяет
+credential и повторяет тот же preflight непосредственно перед outbound request.
 
 ## Ответ и fail-closed поведение
 
@@ -103,9 +111,10 @@ API key передаётся только через secret/config tree. Зап�
 
 ## Проверка
 
-Client tests проверяют transport parsing, bounded responses и error mapping. Request factory tests
-проверяют schema/resources/hash/deadline. Budget tests проверяют request, context, currency,
-per-call и daily limits. Платная semantic проверка выполняется только по draft-runbook
+Client tests проверяют transport parsing, bounded responses и error mapping. Network-free preflight
+tests проверяют работу без API key, точную versioned model и запрет mutable `/latest`. Request
+factory tests проверяют schema/resources/hash/deadline. Budget tests проверяют request, context,
+currency, per-call и daily limits. Платная semantic проверка выполняется только по draft-runbook
 [AI evaluation](../../../runbooks/ai-evaluation.md).
 
 ## Триггеры пересмотра

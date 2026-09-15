@@ -134,6 +134,18 @@ public enum BusinessErrorCode {
             "LLM_OPERATIONS_CONFLICT", BusinessErrorType.CONFLICT,
             "LLM operation conflicts with the current state"
     ),
+    WEEKLY_REVIEW_AI_SNAPSHOT_NOT_FOUND(
+            "WEEKLY_REVIEW_AI_SNAPSHOT_NOT_FOUND", BusinessErrorType.NOT_FOUND,
+            "Weekly review snapshot was not found"
+    ),
+    WEEKLY_REVIEW_AI_JOB_NOT_FOUND(
+            "WEEKLY_REVIEW_AI_JOB_NOT_FOUND", BusinessErrorType.NOT_FOUND,
+            "Weekly review AI job was not found"
+    ),
+    WEEKLY_REVIEW_AI_OPERATIONS_CONFLICT(
+            "WEEKLY_REVIEW_AI_OPERATIONS_CONFLICT", BusinessErrorType.CONFLICT,
+            "Weekly review AI operation conflicts with the current state"
+    ),
     TELEGRAM_LINK_STATE_CONFLICT(
             "TELEGRAM_LINK_STATE_CONFLICT", BusinessErrorType.CONFLICT,
             "Telegram channel state does not allow this operation"

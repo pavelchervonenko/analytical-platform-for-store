@@ -11,7 +11,6 @@ import tools.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -39,21 +38,44 @@ public final class YandexLlmProviderClient implements LlmProviderClient {
     );
 
     private static final String PROVIDER_CODE = "YANDEX";
-    private static final String COST_CURRENCY = "RUB";
     private static final Duration DEFAULT_RETRY_AFTER = Duration.ofSeconds(30);
     private static final Duration MAX_RETRY_AFTER = Duration.ofHours(1);
-    private static final int TOKEN_ESTIMATE_OVERHEAD = 64;
-    private static final BigDecimal THOUSAND = new BigDecimal("1000");
 
     private final YandexLlmProperties properties;
     private final YandexLlmPolicyProperties policy;
     private final ObjectMapper objectMapper;
     private final YandexLlmMetrics metrics;
+    private final YandexLlmRequestPreflight requestPreflight;
     private final Clock clock;
     private final URI endpoint;
     private final HttpClient httpClient;
 
     @Autowired
+    public YandexLlmProviderClient(
+            YandexLlmProperties properties,
+            YandexLlmPolicyProperties policy,
+            ObjectMapper objectMapper,
+            YandexLlmMetrics metrics,
+            Clock clock,
+            YandexLlmRequestPreflight requestPreflight
+    ) {
+        this(
+                properties,
+                policy,
+                objectMapper,
+                metrics,
+                clock,
+                new Transport(
+                        CHAT_COMPLETIONS_URI,
+                        HttpClient.newBuilder()
+                                .connectTimeout(properties.getConnectTimeout())
+                                .followRedirects(HttpClient.Redirect.NEVER)
+                                .build()
+                ),
+                requestPreflight
+        );
+    }
+
     public YandexLlmProviderClient(
             YandexLlmProperties properties,
             YandexLlmPolicyProperties policy,
@@ -67,11 +89,16 @@ public final class YandexLlmProviderClient implements LlmProviderClient {
                 objectMapper,
                 metrics,
                 clock,
-                CHAT_COMPLETIONS_URI,
-                HttpClient.newBuilder()
-                        .connectTimeout(properties.getConnectTimeout())
-                        .followRedirects(HttpClient.Redirect.NEVER)
-                        .build()
+                new Transport(
+                        CHAT_COMPLETIONS_URI,
+                        HttpClient.newBuilder()
+                                .connectTimeout(properties.getConnectTimeout())
+                                .followRedirects(HttpClient.Redirect.NEVER)
+                                .build()
+                ),
+                new YandexLlmRequestPreflight(
+                        properties, policy, objectMapper, metrics
+                )
         );
     }
 
@@ -84,13 +111,41 @@ public final class YandexLlmProviderClient implements LlmProviderClient {
             URI endpoint,
             HttpClient httpClient
     ) {
+        this(
+                properties,
+                policy,
+                objectMapper,
+                metrics,
+                clock,
+                new Transport(endpoint, httpClient),
+                new YandexLlmRequestPreflight(
+                        properties, policy, objectMapper, metrics
+                )
+        );
+    }
+
+    private YandexLlmProviderClient(
+            YandexLlmProperties properties,
+            YandexLlmPolicyProperties policy,
+            ObjectMapper objectMapper,
+            YandexLlmMetrics metrics,
+            Clock clock,
+            Transport transport,
+            YandexLlmRequestPreflight requestPreflight
+    ) {
         this.properties = java.util.Objects.requireNonNull(properties, "properties");
         this.policy = java.util.Objects.requireNonNull(policy, "policy");
         this.objectMapper = java.util.Objects.requireNonNull(objectMapper, "objectMapper");
         this.metrics = java.util.Objects.requireNonNull(metrics, "metrics");
+        this.requestPreflight = java.util.Objects.requireNonNull(
+                requestPreflight, "requestPreflight"
+        );
         this.clock = java.util.Objects.requireNonNull(clock, "clock");
-        this.endpoint = java.util.Objects.requireNonNull(endpoint, "endpoint");
-        this.httpClient = java.util.Objects.requireNonNull(httpClient, "httpClient");
+        Transport configuredTransport = java.util.Objects.requireNonNull(
+                transport, "transport"
+        );
+        this.endpoint = configuredTransport.endpoint();
+        this.httpClient = configuredTransport.httpClient();
     }
 
     @Override
@@ -101,29 +156,7 @@ public final class YandexLlmProviderClient implements LlmProviderClient {
     @Override
     public LlmProviderPreflight preflight(LlmProviderRequest request) {
         validateLocalConfiguration(request);
-        JsonNode responseSchema = parseJson(
-                request.responseSchemaJson(),
-                "Yandex response schema is not valid JSON"
-        );
-        if (!responseSchema.isObject()) {
-            throw notSent(
-                    LlmProviderFailureKind.INVALID_REQUEST,
-                    "Yandex response schema must be a JSON object"
-            );
-        }
-        int estimatedInputTokens = estimateInputTokens(request);
-        BigDecimal maximumCost = calculateCost(
-                estimatedInputTokens,
-                0,
-                request.maxOutputTokens()
-        );
-        metrics.preflight();
-        return new LlmProviderPreflight(
-                estimatedInputTokens,
-                policy.contextWindowTokens(),
-                maximumCost,
-                COST_CURRENCY
-        );
+        return requestPreflight.evaluate(request);
     }
 
     @Override
@@ -261,7 +294,9 @@ public final class YandexLlmProviderClient implements LlmProviderClient {
         } else if (totalTokens != calculatedTotal) {
             throw malformed("Yandex LLM total token count is inconsistent");
         }
-        BigDecimal cost = calculateCost(inputTokens, cached, outputTokens);
+        BigDecimal cost = requestPreflight.calculateCost(
+                inputTokens, cached, outputTokens
+        );
         Duration elapsed = elapsed(startedAt);
         metrics.success(inputTokens, outputTokens, cached, cost, elapsed);
         return new LlmProviderResponseReceipt(
@@ -274,7 +309,7 @@ public final class YandexLlmProviderClient implements LlmProviderClient {
                 reasoningTokens,
                 totalTokens,
                 cost,
-                COST_CURRENCY,
+                preflightCurrency(),
                 elapsed.toMillis(),
                 status
         );
@@ -361,33 +396,8 @@ public final class YandexLlmProviderClient implements LlmProviderClient {
                 : properties.getReadTimeout();
     }
 
-    private int estimateInputTokens(LlmProviderRequest request) {
-        long codePoints = (long) codePoints(request.systemPrompt())
-                + codePoints(request.inputJson())
-                + codePoints(request.responseSchemaJson());
-        long estimate = Math.ceilDiv(codePoints, 2) + TOKEN_ESTIMATE_OVERHEAD;
-        if (estimate > Integer.MAX_VALUE) {
-            throw notSent(
-                    LlmProviderFailureKind.INVALID_REQUEST,
-                    "Yandex LLM token estimate exceeds supported range"
-            );
-        }
-        return (int) estimate;
-    }
-
-    private int codePoints(String value) {
-        return value.codePointCount(0, value.length());
-    }
-
-    private BigDecimal calculateCost(int input, int cached, int output) {
-        int uncached = input - cached;
-        return policy.inputRubPerThousandTokens()
-                .multiply(BigDecimal.valueOf(uncached))
-                .add(policy.cachedInputRubPerThousandTokens()
-                        .multiply(BigDecimal.valueOf(cached)))
-                .add(policy.outputRubPerThousandTokens()
-                        .multiply(BigDecimal.valueOf(output)))
-                .divide(THOUSAND, 6, RoundingMode.CEILING);
+    private String preflightCurrency() {
+        return "RUB";
     }
 
     private byte[] readBounded(InputStream input) throws IOException {
@@ -759,6 +769,14 @@ public final class YandexLlmProviderClient implements LlmProviderClient {
     private static final class ResponseTooLargeException extends IOException {
         private ResponseTooLargeException() {
             super("Yandex LLM response exceeds configured byte limit");
+        }
+    }
+
+    private record Transport(URI endpoint, HttpClient httpClient) {
+
+        private Transport {
+            java.util.Objects.requireNonNull(endpoint, "endpoint");
+            java.util.Objects.requireNonNull(httpClient, "httpClient");
         }
     }
 }
