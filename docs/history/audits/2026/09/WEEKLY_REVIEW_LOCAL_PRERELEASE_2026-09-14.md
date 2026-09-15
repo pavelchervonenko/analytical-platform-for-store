@@ -137,6 +137,37 @@ persisted wording. Уже сохранённые revisions не переписы
 новый frontend read path на реальных `PARTIAL` payloads и будущую policy — contract/backend tests,
 но не выдаёт старый snapshot за заново сгенерированный v12.
 
+## Follow-up: P7-C real-data v12 gate, 2026-09-15
+
+После отдельного разрешения проверено сохранённое локальное покрытие двух магазинов за
+`2026-08-31..2026-09-13`. Оно уже было непрерывным для всех четырнадцати дней, поэтому новый
+внешний запрос LiveSklad не выполнялся. Через штатный local authenticated admin API для обоих
+магазинов созданы revision 3 с `snapshotPolicy=weekly-snapshot-v12`.
+
+Обезличенная проверка БД и API показала:
+
+- оба новых отчёта — `PARTIAL`, blocking issues отсутствуют;
+- у каждого отчёта `2` complete / `1` partial coverage source и `1` ready / `3` limited core
+  metrics;
+- прежние v10/v11 revisions сохранены; у каждого магазина три разных content hash, две корректные
+  supersedes-связи и ни одной недействительной связи;
+- неполные смены не стали самостоятельным page-level warning, employee priority или workload
+  benchmark;
+- ограничения остались адресными: unattributed returns, sales/returns consistency и unexpected
+  zero cost; один отчёт дополнительно ограничен unclassified products.
+
+P7-C остановлен по предусмотренному условию: естественного реального `READY` в разрешённой выборке
+нет. Fixture `READY` не считается заменой. Live visual v12 тоже не объявляется выполненным:
+Windows-local web/API были доступны на loopback, но WSL browser не мог достичь этого адреса, а
+Docker Desktop завершал TLS-ошибкой загрузку browser runtime из MCR и двух Alpine mirrors. Ранее
+пройденные `15/15` fixture captures и `6/6` live v11 сохраняют регрессионную ценность, но не являются
+v12 live evidence.
+
+Readiness временного стенда возвращал `DOWN` по ожидаемой защите schema boundary: reused local DB
+уже находилась на `V49`, а RC-образ содержит migration range до `V48`. Функциональный API работал,
+но стенд не признаётся release-equivalent. Схема не откатывалась, readiness не ослаблялся,
+production/staging не затрагивались. Verdict P7-C: `STOP`; production rollout не разрешён.
+
 ## Remaining limits
 
 - Fresh real data did not yield a `READY` report. A production decision must not reinterpret the

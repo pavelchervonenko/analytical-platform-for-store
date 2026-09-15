@@ -24,7 +24,8 @@ exit_target: evidence
 
 ## Цель и границы
 
-Manifest фиксирует P7-A: минимальный deterministic-first change set для раздела «ИИ-разбор».
+Manifest фиксирует P7-A/P7-B и результат попытки P7-C для минимального deterministic-first change
+set раздела «ИИ-разбор».
 Кандидат собирается в отдельном worktree от подтверждённой production-базы, указанной в
 [`project-state.md`](../current/project-state.md). Текущая рабочая ветка с параллельными изменениями
 не является базой сборки и не переносится целиком.
@@ -200,10 +201,34 @@ presentation-семантика. P7-B обязан выполнить штатн
 P7-B не подтверждает реальный `READY`: это отдельная P7-C проверка, для которой требуется новое
 явное разрешение на источник, магазины и диапазон дат.
 
+### Результат P7-C
+
+`STOP` после разрешённой локальной проверки реальных данных:
+
+- локальная БД уже содержала непрерывное покрытие `2026-08-31..2026-09-13` для двух разрешённых
+  магазинов, поэтому новый внешний read LiveSklad не выполнялся;
+- штатный local authenticated admin API создал для обоих магазинов immutable revision 3 с
+  `snapshotPolicy=weekly-snapshot-v12`; старые v10/v11 revisions сохранены, supersedes-цепочки и
+  content hashes не противоречат immutability;
+- оба v12 отчёта имеют естественный `PARTIAL`, одинаковую сводную структуру coverage
+  (`2` complete / `1` partial) и core metrics (`1` ready / `3` limited). Fixture-only `READY` не
+  принимается за реальное подтверждение;
+- неполные смены не создали самостоятельный глобальный warning, employee priority или workload
+  benchmark; ограничения остались адресными;
+- live visual v12 не состоялся из-за локальной инфраструктуры: Windows loopback недоступен WSL
+  browser, а Docker Desktop не смог по TLS получить browser runtime из MCR и двух Alpine mirrors.
+  Пройденные в P7-B `15/15` fixture captures и прежние `6/6` live v11 это не заменяют;
+- readiness стенда корректно остаётся `DOWN`: reused local DB уже на `V49`, тогда как кандидат
+  упакован до `V48`. Схема не откатывалась и readiness не ослаблялся.
+
+Production/staging не использовались. P7-D и последующие release gates не начинаются как
+продолжение этого результата: сначала нужен естественный real-data `READY`, schema-compatible
+isolated DB и локальный v12 visual `6/6`.
+
 ## Открытые решения
 
-- В P7-C определить, достаточно ли production-классификации для реального `READY`. Если нет,
-  classification выпускается отдельным обозримым пакетом, а не подмешивается в этот manifest.
+- Отдельно диагностировать, какие реальные data-quality/classification ограничения препятствуют
+  `READY`; возможный classification-пакет не подмешивать в этот manifest.
 - В P7-D отдельно решить судьбу AI-enabled пути на основании privacy, cost и concurrency gates.
 - Legacy cleanup не входит в этот кандидат и рассматривается только после периода наблюдения P7-I.
 

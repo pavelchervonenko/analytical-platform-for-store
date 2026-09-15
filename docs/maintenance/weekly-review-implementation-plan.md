@@ -72,10 +72,12 @@ exit_target: current
 - P7-B завершён локально: чистая установка, полный frontend/backend/documentation набор,
   пятисценарная visual-матрица и ручной UI-review прошли; npm audit не обнаружил уязвимостей.
   Локальные backend/web images собраны из одного reviewed commit, OCI revision совпадает, а
-  упакованный migration range не отличается от production-базы. P7-C–P7-I не начаты; production
-  rollout, project-state, release evidence и legacy cleanup требуют собственных контрольных точек
-  и авторизации. Свежий реальный `READY` в разрешённом диапазоне не получен и остаётся явным
-  ограничением предрелизного evidence.
+  упакованный migration range не отличается от production-базы.
+- P7-C выполнен до stop-условия: полное локальное покрытие двух недель подтверждено, для обоих
+  разрешённых магазинов через штатный authenticated API сохранены новые immutable revision с
+  policy `weekly-snapshot-v12`. Оба отчёта естественно остались `PARTIAL`; реальный `READY` в
+  разрешённой выборке отсутствует. Поэтому P7-C имеет verdict `STOP`, а P7-D–P7-I, production
+  rollout, project-state и legacy cleanup не начаты.
 
 ## Целевой результат
 
@@ -854,6 +856,27 @@ Stop-условия P7-C:
 Контрольная точка P7-C: реальные `READY` и `PARTIAL` подтверждают тот же контракт, что fixtures и
 tests; новый v12 snapshot прочитан актуальным frontend, а ограничения evidence явно зафиксированы.
 
+Статус: **STOP после разрешённого локального прогона**. Непрерывное покрытие обеих недель уже
+находилось в изолированной локальной БД, поэтому дополнительного обращения к LiveSklad не
+потребовалось. Для обоих разрешённых магазинов штатный authenticated admin API создал revision 3 с
+policy `weekly-snapshot-v12`; предыдущие v10/v11 revisions и их content hashes сохранены, цепочки
+supersedes корректны, недействительных связей нет. Оба новых отчёта — естественный `PARTIAL`: у
+каждого `2` complete и `1` partial coverage source, `1` ready и `3` limited core metrics. Неполные
+смены не стали самостоятельным page-level warning или workload benchmark.
+
+Естественного реального `READY` в разрешённой выборке нет, поэтому fixture evidence не подменяет
+runtime evidence и контрольная точка не пройдена. Live visual нового v12 также не объявляется
+пройденным: локальный Windows web/API доступны только через loopback, WSL browser не достигает этот
+loopback, а загрузка отдельного browser runtime была заблокирована TLS-сбоями Docker Desktop для
+MCR и двух Alpine mirrors. Ранее пройденные `15/15` fixture captures и `6/6` live v11 остаются
+полезной регрессией, но не заменяют v12 live-проверку.
+
+Отдельное ограничение стенда: candidate backend ожидает schema `V48`, а повторно используемая
+локальная БД уже имеет `V49`, поэтому защитный readiness endpoint возвращает `DOWN`. Функциональный
+authenticated API и транзакционная генерация доступны, однако такой стенд не считается
+release-equivalent. Схема не откатывалась, readiness не ослаблялся, production/staging не
+затрагивались.
+
 После P7-C проводится новый независимый UI review по обезличенному live-наблюдению. При любом
 изменении presentation поведение возвращается в P6.1 и проходит полную fixture-матрицу повторно.
 
@@ -1175,5 +1198,7 @@ Rate-limit backfill показал отдельную P2-неэффективн�
 
 Локальная часть P0–P6 извлечена в current-контракты и подтверждена
 [`WEEKLY_REVIEW_LOCAL_PRERELEASE_2026-09-14.md`](../history/audits/2026/09/WEEKLY_REVIEW_LOCAL_PRERELEASE_2026-09-14.md).
-Оба реальных отчёта оказались `PARTIAL`; поэтому runtime-проверка `READY`, production rollout и
-legacy cleanup остаются в P7 и не объявляются завершёнными.
+P7-A и P7-B подтверждают границу и воспроизводимость кандидата. P7-C сохранил реальные immutable
+v12 snapshots, но оба отчёта оказались `PARTIAL`; отсутствие естественного `READY`, недоступность
+v12 live visual и schema mismatch локального стенда оставляют контрольную точку в `STOP`.
+Production rollout и legacy cleanup не объявляются завершёнными.
