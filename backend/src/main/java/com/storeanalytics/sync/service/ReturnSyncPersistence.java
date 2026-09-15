@@ -3,6 +3,7 @@ package com.storeanalytics.sync.service;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
+import com.storeanalytics.common.exception.InvalidRequestException;
 import com.storeanalytics.employee.model.Employee;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladCashItemPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladCashRegisterPayload;
@@ -139,13 +140,6 @@ public class ReturnSyncPersistence {
                 }
                 synchronizeReturn(context, store, source);
             }
-            markMissingReturnsDeleted(
-                    syncRun,
-                    store,
-                    period,
-                    seenDocumentIds,
-                    result
-            );
         }
         return result.toResult();
     }
@@ -155,6 +149,29 @@ public class ReturnSyncPersistence {
             UUID syncRunId,
             Store requestedStore,
             LiveSkladReturnSource source
+    ) {
+        return synchronizeTargetedInternal(
+                syncRunId, requestedStore, source, null
+        );
+    }
+
+    @Transactional
+    ReturnSyncBatchResult relinkExistingOrphan(
+            UUID syncRunId,
+            Store requestedStore,
+            LiveSkladReturnSource source,
+            ReturnOrphanRelinkExpectation expectation
+    ) {
+        return synchronizeTargetedInternal(
+                syncRunId, requestedStore, source, expectation
+        );
+    }
+
+    private ReturnSyncBatchResult synchronizeTargetedInternal(
+            UUID syncRunId,
+            Store requestedStore,
+            LiveSkladReturnSource source,
+            ReturnOrphanRelinkExpectation relinkExpectation
     ) {
         SyncRun syncRun = factRepositories.syncRuns().findById(syncRunId)
                 .orElseThrow(() -> new IllegalArgumentException(
@@ -190,7 +207,18 @@ public class ReturnSyncPersistence {
                 true,
                 now
         );
+        if (relinkExpectation != null) {
+            lockReturn(syncRun, source.externalId());
+            validateExistingOrphanRelink(
+                    syncRun, store, source.detail(), relinkExpectation
+            );
+        }
         synchronizeReturn(context, store, source);
+        if (relinkExpectation != null) {
+            validateCompletedOrphanRelink(
+                    syncRun, store, relinkExpectation
+            );
+        }
         return result.toResult();
     }
 
@@ -1020,31 +1048,6 @@ public class ReturnSyncPersistence {
         }
     }
 
-    private void markMissingReturnsDeleted(
-            SyncRun syncRun,
-            Store store,
-            ReturnSyncPeriod period,
-            Set<String> seenDocumentIds,
-            Accumulator result
-    ) {
-        for (SalesDocument document : factRepositories.documents()
-                .findAllByConnectionIdAndStoreIdAndDocumentKindAndOccurredAtBetween(
-                        syncRun.getConnection().getId(),
-                        store.getId(),
-                        SalesDocumentKind.RETURN,
-                        "saleReturn",
-                        period.start(),
-                        period.end()
-                )) {
-            if (!seenDocumentIds.contains(document.getExternalId())
-                    && !DISCOVERY_WEBHOOK.equals(document.getSourceStatus())
-                    && document.markDeleted(syncRun)) {
-                result.documentsUpdated++;
-                result.documentsDeleted++;
-            }
-        }
-    }
-
     private void validateSource(
             Store store,
             ReturnSyncPeriod period,
@@ -1079,13 +1082,6 @@ public class ReturnSyncPersistence {
                 || detail.positions() == null) {
             throw new IllegalArgumentException(
                     "LiveSklad return detail is inconsistent"
-            );
-        }
-        if (returnDetail
-                && (detail.occurredAt().isBefore(period.start())
-                || detail.occurredAt().isAfter(period.end()))) {
-            throw new IllegalArgumentException(
-                    "LiveSklad return detail is outside the requested period"
             );
         }
     }
@@ -1126,6 +1122,166 @@ public class ReturnSyncPersistence {
         }
     }
 
+    private void validateExistingOrphanRelink(
+            SyncRun syncRun,
+            Store store,
+            LiveSkladReturnDetailPayload detail,
+            ReturnOrphanRelinkExpectation expectation
+    ) {
+        SalesDocument returned = factRepositories.documents()
+                .findByConnectionIdAndExternalId(
+                        syncRun.getConnection().getId(),
+                        expectation.externalId()
+                )
+                .orElseThrow(() -> relinkMismatch(
+                        "Existing orphan return does not exist"
+                ));
+        if (!returned.isReturn()
+                || returned.isDeleted()
+                || !sameStore(returned.getStore(), store)
+                || !expectation.documentNumber().equals(
+                returned.getDocumentNumber())
+                || returned.getNetAmount().compareTo(
+                expectation.netAmount()) != 0
+                || !sameAmount(
+                returned.getCostAmount(), expectation.costAmount())
+                || !matchesExpectedCurrentEmployee(
+                returned, expectation.currentEmployeeExternalId())
+                || returned.getOriginalDocument() != null) {
+            throw relinkMismatch(
+                    "Existing return does not match orphan precondition"
+            );
+        }
+
+        SalesDocument originalSale = factRepositories.documents()
+                .findByConnectionIdAndExternalId(
+                        syncRun.getConnection().getId(),
+                        expectation.originalSaleExternalId()
+                )
+                .orElseThrow(() -> relinkMismatch(
+                        "Expected original sale does not exist"
+                ));
+        if (!originalSale.isSale()
+                || originalSale.isDeleted()
+                || !sameStore(originalSale.getStore(), store)
+                || originalSale.getEmployee() == null
+                || !expectation.originalEmployeeExternalId().equals(
+                originalSale.getEmployee().getExternalId())
+                || !expectation.originalSaleExternalId().equals(
+                detail.originalSaleExternalId())) {
+            throw relinkMismatch(
+                    "Original sale does not match relink expectation"
+            );
+        }
+        validateRelinkItems(
+                returned, originalSale, expectation, false
+        );
+    }
+
+    private void validateCompletedOrphanRelink(
+            SyncRun syncRun,
+            Store store,
+            ReturnOrphanRelinkExpectation expectation
+    ) {
+        SalesDocument returned = factRepositories.documents()
+                .findByConnectionIdAndExternalId(
+                        syncRun.getConnection().getId(),
+                        expectation.externalId()
+                )
+                .orElseThrow(() -> relinkMismatch(
+                        "Relinked return does not exist"
+                ));
+        SalesDocument originalSale = returned.getOriginalDocument();
+        if (originalSale == null
+                || !expectation.originalSaleExternalId().equals(
+                originalSale.getExternalId())
+                || !sameStore(returned.getStore(), store)
+                || returned.getEmployee() == null
+                || !expectation.originalEmployeeExternalId().equals(
+                returned.getEmployee().getExternalId())
+                || returned.getNetAmount().compareTo(
+                expectation.netAmount()) != 0
+                || !sameAmount(
+                returned.getCostAmount(), expectation.costAmount())) {
+            throw relinkMismatch(
+                    "Return original link was not materialized as expected"
+            );
+        }
+        validateRelinkItems(
+                returned, originalSale, expectation, true
+        );
+    }
+
+    private void validateRelinkItems(
+            SalesDocument returned,
+            SalesDocument originalSale,
+            ReturnOrphanRelinkExpectation expectation,
+            boolean linked
+    ) {
+        Map<String, SalesDocumentItem> returnItems = new HashMap<>();
+        for (SalesDocumentItem item : factRepositories.items()
+                .findAllBySalesDocumentId(returned.getId())) {
+            if (!item.isDeleted()) {
+                returnItems.put(item.getExternalId(), item);
+            }
+        }
+        if (returnItems.size() != expectation.positionCount()) {
+            throw relinkMismatch(
+                    "Return item count does not match relink expectation"
+            );
+        }
+        for (ReturnRelinkPositionExpectation expected
+                : expectation.positions()) {
+            SalesDocumentItem returnedItem = returnItems.get(
+                    expected.returnPositionExternalId()
+            );
+            SalesDocumentItem originalItem = factRepositories.items()
+                    .findBySalesDocumentIdAndExternalId(
+                            originalSale.getId(),
+                            expected.originalSalePositionExternalId()
+                    )
+                    .filter(item -> !item.isDeleted())
+                    .orElseThrow(() -> relinkMismatch(
+                            "Expected original sale item does not exist"
+                    ));
+            if (returnedItem == null
+                    || !expected.productExternalId().equals(
+                    returnedItem.getProduct().getExternalId())
+                    || !expected.productExternalId().equals(
+                    originalItem.getProduct().getExternalId())
+                    || returnedItem.getQuantity().compareTo(
+                    expected.quantity()) != 0
+                    || returnedItem.getNetAmount().compareTo(
+                    expected.netAmount()) != 0
+                    || !sameAmount(
+                    returnedItem.getCostAmount(), expected.costAmount())
+                    || linked && (returnedItem.getOriginalItem() == null
+                    || !expected.originalSalePositionExternalId().equals(
+                    returnedItem.getOriginalItem().getExternalId()))
+                    || !linked && returnedItem.getOriginalItem() != null) {
+                throw relinkMismatch(
+                        "Return item does not match relink expectation"
+                );
+            }
+        }
+    }
+
+    private InvalidRequestException relinkMismatch(String message) {
+        return new InvalidRequestException(message);
+    }
+
+    private boolean matchesExpectedCurrentEmployee(
+            SalesDocument returned,
+            String expectedExternalId
+    ) {
+        if (expectedExternalId == null) {
+            return returned.getEmployee() == null;
+        }
+        return returned.getEmployee() != null
+                && expectedExternalId.equals(
+                returned.getEmployee().getExternalId());
+    }
+
     private void validateStore(SyncRun syncRun, Store store) {
         if (!store.isConnectedTo(syncRun.getConnection())) {
             throw new IllegalArgumentException(
@@ -1140,6 +1296,11 @@ public class ReturnSyncPersistence {
                 && second != null
                 && first.getId() != null
                 && first.getId().equals(second.getId());
+    }
+
+    private boolean sameAmount(BigDecimal first, BigDecimal second) {
+        return first == null ? second == null
+                : second != null && first.compareTo(second) == 0;
     }
 
     private String scopedId(SyncRun syncRun, String externalId) {

@@ -278,6 +278,18 @@ public class SalesDocumentItem extends AbstractMutableEntity {
         return originalItem;
     }
 
+    public BigDecimal getQuantity() {
+        return quantity;
+    }
+
+    public BigDecimal getNetAmount() {
+        return netAmount;
+    }
+
+    public BigDecimal getCostAmount() {
+        return costAmount;
+    }
+
     public SalesItemClassification classificationSnapshot() {
         return new SalesItemClassification(
                 productNameSnapshot,

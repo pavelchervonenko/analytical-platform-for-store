@@ -13,8 +13,14 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
@@ -56,12 +62,52 @@ public class LiveSkladReturnRecoveryService {
             int positionCount,
             String reason
     ) {
+        return request(
+                requestedBy,
+                idempotencyKey,
+                new RecoverLiveSkladReturnRequest(
+                        externalId,
+                        documentNumber,
+                        netAmount,
+                        positionCount,
+                        LiveSkladReturnRecoveryMode.MISSING_RETURN,
+                        null,
+                        null,
+                        null,
+                        List.of(),
+                        reason
+                )
+        );
+    }
+
+    @Transactional
+    public LiveSkladReturnRecoveryView request(
+            UUID requestedBy,
+            String idempotencyKey,
+            RecoverLiveSkladReturnRequest request
+    ) {
         String key = validateIdempotencyKey(idempotencyKey);
-        String validatedExternalId = validateExternalId(externalId);
-        String validatedDocumentNumber = validateDocumentNumber(documentNumber);
-        BigDecimal validatedAmount = validateAmount(netAmount);
-        int validatedPositionCount = validatePositionCount(positionCount);
-        String validatedReason = validateReason(reason);
+        String validatedExternalId = validateExternalId(request.externalId());
+        String validatedDocumentNumber = validateDocumentNumber(
+                request.expectedDocumentNumber()
+        );
+        BigDecimal validatedAmount = validateAmount(
+                request.expectedNetAmount()
+        );
+        int validatedPositionCount = validatePositionCount(
+                request.expectedPositionCount()
+        );
+        LiveSkladReturnRecoveryMode validatedMode = request.mode() == null
+                ? LiveSkladReturnRecoveryMode.MISSING_RETURN : request.mode();
+        OriginalExpectations original = validateOriginalExpectations(
+                validatedMode,
+                request.expectedCurrentEmployeeExternalId(),
+                request.expectedOriginalSaleExternalId(),
+                request.expectedOriginalEmployeeExternalId(),
+                request.expectedOriginalLinks(),
+                validatedPositionCount
+        );
+        String validatedReason = validateReason(request.reason());
 
         Optional<LiveSkladReturnRecoveryView> existing =
                 store.findRecoveryByRequesterAndKey(requestedBy, key);
@@ -71,7 +117,9 @@ public class LiveSkladReturnRecoveryService {
                     validatedExternalId,
                     validatedDocumentNumber,
                     validatedAmount,
-                    validatedPositionCount
+                    validatedPositionCount,
+                    validatedMode,
+                    original
             );
         }
 
@@ -83,10 +131,15 @@ public class LiveSkladReturnRecoveryService {
                     validatedExternalId,
                     validatedDocumentNumber,
                     validatedAmount,
-                    validatedPositionCount
+                    validatedPositionCount,
+                    validatedMode,
+                    original
             );
         }
-        if (store.findRecoveryByExternalId(validatedExternalId).isPresent()) {
+        if (store.findRecoveryByExternalIdAndMode(
+                validatedExternalId,
+                validatedMode
+        ).isPresent()) {
             throw new IdempotencyKeyConflictException();
         }
 
@@ -103,6 +156,11 @@ public class LiveSkladReturnRecoveryService {
                         validatedDocumentNumber,
                         validatedAmount,
                         validatedPositionCount,
+                        validatedMode,
+                        original.currentEmployeeExternalId(),
+                        original.saleExternalId(),
+                        original.employeeExternalId(),
+                        original.links(),
                         validatedReason,
                         eventId,
                         payload,
@@ -110,6 +168,28 @@ public class LiveSkladReturnRecoveryService {
                         now
                 )
         );
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("externalId", validatedExternalId);
+        metadata.put("documentNumber", validatedDocumentNumber);
+        metadata.put("netAmount", validatedAmount);
+        metadata.put("positionCount", validatedPositionCount);
+        metadata.put("mode", validatedMode.name());
+        if (original.currentEmployeeExternalId() != null) {
+            metadata.put(
+                    "currentEmployeeExternalId",
+                    original.currentEmployeeExternalId()
+            );
+        }
+        if (original.saleExternalId() != null) {
+            metadata.put(
+                    "originalSaleExternalId", original.saleExternalId()
+            );
+            metadata.put(
+                    "originalEmployeeExternalId",
+                    original.employeeExternalId()
+            );
+            metadata.put("originalLinkCount", original.links().size());
+        }
         auditLogService.record(
                 requestedBy,
                 null,
@@ -117,12 +197,7 @@ public class LiveSkladReturnRecoveryService {
                 new AuditTarget(AuditEntityType.RETURN_DOCUMENT, id),
                 validatedReason,
                 null,
-                Map.of(
-                        "externalId", validatedExternalId,
-                        "documentNumber", validatedDocumentNumber,
-                        "netAmount", validatedAmount,
-                        "positionCount", validatedPositionCount
-                )
+                Map.copyOf(metadata)
         );
         return result;
     }
@@ -139,12 +214,26 @@ public class LiveSkladReturnRecoveryService {
             String externalId,
             String documentNumber,
             BigDecimal netAmount,
-            int positionCount
+            int positionCount,
+            LiveSkladReturnRecoveryMode mode,
+            OriginalExpectations original
     ) {
         if (!existing.externalId().equals(externalId)
                 || !existing.expectedDocumentNumber().equals(documentNumber)
                 || existing.expectedNetAmount().compareTo(netAmount) != 0
-                || existing.expectedPositionCount() != positionCount) {
+                || existing.expectedPositionCount() != positionCount
+                || existing.mode() != mode
+                || !java.util.Objects.equals(
+                existing.expectedCurrentEmployeeExternalId(),
+                original.currentEmployeeExternalId())
+                || !java.util.Objects.equals(
+                existing.expectedOriginalSaleExternalId(),
+                original.saleExternalId())
+                || !java.util.Objects.equals(
+                existing.expectedOriginalEmployeeExternalId(),
+                original.employeeExternalId())
+                || !existing.expectedOriginalLinks().equals(
+                original.links())) {
             throw new IdempotencyKeyConflictException();
         }
         return existing;
@@ -161,10 +250,14 @@ public class LiveSkladReturnRecoveryService {
     }
 
     private String validateExternalId(String value) {
+        return validateExternalId(value, "LiveSklad return externalId");
+    }
+
+    private String validateExternalId(String value, String label) {
         String externalId = value == null ? "" : value.trim();
         if (!EXTERNAL_ID.matcher(externalId).matches()) {
             throw new InvalidRequestException(
-                    "LiveSklad return externalId must contain 24 lowercase hex characters"
+                    label + " must contain 24 lowercase hex characters"
             );
         }
         return externalId;
@@ -181,9 +274,9 @@ public class LiveSkladReturnRecoveryService {
     }
 
     private BigDecimal validateAmount(BigDecimal value) {
-        if (value == null || value.signum() <= 0) {
+        if (value == null || value.signum() < 0) {
             throw new InvalidRequestException(
-                    "Expected return amount must be positive"
+                    "Expected return amount must not be negative"
             );
         }
         try {
@@ -203,6 +296,143 @@ public class LiveSkladReturnRecoveryService {
             );
         }
         return value;
+    }
+
+    private OriginalExpectations validateOriginalExpectations(
+            LiveSkladReturnRecoveryMode mode,
+            String currentEmployeeExternalId,
+            String saleExternalId,
+            String employeeExternalId,
+            List<RecoverLiveSkladReturnLinkExpectation> links,
+            int positionCount
+    ) {
+        List<RecoverLiveSkladReturnLinkExpectation> suppliedLinks =
+                links == null ? List.of() : links;
+        if (mode == LiveSkladReturnRecoveryMode.MISSING_RETURN) {
+            if (currentEmployeeExternalId != null
+                    || hasText(saleExternalId)
+                    || hasText(employeeExternalId)
+                    || !suppliedLinks.isEmpty()) {
+                throw new InvalidRequestException(
+                        "Original-link expectations require EXISTING_ORPHAN_RELINK mode"
+                );
+            }
+            return new OriginalExpectations(null, null, null, List.of());
+        }
+        String validatedCurrentEmployee = currentEmployeeExternalId == null
+                ? null
+                : validateExternalId(
+                        currentEmployeeExternalId,
+                        "Expected current return employee externalId"
+                );
+        String validatedSale = validateExternalId(
+                saleExternalId,
+                "Expected original sale externalId"
+        );
+        String validatedEmployee = validateExternalId(
+                employeeExternalId,
+                "Expected original employee externalId"
+        );
+        if (suppliedLinks.size() != positionCount) {
+            throw new InvalidRequestException(
+                    "Expected original links must match expected position count"
+            );
+        }
+        Set<String> returnPositionIds = new HashSet<>();
+        Set<String> originalPositionIds = new HashSet<>();
+        List<RecoverLiveSkladReturnLinkExpectation> validatedLinks =
+                new ArrayList<>();
+        for (RecoverLiveSkladReturnLinkExpectation link : suppliedLinks) {
+            if (link == null) {
+                throw new InvalidRequestException(
+                        "Expected original link cannot be null"
+                );
+            }
+            String returnPositionId = validateExternalId(
+                    link.returnPositionExternalId(),
+                    "Expected return position externalId"
+            );
+            String originalPositionId = validateExternalId(
+                    link.originalSalePositionExternalId(),
+                    "Expected original sale position externalId"
+            );
+            String productId = validateExternalId(
+                    link.productExternalId(),
+                    "Expected product externalId"
+            );
+            if (!returnPositionIds.add(returnPositionId)
+                    || !originalPositionIds.add(originalPositionId)) {
+                throw new InvalidRequestException(
+                        "Expected original links must be one-to-one"
+                );
+            }
+            validatedLinks.add(new RecoverLiveSkladReturnLinkExpectation(
+                    returnPositionId,
+                    originalPositionId,
+                    productId,
+                    validateQuantity(link.expectedQuantity()),
+                    validateNonNegativeAmount(
+                            link.expectedNetAmount(),
+                            "Expected position net amount",
+                            false
+                    ),
+                    validateNonNegativeAmount(
+                            link.expectedCostAmount(),
+                            "Expected position cost amount",
+                            true
+                    )
+            ));
+        }
+        validatedLinks.sort(Comparator.comparing(
+                RecoverLiveSkladReturnLinkExpectation::returnPositionExternalId
+        ));
+        return new OriginalExpectations(
+                validatedCurrentEmployee,
+                validatedSale,
+                validatedEmployee,
+                List.copyOf(validatedLinks)
+        );
+    }
+
+    private BigDecimal validateQuantity(BigDecimal value) {
+        if (value == null || value.signum() <= 0) {
+            throw new InvalidRequestException(
+                    "Expected position quantity must be positive"
+            );
+        }
+        return scaled(value, 3, "Expected position quantity");
+    }
+
+    private BigDecimal validateNonNegativeAmount(
+            BigDecimal value,
+            String label,
+            boolean nullable
+    ) {
+        if (value == null) {
+            if (nullable) {
+                return null;
+            }
+            throw new InvalidRequestException(label + " is required");
+        }
+        if (value.signum() < 0) {
+            throw new InvalidRequestException(label + " must not be negative");
+        }
+        return scaled(value, 2, label);
+    }
+
+    private BigDecimal scaled(BigDecimal value, int scale, String label) {
+        try {
+            return value.setScale(scale, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException exception) {
+            throw new InvalidRequestException(
+                    label + " has unsupported precision",
+                    exception
+            );
+        }
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     private String validateReason(String value) {
@@ -227,5 +457,13 @@ public class LiveSkladReturnRecoveryService {
                     exception
             );
         }
+    }
+
+    private record OriginalExpectations(
+            String currentEmployeeExternalId,
+            String saleExternalId,
+            String employeeExternalId,
+            List<RecoverLiveSkladReturnLinkExpectation> links
+    ) {
     }
 }

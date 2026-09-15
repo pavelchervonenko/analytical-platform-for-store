@@ -13,6 +13,7 @@ import com.storeanalytics.integration.livesklad.exception.LiveSkladRateLimitExce
 import com.storeanalytics.integration.livesklad.exception.LiveSkladReturnChangedException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladTransportException;
 import com.storeanalytics.sync.service.ReturnSyncService;
+import com.storeanalytics.sync.service.ReturnRelinkPositionExpectation;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -99,7 +100,28 @@ class LiveSkladSaleReturnWebhookWorker {
 
         try {
             store.recordSourceDocument(claim.id(), workerId, sourceDocumentId);
-            if (claim.recovery()) {
+            if (claim.existingOrphanRelink()) {
+                returnSyncService.relinkExistingOrphanReturn(
+                        sourceDocumentId,
+                        claim.recoveryExpectedDocumentNumber(),
+                        claim.recoveryExpectedNetAmount(),
+                        claim.recoveryExpectedPositionCount(),
+                        claim.recoveryExpectedCurrentEmployeeExternalId(),
+                        claim.recoveryExpectedOriginalSaleExternalId(),
+                        claim.recoveryExpectedOriginalEmployeeExternalId(),
+                        claim.recoveryExpectedOriginalLinks().stream()
+                                .map(link ->
+                                        new ReturnRelinkPositionExpectation(
+                                                link.returnPositionExternalId(),
+                                                link.originalSalePositionExternalId(),
+                                                link.productExternalId(),
+                                                link.expectedQuantity(),
+                                                link.expectedNetAmount(),
+                                                link.expectedCostAmount()
+                                        ))
+                                .toList()
+                );
+            } else if (claim.recovery()) {
                 returnSyncService.recoverReturn(
                         sourceDocumentId,
                         claim.recoveryExpectedDocumentNumber(),

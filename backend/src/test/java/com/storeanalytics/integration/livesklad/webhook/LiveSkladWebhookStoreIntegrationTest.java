@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -159,6 +160,11 @@ class LiveSkladWebhookStoreIntegrationTest {
                         "F000381",
                         new BigDecimal("15030.00"),
                         2,
+                        LiveSkladReturnRecoveryMode.MISSING_RETURN,
+                        null,
+                        null,
+                        null,
+                        List.of(),
                         "Restore report discrepancy",
                         "manual-recovery-event",
                         """
@@ -187,6 +193,117 @@ class LiveSkladWebhookStoreIntegrationTest {
                 store.findRecoveryById(queued.id()).orElseThrow();
         assertThat(completed.status()).isEqualTo("PROCESSED");
         assertThat(completed.processedAt()).isEqualTo(NOW.plusSeconds(1));
+    }
+
+    @Test
+    void persistsZeroNetRecoveryExpectationForWorker() {
+        UUID requestedBy = UUID.randomUUID();
+        jdbcTemplate.update(
+                """
+                INSERT INTO app_users (
+                    id, email, password_hash, display_name, role
+                ) VALUES (?, ?, 'hash', 'Zero-net Recovery Admin', 'ADMIN')
+                """,
+                requestedBy,
+                requestedBy + "@example.com"
+        );
+        LiveSkladReturnRecoveryView queued = store.createRecovery(
+                new LiveSkladReturnRecoveryRequest(
+                        UUID.randomUUID(),
+                        requestedBy,
+                        "recovery-F000175",
+                        "69c67dbf35f1a26e5b3bc638",
+                        "F000175",
+                        new BigDecimal("0.00"),
+                        1,
+                        LiveSkladReturnRecoveryMode.MISSING_RETURN,
+                        null,
+                        null,
+                        null,
+                        List.of(),
+                        "Restore verified zero-net item return",
+                        "manual-zero-net-recovery-event",
+                        """
+                        {"eventId":"manual-zero-net-recovery-event","data":{"id":"69c67dbf35f1a26e5b3bc638"}}
+                        """,
+                        "d".repeat(64),
+                        NOW
+                )
+        );
+
+        LiveSkladWebhookClaim claim = store.claimNextSaleReturn(
+                "zero-net-recovery-worker", NOW, Duration.ofMinutes(2), 8
+        ).orElseThrow();
+
+        assertThat(queued.expectedNetAmount()).isEqualByComparingTo("0.00");
+        assertThat(claim.recoveryExpectedNetAmount())
+                .isEqualByComparingTo("0.00");
+        assertThat(claim.recoveryExpectedPositionCount()).isEqualTo(1);
+    }
+
+    @Test
+    void persistsExistingOrphanRelinkExpectationsForWorker() {
+        UUID requestedBy = UUID.randomUUID();
+        jdbcTemplate.update(
+                """
+                INSERT INTO app_users (
+                    id, email, password_hash, display_name, role
+                ) VALUES (?, ?, 'hash', 'Relink Admin', 'ADMIN')
+                """,
+                requestedBy,
+                requestedBy + "@example.com"
+        );
+        RecoverLiveSkladReturnLinkExpectation link =
+                new RecoverLiveSkladReturnLinkExpectation(
+                        "6a5ce976c3093727ca1a0af0",
+                        "69875b2ba44502026430bc2d",
+                        "695bd5e1214c11471133b70a",
+                        new BigDecimal("1.000"),
+                        new BigDecimal("46990.00"),
+                        new BigDecimal("43750.00")
+                );
+        LiveSkladReturnRecoveryView queued = store.createRecovery(
+                new LiveSkladReturnRecoveryRequest(
+                        UUID.randomUUID(),
+                        requestedBy,
+                        "relink-F000349-v1",
+                        "6a5ce976c30937c4371a0af1",
+                        "F000349",
+                        new BigDecimal("46990.00"),
+                        1,
+                        LiveSkladReturnRecoveryMode.EXISTING_ORPHAN_RELINK,
+                        "6912f4ab09e647f3125d14ba",
+                        "69875ed7a44502f84130f263",
+                        "6912f4ab09e647f3125d14ba",
+                        List.of(link),
+                        "Relink verified existing orphan return",
+                        "manual-relink-event",
+                        """
+                        {"eventId":"manual-relink-event","data":{"id":"6a5ce976c30937c4371a0af1"}}
+                        """,
+                        "c".repeat(64),
+                        NOW
+                )
+        );
+
+        assertThat(queued.mode()).isEqualTo(
+                LiveSkladReturnRecoveryMode.EXISTING_ORPHAN_RELINK
+        );
+        assertThat(queued.expectedCurrentEmployeeExternalId())
+                .isEqualTo("6912f4ab09e647f3125d14ba");
+        assertThat(queued.expectedOriginalLinks()).containsExactly(link);
+        LiveSkladWebhookClaim claim = store.claimNextSaleReturn(
+                "relink-worker", NOW, Duration.ofMinutes(2), 8
+        ).orElseThrow();
+        assertThat(claim.existingOrphanRelink()).isTrue();
+        assertThat(claim.recoveryExpectedCurrentEmployeeExternalId())
+                .isEqualTo("6912f4ab09e647f3125d14ba");
+        assertThat(claim.recoveryExpectedOriginalSaleExternalId())
+                .isEqualTo("69875ed7a44502f84130f263");
+        assertThat(claim.recoveryExpectedOriginalEmployeeExternalId())
+                .isEqualTo("6912f4ab09e647f3125d14ba");
+        assertThat(claim.recoveryExpectedOriginalLinks())
+                .containsExactly(link);
     }
 
     private LiveSkladWebhookReceipt receipt(

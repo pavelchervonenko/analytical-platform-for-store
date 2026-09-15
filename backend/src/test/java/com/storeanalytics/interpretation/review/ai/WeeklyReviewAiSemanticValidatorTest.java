@@ -35,7 +35,7 @@ class WeeklyReviewAiSemanticValidatorTest {
                                 + "Это отдельная зона контроля."
                 );
         assertThat(result.content().actionWordings().getFirst().title())
-                .isEqualTo("Разобрать рост возвратов");
+                .isEqualTo("Проверить чеки и причины возвратов");
     }
 
     @Test

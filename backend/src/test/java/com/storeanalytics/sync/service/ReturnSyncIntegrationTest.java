@@ -198,6 +198,96 @@ class ReturnSyncIntegrationTest {
     }
 
     @Test
+    void synchronizesDelayedCashReturnWithoutFalseWindowDeletion() {
+        bootstrapReferences();
+        SaleFixture sale = new SaleFixture(
+                "sale-delayed-cash",
+                "sale-position-delayed-cash",
+                "product-delayed-cash",
+                Instant.parse("2026-07-01T10:00:00Z"),
+                "100.00",
+                "60.00"
+        );
+        seedSale(sale);
+        ReturnFixture source = new ReturnFixture(
+                "return-delayed-cash",
+                sale,
+                Instant.parse("2026-07-01T19:00:00Z"),
+                Instant.parse("2026-07-02T01:02:00Z"),
+                "saleReturn"
+        );
+        Instant cashOccurredAt = Instant.parse("2026-07-02T01:00:00Z");
+        fakeClient.setReturns(
+                List.of(cashItem()),
+                Map.of("store-1", List.of(cashRegister())),
+                List.of(cashTransaction(source, cashOccurredAt)),
+                Map.of(source.externalId(), returnDetail(source))
+        );
+        ReturnSyncPeriod cashWindow = new ReturnSyncPeriod(
+                Instant.parse("2026-07-02T00:00:00Z"),
+                Instant.parse("2026-07-02T06:00:00Z")
+        );
+
+        ReturnSyncResult first = returnSyncService.synchronize(cashWindow);
+        ReturnSyncResult replay = returnSyncService.synchronize(cashWindow);
+
+        assertThat(first.status()).isEqualTo(SyncStatus.SUCCESS);
+        assertThat(first.recordsCreated()).isEqualTo(1);
+        assertThat(replay.recordsSkipped()).isEqualTo(1);
+        Map<String, Object> document = jdbcTemplate.queryForMap(
+                """
+                SELECT business_date,
+                       occurred_at = TIMESTAMPTZ '2026-07-01T19:00:00Z'
+                           AS expected_occurred_at, net_amount, is_deleted
+                FROM sales_documents
+                WHERE external_id = 'return-delayed-cash'
+                """
+        );
+        assertThat(document.get("business_date").toString())
+                .isEqualTo("2026-07-01");
+        assertThat(document.get("expected_occurred_at"))
+                .isEqualTo(true);
+        assertThat(document.get("net_amount")).isEqualTo(money("100.00"));
+        assertThat(document.get("is_deleted")).isEqualTo(false);
+
+        fakeClient.setReturns(
+                List.of(cashItem()),
+                Map.of("store-1", List.of(cashRegister())),
+                List.of(),
+                Map.of()
+        );
+        ReturnSyncResult documentWindow = returnSyncService.synchronize(
+                new ReturnSyncPeriod(
+                        Instant.parse("2026-07-01T18:00:00Z"),
+                        Instant.parse("2026-07-02T00:00:00Z")
+                )
+        );
+
+        assertThat(documentWindow.documentsDeleted()).isZero();
+        assertReturnDeleted("return-delayed-cash", false);
+
+        ReturnFixture deleted = new ReturnFixture(
+                source.externalId(),
+                sale,
+                cashOccurredAt,
+                Instant.parse("2026-07-02T01:03:00Z"),
+                "delete"
+        );
+        fakeClient.setReturns(
+                List.of(cashItem()),
+                Map.of("store-1", List.of(cashRegister())),
+                List.of(cashTransaction(deleted)),
+                Map.of()
+        );
+
+        ReturnSyncResult explicitDelete =
+                returnSyncService.synchronize(cashWindow);
+
+        assertThat(explicitDelete.documentsDeleted()).isEqualTo(1);
+        assertReturnDeleted("return-delayed-cash", true);
+    }
+
+    @Test
     void preservesOrphanReturnAndLinksItAfterOriginalSaleArrives() {
         bootstrapReferences();
         SaleFixture lateSale = new SaleFixture(
@@ -280,6 +370,350 @@ class ReturnSyncIntegrationTest {
                 """,
                 Boolean.class
         )).isTrue();
+    }
+
+    @Test
+    void guardedRelinkUpdatesOnlyExistingOrphanLinksAndEmployee() {
+        bootstrapReferences();
+        SaleFixture sale = new SaleFixture(
+                "sale-guarded-relink",
+                "sale-position-guarded-relink",
+                "product-guarded-relink",
+                Instant.parse("2026-07-01T10:00:00Z"),
+                "50.00",
+                "20.00"
+        );
+        ReturnFixture source = new ReturnFixture(
+                "return-guarded-relink",
+                sale,
+                Instant.parse("2026-07-01T12:00:00Z"),
+                Instant.parse("2026-07-01T12:02:00Z"),
+                "saleReturn"
+        );
+        configureReturn(source);
+
+        ReturnSyncResult unresolved = returnSyncService.synchronize(period());
+
+        assertThat(unresolved.status()).isEqualTo(SyncStatus.PARTIAL_SUCCESS);
+        Map<String, Object> before = jdbcTemplate.queryForMap(
+                """
+                SELECT document.net_amount,
+                       document.cost_amount,
+                       document.employee_id,
+                       document.original_document_id,
+                       item.quantity,
+                       item.net_amount AS item_net_amount,
+                       item.cost_amount AS item_cost_amount,
+                       item.original_item_id
+                FROM sales_documents document
+                JOIN sales_document_items item
+                  ON item.sales_document_id = document.id
+                WHERE document.external_id = 'return-guarded-relink'
+                  AND item.external_id = 'return-position'
+                """
+        );
+        assertThat(before.get("employee_id")).isNull();
+        assertThat(before.get("original_document_id")).isNull();
+        assertThat(before.get("original_item_id")).isNull();
+
+        seedSale(sale);
+        ReturnSyncResult relinked =
+                returnSyncService.relinkExistingOrphanReturn(
+                        source.externalId(),
+                        "R-1",
+                        money("50.00"),
+                        1,
+                        null,
+                        sale.externalId(),
+                        "employee-1",
+                        List.of(new ReturnRelinkPositionExpectation(
+                                "return-position",
+                                sale.positionExternalId(),
+                                sale.productExternalId(),
+                                new BigDecimal("1.000"),
+                                money("50.00"),
+                                money("20.00")
+                        ))
+                );
+
+        assertThat(relinked.status()).isEqualTo(SyncStatus.SUCCESS);
+        Map<String, Object> after = jdbcTemplate.queryForMap(
+                """
+                SELECT returned.net_amount,
+                       returned.cost_amount,
+                       returned.employee_id = original.employee_id
+                           AS employee_linked,
+                       returned.original_document_id = original.id
+                           AS document_linked,
+                       returned_item.quantity,
+                       returned_item.net_amount AS item_net_amount,
+                       returned_item.cost_amount AS item_cost_amount,
+                       returned_item.original_item_id = original_item.id
+                           AS item_linked
+                FROM sales_documents returned
+                JOIN sales_documents original
+                  ON original.external_id = 'sale-guarded-relink'
+                JOIN sales_document_items returned_item
+                  ON returned_item.sales_document_id = returned.id
+                JOIN sales_document_items original_item
+                  ON original_item.sales_document_id = original.id
+                 AND original_item.external_id =
+                     'sale-position-guarded-relink'
+                WHERE returned.external_id = 'return-guarded-relink'
+                  AND returned_item.external_id = 'return-position'
+                """
+        );
+        assertThat(after)
+                .containsEntry("net_amount", before.get("net_amount"))
+                .containsEntry("cost_amount", before.get("cost_amount"))
+                .containsEntry("quantity", before.get("quantity"))
+                .containsEntry(
+                        "item_net_amount", before.get("item_net_amount")
+                )
+                .containsEntry(
+                        "item_cost_amount", before.get("item_cost_amount")
+                )
+                .containsEntry("employee_linked", true)
+                .containsEntry("document_linked", true)
+                .containsEntry("item_linked", true);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT count(*) FROM data_quality_issues
+                WHERE status = 'OPEN'
+                  AND issue_code IN (
+                      'RETURN_ORIGINAL_DOCUMENT_MISSING',
+                      'RETURN_ORIGINAL_ITEM_MISSING'
+                  )
+                """,
+                Integer.class
+        )).isZero();
+    }
+
+    @Test
+    void guardedRelinkReattributesExactCurrentEmployee() {
+        assertGuardedRelinkAcceptsStoredEmployee("return-processor");
+    }
+
+    @Test
+    void guardedRelinkRepairsLinksWhenEmployeeIsAlreadyCorrect() {
+        assertGuardedRelinkAcceptsStoredEmployee("employee-1");
+    }
+
+    private void assertGuardedRelinkAcceptsStoredEmployee(
+            String currentEmployeeExternalId
+    ) {
+        bootstrapReferences();
+        SaleFixture sale = new SaleFixture(
+                "sale-guarded-current-employee",
+                "sale-position-guarded-current-employee",
+                "product-guarded-current-employee",
+                Instant.parse("2026-07-01T10:00:00Z"),
+                "50.00",
+                "20.00"
+        );
+        ReturnFixture source = new ReturnFixture(
+                "return-guarded-current-employee",
+                sale,
+                Instant.parse("2026-07-01T12:00:00Z"),
+                Instant.parse("2026-07-01T12:02:00Z"),
+                "saleReturn"
+        );
+        configureReturn(source);
+        assertThat(returnSyncService.synchronize(period()).status())
+                .isEqualTo(SyncStatus.PARTIAL_SUCCESS);
+        seedSale(sale);
+        jdbcTemplate.update(
+                """
+                UPDATE sales_documents
+                SET employee_id = (
+                    SELECT id FROM employees WHERE external_id = ?
+                )
+                WHERE external_id = 'return-guarded-current-employee'
+                """,
+                currentEmployeeExternalId
+        );
+
+        ReturnSyncResult relinked =
+                returnSyncService.relinkExistingOrphanReturn(
+                        source.externalId(),
+                        "R-1",
+                        money("50.00"),
+                        1,
+                        currentEmployeeExternalId,
+                        sale.externalId(),
+                        "employee-1",
+                        List.of(new ReturnRelinkPositionExpectation(
+                                "return-position",
+                                sale.positionExternalId(),
+                                sale.productExternalId(),
+                                new BigDecimal("1.000"),
+                                money("50.00"),
+                                money("20.00")
+                        ))
+                );
+
+        assertThat(relinked.status()).isEqualTo(SyncStatus.SUCCESS);
+        Map<String, Object> after = jdbcTemplate.queryForMap(
+                """
+                SELECT employee.external_id AS employee_external_id,
+                       returned.original_document_id IS NOT NULL
+                           AS document_linked,
+                       returned_item.original_item_id IS NOT NULL
+                           AS item_linked
+                FROM sales_documents returned
+                JOIN employees employee ON employee.id = returned.employee_id
+                JOIN sales_document_items returned_item
+                  ON returned_item.sales_document_id = returned.id
+                WHERE returned.external_id =
+                    'return-guarded-current-employee'
+                """
+        );
+        assertThat(after)
+                .containsEntry("employee_external_id", "employee-1")
+                .containsEntry("document_linked", true)
+                .containsEntry("item_linked", true);
+    }
+
+    @Test
+    void guardedRelinkRejectsUnexpectedCurrentEmployeeWithoutMutation() {
+        bootstrapReferences();
+        SaleFixture sale = new SaleFixture(
+                "sale-guarded-employee-mismatch",
+                "sale-position-guarded-employee-mismatch",
+                "product-guarded-employee-mismatch",
+                Instant.parse("2026-07-01T10:00:00Z"),
+                "50.00",
+                "20.00"
+        );
+        ReturnFixture source = new ReturnFixture(
+                "return-guarded-employee-mismatch",
+                sale,
+                Instant.parse("2026-07-01T12:00:00Z"),
+                Instant.parse("2026-07-01T12:02:00Z"),
+                "saleReturn"
+        );
+        configureReturn(source);
+        assertThat(returnSyncService.synchronize(period()).status())
+                .isEqualTo(SyncStatus.PARTIAL_SUCCESS);
+        seedSale(sale);
+        jdbcTemplate.update(
+                """
+                UPDATE sales_documents
+                SET employee_id = (
+                    SELECT id FROM employees
+                    WHERE external_id = 'return-processor'
+                )
+                WHERE external_id = 'return-guarded-employee-mismatch'
+                """
+        );
+
+        assertThatThrownBy(() ->
+                returnSyncService.relinkExistingOrphanReturn(
+                        source.externalId(),
+                        "R-1",
+                        money("50.00"),
+                        1,
+                        null,
+                        sale.externalId(),
+                        "employee-1",
+                        List.of(new ReturnRelinkPositionExpectation(
+                                "return-position",
+                                sale.positionExternalId(),
+                                sale.productExternalId(),
+                                new BigDecimal("1.000"),
+                                money("50.00"),
+                                money("20.00")
+                        ))
+                )
+        ).isInstanceOf(ReturnSyncException.class);
+
+        Map<String, Object> stored = jdbcTemplate.queryForMap(
+                """
+                SELECT employee.external_id AS employee_external_id,
+                       returned.original_document_id,
+                       returned_item.original_item_id
+                FROM sales_documents returned
+                JOIN employees employee ON employee.id = returned.employee_id
+                JOIN sales_document_items returned_item
+                  ON returned_item.sales_document_id = returned.id
+                WHERE returned.external_id =
+                    'return-guarded-employee-mismatch'
+                """
+        );
+        assertThat(stored)
+                .containsEntry("employee_external_id", "return-processor")
+                .containsEntry("original_document_id", null)
+                .containsEntry("original_item_id", null);
+    }
+
+    @Test
+    void guardedRelinkRejectsChangedStoredFactsWithoutMutation() {
+        bootstrapReferences();
+        SaleFixture sale = new SaleFixture(
+                "sale-guarded-reject",
+                "sale-position-guarded-reject",
+                "product-guarded-reject",
+                Instant.parse("2026-07-01T10:00:00Z"),
+                "50.00",
+                "20.00"
+        );
+        ReturnFixture source = new ReturnFixture(
+                "return-guarded-reject",
+                sale,
+                Instant.parse("2026-07-01T12:00:00Z"),
+                Instant.parse("2026-07-01T12:02:00Z"),
+                "saleReturn"
+        );
+        configureReturn(source);
+        assertThat(returnSyncService.synchronize(period()).status())
+                .isEqualTo(SyncStatus.PARTIAL_SUCCESS);
+        seedSale(sale);
+        jdbcTemplate.update(
+                """
+                UPDATE sales_document_items
+                SET cost_amount = 19.99
+                WHERE external_id = 'return-position'
+                """
+        );
+
+        assertThatThrownBy(() ->
+                returnSyncService.relinkExistingOrphanReturn(
+                        source.externalId(),
+                        "R-1",
+                        money("50.00"),
+                        1,
+                        null,
+                        sale.externalId(),
+                        "employee-1",
+                        List.of(new ReturnRelinkPositionExpectation(
+                                "return-position",
+                                sale.positionExternalId(),
+                                sale.productExternalId(),
+                                new BigDecimal("1.000"),
+                                money("50.00"),
+                                money("20.00")
+                        ))
+                )
+        ).isInstanceOf(ReturnSyncException.class)
+                .hasMessage("Return synchronization failed");
+
+        Map<String, Object> stored = jdbcTemplate.queryForMap(
+                """
+                SELECT returned.employee_id,
+                       returned.original_document_id,
+                       returned_item.original_item_id,
+                       returned_item.cost_amount
+                FROM sales_documents returned
+                JOIN sales_document_items returned_item
+                  ON returned_item.sales_document_id = returned.id
+                WHERE returned.external_id = 'return-guarded-reject'
+                  AND returned_item.external_id = 'return-position'
+                """
+        );
+        assertThat(stored.get("employee_id")).isNull();
+        assertThat(stored.get("original_document_id")).isNull();
+        assertThat(stored.get("original_item_id")).isNull();
+        assertThat(stored.get("cost_amount")).isEqualTo(money("19.99"));
     }
 
     @Test
@@ -453,6 +887,78 @@ class ReturnSyncIntegrationTest {
                 """,
                 Integer.class
         )).isEqualTo(1);
+    }
+
+    @Test
+    void validatedRecoveryPersistsZeroNetItemReturnWithCost() {
+        bootstrapReferences();
+        SaleFixture sale = new SaleFixture(
+                "sale-zero-net-recovery",
+                "sale-position-zero-net-recovery",
+                "product-zero-net-recovery",
+                Instant.parse("2026-07-01T10:00:00Z"),
+                "0.00",
+                "50.00"
+        );
+        seedSale(sale);
+        ReturnFixture recovery = new ReturnFixture(
+                "return-zero-net-recovery",
+                sale,
+                Instant.parse("2026-07-01T13:00:00Z"),
+                Instant.parse("2026-07-01T13:02:00Z"),
+                "saleReturn"
+        );
+        fakeClient.setReturns(
+                List.of(),
+                Map.of(),
+                List.of(),
+                Map.of(recovery.externalId(), returnDetail(recovery))
+        );
+
+        ReturnSyncResult first = returnSyncService.recoverReturn(
+                recovery.externalId(),
+                "R-1",
+                money("0.00"),
+                1
+        );
+        ReturnSyncResult replay = returnSyncService.recoverReturn(
+                recovery.externalId(),
+                "R-1",
+                money("0.00"),
+                1
+        );
+
+        assertThat(first.status()).isEqualTo(SyncStatus.SUCCESS);
+        assertThat(replay.status()).isEqualTo(SyncStatus.SUCCESS);
+        Map<String, Object> recovered = jdbcTemplate.queryForMap(
+                """
+                SELECT returned.net_amount,
+                       returned.cost_amount,
+                       returned.original_document_id = original.id AS linked,
+                       item.net_amount AS item_net_amount,
+                       item.cost_amount AS item_cost_amount,
+                       item.original_item_id = original_item.id AS item_linked
+                FROM sales_documents returned
+                JOIN sales_documents original
+                  ON original.external_id = 'sale-zero-net-recovery'
+                JOIN sales_document_items item
+                  ON item.sales_document_id = returned.id
+                JOIN sales_document_items original_item
+                  ON original_item.sales_document_id = original.id
+                WHERE returned.external_id = 'return-zero-net-recovery'
+                  AND returned.document_kind = 'RETURN'
+                  AND returned.is_deleted = false
+                  AND item.is_deleted = false
+                  AND original_item.is_deleted = false
+                """
+        );
+        assertThat(recovered)
+                .containsEntry("net_amount", money("0.00"))
+                .containsEntry("cost_amount", money("50.00"))
+                .containsEntry("linked", true)
+                .containsEntry("item_net_amount", money("0.00"))
+                .containsEntry("item_cost_amount", money("50.00"))
+                .containsEntry("item_linked", true);
     }
 
     @Test
@@ -728,12 +1234,17 @@ class ReturnSyncIntegrationTest {
     }
 
     private void assertReturnDeleted(boolean expected) {
+        assertReturnDeleted("return-1", expected);
+    }
+
+    private void assertReturnDeleted(String externalId, boolean expected) {
         assertThat(jdbcTemplate.queryForObject(
                 """
                 SELECT is_deleted FROM sales_documents
-                WHERE external_id = 'return-1'
+                WHERE external_id = ?
                 """,
-                Boolean.class
+                Boolean.class,
+                externalId
         )).isEqualTo(expected);
     }
 
@@ -785,9 +1296,16 @@ class ReturnSyncIntegrationTest {
     private LiveSkladCashTransactionPayload cashTransaction(
             ReturnFixture fixture
     ) {
+        return cashTransaction(fixture, fixture.occurredAt());
+    }
+
+    private LiveSkladCashTransactionPayload cashTransaction(
+            ReturnFixture fixture,
+            Instant occurredAt
+    ) {
         return new LiveSkladCashTransactionPayload(
                 "cash-" + fixture.externalId(),
-                fixture.occurredAt(),
+                occurredAt,
                 fixture.sourceUpdatedAt(),
                 fixture.sourceType(),
                 "store-1",

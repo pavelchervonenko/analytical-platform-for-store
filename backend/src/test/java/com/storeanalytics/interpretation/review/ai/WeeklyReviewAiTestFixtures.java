@@ -62,7 +62,7 @@ final class WeeklyReviewAiTestFixtures {
                 )),
                 List.of(new WeeklyReviewAiInput.ActionSource(
                         "action:restore:return_revenue",
-                        "Разобрать рост возвратов",
+                        "Проверить чеки и причины возвратов",
                         "Сравнить со следующей полной неделей",
                         List.of("STORE.RETURN_REVENUE")
                 )),

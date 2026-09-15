@@ -626,11 +626,25 @@ export type ManualLlmJobView = {
     updatedAt?: string;
 };
 
+export type RecoverLiveSkladReturnLinkExpectation = {
+    returnPositionExternalId: string;
+    originalSalePositionExternalId: string;
+    productExternalId: string;
+    expectedQuantity: number;
+    expectedNetAmount: number;
+    expectedCostAmount?: number;
+};
+
 export type RecoverLiveSkladReturnRequest = {
     externalId: string;
     expectedDocumentNumber: string;
     expectedNetAmount: number;
     expectedPositionCount?: number;
+    mode?: 'MISSING_RETURN' | 'EXISTING_ORPHAN_RELINK';
+    expectedCurrentEmployeeExternalId?: string;
+    expectedOriginalSaleExternalId?: string;
+    expectedOriginalEmployeeExternalId?: string;
+    expectedOriginalLinks?: Array<RecoverLiveSkladReturnLinkExpectation>;
     reason: string;
 };
 
@@ -640,6 +654,11 @@ export type LiveSkladReturnRecoveryView = {
     expectedDocumentNumber?: string;
     expectedNetAmount?: number;
     expectedPositionCount?: number;
+    mode?: 'MISSING_RETURN' | 'EXISTING_ORPHAN_RELINK';
+    expectedCurrentEmployeeExternalId?: string;
+    expectedOriginalSaleExternalId?: string;
+    expectedOriginalEmployeeExternalId?: string;
+    expectedOriginalLinks?: Array<RecoverLiveSkladReturnLinkExpectation>;
     status?: string;
     attemptCount?: number;
     terminalFailure?: boolean;
@@ -1953,8 +1972,8 @@ export type ActiveSessionResponse = {
 };
 
 export type CsrfToken = {
-    token?: string;
     parameterName?: string;
+    token?: string;
     headerName?: string;
 };
 
