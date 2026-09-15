@@ -17,6 +17,7 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/salary/service/PayrollCalculationServiceTest.java
   - backend/src/test/java/com/storeanalytics/salary/service/PayrollReadinessServiceTest.java
   - backend/src/test/java/com/storeanalytics/salary/web/PayrollControllerTest.java
+  - backend/src/test/java/com/storeanalytics/store/web/StoreDataStatusSecurityIntegrationTest.java
 runtime_evidence: []
 required_reviewers:
   - backend-data
@@ -36,8 +37,8 @@ superseded_by: null
 
 Store-scoped API предоставляет readiness, preview, calculation, revision list/detail/comparison,
 adjustments, approve и paid transitions согласно OpenAPI v12. Все store-scoped payroll endpoints
-требуют одновременно назначение магазина и функцию `PAYROLL`; одного назначения недостаточно.
-`canCalculate` означает техническую
+требуют одновременно доступ к магазину и функцию `PAYROLL`; одного назначения магазина
+недостаточно. `canCalculate` означает техническую
 возможность построить scenario; более строгий `canApprove` требует закрытых blocking quality gaps.
 
 Calculation создаёт immutable revision lineage. После APPROVED/PAID новая ревизия требует reason.
@@ -68,6 +69,11 @@ plan, classification и formula; STALE revision нельзя approve/pay до я
 Admin payroll scheme и product payroll-category assignment endpoints входят в OpenAPI v12, но
 изменение formula/category является versioned business change и требует отдельного product review.
 
+Manager UI считает число незавершённых категорий проверок, а не сумму затронутых строк. Детальные
+списки товаров без категории/себестоимости видит только администратор; менеджеру остаются его
+действия по плану и сменам. Отрицательная `payableAmount` допустима формулой, но перед approval
+интерфейс показывает отдельное предупреждение и повторяет его в подтверждении.
+
 Отсутствие `PAYROLL` не закрывает архив `/reports`: опубликованные зарплатные snapshots намеренно
-остаются видимыми. Прямые ведомости, preview/readiness/revisions и зарплатный контекст карточки
-сотрудника при этом недоступны.
+остаются видимыми в отчётах. При этом прямые ведомости, preview/readiness/revisions и зарплатный
+контекст карточки сотрудника недоступны.

@@ -6,7 +6,7 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-04
 requirement_sources:
   - docs/history/audits/2026/08/CUSTOMER_KPI_FORMULA_AUDIT_2026-08-13.md
 implementation_sources:
@@ -44,6 +44,10 @@ superseded_by: null
 - orphan return без найденного SALE сохраняется с `employee_id = null` и входит в «Не назначен»;
 - после появления оригинала повторная синхронизация связывает возврат и назначает исходного
   продавца.
+
+Возврат входит в выбранный период по собственной `business_date`, даже если исходная продажа была
+в более раннем месяце. Поэтому он уменьшает показатели продавца исходной продажи именно в периоде
+возврата; переносить минус назад в месяц продажи система не должна.
 
 `ReturnSyncIntegrationTest` использует двух разных разрешённых сотрудников и проверяет как
 приоритет исходного продавца, так и отсутствие fallback у orphan return. Store/category signed

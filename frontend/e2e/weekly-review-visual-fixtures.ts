@@ -23,7 +23,6 @@ function unavailableWorkloadMetric(metric: WeeklyReviewMetric): WeeklyReviewMetr
     previousSample: null
   };
 }
-
 function unavailableBlockedMetric(metric: WeeklyReviewMetric): WeeklyReviewMetric {
   return {
     ...unavailableWorkloadMetric(metric),
@@ -485,4 +484,3 @@ export function visualWeeklyReview(scenario: string | null): WeeklyReview {
   review.team.benchmarkPolicy.label = "Медиана выручки в час, 10 сотрудников";
   return review;
 }
-

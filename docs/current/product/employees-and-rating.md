@@ -6,7 +6,7 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-09-03
+last_verified: 2026-09-14
 requirement_sources:
   - docs/archive/legacy-contracts/employee-rating-api.md
   - docs/archive/discoveries/analytics-business-rules-draft.md
@@ -17,6 +17,8 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/performance/service/EmployeeCardService.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewTeamEmployeeProjector.java
   - backend/src/main/resources/db/migration/V4__add_employee_performance_rating.sql
+  - frontend/src/insights/weekly-review/WeeklyReviewContent.tsx
+  - frontend/src/insights/weekly-review/weeklyReviewViewModel.ts
   - frontend/src/plan-schedule/forms.ts
 verification_sources:
   - backend/src/test/java/com/storeanalytics/metrics/repository/EmployeeKpiIntegrationTest.java
@@ -24,8 +26,11 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/performance/service/EmployeeRatingServiceTest.java
   - backend/src/test/java/com/storeanalytics/performance/service/EmployeeCardServiceTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewTeamEmployeeProjectorTest.java
+  - frontend/src/insights/WeeklyReviewView.test.tsx
+  - frontend/src/insights/weekly-review/weeklyReviewViewModel.test.ts
   - frontend/src/plan-schedule/forms.test.ts
-runtime_evidence: []
+runtime_evidence:
+  - docs/history/audits/2026/09/WEEKLY_REVIEW_LOCAL_PRERELEASE_2026-09-14.md
 required_reviewers:
   - product
   - backend
@@ -60,6 +65,26 @@ Overview roster не обязан сходиться со store total.
 сотрудника не удаляется автоматически, а уже созданный weekly-review snapshot не фильтруется заново
 при чтении. Историческое представление меняется только новой immutable revision.
 
+### Вклад и эффективность в Weekly Review
+
+Чистая выручка сотрудника в недельном разборе — это его вклад в результат магазина и собственная
+динамика относительно прошлой недели. Она не используется для оценочного сравнения с коллегами.
+Сравнение эффективности допустимо только по `REVENUE_PER_HOUR` с медианой минимум трёх сотрудников,
+у которых достаточно продаж, смен и часов в обеих сравниваемых неделях. Неполная база любой из
+двух недель исключает сотрудника из benchmark и не создаёт оценочного peer comparison.
+
+Смены для менеджера являются optional operational data: их отсутствие не обесценивает уже
+доступные продажи сотрудника. При незаполненных сменах `SHIFT_COUNT`, `WORKED_HOURS` и
+`REVENUE_PER_HOUR` недоступны, peer comparison отсутствует, но сотрудник, команда и весь Weekly
+Review не получают `LIMITED`/`PARTIAL` только по этой причине. Такой пробел не создаёт
+`ATTENTION` или действие. Реальная нехватка продаж и нераспределённые возвраты остаются отдельными
+адресными ограничениями.
+
+Если сотрудник уже показан в Weekly Review по достаточному sales-сигналу, отсутствие time-оценки
+обозначается одной нейтральной подписью `Часть смен не заполнена — оценка по часам недоступна`.
+Список исключений не получает отдельную серую сводку: заголовок содержит `N из M требуют проверки`,
+а каждая карточка объясняет только собственную причину.
+
 ## Rating v1
 
 Четыре направления имеют вес `25%`, cap `150`:
@@ -73,6 +98,10 @@ Structure = 50% * clamp(accessory share / target * 100, 0, 150)
 Attach = average(clamp(employee rate / store rate * 100, 0, 150))
 Overall = sum(score * weight / 100) * 100 / available coverage
 ```
+
+Валовая прибыль и маржа могут отображаться как финансовые показатели сотрудника, но не являются
+отдельными направлениями Rating v1 и не добавляют баллы в `Overall`. Рейтинг использует выручку,
+выручку за час, структуру аксессуаров/услуг и attach-rate.
 
 Attach участвует при employee denominator `>=3` и положительном store benchmark. Место присваивается
 при coverage `>=75%`, ранжирование dense. Нет смены — не candidate; нулевые/отрицательные часы —

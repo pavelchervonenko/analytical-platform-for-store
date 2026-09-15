@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - manager
-last_verified: 2026-09-09
+last_verified: 2026-09-14
 requirement_sources:
   - docs/archive/legacy-contracts/store-directory-api.md
 implementation_sources:

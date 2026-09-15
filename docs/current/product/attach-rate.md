@@ -6,7 +6,7 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-04
 requirement_sources:
   - docs/archive/legacy-contracts/attach-rate-api.md
   - docs/archive/discoveries/analytics-business-rules-draft.md
@@ -77,6 +77,10 @@ Store benchmark использует все факты магазина. Employe
 `rate=null` — «нет продаж для расчёта», отсутствующий benchmark — «нет среднего по магазину», база
 ниже порога — «недостаточно продаж». Quality counters сопровождают unmatched numerator,
 ambiguous warranty и unknown condition.
+
+Продажи и возвраты попадают в числитель и базу по собственной дате операции. Возврат текущего
+периода может уменьшить attach-rate продавца исходной продажи, даже если сама продажа была за
+пределами выбранного периода.
 
 Store rate не зависит от employee attribution; employee rate периода с возвратами ограничен
 [ADR-0001](../../decisions/ADR-0001-return-employee-attribution.md). Integration tests покрывают 14

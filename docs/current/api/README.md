@@ -14,7 +14,7 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics
 verification_sources:
   - frontend/src/api/consumerContract.test.ts
-  - scripts/check-openapi-compatibility.py
+  - scripts/check-openapi-compatibility.mjs
 runtime_evidence: []
 required_reviewers:
   - backend-data

@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - operator
-last_verified: 2026-09-14
+last_verified: 2026-09-15
 requirement_sources:
   - docs/archive/legacy-contracts/database-design.md
   - docs/maintenance/documentation-policy.md
@@ -19,6 +19,7 @@ implementation_sources:
 verification_sources:
   - backend/src/test/java/com/storeanalytics/common/database/ExpectedSchemaVersionTest.java
   - backend/src/test/java/com/storeanalytics/MigrationApplicationIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/common/database/UserFeatureAccessMigrationIntegrationTest.java
 runtime_evidence: []
 required_reviewers:
   - backend-data
@@ -36,7 +37,7 @@ superseded_by: null
 ## Действующий контракт
 
 Backend вычисляет максимальную ожидаемую schema version из packaged migration resources. В
-source-tree максимальная версия — V50; цепочка также содержит V39.1, которая сортируется между V39
+source-tree максимальная версия — V51; цепочка также содержит V39.1, которая сортируется между V39
 и V40. Runtime API/WORKER не мигрирует БД и должен только read-only проверить фактическую историю.
 
 Production deploy сначала проверяет immutable images и packaged schema, затем останавливает worker
@@ -52,7 +53,9 @@ migration writers остаются остановленными до диагн�
 | V43 | Lease/retry/terminal state и orphan return до появления исходной продажи |
 | V44 | Audited, idempotent validated return recovery |
 | V45–V48 | Weekly-review snapshots, AI enrichment/jobs/attempts и contract hardening |
-| V50 | Глобальные функциональные права руководителей с backfill прежнего доступа |
+| V49 | Durable ожидания для повторного связывания orphan return |
+| V50 | Глобальные функции руководителей с backfill `PLAN`, `SHIFTS`, `PAYROLL` |
+| V51 | Non-negative expectation для доказанных zero-net item returns |
 
 ## Политика изменения
 
@@ -73,8 +76,8 @@ oracle packaged version.
 
 ## Что не доказано
 
-- Не существует полного populated upgrade matrix из каждой V1–V49 в V50.
-- Downgrade V50 в предыдущую schema не реализован и не репетировался.
+- Не существует полного populated upgrade matrix из каждой V1–V50 в V51.
+- Downgrade V51 в предыдущую schema не реализован и не репетировался.
 - Release scripts используют локальный state-файл для compatibility decision. После failed
   migration marker `MIGRATION_IN_PROGRESS` нельзя автоматически примирить с реальным
   `flyway_schema_history`; штатный recovery runbook для этого ещё не подтверждён.

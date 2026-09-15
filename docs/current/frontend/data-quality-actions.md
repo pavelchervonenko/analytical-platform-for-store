@@ -43,7 +43,7 @@ Action должно менять модель, породившую issue, уч�
 | Issue/action | Правильная цель | Реализация |
 |---|---|---|
 | Sync gap | Refresh/admin sync | Есть с role guard |
-| Missing plan/shifts | `/plan`, нужная view | Есть |
+| Missing plan/shifts | `/plan` или `/shifts` | Есть |
 | Payroll unmapped | Payroll classification | Есть |
 | `SOURCE_PRODUCTS_UNMAPPED` | Analytics assignment | Есть с admin guard |
 | Missing/unexpected cost | Source + resync | Manual editor отсутствует |

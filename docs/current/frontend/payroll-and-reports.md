@@ -16,6 +16,8 @@ implementation_sources:
   - frontend/src/api/queries.ts
 verification_sources:
   - frontend/src/payroll/payroll-ui.test.ts
+  - frontend/src/payroll/PayrollPage.permissions.test.tsx
+  - frontend/src/auth/SessionGates.test.tsx
   - frontend/src/reports/ReportsPage.test.tsx
   - backend/src/test/java/com/storeanalytics/salary/web/PayrollControllerTest.java
   - backend/src/test/java/com/storeanalytics/report

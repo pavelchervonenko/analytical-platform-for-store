@@ -59,6 +59,9 @@ production-read-only preflight и владелец не подтвердил п�
 
 ## Предусловия
 
+- Production SSH-канал установлен по
+  [отдельному host-access runbook](production-ssh-access.md); owner-key fingerprint проверен, а
+  временный `sudo` allowlist не изменяет `authorized_keys`.
 - Reviewed tag/commit находится на approved branch, CI зелёный.
 - Backend/web заданы как exact `ghcr.io/...@sha256:<64 hex>`; оба OCI revision равны
   `RELEASE_COMMIT`, а digest-поля совпадают с image references.
@@ -70,7 +73,7 @@ production-read-only preflight и владелец не подтвердил п�
   выключенной reconciliation все три значения пусты/нулевые.
 - Recorded source schema входит в migration range, packaged target совпадает с `SCHEMA_VERSION`.
 - Назначены observer, rollback/forward-fix owner и окно наблюдения.
-- Для релиза с V50 изменение прав руководителей начинается только после успешного запуска новых
+- Для релиза с V50 изменения прав руководителей выполняются только после успешного запуска новых
   API и web: migration сначала сохраняет прежний доступ всем существующим руководителям.
 
 ## Критерии остановки
@@ -147,11 +150,12 @@ Application rollback не откатывает БД. `rollback.sh` допуст�
 явной совместимости previous runtime. Иначе применяется reviewed compatible forward-fix. Restore
 используется только по DR runbook и не выполняется поверх production.
 
-Особый случай V50: предыдущий runtime не знает `user_feature_access` и снова разрешит
-руководителю план, смены и зарплату по одному назначению магазина. После настройки хотя бы одного
-ограниченного руководителя application rollback на такую версию не сохраняет policy. Перед ним
-оператор либо временно деактивирует затронутые учётные записи с подтверждением security owner,
-либо применяет совместимый forward-fix. Таблицу и строки V50 при rollback не удаляют.
+Особый случай V50: предыдущий runtime не знает `user_feature_access` и снова позволит руководителю
+открывать план, смены и зарплату по одному назначению магазина. Поэтому после настройки хотя бы
+одного ограниченного руководителя application rollback на такую версию не сохраняет policy. Перед
+ним оператор либо временно деактивирует затронутые учётные записи и получает подтверждение security
+owner, либо применяет совместимый forward-fix; наличие таблицы V50 само по себе не защищает старый
+код. Удалять таблицу или строки доступа при rollback нельзя.
 
 ## Evidence и известные пробелы
 

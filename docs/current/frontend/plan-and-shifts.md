@@ -21,6 +21,7 @@ implementation_sources:
   - frontend/src/api/queries.ts
 verification_sources:
   - frontend/src/app/AppShell.test.ts
+  - frontend/src/auth/SessionGates.test.tsx
   - frontend/src/plan-schedule/PlanSchedulePage.test.tsx
   - frontend/src/plan-schedule/PlanPanel.test.tsx
   - frontend/src/plan-schedule/PlanSettingsPanel.test.tsx

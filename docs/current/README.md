@@ -7,7 +7,7 @@ audience:
   - developer
   - operator
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-04
 requirement_sources:
   - docs/maintenance/documentation-policy.md
 implementation_sources:
@@ -90,7 +90,7 @@ superseded_by: null
 - [Главная](frontend/overview.md)
 - [Структура продаж и карта допродаж](frontend/sales-structure-and-attach-map.md)
 - [Сотрудники](frontend/employees.md)
-- [План и смены](frontend/plan-and-shifts.md)
+- [План и смены: отдельные экраны](frontend/plan-and-shifts.md)
 - [Зарплата и отчёты](frontend/payroll-and-reports.md)
 - [Действия качества](frontend/data-quality-actions.md)
 - [Transport-контракты](frontend/transport-contracts.md)
