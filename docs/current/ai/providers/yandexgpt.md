@@ -21,7 +21,8 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/integration/llm/yandex/YandexLlmRequestPreflightTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiBudgetGuardTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiProviderRequestFactoryTest.java
-runtime_evidence: []
+runtime_evidence:
+  - docs/history/releases/2026/09/v0.1.0-pilot.33-production-verification.md
 required_reviewers:
   - ai-semantic
   - security-privacy

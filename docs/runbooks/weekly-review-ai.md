@@ -6,9 +6,11 @@ owner: ai
 audience:
   - operator
 last_verified: 2026-09-15
-last_rehearsed: null
+last_rehearsed: 2026-09-15
 verification_levels:
   - static
+  - production-read-only
+  - production-drill
 required_verification_levels:
   - staging
   - production-read-only
@@ -28,6 +30,14 @@ verification_evidence:
     scope: Exact preflight, approval, lifecycle, budget, validation and immutable publication paths reviewed
     verified_at: 2026-09-15
     evidence: docs/current/ai/weekly-review.md
+  - level: production-read-only
+    scope: Exact snapshot, privacy, hash, budget, queue and published-read-path preflight verified without a provider call
+    verified_at: 2026-09-15
+    evidence: docs/history/releases/2026/09/v0.1.0-pilot.33-production-verification.md
+  - level: production-drill
+    scope: Two separately approved single-call canaries completed with valid immutable enrichments and no notification events
+    verified_at: 2026-09-15
+    evidence: docs/history/releases/2026/09/v0.1.0-pilot.33-production-verification.md
 required_reviewers:
   - ai-semantic
   - security-privacy
@@ -49,13 +59,15 @@ superseded_by: null
 выполняет ограниченный provider-вызов и проверяет опубликованный immutable enrichment. Процедура не
 включает массовый planner, не меняет KPI и не разрешает платные вызовы без отдельной авторизации.
 
-**Текущий authorization status: NO-GO для платного canary.** В candidate реализован read-only
-preflight и exact approval contract, но они ещё не прошли release review, staging rehearsal и
-production deployment. До этого production pilot.32 остаётся с выключенными generation/planner/
-worker flags, а старый POST нельзя считать защищённым новым contract.
+**Текущий authorization status: GO только для одного нового exact snapshot после свежего
+network-free preflight и отдельного явного разрешения его hashes, одного вызова и верхней
+стоимости.** Два таких production canary уже завершились успешно; их разрешения исчерпаны и не
+могут использоваться повторно. Массовая генерация и автоматические planners остаются NO-GO.
 
-Статус остаётся `draft`: локальная статическая проверка не заменяет reusable staging rehearsal,
-production read-only evidence и отдельное разрешение exact canary с известной стоимостью.
+Статус runbook остаётся `draft`: static, production read-only и ограниченный production drill
+подтверждены, но обязательная reusable staging rehearsal exact publication path ещё не сохранена.
+Фактическое состояние runtime нужно читать только в
+[`project-state.md`](../current/project-state.md).
 
 ## Влияние и требуемая авторизация
 
@@ -162,9 +174,10 @@ request. Preflight не является доказательством provider
    ниже.
 
 Пустой body должен вернуть `428 Precondition Required`. Любое изменение snapshot/request/budget
-между preflight и POST должно вернуть `412 Precondition Failed` без enqueue. Пока candidate не
-выпущен и не отрепетирован, production POST вручную не вызывать. Raw cookie/token, полный provider
-input/response и credentials нельзя помещать в команды, shell history или evidence.
+между preflight и POST должно вернуть `412 Precondition Failed` без enqueue. Production POST
+нельзя вызывать без свежего exact preflight и отдельного разрешения конкретного target. Raw
+cookie/token, полный provider input/response и credentials нельзя помещать в команды, shell
+history или evidence.
 
 ## Проверка результата
 
@@ -200,8 +213,7 @@ versions, statuses, validation codes, token/cost totals, до/после backend
 
 ## Репетиция
 
-- Достигнут только `static`: candidate preflight/approval contract прошёл локальные unit,
-  authorization, PostgreSQL concurrency и OpenAPI compatibility проверки.
-- До `current` обязательны release review, staging rehearsal платного вызова и production
-  read-only preflight exact deployed commit.
-- Canary одного магазина/недели не доказывает массовую автоматизацию.
+- `static`, `production-read-only` и `production-drill` подтверждены: exact preflight/approval,
+  две отдельно разрешённые single-call операции, immutable publication и штатный read path прошли.
+- До `status: current` всё ещё обязательна reusable staging rehearsal exact publication path.
+- Даже два canary одной недели не доказывают массовую или автоматическую генерацию.

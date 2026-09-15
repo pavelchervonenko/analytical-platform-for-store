@@ -53,6 +53,7 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/interpretation/web/WeeklyReviewAiOperationsSecurityIntegrationTest.java
 runtime_evidence:
   - docs/history/audits/2026/09/WEEKLY_REVIEW_LOCAL_PRERELEASE_2026-09-14.md
+  - docs/history/releases/2026/09/v0.1.0-pilot.33-production-verification.md
 required_reviewers:
   - ai-semantic
   - backend-data
