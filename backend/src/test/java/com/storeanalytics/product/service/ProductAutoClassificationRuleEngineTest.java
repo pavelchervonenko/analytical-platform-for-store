@@ -202,6 +202,11 @@ class ProductAutoClassificationRuleEngineTest {
                         ProductConditionType.NOT_APPLICABLE
                 ),
                 arguments(
+                        "USB-C - Lightning No Box",
+                        "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
                         "СЗУ Apple Power Adapter 30W Original",
                         "CHARGER_CABLE",
                         ProductConditionType.NOT_APPLICABLE
@@ -258,6 +263,11 @@ class ProductAutoClassificationRuleEngineTest {
                 ),
                 arguments(
                         "Док-станция PS5 DualSense ChargingStation",
+                        "OTHER_ACCESSORY_PRODUCT",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Картхолдер VLP из экокожи с MagSafe Черный",
                         "OTHER_ACCESSORY_PRODUCT",
                         ProductConditionType.NOT_APPLICABLE
                 ),
