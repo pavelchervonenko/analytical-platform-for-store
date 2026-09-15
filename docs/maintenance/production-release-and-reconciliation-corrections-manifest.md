@@ -298,6 +298,10 @@ idempotency keys создаются только перед операцией �
 6. Убедиться, что migration numbers уникальны и packaged expected schema соответствует последней
    включённой migration.
 
+Результат на интегральном candidate: выполнено. Истории production-base и Weekly Review RC
+сохранены, изменения разделены на логические commits, unknown/untracked и conflict markers не
+обнаружены, migration numbers уникальны, candidate release metadata выровнены с packaged target.
+
 ### 2. Закрыть code gaps R1/C1
 
 1. Добавить exact current-employee expectation или эквивалентный fail-closed guard для
@@ -310,6 +314,11 @@ idempotency keys создаются только перед операцией �
    concurrent recovery paths.
 5. Проверить rule v8 и отсутствие unintended reclassification warranty/Care и product rows.
 
+Результат на интегральном candidate: выполнено. Guard принимает отдельный immutable expectation,
+fail-closed проверяет source и target facts и покрыт integration/webhook tests для null,
+wrong-current и already-correct employee вариантов. Полный backend gate включая classification,
+OpenAPI, security и concurrency regression проходит.
+
 ### 3. Подготовить исторические scripts/manifests
 
 1. Создать три bounded classification scripts: январь, февраль, март.
@@ -320,6 +329,10 @@ idempotency keys создаются только перед операцией �
 4. Выбрать январскую parent-sale strategy; без неё январский relink package не готов.
 5. Проверить отсутствие approved/paid payroll, finalized reports и conflicting jobs в каждом
    месяце непосредственно перед mutation.
+
+Результат: не выполнено. Bounded classification scripts/manifests ещё не созданы, январская
+parent-sale strategy не выбрана, а fresh факты для data mutations допустимо получать только после
+успешного deployment и нового отдельного разрешения.
 
 ### 4. Выполнить локальные и CI gates на exact candidate
 
@@ -341,6 +354,21 @@ OpenAPI baseline/current/generated types проверяются на чисто�
 
 После локальных проверок обязательны green CI, reproducible build и immutable backend/web images,
 чьи revisions соответствуют exact reviewed commit.
+
+Локальный результат на интегральном candidate:
+
+- backend Java 21: полный `check`, `1138` tests, `0` failures, `0` errors, Checkstyle/OpenAPI/
+  supply-chain/operator/security gates проходят;
+- frontend Node 22: contracts check, lint без warnings, `262` tests и production build проходят;
+- local-only visual gate: `15` route/scenario-наборов × `3` viewport, representative artifacts
+  затронутых областей просмотрены вручную; найденные fixture/payroll defects исправлены и
+  перепроверены;
+- deploy release-safety, security hardening и Weekly Review AI release-safety scripts проходят;
+- documentation gate после обновления manifests: `25` unit tests и strict inventory validation
+  для `413` rows без warnings.
+
+CI, reproducible immutable image publication и проверка image revisions остаются внешними
+stop-условиями и локальным результатом не закрываются.
 
 ### 5. Выполнить integration/conflict gate
 
@@ -374,6 +402,11 @@ OpenAPI baseline/current/generated types проверяются на чисто�
 Любой необъяснённый конфликт, flaky integration test, нехватка server headroom, restart/OOM,
 длительный lock, рост 5xx или несовместимость rollback переводит релиз в `NO-GO`. Такой пакет
 исправляется или переносится в следующий release train; guard не обходится ручным запуском.
+
+Локальная часть conflict gate выполнена: объединённый backend/frontend candidate и contract gates
+проходят, миграционная цепочка и schema/ACL safety покрыты тестами, UI role/feature и failure-state
+сценарии входят в общий regression. Production-like server-safety rehearsal, измерение headroom,
+locks, очередей и exact previous-runtime rollback остаются незакрытыми.
 
 ### 6. Rehearsal и production readiness
 
@@ -471,27 +504,37 @@ failed/active conflicting jobs. Затем данные меняются в сл
 
 ## Current NO-GO evidence
 
-На 2026-09-15 после локальной фиксации и интеграции:
+На 2026-09-15 общий локальный candidate собран и проверен:
 
-- исходный dirty scope разделён на логические коммиты; Weekly Review RC влит в
-  `codex/store-release-rc` с ручным совмещением общих файлов;
+- исходный dirty scope разделён на логические commits; Weekly Review RC влит в
+  `codex/store-release-rc`, обе исходные истории сохранены, unknown/untracked и conflict markers
+  отсутствуют;
 - guarded relink покрывает nullable, wrong-current и already-correct current employee варианты,
   включая техническую форму для `F000244`/`F000349`;
 - OpenAPI v12/current/backend-generated и frontend transport types согласованы; новые recovery поля
   совместимы и не required;
-- интеграционный targeted backend gate на Java 21 и полный frontend contracts/lint/
-  `262/262` tests/build проходят; frontend пока запущен на локальном Node 20, хотя engine
-  candidate требует Node 22.22+;
-- documentation unit/strict gate до merge проходил `25/25` и `413` inventory rows; после merge
-  он должен быть повторён;
-- полный backend `check`, Node 22 frontend rerun, интегральный `visual:local`, immutable image build,
-  staging/release-equivalent rehearsal и fresh production-read-only/backup evidence ещё не закрыты;
-- bounded classification correction scripts с `--preflight/--apply/--verify` ещё не реализованы, а
-  январская parent-sale strategy не выбрана;
-- staging rehearsal и release-specific production-read-only/backup evidence отсутствуют.
+- полный backend `check` на Java 21 проходит: `1138` tests, `0` failures, `0` errors, включая
+  Checkstyle, OpenAPI, supply-chain, operator, security и deploy safety;
+- frontend на Node 22 проходит contracts, lint без warnings, `262` tests и production build;
+- local-only visual gate покрывает `15` route/scenario-наборов на desktop/tablet/mobile; найденные
+  при интеграции duplicate fixture и payroll blocked-readiness skeleton исправлены и повторно
+  проверены;
+- deploy release-safety, security hardening и Weekly Review AI release-safety scripts проходят.
+- documentation unit/strict gate после обновления manifests проходит: `25` tests, `413` inventory
+  rows, `0` warnings.
 
-Это не означает, что накопленные изменения непригодны. Это означает, что деплоить текущий каталог
-или выбирать случайный commit сейчас нельзя.
+Общий verdict остаётся `NO-GO`, потому что не закрыты обязательные внешние и data-correction gates:
+
+- финальный candidate ещё не прошёл green CI и не опубликован как exact paired immutable images;
+- production-like staging upgrade/recovery rehearsal, server headroom/locks/queues и exact
+  previous-runtime rollback не доказаны;
+- отсутствуют fresh production read-only preflight, backup checkpoint/isolated restore evidence и
+  operations/security sign-off;
+- bounded classification correction scripts с `--preflight/--apply/--verify` ещё не реализованы;
+- январская parent-sale strategy не выбрана.
+
+Это означает, что локальный candidate готов к внешнему release pipeline и review, но production
+deployment пока не разрешён.
 
 ## Критерий готовности к показу exact production plan
 

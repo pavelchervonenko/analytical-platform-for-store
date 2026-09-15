@@ -313,6 +313,30 @@ P7-H/P7-I имеют статус `NOT STARTED`: production rollout требуе
 [`production-release-and-reconciliation-corrections-manifest.md`](production-release-and-reconciliation-corrections-manifest.md).
 Component `P7-F`/`P7-G` остаются `STOP`; этот handoff не разрешает staging или production rollout.
 
+### Интегральная проверка handoff 2026-09-15
+
+Weekly Review проверен уже после слияния с остальными пакетами общего кандидата:
+
+- обе исходные линии истории являются предками `codex/store-release-rc`; untracked-файлов и
+  неразрешённых conflict markers нет;
+- полный backend `check` на Java 21 прошёл: `1138` tests, `0` failures, `0` errors;
+- frontend на Node 22 прошёл contracts generation/check, lint без warnings, `262` tests и
+  production build;
+- локальный fixture capture прошёл для `15` route/scenario-наборов на desktop/tablet/mobile
+  (`45` captures): overview, employees, plan, plan settings, shifts, payroll, reports, profile,
+  пять состояний Weekly Review, admin и data quality; representative artifacts всех затронутых
+  областей просмотрены вручную;
+- во время интегрального visual gate устранены конфликтное дублирование Weekly Review fixture и
+  бесконечный payroll skeleton при `canCalculate=false`; повторные frontend/visual gates зелёные;
+- deploy release-safety, security hardening и Weekly Review AI release-safety scripts проходят на
+  итоговой candidate-конфигурации;
+- после обновления release manifests documentation gate проходит: `25` unit tests и strict
+  inventory validation для `413` rows без warnings.
+
+Эти результаты закрывают локальную совместимость component handoff, но не заменяют CI, публикацию
+immutable paired images, release-equivalent staging, fresh backup/restore и production read-only
+preflight. Поэтому verdict `P7-F`/`P7-G` не повышается.
+
 ## Открытые решения
 
 - Отдельно диагностировать, какие реальные data-quality/classification ограничения препятствуют
