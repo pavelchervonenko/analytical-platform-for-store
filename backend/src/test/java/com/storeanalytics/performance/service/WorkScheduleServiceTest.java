@@ -3,13 +3,17 @@ package com.storeanalytics.performance.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.auth.repository.AppUserRepository;
+import com.storeanalytics.audit.service.AuditAction;
+import com.storeanalytics.audit.service.AuditLogService;
 import com.storeanalytics.common.exception.InvalidRequestException;
 import com.storeanalytics.common.exception.PreconditionFailedException;
 import com.storeanalytics.employee.model.Employee;
@@ -39,6 +43,7 @@ class WorkScheduleServiceTest {
     private EmployeeStoreAssignmentRepository assignmentRepository;
     private StoreRepository storeRepository;
     private AppUserRepository userRepository;
+    private AuditLogService auditLogService;
     private WorkScheduleService service;
 
     @BeforeEach
@@ -48,13 +53,14 @@ class WorkScheduleServiceTest {
         assignmentRepository = mock(EmployeeStoreAssignmentRepository.class);
         storeRepository = mock(StoreRepository.class);
         userRepository = mock(AppUserRepository.class);
+        auditLogService = mock(AuditLogService.class);
         service = new WorkScheduleService(
                 shiftRepository,
                 revisionRepository,
                 assignmentRepository,
                 storeRepository,
                 userRepository,
-                mock(com.storeanalytics.audit.service.AuditLogService.class)
+                auditLogService
         );
     }
 
@@ -253,6 +259,15 @@ class WorkScheduleServiceTest {
             assertThat(shift.isActive()).isFalse();
             assertThat(shift.getUpdatedBy()).isSameAs(secondActor);
         });
+        verify(auditLogService, times(2)).record(
+                eq(secondActorId),
+                eq(storeId),
+                eq(AuditAction.WORK_SCHEDULE_REPLACED),
+                any(),
+                any(),
+                any(),
+                any()
+        );
     }
 
     @Test

@@ -1,3 +1,5 @@
+import type { EmployeeShift, WorkShiftInput } from "../api/contracts";
+
 export interface ShiftRosterEmployeeState {
   employeeActive: boolean;
   assignmentActive: boolean;
@@ -54,6 +56,30 @@ export function validatePlanForm(values: PlanFormValues): { data: PlanInput | nu
 
 export function parseWorkedHours(value: string): number | null {
   return parseDecimal(value, 0.01, 11, 2);
+}
+
+export function rebaseWorkShiftInputs(
+  baselineShifts: EmployeeShift[],
+  requestedShifts: WorkShiftInput[],
+  latestShifts: EmployeeShift[]
+): WorkShiftInput[] {
+  const baseline = new Map(baselineShifts.map((shift) => [shift.employeeId, shift.workedHours]));
+  const requested = new Map(requestedShifts.map((shift) => [shift.employeeId, shift.workedHours]));
+  const rebased = new Map(latestShifts.map((shift) => [shift.employeeId, shift.workedHours]));
+  const candidates = new Set([...baseline.keys(), ...requested.keys()]);
+
+  for (const employeeId of candidates) {
+    const existedBefore = baseline.has(employeeId);
+    const requestedNow = requested.has(employeeId);
+    if (existedBefore === requestedNow
+        && baseline.get(employeeId) === requested.get(employeeId)) continue;
+    if (requestedNow) rebased.set(employeeId, requested.get(employeeId)!);
+    else rebased.delete(employeeId);
+  }
+
+  return [...rebased.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([employeeId, workedHours]) => ({ employeeId, workedHours }));
 }
 
 export function buildMonthCalendar(month: string): Array<string | null> {

@@ -3,6 +3,8 @@ package com.storeanalytics.store.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -15,10 +17,16 @@ import com.storeanalytics.auth.repository.AppUserRepository;
 import com.storeanalytics.auth.repository.UserFeatureAccessRepository;
 import com.storeanalytics.auth.repository.UserStoreAccessRepository;
 import com.storeanalytics.common.web.ApiContractVersion;
+import com.storeanalytics.employee.model.Employee;
+import com.storeanalytics.employee.model.EmployeeStoreAssignment;
+import com.storeanalytics.employee.repository.EmployeeRepository;
+import com.storeanalytics.employee.repository.EmployeeStoreAssignmentRepository;
 import com.storeanalytics.performance.model.StorePerformancePlan;
 import com.storeanalytics.performance.model.StorePlanTargets;
-import com.storeanalytics.performance.repository.StorePerformancePlanRepository;
 import com.storeanalytics.performance.repository.EmployeeRatingSnapshotRepository;
+import com.storeanalytics.performance.repository.EmployeeWorkShiftRepository;
+import com.storeanalytics.performance.repository.StorePerformancePlanRepository;
+import com.storeanalytics.performance.repository.WorkScheduleDayRevisionRepository;
 import com.storeanalytics.quality.model.DataQualityIssue;
 import com.storeanalytics.quality.model.DataQualitySeverity;
 import com.storeanalytics.quality.repository.DataQualityIssueRepository;
@@ -40,6 +48,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -83,7 +92,14 @@ class StoreDataStatusSecurityIntegrationTest {
     private StorePerformancePlanRepository performancePlanRepository;
     @Autowired
     private EmployeeRatingSnapshotRepository ratingSnapshotRepository;
-
+    @Autowired
+    private EmployeeStoreAssignmentRepository assignmentRepository;
+    @Autowired
+    private EmployeeRepository employeeRepository;
+    @Autowired
+    private EmployeeWorkShiftRepository workShiftRepository;
+    @Autowired
+    private WorkScheduleDayRevisionRepository workScheduleDayRevisionRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -100,6 +116,10 @@ class StoreDataStatusSecurityIntegrationTest {
         ratingSnapshotRepository.deleteAll();
         performancePlanRepository.deleteAll();
         qualityIssueRepository.deleteAll();
+        workShiftRepository.deleteAll();
+        workScheduleDayRevisionRepository.deleteAll();
+        assignmentRepository.deleteAll();
+        employeeRepository.deleteAll();
         featureAccessRepository.deleteAll();
         accessRepository.deleteAll();
         userRepository.deleteAll();
@@ -336,6 +356,142 @@ class StoreDataStatusSecurityIntegrationTest {
                         .queryParam("periodEnd", "2026-07-31")
                         .session(adminSession))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void twoManagersWithShiftAccessCanReplaceAndClearTheSameDay() throws Exception {
+        Store store = createStore("shared-shift-store");
+        AppUser administrator = createUser("admin-shared-shift@example.com", UserRole.ADMIN);
+        AppUser firstManager = createUser("first-shift-manager@example.com", UserRole.MANAGER);
+        AppUser secondManager = createUser("second-shift-manager@example.com", UserRole.MANAGER);
+        accessRepository.saveAll(List.of(
+                new UserStoreAccess(firstManager, store, administrator),
+                new UserStoreAccess(secondManager, store, administrator)
+        ));
+        featureAccessRepository.saveAll(List.of(
+                new UserFeatureAccess(firstManager, UserFeature.SHIFTS, administrator),
+                new UserFeatureAccess(secondManager, UserFeature.SHIFTS, administrator)
+        ));
+        Employee employee = employeeRepository.saveAndFlush(Employee.manual(
+                "shared-shift-employee", "Shared Shift Employee"
+        ));
+        assignmentRepository.saveAndFlush(new EmployeeStoreAssignment(employee, store, true));
+
+        LocalDate date = LocalDate.of(2026, 9, 14);
+        MockHttpSession firstSession = login("first-shift-manager@example.com");
+        Cookie firstCsrf = csrfCookie(firstSession);
+        String emptyDayEtag = mockMvc.perform(get(
+                        "/api/stores/{storeId}/work-schedule/{workDate}",
+                        store.getId(),
+                        date
+                ).session(firstSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.revision").value(0))
+                .andReturn().getResponse().getHeader(HttpHeaders.ETAG);
+        assertThat(emptyDayEtag).isNotNull();
+
+        String firstManagerEtag = mockMvc.perform(put(
+                        "/api/stores/{storeId}/work-schedule/{workDate}",
+                        store.getId(),
+                        date
+                ).session(firstSession)
+                .cookie(firstCsrf)
+                .header("X-XSRF-TOKEN", firstCsrf.getValue())
+                .header(HttpHeaders.IF_MATCH, emptyDayEtag)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"shifts":[{"employeeId":"%s","workedHours":11}]}
+                        """.formatted(employee.getId())))
+                .andExpect(status().isOk())
+                .andExpect(header().exists(HttpHeaders.ETAG))
+                .andExpect(jsonPath("$.revision").value(1))
+                .andExpect(jsonPath("$.shifts[0].workedHours").value(11))
+                .andReturn().getResponse().getHeader(HttpHeaders.ETAG);
+        assertThat(firstManagerEtag).isNotNull();
+
+        MockHttpSession secondSession = login("second-shift-manager@example.com");
+        Cookie secondCsrf = csrfCookie(secondSession);
+        mockMvc.perform(get(
+                        "/api/stores/{storeId}/work-schedule/{workDate}",
+                        store.getId(),
+                        date
+                ).session(secondSession))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ETAG, firstManagerEtag))
+                .andExpect(jsonPath("$.shifts[0].employeeId").value(employee.getId().toString()));
+
+        String secondManagerEtag = mockMvc.perform(put(
+                        "/api/stores/{storeId}/work-schedule/{workDate}",
+                        store.getId(),
+                        date
+                ).session(secondSession)
+                .cookie(secondCsrf)
+                .header("X-XSRF-TOKEN", secondCsrf.getValue())
+                .header(HttpHeaders.IF_MATCH, firstManagerEtag)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"shifts":[{"employeeId":"%s","workedHours":7.5}]}
+                        """.formatted(employee.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.revision").value(2))
+                .andExpect(jsonPath("$.shifts[0].workedHours").value(7.5))
+                .andReturn().getResponse().getHeader(HttpHeaders.ETAG);
+        assertThat(secondManagerEtag).isNotNull();
+
+        mockMvc.perform(put(
+                        "/api/stores/{storeId}/work-schedule/{workDate}",
+                        store.getId(),
+                        date
+                ).session(secondSession)
+                .cookie(secondCsrf)
+                .header("X-XSRF-TOKEN", secondCsrf.getValue())
+                .header(HttpHeaders.IF_MATCH, secondManagerEtag)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"shifts\":[]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.revision").value(3))
+                .andExpect(jsonPath("$.shifts").isEmpty());
+    }
+
+    @Test
+    void shiftWritesRequireBothFeatureAndStoreAccess() throws Exception {
+        Store store = createStore("guarded-shift-store");
+        AppUser administrator = createUser("admin-guarded-shift@example.com", UserRole.ADMIN);
+        AppUser noFeature = createUser("shift-no-feature@example.com", UserRole.MANAGER);
+        AppUser noStore = createUser("shift-no-store@example.com", UserRole.MANAGER);
+        accessRepository.saveAndFlush(new UserStoreAccess(noFeature, store, administrator));
+        featureAccessRepository.saveAndFlush(
+                new UserFeatureAccess(noStore, UserFeature.SHIFTS, administrator)
+        );
+        LocalDate date = LocalDate.of(2026, 9, 14);
+
+        MockHttpSession noFeatureSession = login("shift-no-feature@example.com");
+        Cookie noFeatureCsrf = csrfCookie(noFeatureSession);
+        mockMvc.perform(put(
+                        "/api/stores/{storeId}/work-schedule/{workDate}",
+                        store.getId(),
+                        date
+                ).session(noFeatureSession)
+                .cookie(noFeatureCsrf)
+                .header("X-XSRF-TOKEN", noFeatureCsrf.getValue())
+                .header(HttpHeaders.IF_MATCH, "\"ignored\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"shifts\":[]}"))
+                .andExpect(status().isForbidden());
+
+        MockHttpSession noStoreSession = login("shift-no-store@example.com");
+        Cookie noStoreCsrf = csrfCookie(noStoreSession);
+        mockMvc.perform(put(
+                        "/api/stores/{storeId}/work-schedule/{workDate}",
+                        store.getId(),
+                        date
+                ).session(noStoreSession)
+                .cookie(noStoreCsrf)
+                .header("X-XSRF-TOKEN", noStoreCsrf.getValue())
+                .header(HttpHeaders.IF_MATCH, "\"ignored\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"shifts\":[]}"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
