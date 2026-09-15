@@ -1,13 +1,16 @@
 package com.storeanalytics.interpretation.web;
 
+import com.storeanalytics.interpretation.review.ai.WeeklyReviewAiGenerationApproval;
 import com.storeanalytics.interpretation.review.ai.WeeklyReviewAiJobView;
 import com.storeanalytics.interpretation.review.ai.WeeklyReviewAiOperatorService;
+import com.storeanalytics.interpretation.review.ai.WeeklyReviewAiPreflightView;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -30,7 +33,15 @@ public class WeeklyReviewAiOperationsController {
 
     @PostMapping("/snapshots/{snapshotId}/generate")
     @ResponseStatus(HttpStatus.ACCEPTED)
-    WeeklyReviewAiJobView generate(@PathVariable UUID snapshotId) {
-        return service.generate(snapshotId);
+    WeeklyReviewAiJobView generate(
+            @PathVariable UUID snapshotId,
+            @RequestBody(required = false) WeeklyReviewAiGenerationApproval approval
+    ) {
+        return service.generate(snapshotId, approval);
+    }
+
+    @GetMapping("/snapshots/{snapshotId}/preflight")
+    WeeklyReviewAiPreflightView preflight(@PathVariable UUID snapshotId) {
+        return service.preflight(snapshotId);
     }
 }

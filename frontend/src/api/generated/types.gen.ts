@@ -475,6 +475,15 @@ export type WeeklyReviewSnapshotView = {
     createdAt?: string;
 };
 
+export type WeeklyReviewAiGenerationApproval = {
+    snapshotContentHash: string;
+    inputHash: string;
+    requestHash: string;
+    approvedMaximumProviderCalls: number;
+    approvedMaximumTotalCost: number;
+    costCurrency: 'RUB';
+};
+
 export type WeeklyReviewAiJobView = {
     jobId?: string;
     snapshotId?: string;
@@ -1736,6 +1745,7 @@ export type JsonNode = {
     container?: boolean;
     number?: boolean;
     missingNode?: boolean;
+    floatingPointNumber?: boolean;
     valueNode?: boolean;
     nodeType?: 'ARRAY' | 'BINARY' | 'BOOLEAN' | 'MISSING' | 'NULL' | 'NUMBER' | 'OBJECT' | 'POJO' | 'STRING';
     object?: boolean;
@@ -1753,7 +1763,6 @@ export type JsonNode = {
     textual?: boolean;
     boolean?: boolean;
     binary?: boolean;
-    floatingPointNumber?: boolean;
     embeddedValue?: boolean;
 };
 
@@ -1972,14 +1981,84 @@ export type ActiveSessionResponse = {
 };
 
 export type CsrfToken = {
-    parameterName?: string;
     token?: string;
+    parameterName?: string;
     headerName?: string;
 };
 
 export type CsrfConfigurationResponse = {
     headerName?: string;
     cookieName?: string;
+};
+
+export type WeeklyReviewAiExistingState = {
+    jobId?: string;
+    jobStatus?: string;
+    enrichmentId?: string;
+    enrichmentInputHash?: string;
+    enrichmentContentHash?: string;
+};
+
+export type WeeklyReviewAiPreflightBudget = {
+    estimatedMaximumCostPerCall?: number;
+    maximumAllowedProviderCalls?: number;
+    recommendedCanaryProviderCalls?: number;
+    estimatedMaximumCostAtAllowedCalls?: number;
+    costCurrency?: string;
+    configuredPerCallLimit?: number;
+    actualCostToday?: number;
+    configuredDailyLimit?: number;
+};
+
+export type WeeklyReviewAiPreflightContract = {
+    promptVersion?: string;
+    inputSchemaVersion?: number;
+    selectionSchemaVersion?: number;
+    contentSchemaVersion?: number;
+};
+
+export type WeeklyReviewAiPreflightRequest = {
+    providerCode?: string;
+    modelVersion?: string;
+    providerCredentialCheck?: string;
+    inputHash?: string;
+    requestHash?: string;
+    estimatedInputTokens?: number;
+    maximumOutputTokens?: number;
+    contextWindowTokens?: number;
+    factorCount?: number;
+    actionCount?: number;
+    evidenceCount?: number;
+};
+
+export type WeeklyReviewAiPreflightSnapshot = {
+    snapshotId?: string;
+    storeId?: string;
+    revision?: number;
+    periodStart?: string;
+    periodEnd?: string;
+    timezone?: string;
+    reportState?: string;
+    contentHash?: string;
+};
+
+export type WeeklyReviewAiPreflightView = {
+    snapshot?: WeeklyReviewAiPreflightSnapshot;
+    contract?: WeeklyReviewAiPreflightContract;
+    privacy?: WeeklyReviewAiPrivacySummary;
+    request?: WeeklyReviewAiPreflightRequest;
+    budget?: WeeklyReviewAiPreflightBudget;
+    existing?: WeeklyReviewAiExistingState;
+    approvalEligible?: boolean;
+    generationEnabled?: boolean;
+    workerEnabled?: boolean;
+};
+
+export type WeeklyReviewAiPrivacySummary = {
+    verdict?: string;
+    scope?: string;
+    employeeScopeIncluded?: boolean;
+    rawInputIncluded?: boolean;
 };
 
 export type PageResponseAdminUserResponse = {
@@ -2570,7 +2649,7 @@ export type GenerateResponses = {
 export type GenerateResponse = GenerateResponses[keyof GenerateResponses];
 
 export type Generate1Data = {
-    body?: never;
+    body?: WeeklyReviewAiGenerationApproval;
     path: {
         snapshotId: string;
     };
@@ -3674,6 +3753,24 @@ export type CsrfResponses = {
 };
 
 export type CsrfResponse = CsrfResponses[keyof CsrfResponses];
+
+export type PreflightData = {
+    body?: never;
+    path: {
+        snapshotId: string;
+    };
+    query?: never;
+    url: '/api/admin/weekly-review-ai/snapshots/{snapshotId}/preflight';
+};
+
+export type PreflightResponses = {
+    /**
+     * OK
+     */
+    200: WeeklyReviewAiPreflightView;
+};
+
+export type PreflightResponse = PreflightResponses[keyof PreflightResponses];
 
 export type FindJobData = {
     body?: never;

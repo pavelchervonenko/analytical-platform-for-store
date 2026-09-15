@@ -7,6 +7,8 @@ import com.storeanalytics.interpretation.review.WeeklyReviewFacts.PeriodFacts;
 import com.storeanalytics.interpretation.review.WeeklyReviewPolicyV1.RevenuePeriod;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.DateRange;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.PeriodContext;
+import com.storeanalytics.interpretation.review.ai.WeeklyReviewAiOperatorService;
+import com.storeanalytics.interpretation.review.ai.WeeklyReviewAiPreflightView;
 import com.storeanalytics.interpretation.snapshot.EmployeeSalesSampleFacts;
 import com.storeanalytics.metrics.service.AttachRateDataQuality;
 import com.storeanalytics.metrics.service.AttachRateResult;
@@ -64,11 +66,19 @@ class WeeklyReviewSnapshotStoreIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private WeeklyReviewAiOperatorService aiOperatorService;
+
     @DynamicPropertySource
     static void configurePostgres(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("app.llm.yandex.folder-id", () -> "preflight-folder");
+        registry.add(
+                "app.llm.yandex.model-uri",
+                () -> "gpt://preflight-folder/yandexgpt-5.1"
+        );
     }
 
     @Test
@@ -139,6 +149,34 @@ class WeeklyReviewSnapshotStoreIntegrationTest {
                 );
     }
 
+    @Test
+    void exactAiPreflightIsStableAndDoesNotWriteDurableState() {
+        UUID storeId = addStore();
+        PersistedWeeklyReviewSnapshot snapshot = store.persist(
+                facts(storeId, "1000.00", "900.00"),
+                Instant.parse("2026-08-24T04:00:00Z")
+        );
+        DurableCounts before = durableCounts();
+
+        WeeklyReviewAiPreflightView first = aiOperatorService.preflight(
+                snapshot.id()
+        );
+        WeeklyReviewAiPreflightView second = aiOperatorService.preflight(
+                snapshot.id()
+        );
+
+        assertThat(first.request().inputHash())
+                .isEqualTo(second.request().inputHash());
+        assertThat(first.request().requestHash())
+                .isEqualTo(second.request().requestHash());
+        assertThat(first.snapshot().contentHash())
+                .isEqualTo(snapshot.contentHash());
+        assertThat(first.privacy().verdict())
+                .isEqualTo("PASS_STORE_ONLY_SCHEMA");
+        assertThat(first.approvalEligible()).isTrue();
+        assertThat(durableCounts()).isEqualTo(before);
+    }
+
     private UUID addStore() {
         UUID connectionId = jdbcTemplate.queryForObject(
                 "SELECT id FROM integration_connections WHERE connection_key = 'livesklad-default'",
@@ -157,6 +195,30 @@ class WeeklyReviewSnapshotStoreIntegrationTest {
                 "weekly-review-snapshot-" + storeId
         );
         return storeId;
+    }
+
+    private DurableCounts durableCounts() {
+        return new DurableCounts(
+                jdbcTemplate.queryForObject(
+                        "SELECT count(*) FROM weekly_review_snapshots",
+                        Long.class
+                ),
+                jdbcTemplate.queryForObject(
+                        "SELECT count(*) FROM weekly_review_ai_jobs",
+                        Long.class
+                ),
+                jdbcTemplate.queryForObject(
+                        "SELECT count(*) FROM weekly_review_ai_enrichments",
+                        Long.class
+                )
+        );
+    }
+
+    private record DurableCounts(
+            long snapshots,
+            long jobs,
+            long enrichments
+    ) {
     }
 
     private WeeklyReviewFacts facts(UUID storeId, String currentRevenue, String previousRevenue) {

@@ -7,7 +7,7 @@ audience:
   - developer
   - operator
   - manager
-last_verified: 2026-09-14
+last_verified: 2026-09-15
 requirement_sources:
   - docs/archive/legacy-contracts/AI_WEEKLY_REDESIGN_STAGE2_CONTRACT.md
   - docs/archive/legacy-contracts/weekly-review-ai-management-rubric.md
@@ -27,6 +27,8 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewSnapshotStore.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewTeamEmployeeProjector.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiContract.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiOperatorService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiPreflightView.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiInputCompactor.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiSemanticValidator.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiRendererV25.java
@@ -46,6 +48,9 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiSemanticValidatorTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiRendererV25Test.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiCompletionServiceIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiOperatorServiceTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiJobStoreIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/web/WeeklyReviewAiOperationsSecurityIntegrationTest.java
 runtime_evidence:
   - docs/history/audits/2026/09/WEEKLY_REVIEW_LOCAL_PRERELEASE_2026-09-14.md
 required_reviewers:
@@ -182,6 +187,34 @@ Deterministic действие по росту возвратов сформул
 Employee scope и employee public IDs в input запрещены. Модель возвращает selector-ы для summary и
 каждого фактора. Она не возвращает свободный пользовательский текст, KPI, action title/check или
 новые evidence references.
+
+### Operator preflight и exact approval
+
+Authenticated admin endpoint
+`GET /api/admin/weekly-review-ai/snapshots/{snapshotId}/preflight` строит exact provider request
+network-free и без enqueue. Он доступен при выключенных generation/worker flags, чтобы решение о
+включении не требовало предварительной записи. Ответ содержит только:
+
+- snapshot/store IDs, revision, завершённый период, report state и content hash;
+- активные prompt/input/selection/content versions;
+- provider code и конечный сегмент versioned model URI, но не folder ID или полный URI;
+- canonical input/request hashes, размеры bounded input и верхнюю оценку tokens/cost;
+- текущий daily cost, технические limits и состояние exact job/enrichment;
+- структурный privacy verdict `PASS_STORE_ONLY_SCHEMA`.
+
+Ответ не содержит compacted input, названия магазина, employee scope, имена, provider response или
+credentials. Privacy verdict доказывает только store-only форму schema4: отдельного общего scrubber
+для backend-owned подписей всё ещё нет, поэтому verdict не заменяет security/privacy approval.
+
+API runtime намеренно не получает provider API key. Поле `providerCredentialCheck=WORKER_ONLY`
+означает, что preflight проверил schema, versioned model, context и budget, а наличие credential
+проверяется отдельным root read-only audit и повторно worker-ом перед outbound request.
+
+`POST /api/admin/weekly-review-ai/snapshots/{snapshotId}/generate` требует body с exact snapshot,
+input и request hashes из свежего preflight, одобренным числом provider calls, точной верхней
+стоимостью и валютой. Пустой body возвращает `428`; устаревшее или конфликтующее approval — `412`.
+Snapshot row lock и уникальность job закрывают гонку между повторными enqueue. Для первого canary
+разрешается только один provider call, даже если технический предел конфигурации выше.
 
 ## Validation и rendering
 

@@ -3,13 +3,13 @@ package com.storeanalytics.interpretation.review.ai;
 import com.storeanalytics.common.exception.BusinessErrorCode;
 import com.storeanalytics.common.exception.BusinessException;
 
-public final class WeeklyReviewAiSnapshotNotFoundException
+public final class WeeklyReviewAiWorkerDisabledException
         extends BusinessException {
 
-    public WeeklyReviewAiSnapshotNotFoundException() {
+    public WeeklyReviewAiWorkerDisabledException() {
         super(
-                BusinessErrorCode.WEEKLY_REVIEW_AI_SNAPSHOT_NOT_FOUND,
-                "Weekly review snapshot does not exist"
+                BusinessErrorCode.WEEKLY_REVIEW_AI_OPERATIONS_CONFLICT,
+                "Weekly review AI worker is disabled"
         );
     }
 }

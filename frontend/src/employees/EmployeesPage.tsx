@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Filter, History, LockKeyhole, Search, Trophy, UserCheck, Users } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ArrowRight, ChevronDown, Filter, History, LockKeyhole, Search, Trophy, UserCheck, Users } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import { isApiClientError } from "../api/client";
 import type { EmployeeRatingEntry, EmployeeRatingSetting } from "../api/contracts";
@@ -51,6 +51,7 @@ export function EmployeesPage() {
   const [filter, setFilter] = useState<EmployeeFilter>("all");
   const [sort, setSort] = useState<EmployeeSort>("rank");
   const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
+  const participantsRef = useRef<HTMLDetailsElement>(null);
 
   const directoryQuery = useQuery({
     queryKey: queryKeys.employeeDirectory(storeId, periodStart, periodEnd),
@@ -91,7 +92,8 @@ export function EmployeesPage() {
 
   useEffect(() => {
     if (location.hash !== "#rating-participants" || !settingsQuery.data) return;
-    const frame = window.requestAnimationFrame(() => document.getElementById("rating-participants")?.scrollIntoView({ block: "start" }));
+    if (participantsRef.current) participantsRef.current.open = true;
+    const frame = window.requestAnimationFrame(() => participantsRef.current?.scrollIntoView({ block: "start" }));
     return () => window.cancelAnimationFrame(frame);
   }, [location.hash, settingsQuery.data]);
 
@@ -150,23 +152,6 @@ export function EmployeesPage() {
         <SummaryCard icon={<UserCheck size={21} />} label="Покрытие плана" value={formatPercent(rating.plan.coveragePercent)} note={rating.plan.complete ? `Выполнение выручки: ${formatPercent(rating.plan.revenueAchievementPercent)}` : "План задан не на весь период"} />
       </section>
 
-      <section className="panel rating-participation-panel" id="rating-participants" aria-labelledby="rating-participants-title">
-        <div className="panel__heading"><div><p className="eyebrow">Состав команды</p><h2 id="rating-participants-title">Участники рейтинга и смен</h2><p>Включайте сюда продавцов, которых нужно добавлять в календарь смен и общий рейтинг.</p></div><span>{settingsQuery.data ? `${settingsQuery.data.filter((setting) => setting.participatesInRanking).length} включено` : "—"}</span></div>
-        {settingsQuery.data === undefined && settingsQuery.isPending && <PanelSkeleton rows={3} />}
-        {settingsQuery.data === undefined && settingsQuery.isError && <InlineQueryError error={settingsQuery.error} onRetry={() => void settingsQuery.refetch()} />}
-        {settingsQuery.data && <div className="rating-participation-list">
-          {settingsQuery.data.map((setting) => {
-            const available = setting.employeeActive && setting.assignmentActive;
-            const pending = participationMutation.isPending && participationMutation.variables?.employeeId === setting.employeeId;
-            const failed = participationMutation.isError && participationMutation.variables?.employeeId === setting.employeeId;
-            const failureMessage = isApiClientError(participationMutation.error) && participationMutation.error.status === 409
-              ? "Настройка уже изменилась. Проверьте актуальное значение и повторите."
-              : isApiClientError(participationMutation.error) ? participationMutation.error.message : "Не удалось изменить участие.";
-            return <article key={setting.employeeId}><div><strong>{setting.displayName}</strong><small>{available ? setting.participatesInRanking ? "Участвует в рейтинге и доступен для смен" : "Не участвует и недоступен для новых смен" : !setting.employeeActive ? "Профиль неактивен" : "Нет активного назначения в магазин"}</small>{failed && <p className="rating-participation-error" role="alert">{failureMessage}</p>}</div><button className={`participation-toggle ${setting.participatesInRanking ? "participation-toggle--active" : ""}`} type="button" aria-pressed={setting.participatesInRanking} disabled={!available || pending} onClick={() => participationMutation.mutate(setting)}><span aria-hidden="true"><i /></span>{pending ? "Сохраняем…" : setting.participatesInRanking ? "Включен" : "Выключен"}</button></article>;
-          })}
-        </div>}
-      </section>
-
       <section className="employees-panel panel">
         <div className="employees-toolbar">
           <div><p className="eyebrow">Команда</p><h2>Результаты сотрудников</h2></div>
@@ -205,6 +190,27 @@ export function EmployeesPage() {
           </>
         )}
       </section>
+
+      <details className="panel rating-participation-panel" id="rating-participants" ref={participantsRef}>
+        <summary className="panel__heading">
+          <div><p className="eyebrow">Состав команды</p><h2>Участники рейтинга и смен</h2><p>Включайте сюда продавцов, которых нужно добавлять в календарь смен и общий рейтинг.</p></div>
+          <span>{settingsQuery.data ? `${settingsQuery.data.filter((setting) => setting.participatesInRanking).length} включено` : "—"}<ChevronDown aria-hidden="true" /></span>
+        </summary>
+        {settingsQuery.data === undefined && settingsQuery.isPending && <PanelSkeleton rows={3} />}
+        {settingsQuery.data === undefined && settingsQuery.isError && <InlineQueryError error={settingsQuery.error} onRetry={() => void settingsQuery.refetch()} />}
+        {settingsQuery.data && <div className="rating-participation-list">
+          {settingsQuery.data.map((setting) => {
+            const available = setting.employeeActive && setting.assignmentActive;
+            const pending = participationMutation.isPending && participationMutation.variables?.employeeId === setting.employeeId;
+            const failed = participationMutation.isError && participationMutation.variables?.employeeId === setting.employeeId;
+            const failureMessage = isApiClientError(participationMutation.error) && participationMutation.error.status === 409
+              ? "Настройка уже изменилась. Проверьте актуальное значение и повторите."
+              : isApiClientError(participationMutation.error) ? participationMutation.error.message : "Не удалось изменить участие.";
+            const unavailableReason = !available ? !setting.employeeActive ? "Профиль неактивен" : "Нет активного назначения в магазин" : null;
+            return <article key={setting.employeeId}><div><strong>{setting.displayName}</strong>{unavailableReason && <small>{unavailableReason}</small>}{failed && <p className="rating-participation-error" role="alert">{failureMessage}</p>}</div><button className={`participation-toggle ${setting.participatesInRanking ? "participation-toggle--active" : ""}`} type="button" aria-pressed={setting.participatesInRanking} disabled={!available || pending} onClick={() => participationMutation.mutate(setting)}><span aria-hidden="true"><i /></span>{pending ? "Сохраняем…" : setting.participatesInRanking ? "Включен" : "Выключен"}</button></article>;
+          })}
+        </div>}
+      </details>
 
       {finalizeDialogOpen && <div className="confirm-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !finalizeMutation.isPending) setFinalizeDialogOpen(false); }}><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="finalize-title"><span className="confirm-dialog__icon"><LockKeyhole /></span><h2 id="finalize-title">Зафиксировать рейтинг?</h2><p>Результат за {formatDate(periodStart)} — {formatDate(periodEnd)} станет неизменяемым историческим снимком. Отменить это действие после подтверждения нельзя.</p><div><button className="button button--ghost" type="button" autoFocus disabled={finalizeMutation.isPending} onClick={() => setFinalizeDialogOpen(false)}>Отмена</button><button className="button button--primary" type="button" disabled={finalizeMutation.isPending} onClick={() => finalizeMutation.mutate()}>{finalizeMutation.isPending ? "Фиксируем…" : "Да, зафиксировать"}</button></div></section></div>}
     </div>

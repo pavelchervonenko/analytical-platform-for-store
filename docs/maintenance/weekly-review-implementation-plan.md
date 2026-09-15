@@ -946,6 +946,14 @@ employee sales, другой из-за `PRODUCTS_UNCLASSIFIED`. Эти факт�
 и локальный eval прошли; production defaults для planner/generation/worker остаются выключенными.
 Платный provider-вызов не выполнялся, privacy/cost approval и staging canary не заявляются.
 
+Продолжение 2026-09-15: в отдельном candidate change set реализованы admin-only network-free
+preflight exact snapshot и approval-bound enqueue. Preflight не раскрывает compacted input,
+employee scope, полный model URI или credentials; API runtime не получает provider key. Локально
+проверены стабильность hashes и отсутствие enqueue, budget/privacy rejection, авторизация,
+PostgreSQL concurrency и OpenAPI compatibility. Результат P7-D остаётся `DEFERRED`: candidate ещё
+не выпущен, staging paid canary и production read-only audit не завершены, отдельного exact
+cost/privacy approval на provider-вызов нет.
+
 #### P7-E. Провести менеджерскую приёмку
 
 На release candidate назначенный менеджер без подсказок выполняет пять задач:

@@ -1,13 +1,15 @@
 package com.storeanalytics.interpretation.review.ai;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.ResponseStatus;
+import com.storeanalytics.common.exception.BusinessErrorCode;
+import com.storeanalytics.common.exception.BusinessException;
 
-@ResponseStatus(HttpStatus.CONFLICT)
 public final class WeeklyReviewAiSnapshotNotEligibleException
-        extends RuntimeException {
+        extends BusinessException {
 
     public WeeklyReviewAiSnapshotNotEligibleException() {
-        super("Weekly review snapshot is not eligible for AI enrichment");
+        super(
+                BusinessErrorCode.WEEKLY_REVIEW_AI_OPERATIONS_CONFLICT,
+                "Weekly review snapshot is not eligible for AI enrichment"
+        );
     }
 }

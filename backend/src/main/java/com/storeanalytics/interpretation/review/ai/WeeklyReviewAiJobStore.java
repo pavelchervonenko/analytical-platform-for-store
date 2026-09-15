@@ -7,6 +7,7 @@ import static com.storeanalytics.common.validation.ModelValidation.requireText;
 import com.storeanalytics.interpretation.generation.LlmProviderException;
 import com.storeanalytics.interpretation.generation.LlmProviderPreflight;
 import com.storeanalytics.interpretation.generation.LlmProviderResponseReceipt;
+import com.storeanalytics.common.exception.PreconditionFailedException;
 import com.storeanalytics.interpretation.validation.LlmValidationViolation;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -45,6 +46,12 @@ public class WeeklyReviewAiJobStore {
               AND prompt_version = ?
               AND content_schema_version = ?
             """;
+    private static final String LOCK_SNAPSHOT_SQL = """
+            SELECT id
+            FROM weekly_review_snapshots
+            WHERE id = ?
+            FOR UPDATE
+            """;
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
@@ -72,6 +79,8 @@ public class WeeklyReviewAiJobStore {
         UUID snapshot = requireNonNull(snapshotId, "snapshotId");
         Instant timestamp = requireNonNull(now, "now");
         Duration ttl = positive(deadline, "deadline");
+        require(maxAttempts >= 1 && maxAttempts <= 2,
+                "maxAttempts must be 1 or 2");
         jdbcTemplate.update("""
                 INSERT INTO weekly_review_ai_jobs (
                     id, snapshot_id, prompt_version, content_schema_version,
@@ -96,6 +105,69 @@ public class WeeklyReviewAiJobStore {
         return findBySnapshot(snapshot).orElseThrow(() ->
                 new IllegalStateException("Weekly review AI job could not be read")
         );
+    }
+
+    @Transactional
+    public WeeklyReviewAiJob enqueueApproved(
+            UUID snapshotId,
+            String providerCode,
+            String requestedModel,
+            int maxAttempts,
+            Instant now,
+            Duration deadline
+    ) {
+        UUID snapshot = requireNonNull(snapshotId, "snapshotId");
+        Instant timestamp = requireNonNull(now, "now");
+        Duration ttl = positive(deadline, "deadline");
+        require(maxAttempts >= 1 && maxAttempts <= 2,
+                "maxAttempts must be 1 or 2");
+        List<UUID> locked = jdbcTemplate.query(
+                LOCK_SNAPSHOT_SQL,
+                (resultSet, rowNumber) ->
+                        resultSet.getObject("id", UUID.class),
+                snapshot
+        );
+        if (locked.isEmpty()) {
+            throw new PreconditionFailedException(
+                    "Weekly review snapshot disappeared before enqueue"
+            );
+        }
+        if (findBySnapshot(snapshot).isPresent()
+                || activeEnrichmentExists(snapshot)) {
+            throw new PreconditionFailedException(
+                    "Weekly review AI state changed after preflight"
+            );
+        }
+        int inserted = jdbcTemplate.update("""
+                INSERT INTO weekly_review_ai_jobs (
+                    id, snapshot_id, prompt_version, content_schema_version,
+                    provider_code, requested_model, status, attempt_count,
+                    max_attempts, next_attempt_at, deadline_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?, ?, ?, ?)
+                ON CONFLICT (snapshot_id, prompt_version, content_schema_version)
+                DO NOTHING
+                """,
+                UUID.randomUUID(),
+                snapshot,
+                WeeklyReviewAiContract.PROMPT_VERSION,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                requireText(providerCode, "providerCode"),
+                requireText(requestedModel, "requestedModel"),
+                maxAttempts,
+                Timestamp.from(timestamp),
+                Timestamp.from(timestamp.plus(ttl)),
+                Timestamp.from(timestamp),
+                Timestamp.from(timestamp)
+        );
+        if (inserted != 1) {
+            throw new PreconditionFailedException(
+                    "Weekly review AI state changed during enqueue"
+            );
+        }
+        return findBySnapshot(snapshot).orElseThrow(() ->
+                new IllegalStateException(
+                        "Approved weekly review AI job could not be read"
+                ));
     }
 
     @Transactional
@@ -178,6 +250,22 @@ public class WeeklyReviewAiJobStore {
                 this::mapJob,
                 requireNonNull(jobId, "jobId")
         ));
+    }
+
+    private boolean activeEnrichmentExists(UUID snapshotId) {
+        Long count = jdbcTemplate.queryForObject("""
+                SELECT count(*)
+                FROM weekly_review_ai_enrichments
+                WHERE snapshot_id = ?
+                  AND prompt_version = ?
+                  AND content_schema_version = ?
+                """,
+                Long.class,
+                snapshotId,
+                WeeklyReviewAiContract.PROMPT_VERSION,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
+        );
+        return count != null && count > 0;
     }
 
     @Transactional

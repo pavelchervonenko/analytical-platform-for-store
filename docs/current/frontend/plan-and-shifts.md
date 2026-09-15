@@ -6,7 +6,7 @@ owner: frontend
 audience:
   - developer
   - manager
-last_verified: 2026-09-14
+last_verified: 2026-09-15
 requirement_sources:
   - docs/current/product/plans-and-shifts.md
 implementation_sources:
@@ -26,6 +26,7 @@ verification_sources:
   - frontend/src/plan-schedule/PlanPanel.test.tsx
   - frontend/src/plan-schedule/PlanSettingsPanel.test.tsx
   - frontend/src/plan-schedule/DailyPlanTable.test.tsx
+  - frontend/src/plan-schedule/SchedulePanel.test.tsx
   - frontend/src/plan-schedule/forms.test.ts
   - frontend/e2e/visual-local.spec.ts
 runtime_evidence: []
@@ -105,8 +106,11 @@ superseded_by: null
 
 Календарь показывает количество дней со сменами, число записей и сумму фактически отработанных
 часов. Открытие дня читает актуальную версию, а сохранение полностью заменяет состав этого дня с
-`If-Match`. При `412` пользователь должен заново открыть день; интерфейс не объединяет две версии
-самостоятельно. День без смены отображается явно.
+`If-Match`. Автор предыдущей версии не владеет сменой: любой пользователь с функцией `SHIFTS` и
+доступом к магазину может изменить состав, часы или очистить день. Если после открытия другой
+пользователь успел сохранить этот же день, при `412` редактор загружает актуальную версию и просит
+проверить её и повторить изменение; устаревший черновик не перезаписывает новую версию молча.
+День без смены отображается явно.
 
 Roster для добавления смен содержит только активных сотрудников с активным назначением и
 `participatesInRanking=true`. Ранее сохранённая смена сотрудника, который позже вышел из roster,

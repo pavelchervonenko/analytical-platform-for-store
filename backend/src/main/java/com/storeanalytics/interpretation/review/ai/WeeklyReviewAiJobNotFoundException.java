@@ -1,12 +1,14 @@
 package com.storeanalytics.interpretation.review.ai;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.ResponseStatus;
+import com.storeanalytics.common.exception.BusinessErrorCode;
+import com.storeanalytics.common.exception.BusinessException;
 
-@ResponseStatus(HttpStatus.NOT_FOUND)
-public final class WeeklyReviewAiJobNotFoundException extends RuntimeException {
+public final class WeeklyReviewAiJobNotFoundException extends BusinessException {
 
     public WeeklyReviewAiJobNotFoundException() {
-        super("Weekly review AI job does not exist");
+        super(
+                BusinessErrorCode.WEEKLY_REVIEW_AI_JOB_NOT_FOUND,
+                "Weekly review AI job does not exist"
+        );
     }
 }
