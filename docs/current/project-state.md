@@ -6,7 +6,7 @@ owner: project
 audience:
   - developer
   - operator
-last_verified: 2026-09-13
+last_verified: 2026-09-15
 requirement_sources:
   - docs/maintenance/documentation-policy.md
 implementation_sources:
@@ -14,10 +14,12 @@ implementation_sources:
   - deploy/env.production.example
   - backend/src/main/resources/application.yml
 verification_sources:
+  - docs/history/releases/2026/09/v0.1.0-pilot.32-production-verification.md
   - docs/history/releases/2026/09/v0.1.0-pilot.30-production-verification.md
   - docs/history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-08_MAGAZIN.md
   - docs/history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-08_MOBISFERA.md
 runtime_evidence:
+  - docs/history/releases/2026/09/v0.1.0-pilot.32-production-verification.md
   - docs/history/releases/2026/09/v0.1.0-pilot.30-production-verification.md
   - docs/history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-08_MAGAZIN.md
   - docs/history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-08_MOBISFERA.md
@@ -38,23 +40,24 @@ superseded_by: null
 
 This is the only repository page allowed to summarize the currently verified production release.
 It records an observation, not a live dashboard. Dynamic values below were last observed on
-**2026-09-13** and must be refreshed from sanitized read-only production evidence after every
+**2026-09-15** and must be refreshed from sanitized read-only production evidence after every
 deployment, schema change, relevant flag change or topology change.
 
 ## Verified production snapshot
 
 | Item | Last verified value |
 |---|---|
-| Release | `v0.1.0-pilot.31` |
-| Commit | `a1cd7b9e4377d6ff9ed395f068097fb895f723ff` |
-| Flyway schema | `48` |
+| Release | `v0.1.0-pilot.32` |
+| Commit | `a3508bae01d8e72068644f4407fa4b0d69ece176` |
+| Flyway schema | `51` |
 | Topology | `web`, `backend-api`, `backend-worker` |
 | Service health | all three containers healthy at verification time |
-| Backend image | `sha256:1cfb07e968ce0362702f0c739f3d2341cd0eca1ef8f121065ecbd11e75a5e2d9` |
-| Web image | `sha256:f54cf0ea92769eca818aa844cac88f950e3afe4eea757d2d922263d1b10a6e15` |
+| Backend image | `sha256:71ca225fcf8e94b093839cba5cd347a2118e7df546a82d2e497805ca9cbed04d` |
+| Web image | `sha256:da2d29bdc4e21506ef9a509624fc6e05f81ab3ed89c04765476e6b633b54b70b` |
 
-The previous deployment provenance remains in the
-[pilot.30 production verification record](../history/releases/2026/09/v0.1.0-pilot.30-production-verification.md).
+The current deployment provenance, V48-to-V51 migration rehearsal, transient outer-wrapper
+false negative and independent post-deploy PASS are preserved in the
+[pilot.32 production verification record](../history/releases/2026/09/v0.1.0-pilot.32-production-verification.md).
 The current runtime identity and sanitized read-only business-data verification are preserved in
 the August LiveSklad reconciliations for
 [МАГАЗИН](../history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-08_MAGAZIN.md)
@@ -63,10 +66,10 @@ and
 
 ## Weekly review
 
-The production snapshot enabled the weekly-review read path, optional AI enrichment and the AI
-worker. Automatic snapshot planning and automatic AI planning were disabled. The active AI
-contract in code is `weekly-interpretation-v25/schema4`; the first manual canary passed for one
-store. That result does not establish automatic rollout for every store.
+Release `v0.1.0-pilot.32` deployed the deterministic-first Weekly Review changes. Post-deploy
+verification confirmed that AI generation, automatic AI planning and the AI worker remained
+disabled. Deployment did not create or rewrite a Weekly Review snapshot. The V50 manager feature
+access invariant passed after migration.
 
 On 2026-08-31, one deterministic snapshot for the completed week `2026-08-24..2026-08-30`
 was generated for each active store. Both snapshots are `PARTIAL` and return through the new
@@ -100,12 +103,19 @@ Release `v0.1.0-pilot.31` accepts delayed cash-return events without interpretin
 an earlier fetch as permission to delete the merchandise return. The 2026-09-13 August read-only
 reconciliation found no missing, extra or deleted in-period return facts and required no backfill.
 
+Release `v0.1.0-pilot.32` deployed guarded recovery/relink and bounded-classification tooling but
+did not execute it. All remaining January–March and May/July corrections stay in the separate
+approval queue; no backfill or resynchronization was triggered by deployment.
+
 ## Known operational limits
 
 - A failed Flyway migration can leave `MIGRATION_IN_PROGRESS`; the repository has no rehearsed
   automatic reconciliation of that marker with actual `flyway_schema_history`.
-- Backup creation and upload are implemented, but a downloaded, decrypted, isolated restore with
-  measured RPO/RTO has not been evidenced.
+- The 2026-09-15 release rehearsal proved download, decryption and isolated restore of a fresh
+  encrypted production backup, with 4-second restore and 11-second V48-to-V51 migration in the
+  rehearsal environment. This is not a full disaster-recovery or measured end-to-end RPO test.
+- The previous V48 application runtime refuses schema 51 by design. Application-only rollback is
+  unavailable; use a reviewed forward fix or a separately authorized database restore.
 - Repository alert rules are not proof of connected production alert routing.
 - Session state is process-local; production must remain at one API replica until a shared session
   registry is implemented and verified.

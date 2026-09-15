@@ -14,6 +14,7 @@ source_material:
   - docs/runbooks/production-deployment.md
   - docs/runbooks/livesklad-return-recovery.md
   - docs/maintenance/weekly-review-release-manifest.md
+  - docs/history/releases/2026/09/v0.1.0-pilot.32-production-verification.md
   - docs/history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-01_MAGAZIN.md
   - docs/history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-02_MAGAZIN.md
   - docs/history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-03_MAGAZIN.md
@@ -524,7 +525,10 @@ failed/active conflicting jobs. Затем данные меняются в сл
 - shared session registry: пока он не реализован, production topology следует ограничению из
   `project-state.md`.
 
-## Current NO-GO evidence
+## Superseded pre-deploy NO-GO evidence
+
+Следующий срез описывает состояние до публикации images, rehearsal и production authorization.
+Он сохранён как история принятия решения и заменён фактическим результатом deployment ниже.
 
 На 2026-09-15 общий локальный candidate собран и проверен:
 
@@ -561,6 +565,21 @@ failed/active conflicting jobs. Затем данные меняются в сл
 Это означает, что локальный candidate готов к внешнему release pipeline и review, но production
 deployment пока не разрешён.
 
+## Deployment result and remaining correction gate
+
+Code release `v0.1.0-pilot.32` фактически развернут 2026-09-15. Paired immutable images, fresh
+backup/restore, V48-to-V51 production-like rehearsal, final production preflight, migration,
+service health, public smoke и два независимых post-deploy observation прошли. Транзиентный
+внешний web-health false negative не привёл к blind retry и закрыт отдельным read-only verifier.
+Полное sanitised evidence находится в
+[`v0.1.0-pilot.32 production verification`](../history/releases/2026/09/v0.1.0-pilot.32-production-verification.md).
+
+Deployment не выполнял 22 return operations, три classification transactions, январскую загрузку
+parent sales, backfill или resynchronization. Поэтому этот общий manifest остаётся `draft` до
+выполнения или явного отказа от каждого correction target и повторной полной сверки затронутых
+месяцев. Следующий разрешённый этап — подготовка sanitised exact-target return manifests и новый
+read-only preflight для первой отдельно согласованной волны, а не повторный deployment.
+
 ## Критерий готовности к показу exact production plan
 
 Release candidate готов только когда одновременно выполнены все условия:
@@ -590,4 +609,7 @@ release record и затем обновляются в `project-state.md`.
 
 ## Результат извлечения
 
-Ожидается.
+Code-release часть извлечена в
+[`v0.1.0-pilot.32 production verification`](../history/releases/2026/09/v0.1.0-pilot.32-production-verification.md).
+Окончательное закрытие manifest ожидает отдельные data-correction approvals, выполнение либо
+явный отказ от targets и post-correction monthly reconciliations.

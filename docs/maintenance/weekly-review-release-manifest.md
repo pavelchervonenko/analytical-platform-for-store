@@ -1,7 +1,7 @@
 ---
 doc_schema: 1
 doc_type: working
-status: draft
+status: closed
 owner: project
 audience:
   - developer
@@ -10,6 +10,7 @@ created_at: 2026-09-14
 review_by: 2026-09-28
 source_material:
   - docs/current/project-state.md
+  - docs/history/releases/2026/09/v0.1.0-pilot.32-production-verification.md
   - docs/maintenance/weekly-review-implementation-plan.md
   - docs/history/audits/2026/09/WEEKLY_REVIEW_LOCAL_PRERELEASE_2026-09-14.md
   - docs/runbooks/production-deployment.md
@@ -17,7 +18,7 @@ required_reviewers:
   - frontend
   - backend
   - product
-exit_target: evidence
+exit_target: docs/history/releases/2026/09/v0.1.0-pilot.32-production-verification.md
 ---
 
 # Weekly Review release manifest
@@ -297,9 +298,8 @@ production backup checkpoint и operations/security sign-off. P7-C также н
 real-data `READY`, а P7-F не доказал exact previous-runtime rollback. `project-state.md` не
 обновлялся и его прежнее наблюдение не выдаётся за fresh preflight.
 
-P7-H/P7-I имеют статус `NOT STARTED`: production rollout требует нового точного подтверждения
-конкретного release plan после закрытия stop-условий, а post-release observation возможно только
-после фактического rollout.
+На момент этого pre-release среза P7-H/P7-I имели статус `NOT STARTED`. Их фактический результат
+зафиксирован ниже и извлечён в immutable production evidence.
 
 ## Интеграционный handoff 2026-09-15
 
@@ -337,6 +337,26 @@ Weekly Review проверен уже после слияния с осталь�
 immutable paired images, release-equivalent staging, fresh backup/restore и production read-only
 preflight. Поэтому verdict `P7-F`/`P7-G` не повышается.
 
+## Production closure 2026-09-15
+
+После интеграционного handoff оставшиеся release gates были закрыты для deterministic-first
+варианта без AI:
+
+- `P7-F — PASS_WITH_LIMITS`: production-like rehearsal на fresh encrypted production backup
+  прошёл restore, V48-to-V51 migration, data invariants, sustained API/worker readiness, limits,
+  locks и fail-closed scenarios; previous V48 runtime ожидаемо несовместим с V51;
+- `P7-G — PASS`: exact paired immutable images, fresh production preflight, backup/restore
+  evidence, пустые conflicting queues и достаточные host resources подтверждены;
+- `P7-H — PASS`: после отдельного разрешения развернут `v0.1.0-pilot.32`; Flyway применил
+  V49–V51, API/worker/web поднялись на exact images, встроенный public smoke прошёл;
+- `P7-I — PASS_WITH_LIMITS`: независимый verifier и два последующих read-only production audit
+  подтвердили V51, healthy services, нулевые active queues/locks и неизменный мартовский business
+  projection до/после deployment.
+
+AI generation, planner и worker остались выключены. Rollout не создавал Weekly Review snapshots и
+не доказывает natural `READY` для каждого production store. Этот accepted limit и application-only
+rollback boundary сохранены в production evidence.
+
 ## Открытые решения
 
 - Отдельно диагностировать, какие реальные data-quality/classification ограничения препятствуют
@@ -345,8 +365,6 @@ preflight. Поэтому verdict `P7-F`/`P7-G` не повышается.
   privacy, cost, concurrency и paid staging gates; текущий verdict — `DEFERRED`.
 - Получить natural `READY` и локальный live v13 visual без расширения разрешённого data scope либо
   отдельно согласовать новый scope.
-- Опубликовать reviewed candidate images и выполнить release-equivalent rehearsal с exact previous
-  runtime и свежим backup/restore evidence.
 - Legacy cleanup не входит в этот кандидат и рассматривается только после периода наблюдения P7-I.
 
 ## Критерий закрытия
@@ -357,4 +375,7 @@ preflight. Поэтому verdict `P7-F`/`P7-G` не повышается.
 
 ## Результат извлечения
 
-Ожидается.
+Фактический deterministic-first rollout и post-release observation извлечены в
+[`v0.1.0-pilot.32 production verification`](../history/releases/2026/09/v0.1.0-pilot.32-production-verification.md).
+Manifest закрыт с сохранёнными ограничениями: AI не включён, natural `READY` не заявлен,
+исторические snapshots не переписаны.
