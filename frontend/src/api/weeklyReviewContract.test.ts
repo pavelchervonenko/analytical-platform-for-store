@@ -2,6 +2,74 @@ import { describe, expect, it } from "vitest";
 import { makeWeeklyReview } from "../test/weeklyReviewFixture";
 import { weeklyReviewSchema } from "./weeklyReviewContract";
 
+function makeBlockedReview() {
+  const review = makeWeeklyReview();
+  review.reportState = "BLOCKED";
+  review.qualitySummary.blockingCount = 1;
+  review.summary.state = "INSUFFICIENT";
+  review.summary.outcome = null;
+  review.summary.positive = null;
+  review.summary.risk = null;
+  review.factors = [];
+  review.actions = [];
+  review.salesStructure.state = "INSUFFICIENT";
+  review.salesStructure.root.children = [];
+  review.salesStructure.attachMetrics = [];
+  review.team.state = "INSUFFICIENT";
+  Object.assign(review.team.roster, {
+    activeAssignedWithActivity: 0,
+    participatesInBenchmark: 0,
+    sufficientByAnyMetric: 0,
+    limitedOrInsufficient: 0,
+    excludedFromBenchmark: 0
+  });
+  review.team.observations = [];
+  review.team.attentionEmployeeCount = 0;
+  review.employees = [];
+  const coreMetrics = [
+    ...review.results,
+    review.revenueDecomposition.salesRevenue,
+    review.revenueDecomposition.returnRevenue,
+    review.revenueDecomposition.netRevenue,
+    review.revenueDecomposition.saleDocumentCount,
+    review.revenueDecomposition.returnDocumentCount,
+    review.salesStructure.root.comparison,
+    review.salesStructure.root.shareComparison
+  ];
+  coreMetrics.forEach((metric) => {
+    metric.current = null;
+    metric.previous = null;
+    metric.absoluteDelta = null;
+    metric.changePercent = null;
+    metric.comparisonKind = "UNAVAILABLE";
+    metric.direction = "UNKNOWN";
+    metric.effect = "UNKNOWN";
+    metric.metricState = "UNAVAILABLE";
+    metric.sufficiency = "INSUFFICIENT";
+    metric.materiality = "NOT_EVALUATED";
+    metric.currentSample = null;
+    metric.previousSample = null;
+  });
+  review.evidence.forEach((item) => {
+    item.currentValue = null;
+    item.previousValue = null;
+    item.currentNumerator = null;
+    item.currentDenominator = null;
+    item.previousNumerator = null;
+    item.previousDenominator = null;
+    item.sufficiency = "INSUFFICIENT";
+    item.materiality = "NOT_EVALUATED";
+    item.available = false;
+  });
+  const allowedEvidenceRefs = new Set(
+    coreMetrics.flatMap((metric) => metric.evidenceRefs)
+  );
+  review.evidence = review.evidence.filter((item) => (
+    allowedEvidenceRefs.has(item.evidenceRef)
+  ));
+  return review;
+}
+
 describe("weeklyReviewSchema", () => {
   it("accepts the v2 golden response serialized by the backend assembler", () => {
     const review = makeWeeklyReview();
@@ -18,6 +86,23 @@ describe("weeklyReviewSchema", () => {
       actionType: "RESTORE_METRIC",
       scope: "STORE"
     });
+  });
+
+  it("accepts both peer metrics during the compatible transition", () => {
+    const review = makeWeeklyReview();
+    expect(weeklyReviewSchema.safeParse(review).success).toBe(true);
+
+    review.employees[0]!.peerComparison!.metricCode = "NET_REVENUE";
+    expect(weeklyReviewSchema.safeParse(review).success).toBe(true);
+  });
+
+  it("requires a valid base for a revenue-per-hour peer comparison", () => {
+    const review = makeWeeklyReview();
+    review.employees[0]!.participatesInBenchmark = false;
+
+    expect(() => weeklyReviewSchema.parse(review)).toThrow(
+      "Revenue-per-hour peer comparison requires a ready eligible employee metric"
+    );
   });
 
   it("rejects a different core metric order or unit", () => {
@@ -43,6 +128,17 @@ describe("weeklyReviewSchema", () => {
 
     expect(() => weeklyReviewSchema.parse(review)).toThrow(
       "Referenced weekly-review evidence is missing or ambiguous"
+    );
+  });
+
+  it("rejects employee content that references another employee's evidence", () => {
+    const review = makeWeeklyReview();
+    review.employees[1]!.metrics.netRevenue.evidenceRefs = [
+      review.employees[0]!.metrics.netRevenue.evidenceRefs[0]!
+    ];
+
+    expect(() => weeklyReviewSchema.parse(review)).toThrow(
+      "Employee content must reference evidence owned by the same employee"
     );
   });
 
@@ -100,6 +196,72 @@ describe("weeklyReviewSchema", () => {
       "BLOCKED review requires at least one blocker"
     );
 
+    const blockedWithReadyCore = makeBlockedReview();
+    blockedWithReadyCore.results[0]!.metricState = "READY";
+    blockedWithReadyCore.results[0]!.current = 0;
+    expect(() => weeklyReviewSchema.parse(blockedWithReadyCore)).toThrow(
+      "BLOCKED review requires unavailable core metrics"
+    );
+
+    const blockedWithReadyStructureRoot = makeBlockedReview();
+    blockedWithReadyStructureRoot.salesStructure.root.comparison.metricState = "READY";
+    expect(() => weeklyReviewSchema.parse(blockedWithReadyStructureRoot)).toThrow(
+      "BLOCKED review requires unavailable core metrics"
+    );
+
+    const blockedWithStructureChildren = makeBlockedReview();
+    blockedWithStructureChildren.salesStructure.root.children = [
+      makeWeeklyReview().salesStructure.root.children[0]!
+    ];
+    expect(() => weeklyReviewSchema.parse(blockedWithStructureChildren)).toThrow(
+      "BLOCKED review must not expose detailed analytics"
+    );
+
+    const blockedWithRosterAnalytics = makeBlockedReview();
+    blockedWithRosterAnalytics.team.roster.activeAssignedWithActivity = 1;
+    expect(() => weeklyReviewSchema.parse(blockedWithRosterAnalytics)).toThrow(
+      "BLOCKED review must not expose detailed analytics"
+    );
+
+    const blockedWithAvailableEvidence = makeBlockedReview();
+    const netRevenueRef = blockedWithAvailableEvidence.results[0]!.evidenceRefs[0]!;
+    blockedWithAvailableEvidence.evidence
+      .find((item) => item.evidenceRef === netRevenueRef)!.available = true;
+    expect(() => weeklyReviewSchema.parse(blockedWithAvailableEvidence)).toThrow(
+      "BLOCKED review requires unavailable detailed evidence"
+    );
+
+    const blockedWithOrphanEmployeeEvidence = makeBlockedReview();
+    blockedWithOrphanEmployeeEvidence.evidence.push({
+      ...makeWeeklyReview().evidence.find((item) => item.scope === "EMPLOYEE")!,
+      currentValue: null,
+      previousValue: null,
+      currentNumerator: null,
+      currentDenominator: null,
+      previousNumerator: null,
+      previousDenominator: null,
+      sufficiency: "INSUFFICIENT",
+      materiality: "NOT_EVALUATED",
+      available: false
+    });
+    expect(() => weeklyReviewSchema.parse(blockedWithOrphanEmployeeEvidence)).toThrow(
+      "BLOCKED review requires unavailable detailed evidence"
+    );
+
+    expect(weeklyReviewSchema.safeParse(makeBlockedReview()).success).toBe(true);
+
+    const legacyBlocked = makeWeeklyReview();
+    legacyBlocked.versions.metricsPolicy = "weekly-metrics-v5";
+    legacyBlocked.reportState = "BLOCKED";
+    legacyBlocked.qualitySummary.blockingCount = 1;
+    legacyBlocked.summary.state = "INSUFFICIENT";
+    legacyBlocked.summary.outcome = null;
+    legacyBlocked.summary.positive = null;
+    legacyBlocked.summary.risk = null;
+    legacyBlocked.factors = [];
+    legacyBlocked.actions = [];
+    expect(weeklyReviewSchema.safeParse(legacyBlocked).success).toBe(true);
+
     const readyWithLimitedTeam = makeWeeklyReview();
     readyWithLimitedTeam.team.state = "LIMITED";
     expect(() => weeklyReviewSchema.parse(readyWithLimitedTeam)).toThrow(
@@ -149,6 +311,16 @@ describe("weeklyReviewSchema", () => {
     };
     expect(() => weeklyReviewSchema.parse(wrongEmployee)).toThrow(
       "Employee action must target its owning employee"
+    );
+  });
+
+  it("requires every root action to match one negative factor", () => {
+    const review = makeWeeklyReview();
+    review.actions[0]!.metricCode = "DEVICES_REVENUE";
+    review.actions[0]!.evidenceRefs = ["STORE.STRUCTURE.DEVICES.REVENUE"];
+
+    expect(() => weeklyReviewSchema.parse(review)).toThrow(
+      "Every root action must match exactly one negative factor"
     );
   });
 });

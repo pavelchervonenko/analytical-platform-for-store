@@ -39,6 +39,16 @@ public final class WeeklyReviewCoreProjector {
             RevenuePeriod currentRevenue,
             RevenuePeriod previousRevenue
     ) {
+        return project(current, previous, currentRevenue, previousRevenue, false);
+    }
+
+    public Projection project(
+            StoreKpiResult current,
+            StoreKpiResult previous,
+            RevenuePeriod currentRevenue,
+            RevenuePeriod previousRevenue,
+            boolean sourceAnalyticsBlocked
+    ) {
         StoreKpiResult currentKpi = requireNonNull(current, "current");
         StoreKpiResult previousKpi = requireNonNull(previous, "previous");
         RevenuePeriod currentBreakdown = requireNonNull(currentRevenue, "currentRevenue");
@@ -47,6 +57,9 @@ public final class WeeklyReviewCoreProjector {
                 "current store KPI must match revenue decomposition");
         require(previousKpi.netRevenue().compareTo(previousBreakdown.netRevenue()) == 0,
                 "previous store KPI must match revenue decomposition");
+        if (sourceAnalyticsBlocked) {
+            return unavailableProjection();
+        }
 
         boolean revenueQualityComplete = currentKpi.dataQuality()
                 .periodOpenConsistencyIssueCount() == 0
@@ -114,6 +127,58 @@ public final class WeeklyReviewCoreProjector {
         return new Projection(
                 List.of(netRevenue, grossProfit, margin, averageSale),
                 decomposition
+        );
+    }
+
+    private Projection unavailableProjection() {
+        MetricComparison netRevenue = unavailable(
+                moneySpec("NET_REVENUE", "Чистая выручка", "STORE.NET_REVENUE")
+        );
+        MetricComparison grossProfit = unavailable(
+                moneySpec("GROSS_PROFIT", "Валовая прибыль", "STORE.GROSS_PROFIT")
+        );
+        MetricComparison margin = unavailable(new MetricSpec(
+                "store:margin-percent",
+                "MARGIN_PERCENT",
+                "Маржа",
+                Unit.PERCENT,
+                HIGHER_IS_BETTER,
+                ABSOLUTE,
+                SHARE_THRESHOLD,
+                "STORE.MARGIN_PERCENT"
+        ));
+        MetricComparison averageSale = unavailable(
+                moneySpec("AVERAGE_SALE", "Средняя продажа", "STORE.AVERAGE_SALE")
+        );
+        RevenueDecomposition decomposition = new RevenueDecomposition(
+                unavailable(MetricSpec.storeMoney(
+                        "SALES_REVENUE", WeeklyReviewPolicyV1.Polarity.HIGHER_IS_BETTER
+                )),
+                unavailable(MetricSpec.storeMoney(
+                        "RETURN_REVENUE", WeeklyReviewPolicyV1.Polarity.LOWER_IS_BETTER
+                )),
+                unavailable(MetricSpec.storeMoney(
+                        "NET_REVENUE", WeeklyReviewPolicyV1.Polarity.HIGHER_IS_BETTER
+                )),
+                unavailable(MetricSpec.storeCount("SALE_DOCUMENT_COUNT")),
+                unavailable(MetricSpec.storeCount("RETURN_DOCUMENT_COUNT")),
+                true
+        );
+        return new Projection(
+                List.of(netRevenue, grossProfit, margin, averageSale),
+                decomposition
+        );
+    }
+
+    private MetricComparison unavailable(MetricSpec spec) {
+        return policy.compare(
+                spec,
+                null,
+                null,
+                UNAVAILABLE,
+                INSUFFICIENT,
+                null,
+                null
         );
     }
 

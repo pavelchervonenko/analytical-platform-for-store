@@ -53,22 +53,48 @@ test("MANAGER не получает административную навиг�
   test.setTimeout(90_000);
   test.skip(!managerEmail || !managerPassword, "Задайте E2E_MANAGER_EMAIL и E2E_MANAGER_PASSWORD");
   await login(page, managerEmail!, managerPassword!);
+  const managerFeatures = new Set(await page.evaluate(async () => {
+    const response = await fetch("/api/auth/me", { credentials: "include" });
+    const currentUser = await response.json() as { features?: string[] };
+    return currentUser.features ?? [];
+  }));
   await openNavigationOnMobile(page);
   await expect(page.getByRole("link", { name: "Настройки", exact: true })).toHaveCount(0);
+  for (const [name, feature] of [
+    ["План", "PLAN"],
+    ["Смены", "SHIFTS"],
+    ["Зарплата", "PAYROLL"]
+  ] as const) {
+    await expect(page.getByRole("link", { name, exact: true }))
+      .toHaveCount(managerFeatures.has(feature) ? 1 : 0);
+  }
 
   for (const [path, heading] of [
     ["/overview", "Обзор"],
     ["/employees", "Сотрудники и рейтинг"],
-    ["/plan", "План"],
-    ["/shifts", "Смены"],
-    ["/payroll", "Зарплата"],
     ["/reports", "Отчеты"],
-    ["/quality", "Качество данных"],
     ["/profile", "Профиль и безопасность"]
   ] as const) {
     await page.goto(path);
     await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
   }
+
+  for (const [path, heading, feature] of [
+    ["/plan", "План", "PLAN"],
+    ["/shifts", "Смены", "SHIFTS"],
+    ["/payroll", "Зарплата", "PAYROLL"]
+  ] as const) {
+    await page.goto(path);
+    if (managerFeatures.has(feature)) {
+      await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+    } else {
+      await expect(page).toHaveURL(/\/overview(?:\?|$)/u);
+      await expect(page.getByRole("heading", { name: "Обзор", exact: true })).toBeVisible();
+    }
+  }
+
+  await page.goto("/quality");
+  await expect(page).toHaveURL(/\/overview(?:\?|$)/u);
 
   const adminApiRequests: string[] = [];
   page.on("request", (request) => {

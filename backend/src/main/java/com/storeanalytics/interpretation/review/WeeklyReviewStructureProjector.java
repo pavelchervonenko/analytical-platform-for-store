@@ -113,6 +113,61 @@ public final class WeeklyReviewStructureProjector {
         );
     }
 
+    public SalesStructureBlock unavailable() {
+        MetricComparison revenue = policy.compare(
+                new MetricSpec(
+                        "structure:net-revenue:revenue",
+                        "NET_REVENUE",
+                        "Чистая выручка",
+                        Unit.RUB,
+                        HIGHER_IS_BETTER,
+                        RELATIVE,
+                        CATEGORY_THRESHOLD,
+                        "STORE.STRUCTURE.NET_REVENUE.REVENUE"
+                ),
+                null,
+                null,
+                UNAVAILABLE,
+                Sufficiency.INSUFFICIENT,
+                null,
+                null
+        );
+        MetricComparison share = policy.compare(
+                new MetricSpec(
+                        "structure:net-revenue:share",
+                        "NET_REVENUE_SHARE",
+                        "Доля чистой выручки",
+                        Unit.PERCENT,
+                        CONTEXT,
+                        ABSOLUTE,
+                        CATEGORY_THRESHOLD,
+                        "STORE.STRUCTURE.NET_REVENUE.SHARE"
+                ),
+                null,
+                null,
+                UNAVAILABLE,
+                Sufficiency.INSUFFICIENT,
+                null,
+                null
+        );
+        return new SalesStructureBlock(
+                "sales-structure",
+                BlockState.INSUFFICIENT,
+                new StructureNode(
+                        "structure:net-revenue",
+                        "NET_REVENUE",
+                        "Чистая выручка",
+                        true,
+                        true,
+                        revenue,
+                        share,
+                        List.of()
+                ),
+                List.of(),
+                List.of("Структура недоступна без полного покрытия продаж и возвратов")
+        );
+    }
+
     private StructureNode root(
             StoreKpiResult currentStore,
             StoreKpiResult previousStore,

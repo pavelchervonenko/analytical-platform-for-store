@@ -282,7 +282,7 @@ export const weeklyReviewSchema = z.object({
     metrics: employeeMetricSetSchema,
     ownDynamics: z.array(observationSchema).max(2),
     peerComparison: z.object({
-      metricCode: z.literal("NET_REVENUE"),
+      metricCode: z.enum(["NET_REVENUE", "REVENUE_PER_HOUR"]),
       employeeValue: z.number(),
       benchmarkValue: z.number(),
       benchmarkMethod: z.literal("MEDIAN"),
@@ -415,6 +415,43 @@ export const weeklyReviewSchema = z.object({
   if (review.reportState === "BLOCKED" && review.qualitySummary.blockingCount < 1) {
     addIssue("BLOCKED review requires at least one blocker", ["qualitySummary", "blockingCount"]);
   }
+  const blockedCoreMetrics = [
+    ...review.results,
+    ...decomposition.map(([metric]) => metric),
+    review.salesStructure.root.comparison,
+    review.salesStructure.root.shareComparison
+  ];
+  const metricsPolicyMatch = /^weekly-metrics-v(\d+)$/u.exec(review.versions.metricsPolicy);
+  const requiresBlockedCoreMask = metricsPolicyMatch === null
+    || Number(metricsPolicyMatch[1]) >= 6;
+  if (review.reportState === "BLOCKED" && requiresBlockedCoreMask
+      && blockedCoreMetrics.some((metric) => (
+    metric.metricState !== "UNAVAILABLE"
+      || metric.sufficiency !== "INSUFFICIENT"
+      || metric.materiality !== "NOT_EVALUATED"
+      || metric.current !== null
+      || metric.previous !== null
+      || metric.absoluteDelta !== null
+      || metric.changePercent !== null
+      || metric.comparisonKind !== "UNAVAILABLE"
+      || metric.direction !== "UNKNOWN"
+      || metric.effect !== "UNKNOWN"
+      || metric.currentSample !== null
+      || metric.previousSample !== null
+  ))) {
+    addIssue("BLOCKED review requires unavailable core metrics", ["results"]);
+  }
+  if (review.reportState === "BLOCKED" && requiresBlockedCoreMask
+      && (review.salesStructure.state !== "INSUFFICIENT"
+        || review.salesStructure.attachMetrics.length > 0
+        || review.salesStructure.root.children.length > 0
+        || review.team.state !== "INSUFFICIENT"
+        || Object.values(review.team.roster).some((count) => count !== 0)
+        || review.team.observations.length > 0
+        || review.team.attentionEmployeeCount > 0
+        || review.employees.length > 0)) {
+    addIssue("BLOCKED review must not expose detailed analytics", ["reportState"]);
+  }
   if ((review.summary.state === "READY" || review.summary.state === "LIMITED")
       && review.summary.outcome === null) {
     addIssue("Available summary block requires an outcome", ["summary", "outcome"]);
@@ -459,12 +496,33 @@ export const weeklyReviewSchema = z.object({
         ["employees", employeeIndex, "action", "employeePublicId"]
       );
     }
+    if (employee.peerComparison?.metricCode === "REVENUE_PER_HOUR"
+        && (!employee.participatesInBenchmark
+          || employee.metrics.revenuePerHour.metricState !== "READY"
+          || employee.metrics.revenuePerHour.sufficiency !== "SUFFICIENT"
+          || employee.metrics.revenuePerHour.current === null)) {
+      addIssue(
+        "Revenue-per-hour peer comparison requires a ready eligible employee metric",
+        ["employees", employeeIndex, "peerComparison"]
+      );
+    }
   });
   review.actions.forEach((action, actionIndex) => {
     if (action.scope === "EMPLOYEE" || action.employeePublicId !== null) {
       addIssue(
         "Root actions must target the store or team",
         ["actions", actionIndex, "scope"]
+      );
+    }
+    const relatedFactors = review.factors.filter((factor) => (
+      factor.effect === "NEGATIVE"
+      && factor.comparison.code === action.metricCode
+      && action.evidenceRefs.every((reference) => factor.evidenceRefs.includes(reference))
+    ));
+    if (relatedFactors.length !== 1) {
+      addIssue(
+        "Every root action must match exactly one negative factor",
+        ["actions", actionIndex]
       );
     }
   });
@@ -506,12 +564,98 @@ export const weeklyReviewSchema = z.object({
   });
 
   const evidenceCounts = new Map<string, number>();
+  const evidenceByRef = new Map<string, (typeof review.evidence)[number]>();
   review.evidence.forEach((item) => {
     evidenceCounts.set(item.evidenceRef, (evidenceCounts.get(item.evidenceRef) ?? 0) + 1);
+    evidenceByRef.set(item.evidenceRef, item);
+    if ((item.scope === "EMPLOYEE") !== (item.employeePublicId !== null)) {
+      addIssue(
+        "Employee evidence scope must match employeePublicId",
+        ["evidence", item.evidenceRef, "employeePublicId"]
+      );
+    }
   });
+  if (review.reportState === "BLOCKED" && requiresBlockedCoreMask) {
+    const allowedEvidenceRefs = new Set(
+      blockedCoreMetrics.flatMap((metric) => metric.evidenceRefs)
+    );
+    if (review.evidence.some((item) => (
+      item.available
+        || item.currentValue !== null
+        || item.previousValue !== null
+        || item.currentNumerator !== null
+        || item.currentDenominator !== null
+        || item.previousNumerator !== null
+        || item.previousDenominator !== null
+        || item.sufficiency !== "INSUFFICIENT"
+        || item.materiality !== "NOT_EVALUATED"
+        || !allowedEvidenceRefs.has(item.evidenceRef)
+    ))) {
+      addIssue("BLOCKED review requires unavailable detailed evidence", ["evidence"]);
+    }
+  }
   for (const [reference, count] of evidenceCounts) {
     if (count !== 1) addIssue(`Evidence ${reference} is not unique`, ["evidence"]);
   }
+
+  const assertEmployeeEvidenceOwnership = (
+    employeePublicId: string,
+    employeeIndex: number,
+    references: readonly string[],
+    allowTeamEvidence = false
+  ) => {
+    references.forEach((reference) => {
+      const evidence = evidenceByRef.get(reference);
+      if (evidence === undefined) return;
+      const ownedByEmployee = evidence.scope === "EMPLOYEE"
+        && evidence.employeePublicId === employeePublicId;
+      if (!ownedByEmployee && !(allowTeamEvidence && evidence.scope === "TEAM")) {
+        addIssue(
+          "Employee content must reference evidence owned by the same employee",
+          ["employees", employeeIndex, "evidenceRefs"]
+        );
+      }
+    });
+  };
+  review.employees.forEach((employee, employeeIndex) => {
+    const employeeMetrics = [
+      employee.metrics.completedSales,
+      employee.metrics.netRevenue,
+      employee.metrics.additionalRevenue,
+      employee.metrics.additionalShare,
+      employee.metrics.shiftCount,
+      employee.metrics.workedHours,
+      employee.metrics.revenuePerHour,
+      ...employee.metrics.attachMetrics.map((metric) => metric.comparison)
+    ];
+    employeeMetrics.forEach((metric) => assertEmployeeEvidenceOwnership(
+      employee.employeePublicId,
+      employeeIndex,
+      metric.evidenceRefs
+    ));
+    employee.ownDynamics.forEach((observation) => assertEmployeeEvidenceOwnership(
+      employee.employeePublicId,
+      employeeIndex,
+      observation.evidenceRefs
+    ));
+    [employee.strength, employee.attention, employee.action].forEach((item) => {
+      if (item !== null) {
+        assertEmployeeEvidenceOwnership(
+          employee.employeePublicId,
+          employeeIndex,
+          item.evidenceRefs
+        );
+      }
+    });
+    if (employee.peerComparison !== null) {
+      assertEmployeeEvidenceOwnership(
+        employee.employeePublicId,
+        employeeIndex,
+        employee.peerComparison.evidenceRefs,
+        true
+      );
+    }
+  });
 
   const referenced: string[] = [];
   const appendRefs = (value: { evidenceRefs: readonly string[] } | null) => {

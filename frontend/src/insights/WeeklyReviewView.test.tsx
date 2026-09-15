@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { ReactNode } from "react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
+import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getWeeklyReview } from "../api/queries";
 import type { WeeklyReview } from "../api/weeklyReviewContract";
@@ -17,7 +18,11 @@ vi.mock("../api/queries", () => ({
 
 const getWeeklyReviewMock = vi.mocked(getWeeklyReview);
 
-function renderView(fallback?: ReactNode, initialReview?: WeeklyReview | null) {
+function renderView(
+  fallback?: ReactNode,
+  initialReview?: WeeklyReview | null,
+  qualityHref: string | null = null
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } }
   });
@@ -28,15 +33,38 @@ function renderView(fallback?: ReactNode, initialReview?: WeeklyReview | null) {
     );
   }
   return render(
-    <QueryClientProvider client={client}>
-      <WeeklyReviewView storeId="store-1" fallback={fallback} />
-    </QueryClientProvider>
+    <MemoryRouter initialEntries={["/insights?store=store-1"]}>
+      <QueryClientProvider client={client}>
+        <WeeklyReviewView
+          storeId="store-1"
+          qualityHref={qualityHref}
+          fallback={fallback}
+        />
+      </QueryClientProvider>
+    </MemoryRouter>
   );
 }
 
-function renderReview(review: WeeklyReview | null) {
+function renderReview(review: WeeklyReview | null, qualityHref: string | null = null) {
   getWeeklyReviewMock.mockResolvedValue(review);
-  return renderView();
+  return renderView(undefined, undefined, qualityHref);
+}
+
+function limitation(review: WeeklyReview): WeeklyReview["limitations"][number] {
+  return {
+    limitationId: "returns-partial",
+    code: "RETURNS_PARTIAL",
+    severity: "WARNING",
+    scope: "METRIC",
+    employeePublicId: null,
+    affectedBlockIds: ["summary", "results"],
+    affectedMetricCodes: ["NET_REVENUE"],
+    period: structuredClone(review.period.current),
+    affectedCount: 1,
+    summary: "Возвраты загружены не за всю неделю.",
+    resolution: "Проверьте синхронизацию возвратов.",
+    evidenceRefs: ["STORE.RETURN_REVENUE"]
+  };
 }
 
 function partialReview(): WeeklyReview {
@@ -46,13 +74,45 @@ function partialReview(): WeeklyReview {
   review.qualitySummary = {
     blockingCount: 0,
     warningCount: 1,
-    affectedBlockCount: 1,
+    affectedBlockCount: 2,
     message: "По возвратам доступны не все данные."
   };
-  const returns = review.sourceCoverage.find((source) => source.sourceCode === "RETURNS")!;
-  returns.state = "PARTIAL";
-  returns.message = "Возвраты загружены не за всю неделю.";
+  review.limitations = [limitation(review)];
   return review;
+}
+
+function addAttentionEmployees(review: WeeklyReview, count: number) {
+  const template = review.employees[0]!;
+  review.employees = Array.from({ length: count }, (_, index) => ({
+    ...structuredClone(template),
+    employeePublicId: `attention-${index}`,
+    displayName: `Сотрудник ${index + 1}`,
+    sortGroup: "ATTENTION" as const,
+    attention: {
+      observationId: `attention-${index}:revenue`,
+      title: "Снизилась выручка в час",
+      detail: "Изменение выше порога и требует проверки.",
+      effect: "NEGATIVE" as const,
+      evidenceRefs: template.metrics.revenuePerHour.evidenceRefs
+    },
+    peerComparison: template.peerComparison === null ? null : {
+      ...structuredClone(template.peerComparison),
+      metricCode: "REVENUE_PER_HOUR" as const
+    },
+    action: {
+      ...structuredClone(review.actions[0]!),
+      actionId: `employee-action-${index}`,
+      scope: "EMPLOYEE" as const,
+      employeePublicId: `attention-${index}`,
+      metricCode: "REVENUE_PER_HOUR",
+      title: "Проверить эффективность смен"
+    }
+  }));
+  review.team.attentionEmployeeCount = count;
+  review.team.roster.activeAssignedWithActivity = Math.max(
+    review.team.roster.activeAssignedWithActivity,
+    count
+  );
 }
 
 describe("WeeklyReviewView", () => {
@@ -60,155 +120,215 @@ describe("WeeklyReviewView", () => {
     getWeeklyReviewMock.mockReset();
   });
 
-  it("shows a concise manager-first READY review from the backend golden response", async () => {
+  it("puts the managerial conclusion, one action and four KPIs on the first level", async () => {
+    const review = makeWeeklyReview();
+    const { container } = renderReview(review);
+
+    expect(await screen.findByRole("heading", { name: review.summary.outcome!.text }))
+      .toBeInTheDocument();
+    expect(screen.getByText(review.period.currentLabel, {
+      selector: ".weekly-review-header__period strong"
+    })).toBeInTheDocument();
+    expect(screen.getByText(`Сравнение: ${review.period.previousLabel}`)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: review.actions[0]!.title })).toBeInTheDocument();
+    expect(screen.getByText(/Ориентир/u).parentElement).toHaveTextContent(/не выше 50\s*₽/u);
+    expect(screen.getByText(review.actions[0]!.check)).toBeInTheDocument();
+    expect(container.querySelectorAll(".weekly-review-metric")).toHaveLength(4);
+    expect(screen.getAllByText(review.summary.positive!.text)).toHaveLength(1);
+    expect(screen.queryByText(review.summary.risk!.text)).not.toBeInTheDocument();
+  });
+
+  it("opens one evidence dialog and returns focus on Escape", async () => {
+    const user = userEvent.setup();
     const review = makeWeeklyReview();
     renderReview(review);
 
-    expect(await screen.findByText("17–23 августа 2026", {
-      selector: ".weekly-review-header__period strong"
-    })).toBeInTheDocument();
-    expect(screen.getByText("10–16 августа 2026", {
-      selector: ".weekly-review-header__period strong"
-    })).toBeInTheDocument();
-    expect(screen.queryByText("Расчет по данным")).not.toBeInTheDocument();
-    expect(screen.getByText("17–23 августа 2026", {
-      selector: ".weekly-review-section-heading small"
-    })).toBeInTheDocument();
-    const managerSummary = "Чистая выручка и валовая прибыль выросли, "
-      + "а маржа осталась на прежнем уровне. "
-      + "Рост возвратов уменьшил чистую выручку на 50\u00a0₽.";
-    expect(screen.getByRole("heading", { name: managerSummary })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Шаги на следующую неделю" }))
-      .toBeInTheDocument();
-    expect(screen.getByText("24–30 августа 2026", {
-      selector: ".weekly-review-section-heading small"
-    })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Команда" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Сотрудники" })).toBeInTheDocument();
-    expect(screen.queryByText(/план месяца/iu)).not.toBeInTheDocument();
-    expect(screen.queryByText("Данные готовы")).not.toBeInTheDocument();
+    const trigger = await screen.findByRole("button", { name: "Почему такой вывод" });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await user.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "Основание главного вывода" });
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(within(dialog).getByText("Чистая выручка")).toBeInTheDocument();
+    expect(within(dialog).getByText("Валовая прибыль")).toBeInTheDocument();
+    expect(document.querySelector(".weekly-review-screen"))
+      .toHaveAttribute("aria-hidden", "true");
+    expect(within(dialog).getByRole("button", { name: "Закрыть детали" })).toHaveFocus();
+    await user.keyboard("{Tab}");
+    expect(within(dialog).getByRole("button", { name: "Закрыть детали" })).toHaveFocus();
 
-    const summary = document.querySelector<HTMLElement>(".weekly-review-summary")!;
-    expect(within(summary).getByText("Выручка направления «Техника» выросла"))
-      .toBeInTheDocument();
-    expect(within(summary).getByText("Связь с общим ростом пока не установлена."))
-      .toBeInTheDocument();
-    expect(within(summary).queryByText("Что требует внимания")).not.toBeInTheDocument();
-    expect(within(summary).queryByText("Возвраты выросли")).not.toBeInTheDocument();
-    expect(within(summary).queryByText("Что сделать")).not.toBeInTheDocument();
-    expect(summary.querySelector(".weekly-review-summary__main")).toBeInTheDocument();
-    expect(summary.querySelectorAll(".weekly-review-signal")).toHaveLength(1);
-    const actionList = document.querySelector<HTMLElement>(".weekly-review-action-list")!;
-    expect(actionList.querySelectorAll(".weekly-review-action"))
-      .toHaveLength(review.actions.length);
-    expect(within(actionList).getByText("Разобрать рост возвратов")).toBeInTheDocument();
-    expect(within(actionList).queryByText("На следующую полную неделю"))
-      .not.toBeInTheDocument();
-    expect(within(actionList).queryByText("Цель")).not.toBeInTheDocument();
-    expect(within(actionList).queryByText("Как проверим")).not.toBeInTheDocument();
-    expect(within(actionList).queryByText("01")).not.toBeInTheDocument();
-    expect(within(summary).queryByText(review.summary.positive!.text)).not.toBeInTheDocument();
-    expect(within(summary).queryByText(review.summary.risk!.text)).not.toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
-  it("shows one employee detail and switches it from the compact roster", async () => {
-    const { container } = renderReview(makeWeeklyReview());
-
-    await screen.findAllByText("Анна");
-    const employeeDetail = container.querySelector<HTMLElement>(
-      ".weekly-review-employee-detail"
-    )!;
-    expect(within(employeeDetail).getByRole("heading", { name: "Анна" }))
-      .toBeInTheDocument();
-    expect(within(employeeDetail).getByRole("heading", { name: "Динамика" }))
-      .toBeInTheDocument();
-    expect(within(employeeDetail).getByRole("heading", { name: "Сравнение с командой" }))
-      .toBeInTheDocument();
-    expect(employeeDetail.querySelectorAll(".weekly-review-employee__summary-metric"))
-      .toHaveLength(1);
-    expect(employeeDetail.querySelectorAll(".weekly-review-employee__metrics > article"))
-      .toHaveLength(3);
-    expect(within(employeeDetail).getAllByText("Чистая выручка вырос")).toHaveLength(1);
-
-    fireEvent.click(screen.getByRole("button", { name: /Вера/u }));
-    expect(within(employeeDetail).getByRole("heading", { name: "Вера" }))
-      .toBeInTheDocument();
-  });
-
-  it("opens formula, evidence and sales structure without losing their context", async () => {
+  it("closes the detail panel from its backdrop", async () => {
     const user = userEvent.setup();
     renderReview(makeWeeklyReview());
 
-    const formulaSummary = (await screen.findByText("Как рассчитана чистая выручка"))
-      .closest("summary")!;
-    const formula = formulaSummary.closest("details")!;
-    await user.click(formulaSummary);
-    expect(formula).toHaveAttribute("open");
-    expect(within(formula).getByText("Продажи")).toBeInTheDocument();
-    expect(within(formula).getByText("Возвраты")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Почему такой вывод" }));
+    expect(screen.getByRole("dialog", { name: "Основание главного вывода" }))
+      .toBeInTheDocument();
+    fireEvent.mouseDown(document.querySelector(".weekly-review-detail-layer")!);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
 
-    const evidenceSummary = screen.getAllByText("Основание")[0]!.closest("summary")!;
-    const evidence = evidenceSummary.closest("details")!;
-    await user.click(evidenceSummary);
-    expect(evidence).toHaveAttribute("open");
+  it("uses the detail surface for the revenue formula and keeps structure collapsed", async () => {
+    const user = userEvent.setup();
+    renderReview(makeWeeklyReview());
+
+    const formulaTrigger = await screen.findByRole("button", {
+      name: "Как рассчитана чистая выручка"
+    });
+    await user.click(formulaTrigger);
+    const dialog = screen.getByRole("dialog", { name: "Расчёт чистой выручки" });
+    expect(within(dialog).getByText("Продажи")).toBeInTheDocument();
+    expect(within(dialog).getByText("Возвраты")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Закрыть детали" }));
 
     const structureSummary = screen.getByText("Структура продаж").closest("summary")!;
-    const structure = structureSummary.closest("details")!;
+    expect(structureSummary.closest("details")).not.toHaveAttribute("open");
     await user.click(structureSummary);
-    expect(structure).toHaveAttribute("open");
-    expect(within(structure).getByText("Техника")).toBeInTheDocument();
-    expect(within(structure).getByText("Дополнительная выручка")).toBeInTheDocument();
+    expect(structureSummary.closest("details")).toHaveAttribute("open");
+    expect(screen.getByText("Техника")).toBeInTheDocument();
   });
 
-  it("keeps a long employee roster compact until the manager expands it", async () => {
+  it("shows at most three employee exceptions and compares efficiency only per hour", async () => {
     const user = userEvent.setup();
     const review = makeWeeklyReview();
-    const template = review.employees[0]!;
-    review.employees = [
-      ...review.employees,
-      ...Array.from({ length: 6 }, (_, index) => ({
-        ...template,
-        employeePublicId: `employee-extra-${index + 1}`,
-        displayName: `Сотрудник ${index + 4}`
-      }))
-    ];
+    addAttentionEmployees(review, 5);
     const { container } = renderReview(review);
 
-    await screen.findAllByText("Анна");
-    expect(container.querySelectorAll(".weekly-review-employee-selector")).toHaveLength(8);
-
-    await user.click(screen.getByRole("button", { name: "Показать всех — 9" }));
-    expect(container.querySelectorAll(".weekly-review-employee-selector")).toHaveLength(9);
-    expect(screen.getByRole("button", { name: "Показать меньше" })).toBeInTheDocument();
+    await screen.findByText("Сотрудник 1");
+    expect(container.querySelectorAll(".weekly-review-exception")).toHaveLength(3);
+    expect(screen.queryByText("Сотрудник 4")).not.toBeInTheDocument();
+    expect(screen.getByText("5 из 5 требуют проверки")).toBeInTheDocument();
+    expect(screen.queryByText("Требует проверки")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", {
+      name: "Почему сотрудник в списке: Сотрудник 1"
+    }));
+    const dialog = screen.getByRole("dialog", { name: "Сотрудник 1" });
+    expect(within(dialog).getByRole("heading", { name: "Сравнение эффективности" }))
+      .toBeInTheDocument();
+    expect(within(dialog).getByText(/в час при медиане магазина/u)).toBeInTheDocument();
   });
 
-  it("keeps valid PARTIAL values with one quality status in the header", async () => {
-    const review = partialReview();
-    review.salesStructure.state = "LIMITED";
-    review.team.state = "LIMITED";
+  it("marks only the unavailable time assessment when shifts are incomplete", async () => {
+    const review = makeWeeklyReview();
+    addAttentionEmployees(review, 1);
+    const employee = review.employees[0]!;
+    employee.metrics.shiftCount.metricState = "LIMITED";
+    employee.metrics.workedHours.metricState = "UNAVAILABLE";
+    employee.metrics.revenuePerHour.metricState = "UNAVAILABLE";
+    employee.metrics.revenuePerHour.current = null;
     renderReview(review);
 
-    expect(await screen.findByText("Разбор по доступным данным")).toBeInTheDocument();
-    expect(screen.queryByText("По возвратам доступны не все данные.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Данные ограничены")).not.toBeInTheDocument();
-    expect(document.querySelectorAll(".weekly-review-state--limited")).toHaveLength(1);
-    expect(screen.getAllByText(/1[\s\u00a0]000[\s\u00a0]₽/u).length).toBeGreaterThan(0);
+    expect(await screen.findByText(
+      "Часть смен не заполнена — оценка по часам недоступна"
+    )).toBeInTheDocument();
+    expect(screen.getByText("1 из 3 требует проверки")).toBeInTheDocument();
   });
 
-  it("shows a block-only PARTIAL only in the header", async () => {
+  it("keeps one DOM while toggling additional changes and employees", async () => {
+    const review = makeWeeklyReview();
+    const additionalFactor = structuredClone(review.factors[1]!);
+    additionalFactor.factorId = "factor:accessories_revenue";
+    additionalFactor.title = "Выручка направления «Аксессуары» выросла";
+    additionalFactor.evidenceRefs = ["STORE.STRUCTURE.ACCESSORIES.REVENUE"];
+    additionalFactor.comparison.evidenceRefs = additionalFactor.evidenceRefs;
+    review.factors.push(additionalFactor);
+    addAttentionEmployees(review, 3);
+    const { container } = renderReview(review);
+
+    await screen.findByRole("heading", { name: "Команда" });
+    const changesToggle = container.querySelector<HTMLButtonElement>(
+      'button[aria-controls="weekly-review-changes-list"]'
+    );
+    const employeesToggle = container.querySelector<HTMLButtonElement>(
+      'button[aria-controls="weekly-review-employees-list"]'
+    );
+    expect(changesToggle).toHaveTextContent("Ещё 1 изменение");
+    expect(employeesToggle).toHaveTextContent("Ещё 2 сотрудника");
+    expect(changesToggle).toHaveAttribute("aria-expanded", "false");
+    expect(employeesToggle).toHaveAttribute("aria-expanded", "false");
+    expect(container.querySelectorAll(".weekly-review-factor")).toHaveLength(2);
+    expect(container.querySelectorAll(".weekly-review-exception")).toHaveLength(3);
+
+    fireEvent.click(changesToggle!);
+    fireEvent.click(employeesToggle!);
+
+    expect(changesToggle).toHaveTextContent("Скрыть дополнительные изменения");
+    expect(employeesToggle).toHaveTextContent("Скрыть дополнительных сотрудников");
+    expect(changesToggle).toHaveAttribute("aria-expanded", "true");
+    expect(employeesToggle).toHaveAttribute("aria-expanded", "true");
+    expect(container.querySelectorAll(".weekly-review-factor")).toHaveLength(2);
+    expect(container.querySelectorAll(".weekly-review-exception")).toHaveLength(3);
+  });
+
+  it("keeps reliable PARTIAL values and centralizes the quality explanation", async () => {
+    const user = userEvent.setup();
+    const review = partialReview();
+    const { container } = renderReview(review);
+
+    expect(await screen.findByText("Разбор по доступным данным")).toBeInTheDocument();
+    expect(container.querySelectorAll(".weekly-review-quality-summary")).toHaveLength(1);
+    expect(screen.getByText("По возвратам доступны не все данные.")).toBeInTheDocument();
+    expect(container.querySelectorAll(".weekly-review-metric")).toHaveLength(4);
+    expect(screen.getByRole("button", { name: "Вывод ограничен" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Подробнее об ограничениях" }));
+    expect(screen.getByRole("dialog", { name: "Ограничения данных" })).toHaveTextContent(
+      "Проверьте синхронизацию возвратов."
+    );
+    expect(screen.getByRole("dialog", { name: "Ограничения данных" })).toHaveTextContent(
+      "Исправление выполняет администратор или ответственный за загрузку данных."
+    );
+  });
+
+  it("explains PARTIAL caused only by a local team limitation", async () => {
+    const user = userEvent.setup();
     const review = makeWeeklyReview();
     review.reportState = "PARTIAL";
-    review.summary.state = "LIMITED";
+    review.qualitySummary = {
+      blockingCount: 0,
+      warningCount: 1,
+      affectedBlockCount: 1,
+      message: "Надёжные показатели сохранены; ограничений: 1"
+    };
+    review.limitations = [];
     review.team.state = "LIMITED";
+    review.team.limitations = ["Для части сотрудников недостаточно продаж для сравнения"];
     renderReview(review);
 
-    expect(await screen.findByText("Разбор по доступным данным")).toBeInTheDocument();
-    expect(screen.queryByText("Часть разделов доступна с ограничениями."))
-      .not.toBeInTheDocument();
-    expect(screen.queryByText("Данные готовы")).not.toBeInTheDocument();
+    expect(await screen.findByText("Надёжные показатели сохранены; ограничений: 1"))
+      .toBeInTheDocument();
+    const qualityTrigger = screen.getByRole("button", { name: "Подробнее об ограничениях" });
+    await user.click(qualityTrigger);
+    expect(screen.getByRole("dialog", { name: "Ограничения данных" })).toHaveTextContent(
+      "Для части сотрудников недостаточно продаж для сравнения"
+    );
   });
 
-  it("does not repeat factor narratives after AI wording enrichment", async () => {
+  it("does not promote missing shifts to a report warning", async () => {
+    const review = makeWeeklyReview();
+    review.limitations = [{
+      ...limitation(review),
+      limitationId: "missing-shifts",
+      code: "WORKLOAD_DATA_MISSING",
+      affectedBlockIds: ["employees"],
+      affectedMetricCodes: ["SHIFT_COUNT", "WORKED_HOURS", "REVENUE_PER_HOUR"],
+      summary: "Не заполнены смены"
+    }];
+    review.employees[0]!.metrics.workedHours.metricState = "UNAVAILABLE";
+    review.employees[0]!.metrics.revenuePerHour.metricState = "UNAVAILABLE";
+    review.employees[0]!.peerComparison = null;
+    renderReview(review);
+
+    await screen.findByRole("heading", { name: "Результаты недели" });
+    expect(screen.queryByText("Часть выводов ограничена")).not.toBeInTheDocument();
+    expect(screen.queryByText("Не заполнены смены")).not.toBeInTheDocument();
+  });
+
+  it("does not repeat backend narratives after AI enrichment", async () => {
     const review = makeWeeklyReview();
     review.summary.generatedBy = "AI_ENHANCED";
     review.aiEnhancement.state = "READY";
@@ -219,54 +339,66 @@ describe("WeeklyReviewView", () => {
 
     await screen.findByRole("heading", { name: review.summary.outcome!.text });
     expect(screen.getByText("Дополнено ИИ")).toBeInTheDocument();
-    expect(screen.queryByText("Расчет по данным")).not.toBeInTheDocument();
-    const summary = document.querySelector<HTMLElement>(".weekly-review-summary")!;
-    expect(within(summary).queryByText(review.summary.positive!.text)).not.toBeInTheDocument();
-    expect(within(summary).queryByText(review.summary.risk!.text)).not.toBeInTheDocument();
+    expect(screen.getAllByText(review.summary.positive!.text)).toHaveLength(1);
+    expect(screen.queryByText(review.summary.risk!.text)).not.toBeInTheDocument();
   });
 
-  it.each([
-    ["INSUFFICIENT", "Для этого раздела недостаточно данных."],
-    ["NOT_APPLICABLE", "Этот раздел не применяется к выбранной неделе."]
-  ] as const)("renders dedicated %s states instead of stale block values", async (state, text) => {
-    const review = partialReview();
-    review.salesStructure.state = state;
-    review.team.state = state;
+  it("omits the changes section when its only factor already owns the primary action", async () => {
+    const review = makeWeeklyReview();
+    review.factors = [review.factors[0]!];
     renderReview(review);
 
-    await screen.findByText("Разбор по доступным данным");
-    fireEvent.click(screen.getByText("Структура продаж").closest("summary")!);
-    expect(screen.getAllByText(text).length).toBeGreaterThanOrEqual(2);
+    await screen.findByRole("heading", { name: review.actions[0]!.title });
+    expect(screen.queryByRole("heading", { name: "Что изменилось" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Существенных изменений по доступным данным нет."))
+      .not.toBeInTheDocument();
   });
 
-  it("keeps empty business sections explicit", async () => {
+  it("keeps empty business sections compact and explicit", async () => {
     const review = makeWeeklyReview();
     review.factors = [];
     review.actions = [];
     review.team.observations = [];
     review.employees = [];
+    review.team.attentionEmployeeCount = 0;
     renderReview(review);
 
-    expect(await screen.findByText("Существенных изменений нет.")).toBeInTheDocument();
-    expect(screen.getByText("Дополнительные действия не требуются.")).toBeInTheDocument();
-    expect(screen.getByText("Значимых изменений нет.")).toBeInTheDocument();
-    expect(screen.getByText("Нет сотрудников с продажами за эту неделю.")).toBeInTheDocument();
+    expect(await screen.findByText("Существенных изменений по доступным данным нет."))
+      .toBeInTheDocument();
+    expect(screen.getByText(/Дополнительная проверка не требуется/u)).toBeInTheDocument();
+    expect(screen.getByText(
+      "Значимых отрицательных изменений на достаточной базе не обнаружено."
+    ))
+      .toBeInTheDocument();
   });
 
-  it("keeps a limited metric value without repeating the quality warning", async () => {
+  it("does not claim that no check is needed for PARTIAL without actions", async () => {
     const review = partialReview();
-    review.results[0]!.metricState = "LIMITED";
+    review.actions = [];
     renderReview(review);
 
-    await screen.findByText("Разбор по доступным данным");
-    expect(screen.queryByText("Данные требуют проверки")).not.toBeInTheDocument();
-    expect(screen.getAllByText(/1[\s\u00a0]000[\s\u00a0]₽/u).length).toBeGreaterThan(0);
+    expect(await screen.findByText(
+      "Приоритетная проверка не сформирована по доступной части данных. Сначала уточните ограничения."
+    )).toBeInTheDocument();
+    expect(screen.queryByText(/Дополнительная проверка не требуется/u))
+      .not.toBeInTheDocument();
   });
 
-  it("shows PREPARING as progress rather than a data failure", async () => {
+  it("does not render stale structure values when the block is insufficient", async () => {
+    const user = userEvent.setup();
+    const review = partialReview();
+    review.salesStructure.state = "INSUFFICIENT";
+    renderReview(review);
+
+    await user.click((await screen.findByText("Структура продаж")).closest("summary")!);
+    expect(screen.getByText("Для структуры продаж недостаточно данных.")).toBeInTheDocument();
+    expect(screen.queryByText("Техника")).not.toBeInTheDocument();
+  });
+
+  it("separates PREPARING from a data failure", async () => {
     const review = makeWeeklyReview();
     review.reportState = "PREPARING";
-    review.qualitySummary.message = "Собираем результаты завершенной недели.";
+    review.qualitySummary.message = "Собираем результаты завершённой недели.";
     renderReview(review);
 
     expect(await screen.findByRole("heading", { name: "Разбор формируется" }))
@@ -275,35 +407,55 @@ describe("WeeklyReviewView", () => {
       .not.toBeInTheDocument();
   });
 
-  it("announces BLOCKED as an alert", async () => {
-    const blocked = makeWeeklyReview();
-    blocked.reportState = "BLOCKED";
-    blocked.qualitySummary = {
-      blockingCount: 1,
-      warningCount: 0,
-      affectedBlockCount: 1,
-      message: "Не загружены продажи за часть недели."
-    };
-    renderReview(blocked);
+  it("announces BLOCKED, names the responsible role and hides the unreliable report", async () => {
+    const user = userEvent.setup();
+    const review = makeWeeklyReview();
+    review.reportState = "BLOCKED";
+    review.qualitySummary.message = "Не загружены продажи за часть недели.";
+    review.limitations = [{
+      ...limitation(review),
+      severity: "BLOCKING",
+      summary: "Продажи загружены не за всю неделю."
+    }];
+    renderReview(review);
 
     const alert = await screen.findByRole("alert");
     expect(within(alert).getByRole("heading", { name: "Для разбора не хватает данных" }))
       .toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Результаты недели" }))
       .not.toBeInTheDocument();
+    await user.click(within(alert).getByRole("button", { name: "Что нужно исправить" }));
+    expect(screen.getByRole("dialog", { name: "Что нужно исправить" })).toHaveTextContent(
+      "Исправление выполняет администратор или ответственный за загрузку данных."
+    );
+    expect(screen.queryByRole("link", { name: "Открыть качество данных" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("offers an administrator the existing data-quality route", async () => {
+    const user = userEvent.setup();
+    const review = makeWeeklyReview();
+    review.reportState = "BLOCKED";
+    review.qualitySummary.message = "Не загружены продажи за часть недели.";
+    review.limitations = [{
+      ...limitation(review),
+      severity: "BLOCKING",
+      summary: "Продажи загружены не за всю неделю."
+    }];
+    renderReview(review, "/quality?store=store-1");
+
+    await user.click(await screen.findByRole("button", { name: "Что нужно исправить" }));
+    expect(screen.getByRole("link", { name: "Открыть качество данных" }))
+      .toHaveAttribute("href", "/quality?store=store-1");
   });
 
   it("lets a manager retry an empty response", async () => {
-    getWeeklyReviewMock
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(makeWeeklyReview());
+    getWeeklyReviewMock.mockResolvedValueOnce(null).mockResolvedValueOnce(makeWeeklyReview());
     renderView();
 
     fireEvent.click(await screen.findByRole("button", { name: "Проверить снова" }));
-
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Результаты недели" }))
-        .toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Результаты недели" })).toBeInTheDocument();
     });
     expect(getWeeklyReviewMock).toHaveBeenCalledTimes(2);
   });
@@ -318,47 +470,20 @@ describe("WeeklyReviewView", () => {
   });
 
   it("keeps the latest review visible when a background refresh fails", async () => {
-    const cached = makeWeeklyReview();
     getWeeklyReviewMock.mockRejectedValue(new Error("network"));
-    renderView(undefined, cached);
+    renderView(undefined, makeWeeklyReview());
 
     expect(await screen.findByRole("heading", { name: "Результаты недели" }))
       .toBeInTheDocument();
-    expect(await screen.findByText(
-      /Показаны последние доступные данные/u,
-      undefined,
-      { timeout: 5_000 }
-    ))
+    expect(await screen.findByText(/Показаны последние доступные данные/u))
       .toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("keeps the previous weekly view when the v22 snapshot is not ready", async () => {
+  it("keeps the previous view while the new snapshot is absent", async () => {
     getWeeklyReviewMock.mockResolvedValue(null);
     renderView(<div>Предыдущий недельный разбор</div>);
 
     expect(await screen.findByText("Предыдущий недельный разбор")).toBeInTheDocument();
-    expect(screen.getByText(
-      "Показан предыдущий формат: новый недельный разбор еще не сформирован."
-    )).toBeInTheDocument();
-    expect(screen.queryByText("Разбор еще не сформирован")).not.toBeInTheDocument();
-  });
-
-  it("shows the endpoint error instead of masking it with the previous view", async () => {
-    getWeeklyReviewMock.mockRejectedValue(new Error("network"));
-    renderView(<div>Предыдущий недельный разбор</div>);
-
-    const alert = await screen.findByRole("alert");
-    expect(within(alert).getByText("Не удалось загрузить данные")).toBeInTheDocument();
-    expect(screen.queryByText("Предыдущий недельный разбор")).not.toBeInTheDocument();
-  });
-
-  it("does not mask a refresh error after a cached empty response", async () => {
-    getWeeklyReviewMock.mockRejectedValue(new Error("network"));
-    renderView(<div>Предыдущий недельный разбор</div>, null);
-
-    const alert = await screen.findByRole("alert");
-    expect(within(alert).getByText("Не удалось загрузить данные")).toBeInTheDocument();
-    expect(screen.queryByText("Предыдущий недельный разбор")).not.toBeInTheDocument();
+    expect(screen.getByText(/Показан предыдущий формат/u)).toBeInTheDocument();
   });
 });

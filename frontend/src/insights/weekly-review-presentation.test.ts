@@ -54,6 +54,8 @@ describe("weekly review presentation", () => {
     const action = makeWeeklyReview().actions[0]!;
 
     expect(actionTargetText(action)).toBe("не выше 50 ₽");
+    expect(actionTargetText({ ...action, metricCode: "REVENUE_PER_HOUR" }))
+      .toBe("не выше 50 ₽/ч");
   });
 
   it("describes a partial review without an alarm label", () => {

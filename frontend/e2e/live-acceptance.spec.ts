@@ -57,6 +57,7 @@ test("ADMIN открывает все пользовательские разд�
 
   for (const [path, heading] of [
     ["/overview", "Обзор"],
+    ["/insights", "ИИ-разбор"],
     ["/employees", "Сотрудники и рейтинг"],
     ["/plan", "План"],
     ["/shifts", "Смены"],
@@ -183,6 +184,7 @@ test("ADMIN проводит MANAGER через полный жизненный 
   await expect(page.getByRole("link", { name: "Настройки", exact: true })).toHaveCount(0);
   for (const [path, heading] of [
     ["/overview", "Обзор"],
+    ["/insights", "ИИ-разбор"],
     ["/employees", "Сотрудники и рейтинг"],
     ["/plan", "План"],
     ["/shifts", "Смены"],
