@@ -324,9 +324,21 @@ export class ApiClient {
     path: string,
     options: ApiRequestOptions<T> = {}
   ): Promise<OptionalEtaggedResource<T>> {
+    // Caddy suffixes strong ETags for encoded representations. Conditional writes use the
+    // backend's opaque aggregate tag, so ETag-aware responses must remain untransformed.
+    const headers = new Headers(options.headers);
+    const cacheControl = headers.get("Cache-Control");
+    const directives = cacheControl?.split(",").map((value) => value.trim().toLowerCase()) ?? [];
+    if (!directives.includes("no-transform")) {
+      headers.set(
+        "Cache-Control",
+        cacheControl ? `${cacheControl}, no-transform` : "no-transform"
+      );
+    }
     let etag: string | null = null;
     const value = await this.request(path, {
       ...options,
+      headers,
       responseObserver: (response) => {
         etag = response.headers.get("ETag");
         options.responseObserver?.(response);
