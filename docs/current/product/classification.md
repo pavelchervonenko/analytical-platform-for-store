@@ -6,7 +6,7 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-09-14
+last_verified: 2026-09-16
 requirement_sources:
   - docs/archive/discoveries/analytics-business-rules-draft.md
   - docs/history/audits/2026/08/payroll-classification-review.md
@@ -90,6 +90,13 @@ Backend возвращает точный набор затронутых маг
 query caches. Новая immutable revision создаётся только при изменении content hash. Ошибка этого
 дополнительного обновления не откатывает сохранённую категорию, показывается отдельно и допускает
 повтор запроса.
+
+Автоматические правила `livesklad-product-rules-v9` распознают кабели, название которых состоит
+только из пар разъёмов `USB-C/Type-C` и `Lightning`, как `CHARGER_CABLE`. Оба признака обязательны,
+чтобы слово `Lightning` в названии самостоятельной техники не превращало её в аксессуар.
+Написания `картхолдер`, `кардхолдер` и `cardholder` относятся к
+`OTHER_ACCESSORY_PRODUCT`. Эти категории имеют зарплатную категорию `ACCESSORY`; отдельное
+payroll-назначение не создаётся.
 
 Для `SERVICE|WARRANTY|PROTECTION` ожидаемый ноль себестоимости допустим. В других категориях
 `ZERO_UNEXPECTED` — возможная ошибка, которую readiness пока не всегда блокирует.

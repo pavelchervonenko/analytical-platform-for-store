@@ -19,6 +19,7 @@ class ProductAutoClassificationRuleEngineTest {
     @MethodSource({
         "yandexStationCases",
         "productionDryRunCases",
+        "septemberMobiSphereCases",
         "legacyUnmappedRegressionCases",
         "customerMethodologyCases"
     })
@@ -264,6 +265,21 @@ class ProductAutoClassificationRuleEngineTest {
                 arguments(
                         "Подзарядка устройства",
                         "SETUP_SERVICE",
+                        ProductConditionType.NOT_APPLICABLE
+                )
+        );
+    }
+
+    private static Stream<Arguments> septemberMobiSphereCases() {
+        return Stream.of(
+                arguments(
+                        "USB-C - Lightning No Box",
+                        "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE
+                ),
+                arguments(
+                        "Картхолдер VLP из экокожи с MagSafe Черный",
+                        "OTHER_ACCESSORY_PRODUCT",
                         ProductConditionType.NOT_APPLICABLE
                 )
         );

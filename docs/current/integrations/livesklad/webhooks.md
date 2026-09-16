@@ -6,7 +6,7 @@ owner: integrations
 audience:
   - developer
   - operator
-last_verified: 2026-08-31
+last_verified: 2026-09-16
 requirement_sources:
   - docs/archive/legacy-contracts/livesklad-webhook-receiver.md
 implementation_sources:
@@ -70,6 +70,13 @@ Retryable: rate limit, transport, selected 404/409/5xx, source changed races и 
 Invalid/missing `data.id`, rejected payload, mismatch и exhausted retry — terminal с stable code.
 Targeted operation обновляет exact document/order под transaction lock и не выполняет period-wide
 deletion.
+
+Targeted sale-return sync дополнительно читает справочник кассовых статей, кассы магазина и
+кассовые операции в одном или двух десятиминутных окнах вокруг `occurredAt` и `sourceUpdatedAt`;
+пересекающиеся окна объединяются. Из ответа сохраняются только операции с exact `data.id`;
+соседние возвраты не нормализуются. Это позволяет повторной доставке или ручному exact recheck
+закрыть `RETURN_CASH_TRANSACTION_MISMATCH`, не запуская синхронизацию периода.
+Само наличие этого warning пока не планирует дополнительную доставку автоматически.
 
 Order-return contract `data.id → order detail` остаётся provider observation, требующим реального
 sanitized canary evidence; code/tests доказывают наше ожидаемое поведение, а не provider guarantee.

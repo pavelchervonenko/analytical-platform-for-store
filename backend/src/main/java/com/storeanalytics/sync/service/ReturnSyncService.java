@@ -25,6 +25,7 @@ import com.storeanalytics.sync.repository.SyncRunErrorRepository;
 import com.storeanalytics.sync.repository.SyncRunRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -47,6 +48,8 @@ public class ReturnSyncService {
     private static final String LIVESKLAD_CONNECTION_KEY = "livesklad-default";
     private static final String RETURN_CASH_ITEM_TYPE = "saleReturn";
     private static final int MAX_DETAILS_PER_RUN = 70;
+    private static final Duration TARGETED_CASH_WINDOW_PADDING =
+            Duration.ofMinutes(5);
 
     private final LiveSkladClient liveSkladClient;
     private final IntegrationConnectionRepository connectionRepository;
@@ -179,8 +182,12 @@ public class ReturnSyncService {
                 clock.instant()
         ));
         try {
+            List<LiveSkladCashTransactionPayload> cashTransactions =
+                    expectation == null
+                            ? targetedCashTransactions(store, detail)
+                            : List.of();
             LiveSkladReturnSource source = new LiveSkladReturnSource(
-                    List.of(), detail
+                    cashTransactions, detail
             );
             ReturnSyncBatchResult batch = expectation
                     instanceof ReturnOrphanRelinkExpectation relinkExpectation
@@ -220,6 +227,95 @@ public class ReturnSyncService {
             logFailure(syncRun.getId(), exception);
             throw new ReturnSyncException(syncRun.getId(), exception);
         }
+    }
+
+    private List<LiveSkladCashTransactionPayload> targetedCashTransactions(
+            Store store,
+            LiveSkladReturnDetailPayload detail
+    ) {
+        List<LiveSkladCashItemPayload> returnCashItems = liveSkladClient
+                .fetchCashItems()
+                .stream()
+                .filter(this::isReturnCashItem)
+                .toList();
+        if (returnCashItems.isEmpty()) {
+            throw new IllegalStateException(
+                    "LiveSklad cash-item dictionary has no saleReturn item"
+            );
+        }
+        if (returnCashItems.stream().anyMatch(LiveSkladCashItemPayload::income)) {
+            throw new IllegalStateException(
+                    "LiveSklad saleReturn cash item must be an outflow"
+            );
+        }
+
+        List<LiveSkladCashRegisterPayload> registers =
+                liveSkladClient.fetchCashRegisters(store.getExternalId());
+        if (registers.isEmpty()) {
+            throw new IllegalStateException(
+                    "LiveSklad store has no cash registers"
+            );
+        }
+
+        List<ReturnSyncPeriod> periods = targetedCashPeriods(detail);
+        List<LiveSkladCashTransactionPayload> matching = new ArrayList<>();
+        Set<String> transactionIds = new HashSet<>();
+        for (LiveSkladCashRegisterPayload register : registers) {
+            validateRegister(store, register);
+            for (LiveSkladCashItemPayload cashItem : returnCashItems) {
+                for (ReturnSyncPeriod period : periods) {
+                    List<LiveSkladCashTransactionPayload> transactions =
+                            liveSkladClient.fetchCashTransactions(
+                                    register.externalId(),
+                                    cashItem.externalId(),
+                                    period.start(),
+                                    period.end()
+                            );
+                    for (LiveSkladCashTransactionPayload transaction
+                            : transactions) {
+                        validateTransaction(
+                                store, register, cashItem, period, transaction
+                        );
+                        if (!transactionIds.add(transaction.externalId())) {
+                            throw new IllegalStateException(
+                                    "LiveSklad cash transactions contain a duplicate ID"
+                            );
+                        }
+                        if (detail.externalId().equals(
+                                transaction.documentExternalId())) {
+                            matching.add(transaction);
+                        }
+                    }
+                }
+            }
+        }
+        return List.copyOf(matching);
+    }
+
+    private List<ReturnSyncPeriod> targetedCashPeriods(
+            LiveSkladReturnDetailPayload detail
+    ) {
+        Instant sourceUpdatedAt = detail.sourceUpdatedAt() == null
+                ? detail.occurredAt() : detail.sourceUpdatedAt();
+        ReturnSyncPeriod occurred = new ReturnSyncPeriod(
+                detail.occurredAt().minus(TARGETED_CASH_WINDOW_PADDING),
+                detail.occurredAt().plus(TARGETED_CASH_WINDOW_PADDING)
+        );
+        ReturnSyncPeriod updated = new ReturnSyncPeriod(
+                sourceUpdatedAt.minus(TARGETED_CASH_WINDOW_PADDING),
+                sourceUpdatedAt.plus(TARGETED_CASH_WINDOW_PADDING)
+        );
+        ReturnSyncPeriod first = occurred.start().isBefore(updated.start())
+                ? occurred : updated;
+        ReturnSyncPeriod second = first == occurred ? updated : occurred;
+        if (!second.start().isAfter(first.end())) {
+            return List.of(new ReturnSyncPeriod(
+                    first.start(),
+                    second.end().isAfter(first.end())
+                            ? second.end() : first.end()
+            ));
+        }
+        return List.of(first, second);
     }
 
     private ReturnSyncResult synchronizeInternal(

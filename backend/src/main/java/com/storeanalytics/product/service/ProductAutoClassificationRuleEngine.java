@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class ProductAutoClassificationRuleEngine {
 
-    public static final String RULE_VERSION = "livesklad-product-rules-v8";
+    public static final String RULE_VERSION = "livesklad-product-rules-v9";
 
     public Optional<ProductAutoClassificationDecision> classify(Product product) {
         return classify(product.getName(), product.getSourceKind());
@@ -178,7 +178,8 @@ public class ProductAutoClassificationRuleEngine {
                 "адаптер питания",
                 "блок питания",
                 "провод"
-        ) || name.contains("аккумулятор")
+        ) || isConnectorNamedCable(name)
+                || name.contains("аккумулятор")
                 && containsAny(name, "портативн", "внешн")) {
             return notApplicable("CHARGER_CABLE", "charger-cable");
         }
@@ -214,6 +215,8 @@ public class ProductAutoClassificationRuleEngine {
         if (containsAny(
                 name,
                 "кардхолдер",
+                "картхолдер",
+                "cardholder",
                 "taggy",
                 "держатель",
                 "переходник",
@@ -226,6 +229,11 @@ public class ProductAutoClassificationRuleEngine {
             return notApplicable("OTHER_ACCESSORY_PRODUCT", "other-accessory");
         }
         return Optional.empty();
+    }
+
+    private boolean isConnectorNamedCable(String name) {
+        return containsAny(name, "usb-c", "usb c", "type-c", "type c")
+                && name.contains("lightning");
     }
 
     private Optional<ProductAutoClassificationDecision> classifyDevice(String name) {

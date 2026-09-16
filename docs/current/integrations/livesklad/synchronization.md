@@ -6,7 +6,7 @@ owner: integrations
 audience:
   - developer
   - operator
-last_verified: 2026-09-15
+last_verified: 2026-09-16
 requirement_sources:
   - docs/archive/legacy-contracts/synchronization-api.md
 implementation_sources:
@@ -74,6 +74,13 @@ Malformed/rejected payload и unclassified `LiveSkladException` завершаю
 Targeted webhook sync не запускает period-wide absence/deletion. Для продаж и заказов period sync
 делает absence-based deletion только после полного успешного чтения соответствующей области.
 Возвраты являются отдельным случаем и следуют правилу ниже.
+
+Targeted sale-return sync читает кассовые операции в одном или двух десятиминутных окнах вокруг
+`occurredAt` и `sourceUpdatedAt` выбранного документа и после валидации отбрасывает операции с
+другим document ID. Пересекающиеся окна объединяются. Количество API-вызовов ограничено двумя на
+комбинацию кассы и статьи `saleReturn`, а не числом документов в месяце. Автоматический повтор
+только из-за `RETURN_CASH_TRANSACTION_MISMATCH` пока не включён: warning сохраняется после успешной
+обработки и требует новой доставки либо точечного recheck.
 
 Validated targeted recovery имеет два exact-document режима. `MISSING_RETURN` предназначен только
 для отсутствующего факта. `EXISTING_ORPHAN_RELINK` требует существующий активный orphan и полный

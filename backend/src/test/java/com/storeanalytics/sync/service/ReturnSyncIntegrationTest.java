@@ -771,8 +771,8 @@ class ReturnSyncIntegrationTest {
                         source.rawPayload()
                 );
         fakeClient.setReturns(
-                List.of(),
-                Map.of(),
+                List.of(cashItem()),
+                Map.of("store-1", List.of(cashRegister())),
                 List.of(),
                 Map.of(webhook.externalId(), withoutMoneyMovement)
         );
@@ -828,6 +828,102 @@ class ReturnSyncIntegrationTest {
                 """,
                 Integer.class
         )).isEqualTo(1);
+    }
+
+    @Test
+    void targetedWebhookReturnReconcilesDelayedCashTransaction() {
+        bootstrapReferences();
+        SaleFixture sale = new SaleFixture(
+                "sale-targeted-cash",
+                "sale-position-targeted-cash",
+                "product-targeted-cash",
+                Instant.parse("2026-07-01T10:00:00Z"),
+                "75.00",
+                "30.00"
+        );
+        seedSale(sale);
+        ReturnFixture webhook = new ReturnFixture(
+                "return-targeted-cash",
+                sale,
+                Instant.parse("2026-07-01T13:00:00Z"),
+                Instant.parse("2026-07-01T13:01:00Z"),
+                "saleReturn"
+        );
+        ReturnFixture neighbor = new ReturnFixture(
+                "return-neighboring-cash",
+                sale,
+                Instant.parse("2026-07-01T13:02:00Z"),
+                Instant.parse("2026-07-01T13:03:00Z"),
+                "saleReturn"
+        );
+        LiveSkladReturnDetailPayload detail = returnDetail(webhook);
+        fakeClient.setReturns(
+                List.of(cashItem()),
+                Map.of("store-1", List.of(cashRegister())),
+                List.of(),
+                Map.of(webhook.externalId(), detail)
+        );
+
+        ReturnSyncResult beforeCash =
+                returnSyncService.synchronizeWebhookReturn(webhook.externalId());
+
+        assertThat(beforeCash.qualityIssuesOpened()).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT count(*) FROM data_quality_issues
+                WHERE issue_code = 'RETURN_CASH_TRANSACTION_MISMATCH'
+                  AND status = 'OPEN'
+                """,
+                Integer.class
+        )).isEqualTo(1);
+
+        fakeClient.setReturns(
+                List.of(cashItem()),
+                Map.of("store-1", List.of(cashRegister())),
+                List.of(
+                        cashTransaction(webhook),
+                        cashTransaction(neighbor)
+                ),
+                Map.of(webhook.externalId(), detail)
+        );
+
+        ReturnSyncResult afterCash =
+                returnSyncService.synchronizeWebhookReturn(webhook.externalId());
+
+        assertThat(afterCash.qualityIssuesResolved()).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT count(*) FROM data_quality_issues
+                WHERE issue_code = 'RETURN_CASH_TRANSACTION_MISMATCH'
+                  AND status = 'OPEN'
+                """,
+                Integer.class
+        )).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT count(*) FROM raw_record_versions
+                WHERE entity_type = 'RETURN_DOCUMENT'
+                  AND external_id = 'return-targeted-cash'
+                """,
+                Integer.class
+        )).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT count(*)
+                FROM raw_record_versions
+                WHERE entity_type = 'RETURN_DOCUMENT'
+                  AND external_id = 'return-targeted-cash'
+                  AND jsonb_array_length(payload -> 'cashTransactions') = 1
+                """,
+                Integer.class
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT count(*) FROM sales_documents
+                WHERE external_id = 'return-neighboring-cash'
+                """,
+                Integer.class
+        )).isZero();
     }
 
     @Test
