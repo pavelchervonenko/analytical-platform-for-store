@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { buildMonthCalendar, isSelectableShiftSeller, parseWorkedHours, validatePlanForm } from "./forms";
+import type { EmployeeShift } from "../api/contracts";
+import { buildMonthCalendar, isSelectableShiftSeller, parseWorkedHours, rebaseWorkShiftInputs, validatePlanForm } from "./forms";
+
+function shift(employeeId: string, workedHours: number): EmployeeShift {
+  return {
+    id: `shift-${employeeId}`,
+    employeeId,
+    employeeName: employeeId,
+    workDate: "2026-09-14",
+    workedHours,
+    active: true,
+    version: 1
+  };
+}
 
 describe("plan and schedule forms", () => {
   it("accepts comma decimals and creates the exact plan payload", () => {
@@ -26,6 +39,36 @@ describe("plan and schedule forms", () => {
     expect(isSelectableShiftSeller({ employeeActive: true, assignmentActive: true, participatesInRanking: false })).toBe(false);
     expect(isSelectableShiftSeller({ employeeActive: false, assignmentActive: true, participatesInRanking: true })).toBe(false);
     expect(isSelectableShiftSeller({ employeeActive: true, assignmentActive: false, participatesInRanking: true })).toBe(false);
+  });
+
+  it("rebases only explicitly changed employees onto the latest day", () => {
+    expect(rebaseWorkShiftInputs(
+      [shift("anna", 11), shift("boris", 8)],
+      [
+        { employeeId: "anna", workedHours: 9 },
+        { employeeId: "ilnur", workedHours: 11 }
+      ],
+      [shift("anna", 10), shift("boris", 7), shift("denis", 6)]
+    )).toEqual([
+      { employeeId: "anna", workedHours: 9 },
+      { employeeId: "denis", workedHours: 6 },
+      { employeeId: "ilnur", workedHours: 11 }
+    ]);
+  });
+
+  it("does not restore untouched employees removed by another manager", () => {
+    expect(rebaseWorkShiftInputs(
+      [shift("anna", 11), shift("boris", 8)],
+      [
+        { employeeId: "anna", workedHours: 11 },
+        { employeeId: "boris", workedHours: 8 },
+        { employeeId: "ilnur", workedHours: 11 }
+      ],
+      [shift("boris", 8)]
+    )).toEqual([
+      { employeeId: "boris", workedHours: 8 },
+      { employeeId: "ilnur", workedHours: 11 }
+    ]);
   });
 
   it("builds a Monday-first calendar without dates outside the selected month", () => {
