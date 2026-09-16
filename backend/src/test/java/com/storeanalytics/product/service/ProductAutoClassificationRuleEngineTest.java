@@ -19,6 +19,7 @@ class ProductAutoClassificationRuleEngineTest {
     @MethodSource({
         "yandexStationCases",
         "productionDryRunCases",
+        "septemberMobiSphereCases",
         "legacyUnmappedRegressionCases",
         "customerMethodologyCases"
     })
@@ -202,11 +203,6 @@ class ProductAutoClassificationRuleEngineTest {
                         ProductConditionType.NOT_APPLICABLE
                 ),
                 arguments(
-                        "USB-C - Lightning No Box",
-                        "CHARGER_CABLE",
-                        ProductConditionType.NOT_APPLICABLE
-                ),
-                arguments(
                         "СЗУ Apple Power Adapter 30W Original",
                         "CHARGER_CABLE",
                         ProductConditionType.NOT_APPLICABLE
@@ -267,13 +263,23 @@ class ProductAutoClassificationRuleEngineTest {
                         ProductConditionType.NOT_APPLICABLE
                 ),
                 arguments(
-                        "Картхолдер VLP из экокожи с MagSafe Черный",
-                        "OTHER_ACCESSORY_PRODUCT",
+                        "Подзарядка устройства",
+                        "SETUP_SERVICE",
+                        ProductConditionType.NOT_APPLICABLE
+                )
+        );
+    }
+
+    private static Stream<Arguments> septemberMobiSphereCases() {
+        return Stream.of(
+                arguments(
+                        "USB-C - Lightning No Box",
+                        "CHARGER_CABLE",
                         ProductConditionType.NOT_APPLICABLE
                 ),
                 arguments(
-                        "Подзарядка устройства",
-                        "SETUP_SERVICE",
+                        "Картхолдер VLP из экокожи с MagSafe Черный",
+                        "OTHER_ACCESSORY_PRODUCT",
                         ProductConditionType.NOT_APPLICABLE
                 )
         );
