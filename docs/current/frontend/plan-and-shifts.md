@@ -6,7 +6,7 @@ owner: frontend
 audience:
   - developer
   - manager
-last_verified: 2026-09-15
+last_verified: 2026-09-16
 requirement_sources:
   - docs/current/product/plans-and-shifts.md
 implementation_sources:
@@ -18,6 +18,7 @@ implementation_sources:
   - frontend/src/plan-schedule/DailyPlanTable.tsx
   - frontend/src/plan-schedule/SchedulePanel.tsx
   - frontend/src/plan-schedule/forms.ts
+  - frontend/src/api/client.ts
   - frontend/src/api/queries.ts
 verification_sources:
   - frontend/src/app/AppShell.test.ts
@@ -28,6 +29,7 @@ verification_sources:
   - frontend/src/plan-schedule/DailyPlanTable.test.tsx
   - frontend/src/plan-schedule/SchedulePanel.test.tsx
   - frontend/src/plan-schedule/forms.test.ts
+  - frontend/src/api/etag-client.test.ts
   - frontend/e2e/visual-local.spec.ts
 runtime_evidence: []
 required_reviewers:
@@ -78,6 +80,8 @@ superseded_by: null
 `/plan/settings` форму создания четырёх целей; существующий сначала показывает текущие значения и
 явное действие изменения. GET/PUT плана используют обязательный strong `ETag`: создание отправляет
 `If-None-Match: *`, изменение — `If-Match`; конфликт версии не перезаписывается молча.
+Все ETag-aware запросы отправляют `Cache-Control: no-transform`, чтобы публичный Caddy не изменял
+opaque concurrency token суффиксом gzip/zstd до его последующей отправки в `If-Match`.
 
 Цель «Доп. выручка» редактируется независимо от долей аксессуаров и услуг. Форма не вычисляет её
 автоматически и не требует равенства сумме двух других целей.

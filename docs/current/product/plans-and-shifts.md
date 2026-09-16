@@ -6,7 +6,7 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-09-15
+last_verified: 2026-09-16
 requirement_sources:
   - docs/archive/legacy-contracts/store-plan-progress-api.md
   - docs/archive/discoveries/analytics-business-rules-draft.md
@@ -20,6 +20,7 @@ implementation_sources:
   - frontend/src/plan-schedule/DailyPlanTable.tsx
   - frontend/src/plan-schedule/SchedulePanel.tsx
   - frontend/src/plan-schedule/forms.ts
+  - frontend/src/api/client.ts
 verification_sources:
   - backend/src/test/java/com/storeanalytics/performance/service/WorkScheduleServiceTest.java
   - backend/src/test/java/com/storeanalytics/performance/service/StorePlanProgressServiceTest.java
@@ -29,6 +30,7 @@ verification_sources:
   - frontend/src/plan-schedule/DailyPlanTable.test.tsx
   - frontend/src/plan-schedule/SchedulePanel.test.tsx
   - frontend/src/plan-schedule/forms.test.ts
+  - frontend/src/api/etag-client.test.ts
 runtime_evidence: []
 required_reviewers:
   - product
@@ -140,6 +142,9 @@ future target меняется после синхронизации.
 перезаписывания. При конфликте приложение само загружает актуальную версию, переносит на неё
 изменения выбранных сотрудников и ограниченно повторяет сохранение. Параллельные изменения других
 сотрудников сохраняются; явная команда очистки по-прежнему очищает весь актуальный состав дня.
+Клиент запрашивает ресурсы с ETag с директивой `Cache-Control: no-transform`: публичный Caddy не
+добавляет к opaque concurrency token суффикс выбранного gzip/zstd-представления, поэтому
+последующий `If-Match` сравнивается backend с той же версией агрегата.
 
 Для рейтинга нужна минимум одна смена. В payroll дневной фонд делится поровну между сотрудниками
 смены: часы используются для учёта/эффективности, но не как вес фонда. День фонда без смен снижает
