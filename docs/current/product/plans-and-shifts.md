@@ -6,7 +6,7 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-09-16
+last_verified: 2026-09-19
 requirement_sources:
   - docs/archive/legacy-contracts/store-plan-progress-api.md
   - docs/archive/discoveries/analytics-business-rules-draft.md
@@ -23,6 +23,7 @@ implementation_sources:
   - frontend/src/api/client.ts
 verification_sources:
   - backend/src/test/java/com/storeanalytics/performance/service/WorkScheduleServiceTest.java
+  - backend/src/test/java/com/storeanalytics/performance/service/OptimisticConcurrencyIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/performance/service/StorePlanProgressServiceTest.java
   - backend/src/test/java/com/storeanalytics/performance/web/StorePlanProgressControllerTest.java
   - frontend/src/plan-schedule/PlanPanel.test.tsx
@@ -134,14 +135,24 @@ future target меняется после синхронизации.
 Смена содержит дату, сотрудника и часы. Для добавления новой смены интерфейс предлагает только
 активных сотрудников с активным назначением и `participatesInRanking=true`. Ранее сохранённая смена
 сотрудника, который позже перестал соответствовать roster, остаётся видимой, но недоступна для
-повторного выбора; её удаляют явным редактированием дня.
+повторного выбора; её удаляют явным редактированием дня. Эти правила проверяет backend, поэтому
+прямой API-запрос не может добавить сотрудника вне roster. Управление roster требует функции
+`SHIFTS`.
+
+Смена идентифицируется в границе `(store_id, employee_id, work_date)`. Один глобальный сотрудник
+может работать в двух магазинах в одну дату: записи, часы и ревизии магазинов не конфликтуют и не
+подменяют друг друга.
 
 Состав дня общий для магазина, а не принадлежит создавшему его пользователю. Любой пользователь с
 доступом к сменам этого магазина может заменить состав, изменить часы и очистить день независимо
 от автора предыдущей версии. Strong `ETag` защищает только от настоящего одновременного
 перезаписывания. При конфликте приложение само загружает актуальную версию, переносит на неё
 изменения выбранных сотрудников и ограниченно повторяет сохранение. Параллельные изменения других
-сотрудников сохраняются; явная команда очистки по-прежнему очищает весь актуальный состав дня.
+сотрудников сохраняются. Очистка дня при конфликте не повторяется автоматически: приложение
+показывает актуальный состав и требует нового явного подтверждения, чтобы не удалить незнакомые
+пользователю параллельные изменения; уже пустой актуальный день считается успешно очищенным. Чтение
+состава и его ревизии синхронизировано с записью одним
+store-level lock, поэтому тело ответа и strong `ETag` относятся к одной версии.
 Клиент запрашивает ресурсы с ETag с директивой `Cache-Control: no-transform`: публичный Caddy не
 добавляет к opaque concurrency token суффикс выбранного gzip/zstd-представления, поэтому
 последующий `If-Match` сравнивается backend с той же версией агрегата.

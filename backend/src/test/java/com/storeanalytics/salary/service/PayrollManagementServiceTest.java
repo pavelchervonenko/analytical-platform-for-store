@@ -15,6 +15,7 @@ import com.storeanalytics.common.idempotency.IdempotencyService;
 import com.storeanalytics.employee.repository.EmployeeStoreAssignmentRepository;
 import com.storeanalytics.report.service.MonthlyReportFinalizationService;
 import com.storeanalytics.salary.exception.PayrollStateConflictException;
+import com.storeanalytics.salary.exception.PayrollRunNotFoundException;
 import com.storeanalytics.salary.model.PayrollAdjustmentType;
 import com.storeanalytics.salary.model.PayrollRun;
 import com.storeanalytics.salary.model.PayrollRunStatus;
@@ -114,6 +115,23 @@ class PayrollManagementServiceTest {
 
         assertThatThrownBy(() -> service.addAdjustment(command, "payroll-state-test"))
                 .isInstanceOf(PayrollStateConflictException.class);
+        verifyNoInteractions(assignmentRepository, adjustmentRepository);
+    }
+
+    @Test
+    void doesNotResolvePayrollRunIdThroughAnotherStore() {
+        UUID requestedStoreId = UUID.randomUUID();
+        UUID actualStoreId = UUID.randomUUID();
+        UUID runId = UUID.randomUUID();
+        Store actualStore = mock(Store.class);
+        PayrollRun run = mock(PayrollRun.class);
+        when(actualStore.getId()).thenReturn(actualStoreId);
+        when(run.getStore()).thenReturn(actualStore);
+        when(runRepository.findById(runId)).thenReturn(Optional.of(run));
+
+        assertThatThrownBy(() -> service.get(requestedStoreId, runId))
+                .isInstanceOf(PayrollRunNotFoundException.class);
+
         verifyNoInteractions(assignmentRepository, adjustmentRepository);
     }
 }

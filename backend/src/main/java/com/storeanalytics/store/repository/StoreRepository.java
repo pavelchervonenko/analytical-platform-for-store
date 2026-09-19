@@ -18,6 +18,10 @@ public interface StoreRepository extends JpaRepository<Store, UUID> {
 
     List<Store> findAllByActiveTrue();
 
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select store from Store store where store.id = :storeId")
+    Optional<Store> findByIdForRead(@Param("storeId") UUID storeId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select store from Store store where store.id = :storeId")
     Optional<Store> findByIdForUpdate(@Param("storeId") UUID storeId);

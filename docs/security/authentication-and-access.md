@@ -6,7 +6,7 @@ owner: security
 audience:
   - developer
   - operator
-last_verified: 2026-08-31
+last_verified: 2026-09-19
 requirement_sources:
   - docs/archive/legacy-contracts/security-hardening.md
   - docs/archive/legacy-contracts/bootstrap-and-break-glass.md
@@ -14,9 +14,12 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/auth
   - backend/src/main/java/com/storeanalytics/common/config/SecurityConfig.java
   - backend/src/main/resources/db/migration/V2__add_application_authentication.sql
+  - backend/src/main/resources/db/migration/V50__add_user_feature_access.sql
 verification_sources:
   - backend/src/test/java/com/storeanalytics/auth
   - backend/src/test/java/com/storeanalytics/common/security/SessionRevocationSecurityAuditTest.java
+  - backend/src/test/java/com/storeanalytics/auth/StoreScopedAuthorizationArchitectureTest.java
+  - backend/src/test/java/com/storeanalytics/store/web/StoreDataStatusSecurityIntegrationTest.java
 runtime_evidence: []
 required_reviewers:
   - security-privacy
@@ -48,6 +51,12 @@ SSH, database-provider IAM и customer identity governance находятся в
   sessions.
 - Roles и store assignments проверяются на service/controller boundaries. Admin operation требует
   изменённый после bootstrap пароль.
+- Каждый пользовательский endpoint с `/api/stores/{storeId}` обязан содержать явную проверку
+  `StoreAccessAuthorization`; архитектурный тест строит effective path из class/method mappings и
+  не позволяет добавить endpoint только под общей authenticated-политикой `/api/stores/**`.
+- Функции `PLAN`, `SHIFTS`, `PAYROLL` дополняют, но не заменяют store assignment. Управление roster,
+  влияющим на смены, требует `SHIFTS`; отчёты остаются доступными без `PAYROLL`, но всегда в границе
+  назначенного магазина.
 - Bootstrap admin создаётся только при пустой user table, под PostgreSQL advisory lock, и обязан
   сменить пароль. Break-glass user IDs создают persistent audit и structured alert на login.
 

@@ -27,7 +27,7 @@ class CareClassificationMigrationIntegrationTest {
 
         flyway(null).migrate();
 
-        assertThat(currentVersion()).isEqualTo("51");
+        assertThat(currentVersion()).isEqualTo("52");
         try (Connection connection = connection();
              Statement statement = connection.createStatement();
              ResultSet result = statement.executeQuery("""

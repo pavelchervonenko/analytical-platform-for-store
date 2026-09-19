@@ -11,9 +11,12 @@ import static org.mockito.Mockito.when;
 
 import com.storeanalytics.common.exception.InvalidRequestException;
 import com.storeanalytics.metrics.model.ReportStatus;
+import com.storeanalytics.metrics.model.ReportSnapshot;
 import com.storeanalytics.metrics.model.ReportType;
 import com.storeanalytics.metrics.repository.ReportSnapshotRepository;
 import com.storeanalytics.metrics.repository.ReportSummaryProjection;
+import com.storeanalytics.report.exception.ReportNotFoundException;
+import com.storeanalytics.store.model.Store;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -100,5 +103,23 @@ class ReportQueryServiceTest {
         assertThat(service.years(storeId)).containsExactly(2026, 2025);
 
         verify(repository).findFinalizedYears(storeId);
+    }
+
+    @Test
+    void doesNotResolveReportIdThroughAnotherStore() {
+        UUID requestedStoreId = UUID.randomUUID();
+        UUID actualStoreId = UUID.randomUUID();
+        UUID reportId = UUID.randomUUID();
+        ReportSnapshot report = mock(ReportSnapshot.class);
+        Store actualStore = mock(Store.class);
+        when(actualStore.getId()).thenReturn(actualStoreId);
+        when(report.getStore()).thenReturn(actualStore);
+        when(report.getStatus()).thenReturn(ReportStatus.FINALIZED);
+        when(repository.findById(reportId)).thenReturn(java.util.Optional.of(report));
+
+        assertThatThrownBy(() -> service.get(requestedStoreId, reportId))
+                .isInstanceOf(ReportNotFoundException.class);
+
+        verifyNoInteractions(codec);
     }
 }

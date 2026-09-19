@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - operator
-last_verified: 2026-09-15
+last_verified: 2026-09-19
 requirement_sources:
   - docs/archive/legacy-contracts/database-design.md
 implementation_sources:
@@ -19,6 +19,8 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/product/service/ProductClassificationReconciliationServiceTest.java
   - backend/src/test/java/com/storeanalytics/integration/livesklad/webhook/LiveSkladWebhookStoreIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/common/database/UserFeatureAccessMigrationIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/common/database/WorkShiftStoreScopeMigrationIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/performance/service/OptimisticConcurrencyIntegrationTest.java
 runtime_evidence: []
 required_reviewers:
   - backend-data
@@ -37,7 +39,7 @@ superseded_by: null
 ## Источник истины
 
 Результирующую схему определяет упорядоченная цепочка Flyway migrations, а не этот текст и не JPA.
-Текущий source-tree заканчивается V50 и включает отдельную decimal-версию V39.1. Применённую в
+Текущий source-tree заканчивается V52 и включает отдельную decimal-версию V39.1. Применённую в
 конкретной БД версию можно утверждать только после чтения `flyway_schema_history`.
 
 ## Основные слои
@@ -77,13 +79,18 @@ review artifacts append-only; корректировка создаёт нову
 
 ### Доступ пользователей
 
-`user_store_accesses` задаёт доступ руководителя к магазинам, а добавленная V50 таблица
+`user_store_access` задаёт доступ руководителя к магазинам, а добавленная V50 таблица
 `user_feature_access` — независимый глобальный доступ к функциям `PLAN`, `SHIFTS`, `PAYROLL`.
 Составной primary key `(user_id, feature)` запрещает дубли, enum ограничен CHECK constraint, а
 `granted_by` и `granted_at` сохраняют provenance назначения. Для `ADMIN` явные строки не нужны:
 роль даёт все магазины и функции. V50 backfill назначает все три функции каждому существовавшему на
 момент миграции `MANAGER`, чтобы обновление не отняло ранее доступные разделы; новые руководители
 получают только явно выбранные функции.
+
+`employee_work_shifts` имеет составной внешний ключ назначения `(employee_id, store_id)` и после
+V52 уникальность `(store_id, employee_id, work_date)`. Поэтому общий employee identity может иметь
+независимые смены в двух магазинах в одну дату, но не может получить две записи одной даты внутри
+одного магазина. `work_schedule_day_revisions` использует ту же границу магазина и даты.
 
 ## Инварианты LiveSklad
 

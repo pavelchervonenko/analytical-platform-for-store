@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ChartNoAxesCombined, SlidersHorizontal } from "lucide-react";
 import { Navigate, NavLink, useLocation } from "react-router";
+import { useWorkspace } from "../stores/WorkspaceProvider";
 import { PlanPanel } from "./PlanPanel";
 import { PlanSettingsPanel } from "./PlanSettingsPanel";
 import { SchedulePanel } from "./SchedulePanel";
@@ -59,5 +60,6 @@ export function PlanSettingsPage() {
 }
 
 export function ShiftsPage() {
-  return <PlanningPage title="Смены"><SchedulePanel /></PlanningPage>;
+  const { selectedStore, month } = useWorkspace();
+  return <PlanningPage title="Смены"><SchedulePanel key={`${selectedStore.id}:${month}`} /></PlanningPage>;
 }

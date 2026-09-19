@@ -32,7 +32,8 @@ public class EmployeeRatingSettingsController {
     }
 
     @PutMapping("/{storeId}/employee-rating-settings/{employeeId}")
-    @PreAuthorize("@storeAccessAuthorization.canAccess(#storeId, authentication)")
+    @PreAuthorize("hasAuthority('FEATURE_SHIFTS')"
+            + " and @storeAccessAuthorization.canAccess(#storeId, authentication)")
     EmployeeRatingSettingView update(
             @PathVariable UUID storeId,
             @PathVariable UUID employeeId,

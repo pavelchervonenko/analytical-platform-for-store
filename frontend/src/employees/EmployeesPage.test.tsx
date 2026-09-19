@@ -3,7 +3,8 @@ import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EmployeesPage } from "./EmployeesPage";
 
-const { useMutationMock, useQueryMock } = vi.hoisted(() => ({
+const { auth, useMutationMock, useQueryMock } = vi.hoisted(() => ({
+  auth: { features: ["SHIFTS"] as string[] },
   useMutationMock: vi.fn(),
   useQueryMock: vi.fn()
 }));
@@ -22,6 +23,12 @@ vi.mock("../stores/WorkspaceProvider", () => ({
     selectedStore: { id: "store-1", name: "МАГАЗИН", timezone: "Europe/Kaliningrad" },
     periodStart: "2026-08-01",
     periodEnd: "2026-08-31"
+  })
+}));
+
+vi.mock("../auth/AuthProvider", () => ({
+  useAuth: () => ({
+    user: { role: "MANAGER", features: auth.features }
   })
 }));
 
@@ -58,6 +65,7 @@ const settings = [
 
 describe("employees participation disclosure", () => {
   beforeEach(() => {
+    auth.features = ["SHIFTS"];
     useMutationMock.mockReset().mockReturnValue({
       error: null,
       isError: false,
@@ -103,5 +111,15 @@ describe("employees participation disclosure", () => {
     expect(screen.getByText("Профиль неактивен")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Включен" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getAllByRole("button", { name: "Выключен" })).toHaveLength(2);
+  });
+
+  it("does not expose shift roster controls without the shifts feature", () => {
+    auth.features = [];
+
+    render(<MemoryRouter><EmployeesPage /></MemoryRouter>);
+
+    expect(screen.queryByRole("heading", { name: "Участники рейтинга и смен" }))
+      .not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Включен" })).not.toBeInTheDocument();
   });
 });

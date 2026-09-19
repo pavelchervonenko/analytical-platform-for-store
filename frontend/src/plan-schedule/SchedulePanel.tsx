@@ -5,7 +5,7 @@ import { Link, useLocation } from "react-router";
 import { isApiClientError, type EtaggedResource } from "../api/client";
 import type { EmployeeRatingSetting, EmployeeShift, WorkScheduleDay, WorkShiftInput } from "../api/contracts";
 import { getEmployeeRatingSettings, getWorkSchedule, getWorkScheduleDay, queryKeys, replaceWorkScheduleDay } from "../api/queries";
-import { currentDateInTimeZone, formatDate, formatMonth } from "../shared/date";
+import { currentDateInTimeZone, formatDate, formatMonth, monthRange } from "../shared/date";
 import { formatNumber } from "../shared/format";
 import { InlineQueryError, QueryError, StaleDataNote } from "../shared/QueryState";
 import { useWorkspace } from "../stores/WorkspaceProvider";
@@ -40,6 +40,8 @@ function isScheduleConflict(error: unknown): boolean {
 }
 
 export function ShiftDayEditor({
+  storeId,
+  month,
   workDate,
   dayShifts,
   settings,
@@ -48,6 +50,8 @@ export function ShiftDayEditor({
   onClose,
   onSaved
 }: {
+  storeId: string;
+  month: string;
   workDate: string;
   dayShifts: EmployeeShift[];
   settings: EmployeeRatingSetting[];
@@ -57,8 +61,6 @@ export function ShiftDayEditor({
   onSaved: (date: string) => void;
 }) {
   const location = useLocation();
-  const { selectedStore, month } = useWorkspace();
-  const storeId = selectedStore.id;
   const queryClient = useQueryClient();
   const [baselineShifts, setBaselineShifts] = useState(dayShifts);
   const [draft, setDraft] = useState<Record<string, string>>(() => Object.fromEntries(dayShifts.map((shift) => [shift.employeeId, String(shift.workedHours)])));
@@ -96,6 +98,11 @@ export function ShiftDayEditor({
     ].sort((left, right) => left.workDate.localeCompare(right.workDate)
       || left.employeeName.localeCompare(right.employeeName, "ru-RU")));
   };
+  const invalidateScheduleDependents = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.employees(storeId) }),
+    queryClient.invalidateQueries({ queryKey: ["stores", storeId, "period-quality"] }),
+    queryClient.invalidateQueries({ queryKey: ["stores", storeId, "payroll"] })
+  ]);
 
   const mutation = useMutation({
     mutationFn: async (command: ShiftDayMutation) => {
@@ -107,26 +114,30 @@ export function ShiftDayEditor({
         try {
           return await replaceWorkScheduleDay(storeId, workDate, latest.etag, candidateShifts);
         } catch (error) {
-          if (!isScheduleConflict(error) || conflictCount >= MAXIMUM_CONFLICT_REBASES) throw error;
+          if (!isScheduleConflict(error)
+              || command.mode === "clear"
+              || conflictCount >= MAXIMUM_CONFLICT_REBASES) throw error;
           latest = await getWorkScheduleDay(storeId, workDate);
         }
       }
     },
     onSuccess: async (saved) => {
       updateCachedDay(saved.value.shifts);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.employees(storeId) }),
-        queryClient.invalidateQueries({ queryKey: ["stores", storeId, "period-quality"] }),
-        queryClient.invalidateQueries({ queryKey: ["stores", storeId, "payroll"] })
-      ]);
+      await invalidateScheduleDependents();
       onSaved(workDate);
     },
     onError: async (error, command) => {
       if (!isScheduleConflict(error)) return;
       try {
         const latest = await getWorkScheduleDay(storeId, workDate);
+        if (command.mode === "clear" && latest.value.shifts.length === 0) {
+          updateCachedDay([]);
+          await invalidateScheduleDependents();
+          onSaved(workDate);
+          return;
+        }
         const retainedShifts = command.mode === "clear"
-          ? []
+          ? latest.value.shifts.map(({ employeeId, workedHours }) => ({ employeeId, workedHours }))
           : rebaseWorkShiftInputs(command.baselineShifts, command.shifts, latest.value.shifts);
         setBaselineShifts(latest.value.shifts);
         setDraft(Object.fromEntries(retainedShifts.map((shift) => [shift.employeeId, String(shift.workedHours)])));
@@ -134,6 +145,7 @@ export function ShiftDayEditor({
         setErrors({});
         setClearConfirmation(false);
         setConcurrentUpdateLoaded(true);
+        void invalidateScheduleDependents();
       } catch {
         setConcurrentUpdateLoaded(false);
       }
@@ -221,7 +233,7 @@ export function ShiftDayEditor({
           const selected = employee.employeeId in draft;
           return <article className={`${selected ? "shift-roster-row--selected" : ""} ${!employee.eligible ? "shift-roster-row--unavailable" : ""}`} key={employee.employeeId}><button className="shift-check" type="button" aria-pressed={selected} disabled={mutation.isPending || (!employee.eligible && !selected)} onClick={() => toggle(employee)}><span>{selected && <Check />}</span><i>{employee.displayName.slice(0, 1).toUpperCase()}</i><strong>{employee.displayName}</strong></button><label><span>Часов</span><input type="text" inputMode="decimal" value={draft[employee.employeeId] ?? ""} disabled={mutation.isPending || !selected || !employee.eligible} onChange={(event) => { setDraft((current) => ({ ...current, [employee.employeeId]: event.target.value })); setErrors((current) => ({ ...current, [employee.employeeId]: "" })); }} aria-invalid={Boolean(errors[employee.employeeId])} /></label>{selected && employee.eligible && <button className="full-shift-button" type="button" disabled={mutation.isPending} onClick={() => setDraft((current) => ({ ...current, [employee.employeeId]: "11" }))} aria-label={`Установить полную смену для ${employee.displayName}`}>11 часов</button>}{!employee.eligible && <small>Недоступен для новых смен</small>}{errors[employee.employeeId] && <p role="alert">{errors[employee.employeeId]}</p>}</article>;
         })}</div>}
-        {mutation.isError && <div className="form-alert" role="alert">{isScheduleConflict(mutation.error) ? concurrentUpdateLoaded ? "День несколько раз изменился одновременно. Актуальный состав загружен, а ваши правки сохранены в форме — проверьте их и нажмите «Сохранить день» ещё раз." : "День несколько раз изменился одновременно. Не удалось загрузить актуальную версию — закройте редактор и откройте день снова." : isApiClientError(mutation.error) ? mutation.error.message : "Не удалось сохранить смены. Обновите данные и повторите действие."}</div>}
+        {mutation.isError && <div className="form-alert" role="alert">{isScheduleConflict(mutation.error) ? concurrentUpdateLoaded ? mutation.variables?.mode === "clear" ? "Состав дня изменился. Актуальные смены загружены — проверьте их и подтвердите очистку ещё раз." : "День несколько раз изменился одновременно. Актуальный состав загружен, а ваши правки сохранены в форме — проверьте их и нажмите «Сохранить день» ещё раз." : "День изменился одновременно. Не удалось загрузить актуальную версию — закройте редактор и откройте день снова." : isApiClientError(mutation.error) ? mutation.error.message : "Не удалось сохранить смены. Обновите данные и повторите действие."}</div>}
         <footer><div>{baselineShifts.length > 0 && <>{clearConfirmation && <span className="clear-confirmation">Очистить весь день?</span>}<button className="button button--ghost button--danger-ghost" type="button" disabled={mutation.isPending} onClick={clear}><Eraser size={15} />{clearConfirmation ? "Подтвердить" : "Очистить день"}</button>{clearConfirmation && <button className="button button--ghost" type="button" disabled={mutation.isPending} onClick={() => setClearConfirmation(false)}>Отмена</button>}</>}</div><button className="button button--primary" type="button" disabled={!dirty || mutation.isPending} onClick={save}><Save size={16} />{mutation.isPending ? "Сохраняем…" : "Сохранить день"}</button></footer>
       </section>
     </div>
@@ -233,11 +245,12 @@ function ScheduleSkeleton() {
 }
 
 export function SchedulePanel() {
-  const { selectedStore, month, periodStart, periodEnd } = useWorkspace();
+  const { selectedStore, month } = useWorkspace();
   const storeId = selectedStore.id;
   const location = useLocation();
-  const scheduleKey = queryKeys.workSchedule(storeId, periodStart, periodEnd);
-  const scheduleQuery = useQuery({ queryKey: scheduleKey, queryFn: () => getWorkSchedule(storeId, periodStart, periodEnd) });
+  const schedulePeriod = useMemo(() => monthRange(month), [month]);
+  const scheduleKey = queryKeys.workSchedule(storeId, schedulePeriod.start, schedulePeriod.end);
+  const scheduleQuery = useQuery({ queryKey: scheduleKey, queryFn: () => getWorkSchedule(storeId, schedulePeriod.start, schedulePeriod.end) });
   const settingsQuery = useQuery({ queryKey: queryKeys.employeeRatingSettings(storeId), queryFn: () => getEmployeeRatingSettings(storeId), staleTime: 2 * 60_000 });
   const [selectedDay, setSelectedDay] = useState<EtaggedResource<WorkScheduleDay> | null>(null);
   const [openingDate, setOpeningDate] = useState<string | null>(null);
@@ -296,7 +309,7 @@ export function SchedulePanel() {
         <footer className="schedule-calendar-note"><UserRoundCheck /><span>В рейтинг попадает сотрудник, который включен в участие и имеет хотя бы одну смену. Часы используются для показателя выручки за час.</span></footer>
       </section>
 
-      {selectedDay && settingsQuery.data && <ShiftDayEditor key={`${selectedDay.value.workDate}:${selectedDay.etag}`} workDate={selectedDay.value.workDate} dayShifts={selectedDay.value.shifts} settings={settingsQuery.data} scheduleKey={scheduleKey} returnFocusRef={dayButtonRef} onClose={() => setSelectedDay(null)} onSaved={(date) => { setSelectedDay(null); setLastSavedDate(date); }} />}
+      {selectedDay && settingsQuery.data && <ShiftDayEditor key={`${storeId}:${selectedDay.value.workDate}:${selectedDay.etag}`} storeId={storeId} month={month} workDate={selectedDay.value.workDate} dayShifts={selectedDay.value.shifts} settings={settingsQuery.data} scheduleKey={scheduleKey} returnFocusRef={dayButtonRef} onClose={() => setSelectedDay(null)} onSaved={(date) => { setSelectedDay(null); setLastSavedDate(date); }} />}
     </div>
   );
 }
