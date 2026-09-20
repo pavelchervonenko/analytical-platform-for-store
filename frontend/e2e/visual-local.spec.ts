@@ -501,10 +501,10 @@ async function installFixtureApi(page: Page) {
     freshnessStatus: "CURRENT",
     dataThroughDate: "2026-09-09",
     lagDays: 0,
-    openIssueCount: 0,
+    openIssueCount: 1,
     errorCount: 0,
     warningCount: 0,
-    infoCount: 0,
+    infoCount: 1,
     checkedAt: "2026-09-09T06:00:00Z"
   };
   await page.route("**/api/data-quality/summary", async (route) => json(route, {
@@ -513,7 +513,7 @@ async function installFixtureApi(page: Page) {
     okStoreCount: 1,
     warningStoreCount: 0,
     errorStoreCount: 0,
-    openIssueCount: 0,
+    openIssueCount: 1,
     stores: [qualityStoreSummary]
   }));
   await page.route("**/api/stores/*/data-quality", async (route) => json(route, {
@@ -541,7 +541,16 @@ async function installFixtureApi(page: Page) {
       lastErrorAt: null,
       checkedAt: "2026-09-09T06:00:00Z"
     },
-    issues: []
+    issues: [{
+      key: "QUALITY_ISSUE:visual-zero-cost",
+      source: "SALES",
+      code: "ZERO_UNEXPECTED_COST",
+      severity: "INFO",
+      entityType: "SALE_ITEM",
+      message: "Non-service sale or order item has zero cost",
+      detectedAt: "2026-09-09T05:45:00Z",
+      recommendedAction: "REVIEW_SOURCE_DOCUMENT"
+    }]
   }));
   await page.route("**/api/stores/*/employee-ratings?*", async (route) => json(route, {
     storeId: visualStoreId,
@@ -962,6 +971,7 @@ test.describe("local frontend visual review", () => {
         await expect(page.locator('.quality-page[aria-busy="true"]')).toHaveCount(0);
         await expect(page.getByRole("heading", { name: "Качество данных", exact: true }))
           .toBeVisible();
+        await expect(page.getByText("Информация", { exact: true })).toBeVisible();
       }
 
       const periodSelector = page.getByRole("button", { name: "Выбрать период" });
@@ -1127,6 +1137,21 @@ test.describe("local frontend visual review", () => {
         await expect(
           page.getByRole("dialog", { name: "Выбор периода" })
         ).toHaveCount(0);
+      }
+      if (routeUrl.pathname === "/quality") {
+        await page.getByRole("button", { name: "Подробнее" }).click();
+        const qualityDialog = page.getByRole("dialog", {
+          name: "У товара, не являющегося услугой, указана нулевая себестоимость"
+        });
+        await expect(qualityDialog).toBeVisible();
+        await expect(qualityDialog).toContainText("Информация");
+        await expect(qualityDialog).toContainText("ноль допустим");
+        await page.screenshot({
+          path: resolve(screenshotDirectory, screenshotName(route) + "-info-dialog.png"),
+          animations: "disabled"
+        });
+        await page.keyboard.press("Escape");
+        await expect(qualityDialog).toHaveCount(0);
       }
       if (new URL(route, "http://local.test").pathname === "/overview") {
         await expect(page.getByText("Замечаний по данным: 28")).toHaveCount(0);

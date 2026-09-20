@@ -318,7 +318,7 @@ public class SalesSyncPersistence {
                             "SALE_ITEM",
                             scopedId(syncRun, sourceItem.externalId()),
                             "ZERO_UNEXPECTED_COST",
-                            DataQualitySeverity.WARNING,
+                            DataQualitySeverity.INFO,
                             "Non-service sale item has zero cost"
                     ),
                     now,

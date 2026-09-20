@@ -3,7 +3,7 @@
   "versions" : {
     "metricsPolicy" : "weekly-metrics-v7",
     "snapshotPolicy" : "weekly-snapshot-v13",
-    "qualityPolicy" : "weekly-quality-v7"
+    "qualityPolicy" : "weekly-quality-v8"
   },
   "period" : {
     "timezone" : "Europe/Moscow",

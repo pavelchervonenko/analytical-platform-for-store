@@ -141,7 +141,7 @@ class WeeklyReviewPolicyV1Test {
         assertThat(WeeklyReviewPolicyV1.VERSIONS.snapshotPolicy())
                 .isEqualTo("weekly-snapshot-v13");
         assertThat(WeeklyReviewPolicyV1.VERSIONS.qualityPolicy())
-                .isEqualTo("weekly-quality-v7");
+                .isEqualTo("weekly-quality-v8");
     }
 
     private RevenuePeriod revenue(

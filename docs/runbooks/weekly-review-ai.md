@@ -5,7 +5,7 @@ status: draft
 owner: ai
 audience:
   - operator
-last_verified: 2026-09-15
+last_verified: 2026-09-20
 last_rehearsed: null
 verification_levels:
   - static
@@ -93,6 +93,18 @@ versions, hashes, status, attempt count, validation codes, token counts, cost и
 - Появился любой неожиданный notification event: v25 не должен создавать weekly Telegram event.
 
 ## Preflight
+
+После изменения quality-семантики сначала сформировать новую deterministic snapshot revision без
+provider-вызова и проверить `qualityPolicy=weekly-quality-v8`, report state и limitations. Старую
+revision/enrichment не удалять и не переписывать. Для payment/cash событий дополнительно проверить:
+
+- payment mismatch остаётся видимым в quality read path, но отсутствует в limitations
+  `NET_REVENUE`;
+- cash mismatch исключён из limitations только при точном равенстве active app payments и latest
+  raw `detail.cash`; отсутствие raw evidence сохраняет limitation;
+- unexpected zero-cost виден как `INFO` и не переводит snapshot в `PARTIAL`.
+
+Только после этой network-free проверки разрешено строить exact AI preflight для новой revision.
 
 ```bash
 ./gradlew :backend:test --tests '*WeeklyReviewAi*'

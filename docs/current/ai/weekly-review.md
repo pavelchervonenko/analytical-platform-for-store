@@ -7,7 +7,7 @@ audience:
   - developer
   - operator
   - manager
-last_verified: 2026-09-15
+last_verified: 2026-09-20
 requirement_sources:
   - docs/archive/legacy-contracts/AI_WEEKLY_REDESIGN_STAGE2_CONTRACT.md
   - docs/archive/legacy-contracts/weekly-review-ai-management-rubric.md
@@ -22,6 +22,7 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewAssembler.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewCoreProjector.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewQualityPolicyV1.java
+  - backend/src/main/java/com/storeanalytics/quality/repository/PeriodQualityIssueRepository.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewSummaryPresenter.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewService.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewSnapshotStore.java
@@ -37,6 +38,7 @@ implementation_sources:
   - backend/src/main/resources/db/migration/V48__harden_weekly_review_rollout.sql
 verification_sources:
   - frontend/src/insights/WeeklyReviewView.test.tsx
+  - backend/src/test/java/com/storeanalytics/metrics/repository/StoreKpiIntegrationTest.java
   - frontend/src/insights/weekly-review/weeklyReviewViewModel.test.ts
   - frontend/src/insights/weekly-review-presentation.test.ts
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewAssemblerTest.java
@@ -133,7 +135,7 @@ read path. Поэтому историческая revision может соде�
 | Published content | schema 4 | [`weekly-review-ai-content-v4.schema.json`](../../schemas/weekly-review-ai-content-v4.schema.json) |
 | Deterministic metrics policy | `weekly-metrics-v7` | `WeeklyReviewPolicyV1` |
 | Deterministic snapshot policy | `weekly-snapshot-v13` | `WeeklyReviewPolicyV1` |
-| Data-quality policy | `weekly-quality-v7` | `WeeklyReviewPolicyV1` |
+| Data-quality policy | `weekly-quality-v8` | `WeeklyReviewPolicyV1` |
 
 Backend читает опубликованные schema4 enrichments в порядке `v25`, `v24`, `v23`, `v22`. Worker
 создаёт только активную пару `v25/schema4`. Read compatibility не означает, что старые версии
@@ -229,16 +231,21 @@ Snapshot row lock и уникальность job закрывают гонку 
 Для `PARTIAL` backend явно добавляет ограничение, что вывод основан только на доступной части
 данных. Каждая quality-проблема привязана к конкретным block IDs и metric codes. Неполная
 аналитическая классификация ограничивает только структуру продаж и attach, но не чистую выручку,
-валовую прибыль, команду или сотрудников. Проблема согласованности продаж/возвратов ограничивает
-чистую выручку, её разложение и основанный на ней главный вывод, но не переносится на независимые
+валовую прибыль, команду или сотрудников. `SALE_PAYMENT_MISMATCH` и
+`RETURN_PAYMENT_MISMATCH` остаются диагностикой источника, но не ограничивают weekly
+`NET_REVENUE`: цены, скидки и способы проведения оплаты находятся в ответственности CRM.
+`RETURN_CASH_TRANSACTION_MISMATCH` также не создаёт limitation, когда сумма активных app payments
+точно равна сумме latest raw `detail.cash`; без такого доказательства правило остаётся fail closed и
+ограничивает чистую выручку. Остальные проблемы согласованности продаж/возвратов ограничивают
+чистую выручку, её разложение и основанный на ней главный вывод, но не переносятся на независимые
 метрики. Действительно отсутствующая себестоимость ограничивает валовую прибыль, маржу и зависящий
-от них главный вывод. Нулевая себестоимость является допустимым бизнес-значением: её diagnostic
-counter сохраняется в исходных фактах, но она не создаёт limitation и не понижает состояние
-прибыли, маржи или всего отчёта. Отсутствующая исходная продажа либо позиция у части возвратов также
-не считается нарушением согласованности итогов магазина; сумма возврата уже входит в чистую
-выручку. Если из-за этого невозможно определить продавца, блок команды показывает нейтральную
-оговорку о доступной связи, не создавая page-level warning и не предлагая исправить нормальное
-состояние данных.
+от них главный вывод. Нулевая себестоимость является допустимым бизнес-значением: открытое `INFO`
+и diagnostic counter сохраняются, но limitation не создаётся и состояние прибыли, маржи или всего
+отчёта не понижается. Отсутствующая исходная продажа либо позиция у части возвратов также не
+считается нарушением согласованности итогов магазина; сумма возврата уже входит в чистую выручку.
+Если из-за этого невозможно определить продавца, блок команды показывает нейтральную оговорку о
+доступной связи, не создавая page-level warning и не предлагая исправить нормальное состояние
+данных.
 Если `PARTIAL` возник только внутри структуры или команды, assembler добавляет такой блок в общую
 сводку качества даже при отсутствии корневого quality limitation. Frontend объединяет корневые и
 локальные тексты в одной панели ограничений, а у затронутого главного вывода показывает короткий

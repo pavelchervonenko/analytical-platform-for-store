@@ -67,18 +67,18 @@ class DataQualityServiceTest {
                 DataQualitySeverity.ERROR,
                 Instant.parse("2026-07-22T09:00:00Z")
         );
-        DataQualityIssue internalZeroCost = issue(
+        DataQualityIssue informationalZeroCost = issue(
                 firstId,
                 "SALE_ITEM",
                 "ZERO_UNEXPECTED_COST",
-                DataQualitySeverity.WARNING,
+                DataQualitySeverity.INFO,
                 Instant.parse("2026-07-22T09:30:00Z")
         );
         when(storeCatalogService.findAccessible(userId, UserRole.MANAGER))
                 .thenReturn(List.of(store(firstId, "First"), store(secondId, "Second")));
         when(issueRepository.findAllByStoreIdInAndStatus(
                 List.of(firstId, secondId), DataQualityStatus.OPEN
-        )).thenReturn(List.of(issue, internalZeroCost));
+        )).thenReturn(List.of(issue, informationalZeroCost));
         when(dataStatusService.get(firstId)).thenReturn(dataStatus(
                 firstId, StoreDataFreshnessStatus.STALE, 2
         ));
@@ -92,12 +92,13 @@ class DataQualityServiceTest {
         assertThat(result.errorStoreCount()).isEqualTo(1);
         assertThat(result.warningStoreCount()).isZero();
         assertThat(result.okStoreCount()).isEqualTo(1);
-        assertThat(result.openIssueCount()).isEqualTo(2);
+        assertThat(result.openIssueCount()).isEqualTo(3);
         assertThat(result.stores()).extracting(StoreDataQualitySummaryView::storeId)
                 .containsExactly(firstId, secondId);
         assertThat(result.stores().getFirst().errorCount()).isEqualTo(1);
         assertThat(result.stores().getFirst().warningCount()).isEqualTo(1);
-        assertThat(result.stores().getFirst().openIssueCount()).isEqualTo(2);
+        assertThat(result.stores().getFirst().infoCount()).isEqualTo(1);
+        assertThat(result.stores().getFirst().openIssueCount()).isEqualTo(3);
     }
 
     @Test

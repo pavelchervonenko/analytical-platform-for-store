@@ -99,4 +99,5 @@ query caches. Новая immutable revision создаётся только пр
 payroll-назначение не создаётся.
 
 Для `SERVICE|WARRANTY|PROTECTION` ожидаемый ноль себестоимости допустим. В других категориях
-`ZERO_UNEXPECTED` — возможная ошибка, которую readiness пока не всегда блокирует.
+`ZERO_UNEXPECTED` сохраняется как открытое `INFO`: оно требует проверки смысла позиции и источника,
+но не блокирует readiness и не превращает cost/GP в `null`.

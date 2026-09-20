@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - operator
-last_verified: 2026-09-19
+last_verified: 2026-09-20
 requirement_sources:
   - docs/archive/legacy-contracts/database-design.md
   - docs/maintenance/documentation-policy.md
@@ -21,6 +21,8 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/MigrationApplicationIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/common/database/UserFeatureAccessMigrationIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/common/database/WorkShiftStoreScopeMigrationIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/common/database/SaleTypedReturnIssueMigrationIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/common/database/ZeroCostSeverityMigrationIntegrationTest.java
 runtime_evidence: []
 required_reviewers:
   - backend-data
@@ -38,7 +40,7 @@ superseded_by: null
 ## Действующий контракт
 
 Backend вычисляет максимальную ожидаемую schema version из packaged migration resources. В
-source-tree максимальная версия — V52; цепочка также содержит V39.1, которая сортируется между V39
+source-tree максимальная версия — V54; цепочка также содержит V39.1, которая сортируется между V39
 и V40. Runtime API/WORKER не мигрирует БД и должен только read-only проверить фактическую историю.
 
 Production deploy сначала проверяет immutable images и packaged schema, затем останавливает worker
@@ -58,6 +60,8 @@ migration writers остаются остановленными до диагн�
 | V50 | Глобальные функции руководителей с backfill `PLAN`, `SHIFTS`, `PAYROLL` |
 | V51 | Non-negative expectation для доказанных zero-net item returns |
 | V52 | Уникальность смены ограничена магазином: `(store_id, employee_id, work_date)` |
+| V53 | Закрывает только доказуемые stale missing-original issues у sale-typed return-feed записей |
+| V54 | Переводит открытые unexpected zero-cost issues в информационную severity |
 
 ## Политика изменения
 
@@ -78,8 +82,8 @@ oracle packaged version.
 
 ## Что не доказано
 
-- Не существует полного populated upgrade matrix из каждой V1–V51 в V52.
-- Downgrade V52 в предыдущую schema не реализован и не репетировался.
+- Не существует полного populated upgrade matrix из каждой V1–V53 в V54.
+- Downgrade V54 в предыдущую schema не реализован и не репетировался.
 - Release scripts используют локальный state-файл для compatibility decision. После failed
   migration marker `MIGRATION_IN_PROGRESS` нельзя автоматически примирить с реальным
   `flyway_schema_history`; штатный recovery runbook для этого ещё не подтверждён.

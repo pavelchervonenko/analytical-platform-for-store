@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - operator
-last_verified: 2026-09-09
+last_verified: 2026-09-20
 requirement_sources:
   - docs/archive/legacy-contracts/period-quality-api.md
 implementation_sources:
@@ -40,9 +40,9 @@ Endpoint доступен только `ADMIN`; `MANAGER` получает `403`
 пересчитывает их domain rules. `readyForDecisions` означает отсутствие blocking `ERROR`; WARNING
 может снижать уверенность и остаётся в списке ограничений.
 
-Известная граница: `ZERO_UNEXPECTED` в текущей реализации не блокирует решение и не превращает
-gross profit в `null`; это нельзя трактовать как доказательство корректной себестоимости товара.
-Если правило изменится, quality service, KPI semantics и UI должны обновиться одновременно.
+`ZERO_UNEXPECTED` имеет severity `INFO`, не блокирует решение и не превращает gross profit в
+`null`; это принятое ограничение нельзя трактовать как доказательство корректной себестоимости
+товара. Событие остаётся видимым, а diagnostic counter сохраняется.
 
 Frontend не объединяет period-quality с произвольным выбранным range: endpoint по определению
 month-to-`asOf` и должен иметь явную подпись периода.

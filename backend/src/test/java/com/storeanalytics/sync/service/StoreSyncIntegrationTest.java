@@ -961,6 +961,47 @@ class StoreSyncIntegrationTest {
     }
 
     @Test
+    void recordsUnexpectedSaleZeroCostAsInformation() {
+        storeSyncService.synchronize();
+        employeeSyncService.synchronize();
+        Instant occurredAt = Instant.parse("2026-07-01T12:00:00Z");
+        LiveSkladSaleSummaryPayload summary = saleSummary(
+                "sale-zero-cost", "S-ZERO", occurredAt,
+                "100.00", "100.00", "0.00"
+        );
+        LiveSkladSalePositionPayload position = salePosition(
+                "position-zero-cost", "product-zero-cost", "Zero cost product",
+                "1.000", "100.00", "100.00", "0.00"
+        );
+        LiveSkladSaleDetailPayload detail = saleDetail(
+                "sale-zero-cost", "S-ZERO", occurredAt,
+                occurredAt.plusSeconds(60),
+                new SaleParties("store-fixture-1", "employee-north"),
+                new PaymentAmounts("100.00", "0.00", "0.00"),
+                List.of(position)
+        );
+        fakeClient.setSales(
+                Map.of("store-fixture-1", List.of(summary)),
+                Map.of("sale-zero-cost", detail)
+        );
+
+        salesSyncService.synchronize(new SalesSyncPeriod(
+                Instant.parse("2026-07-01T00:00:00Z"),
+                Instant.parse("2026-07-02T00:00:00Z")
+        ));
+
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT severity
+                FROM data_quality_issues
+                WHERE issue_code = 'ZERO_UNEXPECTED_COST'
+                  AND status = 'OPEN'
+                """,
+                String.class
+        )).isEqualTo(DataQualitySeverity.INFO.name());
+    }
+
+    @Test
     void appliesSalesCorrectionsSoftDeletesMissingFactsAndResolvesQualityIssue() {
         storeSyncService.synchronize();
         employeeSyncService.synchronize();

@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - operator
-last_verified: 2026-09-19
+last_verified: 2026-09-20
 requirement_sources:
   - docs/archive/legacy-contracts/database-design.md
 implementation_sources:
@@ -20,6 +20,8 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/integration/livesklad/webhook/LiveSkladWebhookStoreIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/common/database/UserFeatureAccessMigrationIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/common/database/WorkShiftStoreScopeMigrationIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/common/database/SaleTypedReturnIssueMigrationIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/common/database/ZeroCostSeverityMigrationIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/performance/service/OptimisticConcurrencyIntegrationTest.java
 runtime_evidence: []
 required_reviewers:
@@ -39,7 +41,7 @@ superseded_by: null
 ## Источник истины
 
 Результирующую схему определяет упорядоченная цепочка Flyway migrations, а не этот текст и не JPA.
-Текущий source-tree заканчивается V52 и включает отдельную decimal-версию V39.1. Применённую в
+Текущий source-tree заканчивается V54 и включает отдельную decimal-версию V39.1. Применённую в
 конкретной БД версию можно утверждать только после чтения `flyway_schema_history`.
 
 ## Основные слои

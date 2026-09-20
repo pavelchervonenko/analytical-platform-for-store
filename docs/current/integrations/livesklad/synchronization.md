@@ -6,12 +6,13 @@ owner: integrations
 audience:
   - developer
   - operator
-last_verified: 2026-09-16
+last_verified: 2026-09-20
 requirement_sources:
   - docs/archive/legacy-contracts/synchronization-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/sync
   - backend/src/main/resources/application.yml
+  - backend/src/main/resources/db/migration/V53__resolve_false_sale_typed_return_issues.sql
   - contracts/openapi/current.json
 verification_sources:
   - backend/src/test/java/com/storeanalytics/sync/service/SyncJobIntegrationTest.java
@@ -81,6 +82,12 @@ Targeted sale-return sync читает кассовые операции в од
 комбинацию кассы и статьи `saleReturn`, а не числом документов в месяце. Автоматический повтор
 только из-за `RETURN_CASH_TRANSACTION_MISMATCH` пока не включён: warning сохраняется после успешной
 обработки и требует новой доставки либо точечного recheck.
+
+Return-feed иногда повторно отдаёт обычную продажу с `detail.type=sale`. Если exact external ID уже
+принадлежит активной продаже того же connection/store, normalizer сохраняет документ, позиции и
+оплаты без изменений, помечает raw-version как skipped и закрывает ложный
+`RETURN_ORIGINAL_DOCUMENT_MISSING`. Отсутствующий, deleted, foreign-store или не-SALE документ не
+ослабляет guard: запись остаётся unresolved и требует диагностики.
 
 Validated targeted recovery имеет два exact-document режима. `MISSING_RETURN` предназначен только
 для отсутствующего факта. `EXISTING_ORPHAN_RELINK` требует существующий активный orphan и полный

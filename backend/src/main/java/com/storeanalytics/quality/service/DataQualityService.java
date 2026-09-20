@@ -21,18 +21,12 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class DataQualityService {
-
-    private static final Set<String> INTERNAL_ONLY_ISSUE_CODES = Set.of(
-            "ZERO_UNEXPECTED_COST",
-            "RETURN_ZERO_UNEXPECTED_COST"
-    );
 
     private static final Comparator<DataQualityIssueView> ISSUE_ORDER = Comparator
             .comparingInt((DataQualityIssueView issue) -> severityPriority(issue.severity()))
@@ -157,7 +151,6 @@ public class DataQualityService {
         List<DataQualityIssueView> result = new ArrayList<>();
         synchronizationIssue(dataStatus).ifPresent(result::add);
         persisted.stream()
-                .filter(this::isCustomerVisible)
                 .map(this::issueView)
                 .forEach(result::add);
         result.sort(ISSUE_ORDER);
@@ -220,10 +213,6 @@ public class DataQualityService {
         );
     }
 
-    private boolean isCustomerVisible(DataQualityIssue issue) {
-        return !INTERNAL_ONLY_ISSUE_CODES.contains(issue.getIssueCode());
-    }
-
     private DataQualityIssueView issueView(DataQualityIssue issue) {
         return new DataQualityIssueView(
                 "QUALITY_ISSUE:" + issue.getId(),
@@ -257,6 +246,10 @@ public class DataQualityService {
                     "Return payments do not match returned items";
             case "RETURN_CASH_TRANSACTION_MISMATCH" ->
                     "Return cash operations do not match document payments";
+            case "ZERO_UNEXPECTED_COST" ->
+                    "Non-service sale or order item has zero cost";
+            case "RETURN_ZERO_UNEXPECTED_COST" ->
+                    "Non-service return item has zero cost";
             default -> "Data consistency issue requires review";
         };
     }
