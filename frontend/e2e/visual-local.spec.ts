@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { makeWeeklyReview } from "../src/test/weeklyReviewFixture";
 import { visualWeeklyReview } from "./weekly-review-visual-fixtures";
+import { makeSellerWeeklyReviewView } from "../src/test/sellerWeeklyReviewFixture";
 
 const email = process.env.VISUAL_EMAIL?.trim() || process.env.E2E_ADMIN_EMAIL?.trim();
 const password = process.env.VISUAL_PASSWORD || process.env.E2E_ADMIN_PASSWORD;
@@ -180,6 +181,10 @@ async function installFixtureApi(page: Page) {
       salesGroups: [
         { groupCode: "DEVICES", groupName: "Техника", metrics: categoryMetric(48_772_000 * factor, 600 * factor, 40_910_000 * factor) },
         { groupCode: "PHONES", groupName: "Телефоны", metrics: categoryMetric(43_150_000 * factor, 510 * factor, 36_410_000 * factor) },
+        { groupCode: "DEVICE_CATEGORY:TABLET_APPLE", groupName: "Планшеты Apple", metrics: categoryMetric(2_000_000 * factor, 30 * factor, 1_600_000 * factor) },
+        { groupCode: "DEVICE_CATEGORY:LAPTOP_APPLE", groupName: "Ноутбуки Apple", metrics: categoryMetric(2_800_000 * factor, 20 * factor, 2_300_000 * factor) },
+        { groupCode: "DEVICE_CATEGORY:SPEAKERS", groupName: "Колонки", metrics: categoryMetric(-28_000 * factor, -1 * factor, -20_000 * factor) },
+        { groupCode: "DEVICE_CATEGORY:PODS_WATCH_OTHER_DEVICE", groupName: "Наушники, часы и другая техника — вид не уточнён", metrics: categoryMetric(850_000 * factor, 41 * factor, 620_000 * factor) },
         { groupCode: "ADDITIONAL_REVENUE", groupName: "Дополнительная выручка", metrics: categoryMetric(6_028_000 * factor, 1_640 * factor, 4_790_000 * factor) },
         { groupCode: "ACCESSORY", groupName: "Аксессуары", metrics: categoryMetric(3_562_000 * factor, 1_020 * factor, 2_930_000 * factor) },
         { groupCode: "SERVICE", groupName: "Услуги", metrics: categoryMetric(2_466_000 * factor, 620 * factor, 1_860_000 * factor) }
@@ -606,14 +611,121 @@ async function installFixtureApi(page: Page) {
     storeId: visualStoreId,
     periodStart,
     periodEnd,
-    formulaVersion: "attach-rate-v1",
+    formulaVersion: "attach-rate-v3",
     dataQuality: {
       unmatchedNumeratorItemCount: 0,
       ambiguousWarrantyItemCount: 0,
       unknownDeviceConditionItemCount: 0
     },
-    rates: []
+    rates: [{
+      metricCode: "CHARGER_CABLE", numeratorCategoryCode: "CHARGER_CABLE",
+      denominatorCode: "PHONE", numeratorReceiptCount: 3, denominatorReceiptCount: 10,
+      numeratorQuantity: 3, denominatorQuantity: 10, ratePerHundred: 30
+    }, {
+      metricCode: "POWER_BANK", numeratorCategoryCode: "POWER_BANK",
+      denominatorCode: "PHONE", numeratorReceiptCount: 2, denominatorReceiptCount: 10,
+      numeratorQuantity: 2, denominatorQuantity: 10, ratePerHundred: 20
+    }, {
+      metricCode: "ACCESSORY_PODS_WATCH", numeratorCategoryCode: "ACCESSORY_PODS_WATCH",
+      denominatorCode: "PODS_WATCH", numeratorReceiptCount: 5, denominatorReceiptCount: 7,
+      numeratorQuantity: 5, denominatorQuantity: 7, ratePerHundred: 71.43
+    }, {
+      metricCode: "ACCESSORY_AIRPODS", numeratorCategoryCode: "ACCESSORY_AIRPODS",
+      denominatorCode: "AIRPODS", numeratorReceiptCount: 2.5, denominatorReceiptCount: 2,
+      numeratorQuantity: 2.5, denominatorQuantity: 2, ratePerHundred: 125, preliminary: true
+    }, {
+      metricCode: "ACCESSORY_APPLE_WATCH", numeratorCategoryCode: "ACCESSORY_APPLE_WATCH",
+      denominatorCode: "APPLE_WATCH", numeratorReceiptCount: 1, denominatorReceiptCount: 5,
+      numeratorQuantity: 1, denominatorQuantity: 5, ratePerHundred: 20, preliminary: true
+    }]
   }));
+  const visualCaseId = "50000000-0000-4000-8000-000000000001";
+  const visualCase = {
+    id: visualCaseId, productId: "50000000-0000-4000-8000-000000000002",
+    productCode: "588", name: "Чехол с неустановленной моделью",
+    documentId: "50000000-0000-4000-8000-000000000003",
+    documentNumber: "2048", businessDate: "2026-08-18", quantity: 1,
+    proposedTarget: "CONFLICT", hasIphone: true, hasSamsung: true,
+    decisionTarget: null, decisionCurrent: false, revision: 0, fingerprint: "visual-case-v1", categoryCode: "OTHER_CASE",
+    allowedTargets: ["CASE_APPLE_IPHONE", "CASE_SAMSUNG", "CASE_OTHER_DEVICE", "DEFER"]
+  };
+  const reviewedAccessory = () => {
+    const kind = new URL(page.url()).searchParams.get("accessory");
+    if (kind === "charger") return { ...visualCase, name: "Зарядка Apple Watch", proposedTarget: "NONE",
+      hasIphone: false, hasSamsung: false, categoryCode: "CHARGER_CABLE",
+      allowedTargets: ["CHARGER_CABLE", "ACCESSORY_APPLE_WATCH", "NO_ATTACH", "DEFER"] };
+    if (kind === "glass") return { ...visualCase, name: "Стекло с неизвестной совместимостью", categoryCode: "GLASS_PHONE_UNRESOLVED", allowedTargets: ["GLASS_IPHONE", "GLASS_SAMSUNG", "GLASS_OTHER", "DEFER"] };
+    if (kind === "film") return { ...visualCase, name: "Защитная плёнка", categoryCode: "PROTECTIVE_FILM", allowedTargets: ["FILM_PHONE", "FILM_NON_PHONE", "DEFER"] };
+    if (kind === "universal") return { ...visualCase, name: "Универсальный чехол", categoryCode: "CASE_UNIVERSAL" };
+    return visualCase;
+  };
+  const visualWarrantyId = "60000000-0000-4000-8000-000000000001";
+  const visualWarranty = {
+    id: visualWarrantyId, documentId: visualWarrantyId, documentExternalId: "synthetic-warranty",
+    documentNumber: "500", businessDate: "2026-08-18", documentKind: "SALE",
+    name: "Гарантия Check", quantity: 3, state: "CONFLICT", conflictCode: "MIXED_DEVICE_TYPES",
+    fingerprint: "synthetic-warranty", revision: 0, originalWarrantyItemId: null,
+    financialEmployeeName: "Продавец гарантии"
+  };
+  const warrantyDevices = [
+    { id: "60000000-0000-4000-8000-000000000002", name: "iPhone 13 Б/У", deviceType: "USED", quantity: 2 },
+    { id: "60000000-0000-4000-8000-000000000003", name: "Samsung Galaxy S24", deviceType: "NEW", quantity: 1 }
+  ].map((device) => ({ ...device, documentId: device.id, documentExternalId: device.id,
+    documentNumber: "501", businessDate: "2026-08-18", employeeId: visualStoreId,
+    employeeName: "Продавец устройства", fingerprint: device.id, allocatedQuantity: 0, returnedQuantity: 0 }));
+  const warrantyDetail = { warranty: visualWarranty, candidates: warrantyDevices, allocations: [], history: [], warnings: [] };
+  await page.route("**/api/auth/csrf", async (route) => route.fulfill({
+    status: 200, contentType: "application/json",
+    headers: { "Set-Cookie": "XSRF-TOKEN=synthetic-visual-token; Path=/; SameSite=Lax" },
+    body: JSON.stringify({ headerName: "X-XSRF-TOKEN", cookieName: "XSRF-TOKEN" })
+  }));
+  await page.route("**/api/stores/*/attach-rate/warranties?*", async (route) => {
+    const review = new URL(page.url()).searchParams.get("warranties") === "review";
+    await json(route, { items: review ? [visualWarranty] : [], total: review ? 1 : 0,
+      documentCount: review ? 1 : 0, unallocatedQuantity: review ? 3 : 0, offset: 0, limit: 30,
+      enabled: review || new URL(page.url()).searchParams.get("cases") === "unavailable" });
+  });
+  await page.route("**/api/stores/*/attach-rate/warranties/" + visualWarrantyId, async (route) => route.fulfill({
+    status: 200, contentType: "application/json", headers: { ETag: '"synthetic-warranty-v1"' },
+    body: JSON.stringify(warrantyDetail)
+  }));
+  await page.route("**/api/stores/*/attach-rate/warranties/" + visualWarrantyId + "/preview", async (route) => {
+    const command = route.request().postDataJSON() as { action: string; allocations: { deviceItemId: string; quantity: number }[] };
+    await json(route, { sourceItemId: visualWarrantyId, action: command.action, affectedDates: ["2026-08-18"],
+      warnings: [], allocations: command.allocations.map((allocation) => ({
+        ...allocation, deviceDocumentId: allocation.deviceItemId, businessDate: "2026-08-18",
+        employeeId: visualStoreId, deviceType: warrantyDevices.find((d) => d.id === allocation.deviceItemId)!.deviceType
+      })) });
+  });
+  await page.route("**/api/stores/*/attach-rate/warranties/" + visualWarrantyId + "/decisions", async (route) => route.fulfill({
+    status: 200, contentType: "application/json", headers: { ETag: '"synthetic-warranty-v2"' },
+    body: JSON.stringify(warrantyDetail)
+  }));
+  await page.route("**/api/stores/*/attach-rate/cases?*", async (route) => {
+    if (new URL(page.url()).searchParams.get("cases") === "unavailable") {
+      await route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
+      return;
+    }
+    await json(route, { items: [reviewedAccessory()], total: 1, openCount: 1, conflictCount: 1,
+      openQuantity: 1, offset: 0, limit: 30 });
+  });
+  await page.route("**/api/stores/*/attach-rate/cases/estimates?*", async (route) => json(route, {
+    periodStart, periodEnd, conflictCount: 1, unresolvedCount: 0, unresolvedReturnCount: 1,
+    rates: [{
+      metricCode: "CASE_APPLE_IPHONE", confirmedQuantity: 4, inferredQuantity: 0,
+      denominatorQuantity: 20, confirmedRatePerHundred: 20, indicativeRatePerHundred: 20
+    }, {
+      metricCode: "CASE_SAMSUNG", confirmedQuantity: 2, inferredQuantity: 0,
+      denominatorQuantity: 10, confirmedRatePerHundred: 20, indicativeRatePerHundred: 20
+    }]
+  }));
+  await page.route(/\/api\/stores\/[^/]+\/attach-rate\/cases\/[0-9a-f-]{36}$/u, async (route) => {
+    await route.fulfill({
+      status: 200, contentType: "application/json",
+      headers: { ETag: '"visual-case-v1"' },
+      body: JSON.stringify({ item: reviewedAccessory(), history: [], affectedDates: ["2026-08-18"] })
+    });
+  });
   await page.route("**/api/stores/*/reports?*", async (route) => json(route, {
     items: [],
     page: 0,
@@ -624,6 +736,44 @@ async function installFixtureApi(page: Page) {
     hasPrevious: false
   }));
   await page.route("**/api/stores/*/reports/years", async (route) => json(route, []));
+  await page.route("**/api/stores/*/weekly-reviews/seller-current", async (route) => {
+    const scenario = new URL(page.url()).searchParams.get("reviewScenario");
+    if (!scenario?.startsWith("seller-")) {
+      await route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+      return;
+    }
+    const view = makeSellerWeeklyReviewView();
+    if (scenario === "seller-stale") view.freshness = "STALE";
+    if (scenario === "seller-action") {
+      const card = view.report!.employees[0]!.card;
+      card.attention = {
+        observationId: `employee:${card.employeePublicId}:additional-revenue`,
+        title: "Дополнительная выручка снизилась",
+        detail: "Сравнение двух завершённых недель на достаточной выборке продаж.",
+        effect: "NEGATIVE",
+        evidenceRefs: card.metrics.additionalRevenue.evidenceRefs
+      };
+      card.action = {
+        actionId: `employee:${card.employeePublicId}:review-additional`,
+        priority: "HIGH",
+        actionType: "REVIEW_SELLER_METRIC",
+        scope: "EMPLOYEE",
+        employeePublicId: card.employeePublicId,
+        title: "Проверить снижение дополнительной выручки",
+        metricCode: "ADDITIONAL_REVENUE",
+        target: { operator: "AT_LEAST", value: 20, unit: "RUB" },
+        check: "Сверить результат следующей полной недели.",
+        horizon: "NEXT_FULL_WEEK",
+        generatedBy: "DETERMINISTIC",
+        evidenceRefs: card.metrics.additionalRevenue.evidenceRefs
+      };
+    }
+    if (scenario === "seller-negative") {
+      Object.assign(view.report!.additionalSales, { accessoryRevenue: -5, serviceRevenue: 25,
+        accessoryMixShare: -25, serviceMixShare: 125, compositionChartSafe: false });
+    }
+    await json(route, view);
+  });
   await page.route("**/api/stores/*/weekly-reviews/current", async (route) => {
     const scenario = new URL(page.url()).searchParams.get("reviewScenario");
     await json(route, visualWeeklyReview(scenario));
@@ -1034,6 +1184,37 @@ test.describe("local frontend visual review", () => {
         await page.getByRole("heading", { name: "ИИ-разбор", exact: true }).click();
 
         const reviewScenario = routeUrl.searchParams.get("reviewScenario") ?? "ready-dense";
+        if (!useLiveWeeklyReview && reviewScenario.startsWith("seller-")) {
+          await expect(page.getByText(/Только продавцы рейтинга/u)).toBeVisible();
+          const composition = page.locator(".weekly-review-additional details > summary");
+          await composition.focus();
+          await page.keyboard.press("Enter");
+          await expect(page.locator(".weekly-review-additional details")).toHaveAttribute("open", "");
+          await expect(page.getByText(/Общая доля рассчитана от чистой выручки продавцов/u)).toBeVisible();
+          if (reviewScenario === "seller-negative") {
+            await expect(page.getByText(/Структура показана суммами/u)).toBeVisible();
+          }
+          await page.locator(".weekly-review-additional").screenshot({
+            path: resolve(screenshotDirectory, screenshotName(route) + "-additional-open.png"), animations: "disabled"
+          });
+          await page.keyboard.press("Enter");
+          if (reviewScenario === "seller-action") {
+            const actionRow = page.locator(".weekly-review-seller-row").first();
+            await expect(actionRow.getByText("Проверить: Дополнительная выручка снизилась"))
+              .toBeVisible();
+            await actionRow.screenshot({
+              path: resolve(screenshotDirectory, screenshotName(route) + "-seller-action-row.png"),
+              animations: "disabled"
+            });
+          }
+          const sellerTrigger = page.getByRole("button", { name: "Результаты продавца: Synthetic" });
+          await sellerTrigger.click();
+          await expect(page.getByRole("dialog", { name: "Synthetic" })).toBeVisible();
+          await page.screenshot({ path: resolve(screenshotDirectory, screenshotName(route) + "-seller-detail.png"),
+            animations: "disabled" });
+          await page.keyboard.press("Escape");
+          await expect(sellerTrigger).toBeFocused();
+        }
         if (!useLiveWeeklyReview && reviewScenario === "partial") {
           const limitationTrigger = page.getByRole("button", {
             name: "Подробнее об ограничениях"
@@ -1153,7 +1334,80 @@ test.describe("local frontend visual review", () => {
         await page.keyboard.press("Escape");
         await expect(qualityDialog).toHaveCount(0);
       }
-      if (new URL(route, "http://local.test").pathname === "/overview") {
+      if (routeUrl.pathname === "/overview" && routeUrl.searchParams.get("cases") === "unavailable") {
+        await expect(page.getByRole("alert")).toContainText("Очередь аксессуаров временно недоступна");
+        await page.getByRole("alert").scrollIntoViewIfNeeded();
+        await page.screenshot({
+          path: resolve(screenshotDirectory, "case-review-unavailable-banner.png"), animations: "disabled"
+        });
+        await page.getByRole("button", { name: "Разобрать конфликты" }).click();
+        const review = page.getByRole("dialog", { name: "Разбор спорных продаж" });
+        await expect(review.getByRole("tab", { name: "Гарантии" })).toHaveAttribute("aria-selected", "true");
+        await page.screenshot({
+          path: resolve(screenshotDirectory, "case-review-unavailable.png"), animations: "disabled"
+        });
+        await review.getByRole("button", { name: "Закрыть разбор продаж" }).click();
+      }
+      if (routeUrl.pathname === "/overview" && routeUrl.searchParams.get("cases") === "review") {
+        await page.getByRole("button", { name: "Разобрать конфликты" }).click();
+        const review = page.getByRole("dialog", { name: "Разбор спорных продаж" });
+        await expect(review.getByRole("tab", { name: "Аксессуары" })).toHaveAttribute("aria-selected", "true");
+        await expect(review.locator(".case-estimates__rates")).toBeVisible();
+        await review.locator(".warranty-queue__item").first().click();
+        await expect(review.getByRole("heading", { name: /Чехол с неустановленной моделью|Стекло с неизвестной совместимостью|Защитная плёнка|Универсальный чехол|Зарядка Apple Watch/u })).toBeVisible();
+        await page.screenshot({
+          path: resolve(screenshotDirectory, `accessory-${routeUrl.searchParams.get("accessory") ?? "case"}-review-conflict.png`), animations: "disabled"
+        });
+        await review.getByRole("heading", { name: /Укажите проверенную совместимость/u }).scrollIntoViewIfNeeded();
+        await page.screenshot({
+          path: resolve(screenshotDirectory, `accessory-${routeUrl.searchParams.get("accessory") ?? "case"}-review-editor.png`), animations: "disabled"
+        });
+        await review.getByRole("button", { name: "Закрыть разбор продаж" }).click();
+        await expect(review).toHaveCount(0);
+      }
+      if (routeUrl.pathname === "/overview" && routeUrl.searchParams.get("warranties") === "review") {
+        const trigger = page.getByRole("button", { name: "Разобрать конфликты" });
+        await expect(trigger).toBeVisible();
+        await trigger.click();
+        const review = page.getByRole("dialog", { name: "Разбор спорных продаж" });
+        await expect(review).toBeVisible();
+        const firstCase = review.locator(".warranty-queue__item").first();
+        await firstCase.click();
+        await expect(review.getByRole("heading", { name: "Гарантия Check 3 шт." })).toBeVisible();
+        await review.getByRole("spinbutton", { name: /iPhone 13 Б\/У/u }).fill("2");
+        await expect(review.getByRole("button", { name: "Проверить результат" })).toBeDisabled();
+        await review.getByRole("spinbutton", { name: /Samsung Galaxy S24/u }).fill("1");
+        await page.screenshot({ path: resolve(screenshotDirectory, "warranty-allocation.png"), animations: "disabled" });
+        await review.getByRole("button", { name: "Проверить результат" }).click();
+        const preview = review.getByLabel("Результат решения");
+        await expect(preview).toContainText("Гарантия Б/У: +2");
+        await expect(preview).toContainText("Гарантия новые: +1");
+        await preview.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: resolve(screenshotDirectory, "warranty-preview.png"), animations: "disabled" });
+        if (useFixtureApi) {
+          // Synthetic mode verifies UI interactions; numerical correctness is covered by backend integration tests.
+          await review.getByRole("button", { name: "Сохранить решение" }).click();
+          await expect(review.getByRole("status")).toContainText("Решение сохранено");
+        } else {
+        const ratesPath = `/api/stores/${routeUrl.searchParams.get("store")}/kpi/attach-rates?periodStart=2026-08-01&periodEnd=2026-08-31`;
+        const beforeResponse = await page.request.get(ratesPath);
+        expect(beforeResponse.ok()).toBe(true);
+        const before = await beforeResponse.json() as { rates: { metricCode: string; numeratorQuantity: number }[] };
+        await review.getByRole("button", { name: "Сохранить решение" }).click();
+        await expect(review.getByRole("status")).toContainText("Решение сохранено");
+        const afterResponse = await page.request.get(ratesPath);
+        expect(afterResponse.ok()).toBe(true);
+        const after = await afterResponse.json() as typeof before;
+        for (const [code, increase] of [["WARRANTY_GENERIC_USED", 2], ["WARRANTY_GENERIC_NEW", 1]] as const) {
+          expect(after.rates.find((rate) => rate.metricCode === code)!.numeratorQuantity)
+            .toBe(before.rates.find((rate) => rate.metricCode === code)!.numeratorQuantity + increase);
+        }
+        }
+        await review.getByRole("button", { name: "Закрыть разбор продаж" }).click();
+        await expect(review).toHaveCount(0);
+        await expect(page.locator(".warranty-banner > .button")).toBeFocused();
+      }
+      if (routeUrl.pathname === "/overview" && routeUrl.searchParams.get("warranties") !== "review") {
         await expect(page.getByText("Замечаний по данным: 28")).toHaveCount(0);
         await expect(page.getByRole("heading", {
           name: "Структура продаж — только продавцы"
@@ -1165,6 +1419,15 @@ test.describe("local frontend visual review", () => {
         } else {
           await expect(page.getByText(/План месяца/u)).toHaveCount(0);
           await expect(page.getByRole("link", { name: "План", exact: true })).toHaveCount(0);
+        }
+        if (useFixtureApi) {
+          const devices = page.getByLabel("Техника и ее состав");
+          await devices.getByText("Остальная техника по видам").click();
+          await expect(devices.getByText("Планшеты Apple")).toBeVisible();
+          await expect(devices.getByText("Колонки")).toBeVisible();
+          await devices.screenshot({
+            path: resolve(screenshotDirectory, "catalog-device-details.png"), animations: "disabled"
+          });
         }
         const storeScope = page.getByRole("button", { name: "Весь магазин" });
         await storeScope.click();
@@ -1359,7 +1622,10 @@ test.describe("local frontend visual review", () => {
       await expect(page.locator(".query-error, .inline-query-error, .stale-data-note"))
         .toHaveCount(0);
       await expectNoHorizontalOverflow(page);
-      expect(runtimeFailures).toEqual([]);
+      const unexpectedFailures = runtimeFailures.filter((failure) =>
+        routeUrl.searchParams.get("cases") !== "unavailable"
+        || !/^503 \/api\/stores\/[^/]+\/attach-rate\/cases$/u.test(failure));
+      expect(unexpectedFailures).toEqual([]);
     });
   }
 });

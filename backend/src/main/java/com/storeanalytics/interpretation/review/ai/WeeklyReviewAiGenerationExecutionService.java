@@ -4,11 +4,12 @@ import com.storeanalytics.interpretation.generation.LlmProviderClient;
 import com.storeanalytics.interpretation.generation.LlmProviderException;
 import com.storeanalytics.interpretation.generation.LlmProviderPreflight;
 import com.storeanalytics.interpretation.generation.LlmProviderResponseReceipt;
-import com.storeanalytics.interpretation.review.PersistedWeeklyReviewSnapshot;
+import com.storeanalytics.interpretation.review.PersistedWeeklyReview;
 import com.storeanalytics.interpretation.review.WeeklyReviewSnapshotStore;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -18,6 +19,7 @@ public class WeeklyReviewAiGenerationExecutionService {
     private final WeeklyReviewSnapshotStore snapshotStore;
     private final WeeklyReviewAiGenerationSupport support;
     private final Clock clock;
+    private final SellerWeeklyReviewAiFreshnessGuard sellerGuard;
 
     public WeeklyReviewAiGenerationExecutionService(
             WeeklyReviewAiJobStore jobStore,
@@ -25,25 +27,34 @@ public class WeeklyReviewAiGenerationExecutionService {
             WeeklyReviewAiGenerationSupport support,
             Clock clock
     ) {
+        this(jobStore, snapshotStore, support, clock, null);
+    }
+
+    @Autowired
+    public WeeklyReviewAiGenerationExecutionService(WeeklyReviewAiJobStore jobStore,
+                                                    WeeklyReviewSnapshotStore snapshotStore,
+                                                    WeeklyReviewAiGenerationSupport support, Clock clock,
+                                                    SellerWeeklyReviewAiFreshnessGuard sellerGuard) {
         this.jobStore = jobStore;
         this.snapshotStore = snapshotStore;
         this.support = support;
         this.clock = clock;
+        this.sellerGuard = sellerGuard;
     }
 
     public void execute(WeeklyReviewAiJob job, String owner) {
         Instant now = clock.instant();
-        if (!WeeklyReviewAiContract.isActive(
-                job.promptVersion(), job.contentSchemaVersion())) {
+        boolean seller = SellerWeeklyReviewAiContract.isActive(job.promptVersion(), job.contentSchemaVersion());
+        if (!seller && !WeeklyReviewAiContract.isActive(job.promptVersion(), job.contentSchemaVersion())) {
             jobStore.failClaimed(
                     job, owner, "JOB_CONTRACT_MISMATCH",
                     "Weekly review AI job contract is not active", now
             );
             return;
         }
-        PersistedWeeklyReviewSnapshot snapshot = snapshotStore
-                .findById(job.snapshotId())
-                .orElse(null);
+        PersistedWeeklyReview snapshot = seller
+                ? snapshotStore.findV3ById(job.snapshotId()).orElse(null)
+                : snapshotStore.findById(job.snapshotId()).orElse(null);
         if (snapshot == null) {
             jobStore.failClaimed(
                     job, owner, "SNAPSHOT_NOT_FOUND",
@@ -55,6 +66,11 @@ public class WeeklyReviewAiGenerationExecutionService {
         LlmProviderClient provider;
         LlmProviderPreflight preflight;
         try {
+            if (seller && !sellerCurrent(snapshot)) {
+                jobStore.failClaimed(job, owner, "SNAPSHOT_NOT_CURRENT",
+                        "Seller source changed before provider execution", clock.instant());
+                return;
+            }
             prepared = support.requestFactory().prepare(
                     new WeeklyReviewAiProviderRequestCommand(
                             job.id(),
@@ -98,6 +114,11 @@ public class WeeklyReviewAiGenerationExecutionService {
 
         WeeklyReviewAiAttempt attempt;
         try {
+            if (seller && !sellerCurrent(snapshot)) {
+                jobStore.failClaimed(job, owner, "SNAPSHOT_NOT_CURRENT",
+                        "Seller source changed before provider execution", clock.instant());
+                return;
+            }
             attempt = jobStore.startAttempt(
                     job, owner, prepared, preflight, clock.instant()
             );
@@ -125,6 +146,10 @@ public class WeeklyReviewAiGenerationExecutionService {
         WeeklyReviewAiValidationResult validation = support.validator().validate(
                 prepared.input(), response.responseBody()
         );
+        if (seller && !sellerCurrent(snapshot)) {
+            jobStore.recordStaleResponse(job, attempt, owner, response, clock.instant());
+            return;
+        }
         if (!validation.semanticValidated()) {
             jobStore.recordValidationFailure(
                     job,
@@ -146,6 +171,15 @@ public class WeeklyReviewAiGenerationExecutionService {
                 validation,
                 clock.instant()
         );
+    }
+
+    private boolean sellerCurrent(PersistedWeeklyReview snapshot) {
+        try {
+            return sellerGuard != null && sellerGuard.isCurrent(snapshot);
+        } catch (RuntimeException unavailableSource) {
+            // A failed freshness read must not lose an already billed provider receipt.
+            return false;
+        }
     }
 
     private Instant startOfUtcDay(Instant value) {

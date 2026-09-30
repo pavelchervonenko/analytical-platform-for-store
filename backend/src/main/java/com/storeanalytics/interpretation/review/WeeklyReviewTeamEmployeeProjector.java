@@ -428,8 +428,11 @@ public final class WeeklyReviewTeamEmployeeProjector {
                 policy.attachSufficiency(currentDenominator),
                 policy.attachSufficiency(previousDenominator)
         );
-        BigDecimal currentRate = attachValue(current, EmployeeAttachRatingEntry::ratePercent);
-        BigDecimal previousRate = attachValue(previous, EmployeeAttachRatingEntry::ratePercent);
+        boolean incomplete = incompleteAttach(current, previous);
+        BigDecimal currentRate = incomplete
+                ? null : attachValue(current, EmployeeAttachRatingEntry::ratePercent);
+        BigDecimal previousRate = incomplete
+                ? null : attachValue(previous, EmployeeAttachRatingEntry::ratePercent);
         MetricComparison comparison = comparison(new ComparisonInput(
                 employeePublicId,
                 code,
@@ -440,10 +443,10 @@ public final class WeeklyReviewTeamEmployeeProjector {
                 policy.attachThreshold(),
                 currentRate,
                 previousRate,
-                available(currentRate, previousRate),
+                incomplete ? UNAVAILABLE : available(currentRate, previousRate),
                 sufficiency,
-                attachSample(current),
-                attachSample(previous),
+                incomplete ? null : attachSample(current),
+                incomplete ? null : attachSample(previous),
                 "EMP:" + employeePublicId + ".ATTACH." + code
         ));
         return new AttachMetric(
@@ -458,9 +461,17 @@ public final class WeeklyReviewTeamEmployeeProjector {
         return rate == null ? null : new Sample(
                 rate.numeratorReceiptCount(),
                 rate.denominatorReceiptCount(),
-                "Чеки с дополнительной категорией",
-                "Чеки базы"
+                "Единиц дополнения",
+                "Единиц техники"
         );
+    }
+
+    private boolean incompleteAttach(
+            EmployeeAttachRatingEntry current,
+            EmployeeAttachRatingEntry previous
+    ) {
+        return current != null && current.attributionIncomplete()
+                || previous != null && previous.attributionIncomplete();
     }
 
     private List<MetricComparison> ownCandidates(EmployeeMetricSet metrics) {

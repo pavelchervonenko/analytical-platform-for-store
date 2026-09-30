@@ -31,6 +31,45 @@ class WeeklyReviewServiceTest {
     private static final Instant NOW = Instant.parse("2026-08-27T12:00:00Z");
 
     @Test
+    void generationAcknowledgesOnlyAttributionMarkerCapturedWithFacts() {
+        UUID storeId = UUID.randomUUID();
+        UUID snapshotId = UUID.randomUUID();
+        StoreRepository stores = mock(StoreRepository.class);
+        Store store = mock(Store.class);
+        when(store.getId()).thenReturn(storeId);
+        when(store.getTimezone()).thenReturn("Europe/Moscow");
+        when(stores.findById(storeId)).thenReturn(Optional.of(store));
+        WeeklyReviewFactsSource source = mock(WeeklyReviewFactsSource.class);
+        WeeklyReviewFacts facts = mock(WeeklyReviewFacts.class);
+        Optional<Instant> marker = Optional.of(NOW.minusSeconds(60));
+        when(source.loadForGeneration(storeId, NOW, "Europe/Moscow"))
+                .thenReturn(new WeeklyReviewFactsSource.GenerationFacts(facts, marker));
+        WeeklyReviewSnapshotStore snapshots = mock(WeeklyReviewSnapshotStore.class);
+        PersistedWeeklyReviewSnapshot saved = mock(PersistedWeeklyReviewSnapshot.class);
+        when(saved.id()).thenReturn(snapshotId);
+        when(snapshots.persist(facts, NOW)).thenReturn(saved);
+        WeeklyReviewService service = new WeeklyReviewService(stores, source, snapshots,
+                mock(WeeklyReviewAiReadSupport.class), Clock.fixed(NOW, ZoneOffset.UTC));
+
+        assertThat(service.generate(storeId)).isSameAs(saved);
+        var ordered = org.mockito.Mockito.inOrder(source, snapshots);
+        ordered.verify(source).loadForGeneration(storeId, NOW, "Europe/Moscow");
+        ordered.verify(snapshots).persist(facts, NOW);
+        ordered.verify(snapshots).acknowledgeAttribution(storeId, snapshotId, marker);
+    }
+
+    @Test
+    void attributionMarkerAndFactsAreLoadedUnderRepeatableRead() throws Exception {
+        var transaction = WeeklyReviewFactsSource.class
+                .getMethod("loadForGeneration", UUID.class, Instant.class, String.class)
+                .getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+
+        assertThat(transaction.readOnly()).isTrue();
+        assertThat(transaction.isolation())
+                .isEqualTo(org.springframework.transaction.annotation.Isolation.REPEATABLE_READ);
+    }
+
+    @Test
     void composesExactSnapshotWithItsPublishedEnrichment() {
         UUID storeId = UUID.randomUUID();
         UUID snapshotId = UUID.randomUUID();
@@ -41,6 +80,8 @@ class WeeklyReviewServiceTest {
         when(stores.findById(storeId)).thenReturn(Optional.of(store));
 
         WeeklyReviewResponse base = mock(WeeklyReviewResponse.class);
+        when(base.provenance()).thenReturn(new WeeklyReviewResponse.Provenance(
+                UUID.randomUUID().toString(), 1, NOW.minusSeconds(60), NOW.minusSeconds(60), false, null));
         WeeklyReviewResponse enriched = mock(WeeklyReviewResponse.class);
         PersistedWeeklyReviewSnapshot snapshot = new PersistedWeeklyReviewSnapshot(
                 snapshotId,
@@ -103,6 +144,8 @@ class WeeklyReviewServiceTest {
         when(store.getTimezone()).thenReturn("Europe/Moscow");
         when(stores.findById(storeId)).thenReturn(Optional.of(store));
         WeeklyReviewResponse base = mock(WeeklyReviewResponse.class);
+        when(base.provenance()).thenReturn(new WeeklyReviewResponse.Provenance(
+                UUID.randomUUID().toString(), 1, NOW.minusSeconds(60), NOW.minusSeconds(60), false, null));
         PersistedWeeklyReviewSnapshot persisted = new PersistedWeeklyReviewSnapshot(
                 snapshotId,
                 storeId,
@@ -151,6 +194,8 @@ class WeeklyReviewServiceTest {
         when(store.getTimezone()).thenReturn("Europe/Moscow");
         when(stores.findById(storeId)).thenReturn(Optional.of(store));
         WeeklyReviewResponse base = mock(WeeklyReviewResponse.class);
+        when(base.provenance()).thenReturn(new WeeklyReviewResponse.Provenance(
+                UUID.randomUUID().toString(), 1, NOW.minusSeconds(60), NOW.minusSeconds(60), false, null));
         WeeklyReviewResponse enriched = mock(WeeklyReviewResponse.class);
         PersistedWeeklyReviewSnapshot persisted =
                 new PersistedWeeklyReviewSnapshot(
@@ -210,6 +255,8 @@ class WeeklyReviewServiceTest {
         when(store.getTimezone()).thenReturn("Europe/Moscow");
         when(stores.findById(storeId)).thenReturn(Optional.of(store));
         WeeklyReviewResponse base = mock(WeeklyReviewResponse.class);
+        when(base.provenance()).thenReturn(new WeeklyReviewResponse.Provenance(
+                UUID.randomUUID().toString(), 1, NOW.minusSeconds(60), NOW.minusSeconds(60), false, null));
         WeeklyReviewSnapshotStore snapshots = mock(WeeklyReviewSnapshotStore.class);
         when(snapshots.findLatest(eq(storeId), any(DateRange.class)))
                 .thenReturn(Optional.of(new PersistedWeeklyReviewSnapshot(

@@ -8,6 +8,7 @@ import com.storeanalytics.interpretation.generation.LlmProviderException;
 import com.storeanalytics.interpretation.generation.LlmProviderPreflight;
 import com.storeanalytics.interpretation.generation.LlmProviderResponseReceipt;
 import com.storeanalytics.common.exception.PreconditionFailedException;
+import com.storeanalytics.interpretation.review.SellerWeeklyReviewProperties;
 import com.storeanalytics.interpretation.validation.LlmValidationViolation;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
@@ -50,21 +52,41 @@ public class WeeklyReviewAiJobStore {
             SELECT id
             FROM weekly_review_snapshots
             WHERE id = ?
+              AND report_contract_version = ?
             FOR UPDATE
             """;
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final WeeklyReviewAiGenerationProperties properties;
+    private final String promptVersion;
+    private final int reportContractVersion;
 
     public WeeklyReviewAiJobStore(
             JdbcTemplate jdbcTemplate,
             ObjectMapper objectMapper,
             WeeklyReviewAiGenerationProperties properties
     ) {
+        this(jdbcTemplate, objectMapper, properties, new SellerWeeklyReviewProperties(false));
+    }
+
+    @Autowired
+    public WeeklyReviewAiJobStore(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper,
+            WeeklyReviewAiGenerationProperties properties, SellerWeeklyReviewProperties sellers) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.properties = properties;
+        this.promptVersion = sellers.enabled() ? SellerWeeklyReviewAiContract.PROMPT_VERSION
+                : WeeklyReviewAiContract.PROMPT_VERSION;
+        this.reportContractVersion = sellers.enabled() ? 3 : 2;
+    }
+
+    String activePromptVersion() {
+        return promptVersion;
+    }
+
+    int activeReportContractVersion() {
+        return reportContractVersion;
     }
 
     @Transactional
@@ -81,6 +103,11 @@ public class WeeklyReviewAiJobStore {
         Duration ttl = positive(deadline, "deadline");
         require(maxAttempts >= 1 && maxAttempts <= 2,
                 "maxAttempts must be 1 or 2");
+        Integer version = jdbcTemplate.queryForObject(
+                "SELECT report_contract_version FROM weekly_review_snapshots WHERE id = ?", Integer.class, snapshot);
+        if (version == null || version != reportContractVersion) {
+            throw new PreconditionFailedException("Snapshot contract does not match the active AI input");
+        }
         jdbcTemplate.update("""
                 INSERT INTO weekly_review_ai_jobs (
                     id, snapshot_id, prompt_version, content_schema_version,
@@ -92,7 +119,7 @@ public class WeeklyReviewAiJobStore {
                 """,
                 UUID.randomUUID(),
                 snapshot,
-                WeeklyReviewAiContract.PROMPT_VERSION,
+                promptVersion,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 requireText(providerCode, "providerCode"),
                 requireText(requestedModel, "requestedModel"),
@@ -125,7 +152,7 @@ public class WeeklyReviewAiJobStore {
                 LOCK_SNAPSHOT_SQL,
                 (resultSet, rowNumber) ->
                         resultSet.getObject("id", UUID.class),
-                snapshot
+                snapshot, reportContractVersion
         );
         if (locked.isEmpty()) {
             throw new PreconditionFailedException(
@@ -149,7 +176,7 @@ public class WeeklyReviewAiJobStore {
                 """,
                 UUID.randomUUID(),
                 snapshot,
-                WeeklyReviewAiContract.PROMPT_VERSION,
+                promptVersion,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 requireText(providerCode, "providerCode"),
                 requireText(requestedModel, "requestedModel"),
@@ -197,6 +224,7 @@ public class WeeklyReviewAiJobStore {
                            snapshot.period_end, snapshot.revision,
                            snapshot.report_state
                     FROM weekly_review_snapshots snapshot
+                    WHERE snapshot.report_contract_version = ?
                     ORDER BY snapshot.store_id, snapshot.period_end DESC,
                              snapshot.revision DESC
                 ) candidate
@@ -215,7 +243,7 @@ public class WeeklyReviewAiJobStore {
                 ON CONFLICT (snapshot_id, prompt_version, content_schema_version)
                 DO NOTHING
                 """,
-                WeeklyReviewAiContract.PROMPT_VERSION,
+                promptVersion,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 requireText(providerCode, "providerCode"),
                 requireText(requestedModel, "requestedModel"),
@@ -224,9 +252,10 @@ public class WeeklyReviewAiJobStore {
                 Timestamp.from(timestamp.plus(ttl)),
                 Timestamp.from(timestamp),
                 Timestamp.from(timestamp),
-                WeeklyReviewAiContract.PROMPT_VERSION,
+                reportContractVersion,
+                promptVersion,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
-                WeeklyReviewAiContract.PROMPT_VERSION,
+                promptVersion,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 batchSize
         );
@@ -238,7 +267,7 @@ public class WeeklyReviewAiJobStore {
                 FIND_BY_SNAPSHOT_SQL,
                 this::mapJob,
                 requireNonNull(snapshotId, "snapshotId"),
-                WeeklyReviewAiContract.PROMPT_VERSION,
+                promptVersion,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
         ));
     }
@@ -262,7 +291,7 @@ public class WeeklyReviewAiJobStore {
                 """,
                 Long.class,
                 snapshotId,
-                WeeklyReviewAiContract.PROMPT_VERSION,
+                promptVersion,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
         );
         return count != null && count > 0;
@@ -291,7 +320,7 @@ public class WeeklyReviewAiJobStore {
                   AND deadline_at <= ?
                 """,
                 Timestamp.from(timestamp),
-                WeeklyReviewAiContract.PROMPT_VERSION,
+                promptVersion,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 Timestamp.from(timestamp));
         List<UUID> candidates = jdbcTemplate.query("""
@@ -308,7 +337,7 @@ public class WeeklyReviewAiJobStore {
                 LIMIT 1
                 """,
                 (resultSet, rowNumber) -> resultSet.getObject("id", UUID.class),
-                WeeklyReviewAiContract.PROMPT_VERSION,
+                promptVersion,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 Timestamp.from(timestamp),
                 Timestamp.from(timestamp)
@@ -455,6 +484,20 @@ public class WeeklyReviewAiJobStore {
         ));
     }
 
+    /** Preserve the billed receipt, but never publish wording for a stale seller source. */
+    @Transactional
+    public void recordStaleResponse(WeeklyReviewAiJob job, WeeklyReviewAiAttempt attempt, String owner,
+                                    LlmProviderResponseReceipt response, Instant now) {
+        WeeklyReviewAiValidationResult rejected = WeeklyReviewAiValidationResult.invalid(
+                com.storeanalytics.interpretation.validation.LlmValidationOutcome.SEMANTIC_INVALID,
+                List.of(new LlmValidationViolation("SNAPSHOT_NOT_CURRENT", "$", null)));
+        finishAttemptResponse(attempt, "REJECTED", response, rejected,
+                "SNAPSHOT_NOT_CURRENT", "Seller source changed during provider execution", now);
+        transitionAfterFailure(new FailureTransition(job, owner, false, "SNAPSHOT_NOT_CURRENT",
+                "Seller source changed during provider execution", List.of("SNAPSHOT_NOT_CURRENT"),
+                properties.retryInitialDelay(), now));
+    }
+
     @Transactional
     public void recordSuccessfulAttempt(
             WeeklyReviewAiJob job,
@@ -556,7 +599,7 @@ public class WeeklyReviewAiJobStore {
                 """,
                 Long.class,
                 requireNonNull(status, "status").name(),
-                WeeklyReviewAiContract.PROMPT_VERSION,
+                promptVersion,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
         );
         return value == null ? 0L : value;
@@ -573,7 +616,7 @@ public class WeeklyReviewAiJobStore {
                   AND lease_until < ?
                 """,
                 Long.class,
-                WeeklyReviewAiContract.PROMPT_VERSION,
+                promptVersion,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 Timestamp.from(requireNonNull(now, "now")));
         return value == null ? 0L : value;
@@ -590,7 +633,7 @@ public class WeeklyReviewAiJobStore {
                   AND created_at < ?
                 """,
                 Long.class,
-                WeeklyReviewAiContract.PROMPT_VERSION,
+                promptVersion,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 Timestamp.from(requireNonNull(
                         createdBefore, "createdBefore"
@@ -658,7 +701,7 @@ public class WeeklyReviewAiJobStore {
                   AND job.lease_until < ?
                 """,
                 Timestamp.from(now),
-                WeeklyReviewAiContract.PROMPT_VERSION,
+                promptVersion,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 Timestamp.from(now)
         );
@@ -678,7 +721,7 @@ public class WeeklyReviewAiJobStore {
                   )
                 """,
                 Timestamp.from(now),
-                WeeklyReviewAiContract.PROMPT_VERSION,
+                promptVersion,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 Timestamp.from(now),
                 Timestamp.from(now)
@@ -702,7 +745,7 @@ public class WeeklyReviewAiJobStore {
                   AND job.lease_until < ?
                 """,
                 Timestamp.from(now),
-                WeeklyReviewAiContract.PROMPT_VERSION,
+                promptVersion,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 Timestamp.from(now)
         );
@@ -723,7 +766,7 @@ public class WeeklyReviewAiJobStore {
                 """,
                 Timestamp.from(now),
                 Timestamp.from(now),
-                WeeklyReviewAiContract.PROMPT_VERSION,
+                promptVersion,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 Timestamp.from(now)
         );

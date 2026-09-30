@@ -52,6 +52,11 @@ public final class WeeklyReviewPolicyV1 {
             "weekly-quality-v8"
     );
 
+    public static VersionSet versionsForAttach(boolean attributed) {
+        return attributed ? new VersionSet(VERSIONS.metricsPolicy() + "-attach-v4",
+                VERSIONS.snapshotPolicy(), VERSIONS.qualityPolicy() + "-attach-v4") : VERSIONS;
+    }
+
     private static final int PERCENT_SCALE = 2;
     private static final BigDecimal STORE_RELATIVE_THRESHOLD = new BigDecimal("5.00");
     private static final BigDecimal EMPLOYEE_RELATIVE_THRESHOLD = new BigDecimal("10.00");
@@ -180,36 +185,47 @@ public final class WeeklyReviewPolicyV1 {
             MetricState metricState,
             Sufficiency sufficiency
     ) {
+        return revenueDecomposition(current, previous, metricState, sufficiency, "STORE");
+    }
+
+    public RevenueDecomposition revenueDecomposition(
+            RevenuePeriod current,
+            RevenuePeriod previous,
+            MetricState metricState,
+            Sufficiency sufficiency,
+            String scope
+    ) {
         requireNonNull(current, "current");
         requireNonNull(previous, "previous");
         requireNonNull(metricState, "metricState");
         requireNonNull(sufficiency, "sufficiency");
+        require("STORE".equals(scope) || "SELLERS".equals(scope), "unsupported revenue scope");
         require(current.identityValid(), "current revenue identity must be valid");
         require(previous.identityValid(), "previous revenue identity must be valid");
         return new RevenueDecomposition(
                 compare(
-                        MetricSpec.storeMoney("SALES_REVENUE", Polarity.HIGHER_IS_BETTER),
+                        MetricSpec.money(scope, "SALES_REVENUE", Polarity.HIGHER_IS_BETTER),
                         current.salesRevenue(), previous.salesRevenue(),
                         metricState, sufficiency, null, null
                 ),
                 compare(
-                        MetricSpec.storeMoney("RETURN_REVENUE", Polarity.LOWER_IS_BETTER),
+                        MetricSpec.money(scope, "RETURN_REVENUE", Polarity.LOWER_IS_BETTER),
                         current.returnRevenue(), previous.returnRevenue(),
                         metricState, sufficiency, null, null
                 ),
                 compare(
-                        MetricSpec.storeMoney("NET_REVENUE", Polarity.HIGHER_IS_BETTER),
+                        MetricSpec.money(scope, "NET_REVENUE", Polarity.HIGHER_IS_BETTER),
                         current.netRevenue(), previous.netRevenue(),
                         metricState, sufficiency, null, null
                 ),
                 compare(
-                        MetricSpec.storeCount("SALE_DOCUMENT_COUNT"),
+                        MetricSpec.count(scope, "SALE_DOCUMENT_COUNT"),
                         BigDecimal.valueOf(current.saleDocumentCount()),
                         BigDecimal.valueOf(previous.saleDocumentCount()),
                         metricState, sufficiency, null, null
                 ),
                 compare(
-                        MetricSpec.storeCount("RETURN_DOCUMENT_COUNT"),
+                        MetricSpec.count(scope, "RETURN_DOCUMENT_COUNT"),
                         BigDecimal.valueOf(current.returnDocumentCount()),
                         BigDecimal.valueOf(previous.returnDocumentCount()),
                         metricState, sufficiency, null, null
@@ -332,30 +348,40 @@ public final class WeeklyReviewPolicyV1 {
         }
 
         public static MetricSpec storeMoney(String code, Polarity polarity) {
+            return money("STORE", code, polarity);
+        }
+
+        public static MetricSpec money(String scope, String code, Polarity polarity) {
             String normalized = requireNonNull(code, "code");
+            require("STORE".equals(scope) || "SELLERS".equals(scope), "unsupported metric scope");
             return new MetricSpec(
-                    "store:" + normalized.toLowerCase(Locale.ROOT),
+                    scope.toLowerCase(Locale.ROOT) + ":" + normalized.toLowerCase(Locale.ROOT),
                     normalized,
                     label(normalized),
                     Unit.RUB,
                     polarity,
                     DeltaMode.RELATIVE,
                     STORE_RELATIVE_THRESHOLD,
-                    "STORE." + normalized
+                    scope + "." + normalized
             );
         }
 
         public static MetricSpec storeCount(String code) {
+            return count("STORE", code);
+        }
+
+        public static MetricSpec count(String scope, String code) {
             String normalized = requireNonNull(code, "code");
+            require("STORE".equals(scope) || "SELLERS".equals(scope), "unsupported metric scope");
             return new MetricSpec(
-                    "store:" + normalized.toLowerCase(Locale.ROOT),
+                    scope.toLowerCase(Locale.ROOT) + ":" + normalized.toLowerCase(Locale.ROOT),
                     normalized,
                     label(normalized),
                     Unit.COUNT,
                     Polarity.CONTEXT,
                     DeltaMode.RELATIVE,
                     STORE_RELATIVE_THRESHOLD,
-                    "STORE." + normalized
+                    scope + "." + normalized
             );
         }
 

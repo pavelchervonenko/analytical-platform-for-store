@@ -20,6 +20,7 @@ import { formatMoney, formatNumber, formatPercent } from "../shared/format";
 import { InlineQueryError, PanelSkeleton, QueryError, StaleDataNote } from "../shared/QueryState";
 import { useWorkspace, type AnalyticsPeriodMode } from "../stores/WorkspaceProvider";
 import { AttachRateMatrix, EmployeePerformanceSection, ManagementSummary } from "./OverviewManagementSections";
+import { WarrantyPanel } from "../warranties/WarrantyPanel";
 import { OverviewPlanPanel } from "./OverviewPlanPanel";
 
 const groupLabels: Record<string, { label: string; icon: ReactNode }> = {
@@ -54,7 +55,9 @@ export function SalesStructure({ groups }: { groups: SalesGroup[] }) {
   const accessory = byCode.get("ACCESSORY");
   const service = byCode.get("SERVICE");
   const structuredCodes = new Set(["DEVICES", "PHONES", "ADDITIONAL_REVENUE", "ACCESSORY", "SERVICE"]);
-  const otherGroups = groups.filter((group) => !structuredCodes.has(group.groupCode));
+  const deviceDetails = groups.filter((group) => group.groupCode.startsWith("DEVICE_CATEGORY:"));
+  const otherGroups = groups.filter((group) => !structuredCodes.has(group.groupCode)
+    && !group.groupCode.startsWith("DEVICE_CATEGORY:"));
 
   return (
     <div className="group-list group-list--hierarchical">
@@ -62,6 +65,12 @@ export function SalesStructure({ groups }: { groups: SalesGroup[] }) {
         <section className="group-branch" aria-label="Техника и ее состав">
           {devices && <SalesGroupRow group={devices} />}
           {phones && <SalesGroupRow group={phones} nested />}
+          {deviceDetails.length > 0 && (
+            <details className="sales-device-details">
+              <summary>Остальная техника по видам</summary>
+              {deviceDetails.map((group) => <SalesGroupRow group={group} nested key={group.groupCode} />)}
+            </details>
+          )}
         </section>
       )}
       {(additionalRevenue || accessory || service) && (
@@ -224,6 +233,9 @@ export function OverviewPage() {
           storeName={selectedStore.name}
         />
       )}
+
+      {attachQuery.data && <WarrantyPanel key={storeId} storeId={storeId}
+        periodStart={periodStart} periodEnd={periodEnd} />}
 
       <section className="overview-details" aria-label="Подробные показатели">
         <details className="panel overview-disclosure">

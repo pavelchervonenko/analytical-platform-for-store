@@ -3,6 +3,7 @@ package com.storeanalytics.interpretation.review;
 import static com.storeanalytics.common.validation.ModelValidation.requireNonNull;
 
 import com.storeanalytics.interpretation.snapshot.EmployeeSalesSampleFacts;
+import com.storeanalytics.metrics.service.AttachRateResult;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.performance.repository.EmployeeAttachRateAggregate;
 import com.storeanalytics.performance.repository.EmployeeAttachRateRepository;
@@ -71,9 +72,18 @@ public class WeeklyReviewEmployeeFactsReader {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public EmployeePeriod read(UUID storeId, StoreKpiPeriod period) {
+    public EmployeePeriod read(UUID storeId, StoreKpiPeriod period, AttachRateResult storeAttach) {
         UUID validatedStoreId = requireNonNull(storeId, "storeId");
         StoreKpiPeriod validatedPeriod = requireNonNull(period, "period");
+        AttachRateResult validatedStoreAttach = requireNonNull(storeAttach, "storeAttach");
+        boolean attributionEnabled = "attach-rate-v4".equals(validatedStoreAttach.formulaVersion());
+        boolean unassignedReturns = attributionEnabled
+                && validatedStoreAttach.dataQuality().unassignedReturnItemCount() > 0;
+        Map<String, Boolean> incompleteAttach = validatedStoreAttach.rates().stream()
+                .collect(Collectors.toMap(
+                        rate -> rate.metricCode(),
+                        rate -> attributionEnabled && (rate.preliminary() || unassignedReturns)
+                ));
         List<EmployeePerformanceAggregate> employees = performanceRepository.aggregate(
                 validatedStoreId,
                 validatedPeriod.start(),
@@ -94,7 +104,8 @@ public class WeeklyReviewEmployeeFactsReader {
         List<EmployeeRatingEntry> entries = employees.stream()
                 .map(employee -> entry(
                         employee,
-                        attach.getOrDefault(employee.employeeId(), List.of())
+                        attach.getOrDefault(employee.employeeId(), List.of()),
+                        incompleteAttach
                 ))
                 .toList();
         return new EmployeePeriod(
@@ -127,7 +138,8 @@ public class WeeklyReviewEmployeeFactsReader {
 
     private EmployeeRatingEntry entry(
             EmployeePerformanceAggregate source,
-            List<EmployeeAttachRateAggregate> attachRates
+            List<EmployeeAttachRateAggregate> attachRates,
+            Map<String, Boolean> incompleteAttach
     ) {
         BigDecimal revenue = money(source.netRevenue());
         BigDecimal hours = source.workedHours().setScale(2, RoundingMode.UNNECESSARY);
@@ -158,11 +170,15 @@ public class WeeklyReviewEmployeeFactsReader {
                 null,
                 false,
                 null,
-                attachRates.stream().map(this::attach).toList()
+                attachRates.stream().map(rate -> attach(
+                        rate, incompleteAttach.getOrDefault(rate.metricCode(), false)
+                )).toList()
         );
     }
 
-    private EmployeeAttachRatingEntry attach(EmployeeAttachRateAggregate source) {
+    private EmployeeAttachRatingEntry attach(
+            EmployeeAttachRateAggregate source, boolean attributionIncomplete
+    ) {
         BigDecimal numerator = source.numeratorReceiptCount().setScale(
                 3, RoundingMode.UNNECESSARY
         );
@@ -178,7 +194,8 @@ public class WeeklyReviewEmployeeFactsReader {
                 rate(numerator, denominator),
                 null,
                 false,
-                null
+                null,
+                attributionIncomplete
         );
     }
 

@@ -224,9 +224,14 @@ public class EmployeeRatingService {
                             quantity(store.numeratorReceiptCount()),
                             quantity(store.denominatorReceiptCount())
                     );
-            boolean included = denominator.compareTo(scheme.getMinimumAttachDenominator()) >= 0
+            boolean detailOnly = employee.metricCode().equals("ACCESSORY_AIRPODS")
+                    || employee.metricCode().equals("ACCESSORY_APPLE_WATCH");
+            boolean included = !detailOnly
+                    && denominator.compareTo(scheme.getMinimumAttachDenominator()) >= 0
                     && storeRate != null
-                    && storeRate.signum() > 0;
+                    && storeRate.signum() > 0
+                    && !store.preliminary()
+                    && store.unassignedMetricReturnItemCount() == 0;
             BigDecimal score = included
                     ? ratioScore(rate, storeRate, scheme.getScoreCap()) : null;
             return new EmployeeAttachRatingEntry(
@@ -238,7 +243,8 @@ public class EmployeeRatingService {
                     rate,
                     storeRate,
                     included,
-                    score
+                    score,
+                    store != null && (store.preliminary() || store.unassignedMetricReturnItemCount() > 0)
             );
         }).toList();
     }
@@ -455,7 +461,7 @@ public class EmployeeRatingService {
 
     private RatingFormulaView formula(RatingScheme scheme) {
         return new RatingFormulaView(
-                scheme.getCode(),
+                scheme.getCode() + (storeAttachRateRepository.attributionEnabled() ? "-attach-v4" : ""),
                 scheme.getContributionWeight(),
                 scheme.getEfficiencyWeight(),
                 scheme.getStructureWeight(),

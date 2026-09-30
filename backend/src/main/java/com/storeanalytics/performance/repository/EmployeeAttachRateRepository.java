@@ -1,6 +1,7 @@
 package com.storeanalytics.performance.repository;
 
 import com.storeanalytics.product.model.AttachDenominatorCode;
+import com.storeanalytics.metrics.warranty.AttachAttributionPolicy;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -23,7 +24,7 @@ public class EmployeeAttachRateRepository {
             ),
             period_facts AS (
                 SELECT fact.*
-                FROM attach_rate_item_facts_v3 fact
+                FROM attach_rate_item_facts_v3_catalog fact
                 WHERE fact.store_id = :storeId
                   AND fact.business_date BETWEEN :periodStart AND :periodEnd
                   AND fact.employee_id IS NOT NULL
@@ -34,13 +35,13 @@ public class EmployeeAttachRateRepository {
                 definition.numerator_category_code,
                 definition.denominator_code,
                 COALESCE(SUM(fact.net_quantity) FILTER (
-                    WHERE fact.numerator_metric_code = definition.metric_code
+                    WHERE definition.metric_code = ANY(fact.numerator_metric_codes)
                 ), 0) AS numerator_quantity,
                 COALESCE(SUM(fact.net_quantity) FILTER (
                     WHERE definition.metric_code = ANY(fact.denominator_metric_codes)
                 ), 0) AS denominator_quantity
             FROM rating_employees employee
-            CROSS JOIN attach_rate_metric_definitions_v3 definition
+            CROSS JOIN attach_rate_metric_definitions_catalog definition
             LEFT JOIN period_facts fact ON fact.employee_id = employee.employee_id
             GROUP BY
                 employee.employee_id,
@@ -52,9 +53,11 @@ public class EmployeeAttachRateRepository {
             """;
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final AttachAttributionPolicy policy;
 
-    public EmployeeAttachRateRepository(NamedParameterJdbcTemplate jdbcTemplate) {
+    public EmployeeAttachRateRepository(NamedParameterJdbcTemplate jdbcTemplate, AttachAttributionPolicy policy) {
         this.jdbcTemplate = jdbcTemplate;
+        this.policy = policy;
     }
 
     public List<EmployeeAttachRateAggregate> aggregate(
@@ -68,7 +71,8 @@ public class EmployeeAttachRateRepository {
                 "periodEnd", periodEnd
         );
         return jdbcTemplate.query(
-                EMPLOYEE_ATTACH_RATE_QUERY,
+                policy.enabled() ? EMPLOYEE_ATTACH_RATE_QUERY.replace(
+                        "attach_rate_item_facts_v3", "attach_rate_item_facts_v4") : EMPLOYEE_ATTACH_RATE_QUERY,
                 parameters,
                 (resultSet, rowNumber) -> new EmployeeAttachRateAggregate(
                         resultSet.getObject("employee_id", UUID.class),

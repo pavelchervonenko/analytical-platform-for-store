@@ -5,6 +5,8 @@ public enum AttachDenominatorCode {
     SAMSUNG,
     PHONE,
     PODS_WATCH,
+    AIRPODS,
+    APPLE_WATCH,
     IPAD_MAC,
     NEW_DEVICE,
     USED_DEVICE,

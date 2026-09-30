@@ -49,8 +49,8 @@ class AttachRateServiceTest {
                                 new BigDecimal("2"),
                                 1,
                                 2,
-                                3
-                        )
+                                3, false, 0, 0
+                )
                 ));
 
         AttachRateResult result = service.calculate(storeId, period());
@@ -105,8 +105,8 @@ class AttachRateServiceTest {
                 new BigDecimal(denominator),
                 unmatched,
                 ambiguous,
-                unknownCondition
-        );
+                unknownCondition, false, 0, 0
+                );
     }
 
     private StoreKpiPeriod period() {

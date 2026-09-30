@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -23,20 +24,23 @@ public class OverviewMetricsService {
     private final CategoryKpiService categoryKpiService;
     private final EmployeeKpiService employeeKpiService;
     private final EmployeeCategoryKpiService employeeCategoryKpiService;
+    private final SellerPeriodAnalyticsService sellerAnalytics;
 
     public OverviewMetricsService(
             StoreKpiService storeKpiService,
             CategoryKpiService categoryKpiService,
             EmployeeKpiService employeeKpiService,
-            EmployeeCategoryKpiService employeeCategoryKpiService
+            EmployeeCategoryKpiService employeeCategoryKpiService,
+            SellerPeriodAnalyticsService sellerAnalytics
     ) {
         this.storeKpiService = storeKpiService;
         this.categoryKpiService = categoryKpiService;
         this.employeeKpiService = employeeKpiService;
         this.employeeCategoryKpiService = employeeCategoryKpiService;
+        this.sellerAnalytics = sellerAnalytics;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public OverviewMetricsResult calculate(
             UUID storeId,
             StoreKpiPeriod period,
@@ -50,44 +54,29 @@ public class OverviewMetricsService {
         CategoryKpiResult storeCategories = categoryKpiService.calculate(
                 validatedStoreId, validatedPeriod
         );
-        EmployeeKpiResult employees = employeeKpiService.calculate(
-                validatedStoreId, validatedPeriod
-        );
-        EmployeeCategoryKpiResult employeeCategories = employeeCategoryKpiService.calculate(
-                validatedStoreId, validatedPeriod
-        );
+        SellerOverviewMetrics sellerRead = validatedScope == OverviewMetricScope.SELLERS
+                ? Objects.requireNonNull(sellerAnalytics.readForOverview(validatedStoreId, validatedPeriod)) : null;
+        EmployeeKpiResult employees = sellerRead == null
+                ? employeeKpiService.calculate(validatedStoreId, validatedPeriod)
+                : sellerRead.reconciliationEmployees();
+        EmployeeCategoryKpiResult employeeCategories = sellerRead == null
+                ? employeeCategoryKpiService.calculate(validatedStoreId, validatedPeriod)
+                : sellerRead.reconciliationCategories();
 
-        Aggregate fullEmployee = aggregateEmployees(employees.employees());
-        Aggregate sellerEmployee = aggregateEmployees(employees.employees().stream()
-                .filter(EmployeeKpiEntry::rankingEligible)
-                .toList());
         Aggregate storeAggregate = aggregateStore(store);
-        reconcile("full employee KPI", storeAggregate, fullEmployee);
-
+        reconcile("full employee KPI", storeAggregate, aggregateEmployees(employees.employees()));
         CommercialGroups storeGroups = storeGroups(storeCategories);
-        CommercialGroups fullEmployeeGroups = employeeGroups(employeeCategories.employees());
-        CommercialGroups sellerGroups = employeeGroups(employeeCategories.employees().stream()
-                .filter(EmployeeCategoryKpiEmployee::rankingEligible)
-                .toList());
-        List<CategoryKpiGroup> sellerSalesGroups = aggregateEmployeeSalesGroups(
-                storeCategories.groups(),
-                employeeCategories.employees().stream()
-                        .filter(EmployeeCategoryKpiEmployee::rankingEligible)
-                        .toList()
-        );
-        reconcileGroups("full employee category KPI", storeGroups, fullEmployeeGroups);
+        reconcileGroups("full employee category KPI", storeGroups,
+                employeeGroups(employeeCategories.employees()));
         reconcileAdditional("store", storeGroups);
-        reconcileAdditional("sellers", sellerGroups);
-        equal("seller revenue across employee projections",
-                sellerEmployee.netRevenue(), sellerGroups.netRevenue());
 
-        Aggregate selected = validatedScope == OverviewMetricScope.STORE
-                ? storeAggregate : sellerEmployee;
-        CommercialGroups selectedGroups = validatedScope == OverviewMetricScope.STORE
-                ? storeGroups : sellerGroups;
-        List<CategoryKpiGroup> selectedSalesGroups =
-                validatedScope == OverviewMetricScope.STORE
-                        ? storeCategories.groups() : sellerSalesGroups;
+        SellerPeriodMetrics sellers = sellerRead == null ? null : sellerRead.sellers();
+        Aggregate selected = sellers == null ? storeAggregate : aggregateSellers(sellers);
+        CommercialGroups selectedGroups = sellers == null ? storeGroups : storeGroups(sellers.categories());
+        List<CategoryKpiGroup> selectedSalesGroups = sellers == null
+                ? storeCategories.groups() : sellers.categories().groups();
+        reconcileAdditional("selected scope", selectedGroups);
+        equal("selected revenue across projections", selected.netRevenue(), selectedGroups.netRevenue());
         return result(
                 validatedStoreId,
                 validatedPeriod,
@@ -143,66 +132,18 @@ public class OverviewMetricsService {
         );
     }
 
-    private List<CategoryKpiGroup> aggregateEmployeeSalesGroups(
-            List<CategoryKpiGroup> referenceGroups,
-            Collection<EmployeeCategoryKpiEmployee> employees
-    ) {
-        return referenceGroups.stream()
-                .map(reference -> new CategoryKpiGroup(
-                        reference.groupCode(),
-                        reference.groupName(),
-                        aggregateEmployeeGroupMetrics(employees.stream()
-                                .map(employee -> employeeGroup(
-                                        employee.groups(), reference.groupCode()
-                                ).metrics())
-                                .toList())
-                ))
-                .toList();
-    }
-
-    private CategoryKpiMetrics aggregateEmployeeGroupMetrics(
-            List<EmployeeCategoryKpiMetrics> metrics
-    ) {
-        BigDecimal revenue = money(sum(
-                metrics, EmployeeCategoryKpiMetrics::netRevenue
-        ));
-        BigDecimal netQuantity = quantity(sum(
-                metrics, EmployeeCategoryKpiMetrics::netQuantity
-        ));
-        boolean completeCostData = metrics.stream()
-                .allMatch(metric -> metric.dataQuality().completeCostData());
-        BigDecimal cost = completeCostData
-                ? money(sum(metrics, metric -> Objects.requireNonNull(metric.costAmount())))
-                : null;
-        BigDecimal grossProfit = cost == null
-                ? null : money(revenue.subtract(cost));
-        BigDecimal averageGrossProfitPerUnit = grossProfit == null
-                || netQuantity.signum() <= 0
-                ? null
-                : grossProfit.divide(netQuantity, MONEY_SCALE, RoundingMode.HALF_UP);
-        BigDecimal marginPercent = grossProfit == null || revenue.signum() == 0
-                ? null
-                : grossProfit.multiply(BigDecimal.valueOf(100))
-                        .divide(revenue, PERCENT_SCALE, RoundingMode.HALF_UP);
-        return new CategoryKpiMetrics(
-                revenue,
-                netQuantity,
-                cost,
-                grossProfit,
-                averageGrossProfitPerUnit,
-                marginPercent,
-                new CategoryKpiDataQuality(
-                        completeCostData,
-                        metrics.stream().mapToLong(
-                                metric -> metric.dataQuality().includedItemCount()
-                        ).sum(),
-                        metrics.stream().mapToLong(
-                                metric -> metric.dataQuality().missingCostItemCount()
-                        ).sum(),
-                        metrics.stream().mapToLong(
-                                metric -> metric.dataQuality().unexpectedZeroCostItemCount()
-                        ).sum()
-                )
+    private Aggregate aggregateSellers(SellerPeriodMetrics sellers) {
+        CategoryKpiMetrics totals = sellers.totals();
+        CategoryKpiDataQuality quality = totals.dataQuality();
+        return new Aggregate(
+                totals.netRevenue(),
+                totals.netQuantity(),
+                Objects.requireNonNullElse(totals.costAmount(), BigDecimal.ZERO),
+                quality.completeCostData(),
+                quality.includedItemCount(),
+                sellers.unmappedItemCount(),
+                quality.missingCostItemCount(),
+                quality.unexpectedZeroCostItemCount()
         );
     }
 

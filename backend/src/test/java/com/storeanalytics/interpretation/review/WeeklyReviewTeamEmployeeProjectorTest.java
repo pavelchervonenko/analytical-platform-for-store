@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.EmployeeCard;
 import com.storeanalytics.interpretation.snapshot.EmployeeSalesSampleFacts;
+import com.storeanalytics.performance.service.EmployeeAttachRatingEntry;
 import com.storeanalytics.performance.service.EmployeeRatingEntry;
 import com.storeanalytics.performance.service.EmployeeRatingResult;
+import com.storeanalytics.product.model.AttachDenominatorCode;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -263,6 +265,37 @@ class WeeklyReviewTeamEmployeeProjectorTest {
     }
 
     @Test
+    void unresolvedWarrantyCannotCreateEmployeeAttentionOrAction() {
+        EmployeeRatingEntry base = employee("Анна", "700.00", 2, "16.00");
+        EmployeeRatingEntry current = withWarranty(base, "2", true);
+        EmployeeRatingEntry previous = withWarranty(copy(base, "700.00"), "8", false);
+
+        EmployeeCard result = projector.project(
+                ratings(current),
+                ratings(previous),
+                sales(current, 6),
+                sales(previous, 6),
+                0,
+                0,
+                Map.of("WARRANTY_USED", "Гарантия Б/У")
+        ).employees().getFirst();
+
+        WeeklyReviewResponse.MetricComparison warranty = result.metrics()
+                .attachMetrics().getFirst().comparison();
+        assertThat(warranty.metricState())
+                .isEqualTo(WeeklyReviewResponse.MetricState.UNAVAILABLE);
+        assertThat(warranty.current()).isNull();
+        assertThat(warranty.previous()).isNull();
+        assertThat(warranty.currentSample()).isNull();
+        assertThat(warranty.previousSample()).isNull();
+        assertThat(warranty.materiality())
+                .isEqualTo(WeeklyReviewResponse.Materiality.NOT_EVALUATED);
+        assertThat(result.attention()).isNull();
+        assertThat(result.action()).isNull();
+        assertThat(result.ownDynamics()).isEmpty();
+    }
+
+    @Test
     void explainsUnattributedReturnsWithoutMarkingTheTeamAsLimited() {
         EmployeeRatingEntry employee = employee("Анна", "700.00", 2, "16.00");
 
@@ -447,6 +480,40 @@ class WeeklyReviewTeamEmployeeProjectorTest {
                 false,
                 null,
                 List.of()
+        );
+    }
+
+    private EmployeeRatingEntry withWarranty(
+            EmployeeRatingEntry source, String numerator, boolean incomplete
+    ) {
+        BigDecimal count = new BigDecimal(numerator);
+        return new EmployeeRatingEntry(
+                source.employeeId(),
+                source.displayName(),
+                source.employeeActive(),
+                source.assignmentActive(),
+                source.participatesInRanking(),
+                source.ratingEligible(),
+                source.shiftCount(),
+                source.workedHours(),
+                source.netRevenue(),
+                source.storeRevenueSharePercent(),
+                source.revenuePerShift(),
+                source.revenuePerHour(),
+                source.accessoryRevenue(),
+                source.accessorySharePercent(),
+                source.serviceRevenue(),
+                source.serviceSharePercent(),
+                source.additionalRevenue(),
+                source.additionalSharePercent(),
+                source.scores(),
+                source.ranked(),
+                source.rank(),
+                List.of(new EmployeeAttachRatingEntry(
+                        "WARRANTY_USED", "WARRANTY_USED", AttachDenominatorCode.USED_DEVICE,
+                        count, new BigDecimal("10"), count.multiply(new BigDecimal("10")),
+                        null, false, null, incomplete
+                ))
         );
     }
 

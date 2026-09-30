@@ -20,6 +20,7 @@ environments:
 risk_level: high
 source_of_truth:
   - backend/src/main/java/com/storeanalytics/interpretation/web/WeeklyReviewOperationsController.java
+  - backend/src/main/java/com/storeanalytics/interpretation/web/SellerWeeklyReviewController.java
   - backend/src/main/java/com/storeanalytics/interpretation/web/WeeklyReviewAiOperationsController.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiOperatorService.java
   - deploy/bin/weekly-review-ai-release-safety.sh
@@ -68,6 +69,30 @@ production read-only evidence и отдельное разрешение exact c
 
 ## Предусловия
 
+### Дополнительные проверки seller-контракта
+
+При seller cutover проверять version/scope exact snapshot, а не считать прежний STORE preflight
+разрешением нового input. Seller API: GET `/api/stores/{storeId}/weekly-reviews/seller-current`,
+ADMIN POST `/api/admin/seller-weekly-reviews/stores/{storeId}/generate`. Parent weekly-review и
+`app.interpretation.seller-weekly-review.enabled` должны быть согласованы; недопустимая комбинация
+отвергается на startup. Production/staging activation и платный provider canary требуют отдельной
+авторизации независимо от доступности candidate-кода.
+
+- В seller mode exact snapshot имеет contract3/scope SELLERS и `CURRENT`; PREPARING/STALE/BLOCKED
+  не дают разрешения на AI job. Дополнительно проверить continuous SUCCESS coverage
+  SALES/RETURNS/ORDERS за обе недели и отсутствие незавершённых/не reconciled source writes.
+- Seller preflight возвращает prompt v26/input5, `PASS_SELLER_ONLY_SCHEMA`, без employee scope/raw
+  input. Legacy v2 сохраняет prompt v25/input4 и прежний STORE verdict. Чужой cache не применяется.
+- Backend оставляет immutable provider receipt при stale-after-response, но не enrichment;
+  `SNAPSHOT_NOT_CURRENT` не повторяет платный вызов для того же устаревшего input.
+- Rollback выполняется на совместимом executable выключением seller read/write preference;
+  v3 snapshots/enrichments/checkpoints не удалять. Старый endpoint читает только v2 с явной STORE
+  подписью; общая revision chain сохраняется. После rollback worker выбирает legacy prompt jobs,
+  а seller jobs не переименовываются. Повторное включение должно снова пройти freshness gates.
+- Local fixture visual review не заменяет authenticated backend parity, полный backend check,
+  offline seller AI/privacy review и отдельное canary решение. Не записывать real provider payload,
+  имена, финансовые значения или business screenshots в evidence.
+
 - Exact release/runtime state прочитан из [project-state](../current/project-state.md), а не из
   старого rollout-документа.
 - Snapshot принадлежит нужному магазину и завершённой неделе, имеет `READY` или `PARTIAL`.
@@ -89,7 +114,8 @@ versions, hashes, status, attempt count, validation codes, token counts, cost и
 - Preflight не возвращает exact input/request hashes либо сообщает existing job/enrichment.
 - Provider preflight, budget, context, schema или privacy gate не прошёл.
 - Для snapshot уже существует несовместимый job/enrichment.
-- Worker обрабатывает не активную пару v25/schema4.
+- Worker пытается обработать job вне активной пары prompt/schema: v25/schema4 в legacy mode
+  или v26/schema4 в seller mode. Переключение режима не переименовывает ожидающие jobs.
 - Появился любой неожиданный notification event: v25 не должен создавать weekly Telegram event.
 
 ## Preflight

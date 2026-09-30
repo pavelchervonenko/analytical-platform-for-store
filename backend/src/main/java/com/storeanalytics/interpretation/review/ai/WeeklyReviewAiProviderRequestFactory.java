@@ -5,7 +5,9 @@ import static com.storeanalytics.common.validation.ModelValidation.requireNonNul
 import static com.storeanalytics.common.validation.ModelValidation.requireText;
 
 import com.storeanalytics.interpretation.generation.LlmProviderRequest;
-import com.storeanalytics.interpretation.review.PersistedWeeklyReviewSnapshot;
+import com.storeanalytics.interpretation.review.PersistedWeeklyReview;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse;
+import com.storeanalytics.interpretation.review.WeeklyReviewV3Response;
 import com.storeanalytics.interpretation.validation.LlmJsonSchemaValidator;
 import com.storeanalytics.interpretation.validation.StructuralValidationViolation;
 import java.io.IOException;
@@ -36,6 +38,9 @@ public final class WeeklyReviewAiProviderRequestFactory {
     private final ObjectMapper mapper;
     private final ObjectWriter writer;
     private final LlmJsonSchemaValidator inputValidator;
+    private final LlmJsonSchemaValidator sellerInputValidator;
+    private final SellerWeeklyReviewAiInputCompactor sellerCompactor = new SellerWeeklyReviewAiInputCompactor();
+    private final String sellerSystemPrompt;
     private final String systemPrompt;
     private final String responseSchema;
 
@@ -55,6 +60,8 @@ public final class WeeklyReviewAiProviderRequestFactory {
                 WeeklyReviewAiContract.INPUT_SCHEMA
         );
         systemPrompt = resource(WeeklyReviewAiContract.SYSTEM_PROMPT);
+        sellerInputValidator = new LlmJsonSchemaValidator(SellerWeeklyReviewAiContract.INPUT_SCHEMA);
+        sellerSystemPrompt = resource(SellerWeeklyReviewAiContract.SYSTEM_PROMPT);
         responseSchema = jsonResource(WeeklyReviewAiContract.SELECTION_SCHEMA);
     }
 
@@ -65,7 +72,7 @@ public final class WeeklyReviewAiProviderRequestFactory {
                 command, "command"
         );
         UUID job = requireNonNull(value.jobId(), "jobId");
-        PersistedWeeklyReviewSnapshot source = requireNonNull(
+        PersistedWeeklyReview source = requireNonNull(
                 value.snapshot(), "snapshot"
         );
         Instant timestamp = requireNonNull(value.now(), "now");
@@ -75,9 +82,12 @@ public final class WeeklyReviewAiProviderRequestFactory {
                 "callTimeout must be positive");
         require(deadline.isAfter(timestamp), "AI generation deadline has passed");
 
-        WeeklyReviewAiInput input = compactor.compact(source.response());
+        WeeklyReviewAiEditorialInput input = switch (source.response()) {
+            case WeeklyReviewResponse legacy -> compactor.compact(legacy);
+            case WeeklyReviewV3Response sellers -> sellerCompactor.compact(sellers);
+        };
         String inputJson = codec.canonical(input);
-        validateInput(inputJson);
+        validateInput(inputJson, input instanceof SellerWeeklyReviewAiInput);
         Instant timeoutDeadline = timestamp.plus(timeout);
         Instant callDeadline = timeoutDeadline.isBefore(deadline)
                 ? timeoutDeadline : deadline;
@@ -85,7 +95,7 @@ public final class WeeklyReviewAiProviderRequestFactory {
                 job,
                 requireText(value.providerCode(), "providerCode"),
                 requireText(value.requestedModel(), "requestedModel"),
-                prompt(value.retryViolationCodes()),
+                prompt(value.retryViolationCodes(), input instanceof SellerWeeklyReviewAiInput),
                 inputJson,
                 responseSchema,
                 requireNonNull(value.temperature(), "temperature"),
@@ -108,9 +118,9 @@ public final class WeeklyReviewAiProviderRequestFactory {
         );
     }
 
-    private void validateInput(String inputJson) {
+    private void validateInput(String inputJson, boolean seller) {
         List<StructuralValidationViolation> violations =
-                inputValidator.validate(inputJson);
+                (seller ? sellerInputValidator : inputValidator).validate(inputJson);
         if (!violations.isEmpty()) {
             throw new IllegalStateException(
                     "Weekly review AI input violates packaged schema: "
@@ -119,7 +129,8 @@ public final class WeeklyReviewAiProviderRequestFactory {
         }
     }
 
-    private String prompt(List<String> retryViolationCodes) {
+    private String prompt(List<String> retryViolationCodes, boolean seller) {
+        String selectedPrompt = seller ? sellerSystemPrompt : systemPrompt;
         List<String> codes = List.copyOf(requireNonNull(
                 retryViolationCodes, "retryViolationCodes"
         ));
@@ -128,9 +139,9 @@ public final class WeeklyReviewAiProviderRequestFactory {
                 "retry violation code is invalid"
         ));
         if (codes.isEmpty()) {
-            return systemPrompt;
+            return selectedPrompt;
         }
-        return systemPrompt + "\n\nПредыдущий ответ был отклонён проверками: "
+        return selectedPrompt + "\n\nПредыдущий ответ был отклонён проверками: "
                 + String.join(", ", codes)
                 + ". Исправь только перечисленные нарушения и снова верни точный JSON.";
     }

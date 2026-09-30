@@ -360,7 +360,8 @@ const attachRateEntrySchema = z.object({
   denominatorReceiptCount: z.number(),
   numeratorQuantity: z.number().optional(),
   denominatorQuantity: z.number().optional(),
-  ratePerHundred: z.number().nullable()
+  ratePerHundred: z.number().nullable(),
+  preliminary: z.boolean().optional()
 });
 
 export const attachRateSchema = z.object({
@@ -371,7 +372,8 @@ export const attachRateSchema = z.object({
   dataQuality: z.object({
     unmatchedNumeratorItemCount: z.number().int().nonnegative(),
     ambiguousWarrantyItemCount: z.number().int().nonnegative(),
-    unknownDeviceConditionItemCount: z.number().int().nonnegative()
+    unknownDeviceConditionItemCount: z.number().int().nonnegative(),
+    unassignedReturnItemCount: z.number().int().nonnegative().optional()
   }),
   rates: z.array(attachRateEntrySchema)
 });
@@ -547,6 +549,7 @@ const employeeAttachRatingEntrySchema = z.object({
   ratePercent: z.number().nullable(),
   storeRatePercent: z.number().nullable(),
   includedInScore: z.boolean(),
+  attributionIncomplete: z.boolean().optional(),
   score: z.number().nullable()
 });
 
@@ -1028,7 +1031,8 @@ const annualAttachRateTotalsSchema = z.object({
   denominatorReceiptCount: z.number(),
   numeratorQuantity: z.number().optional(),
   denominatorQuantity: z.number().optional(),
-  ratePerHundred: z.number().nullable()
+  ratePerHundred: z.number().nullable(),
+  preliminary: z.boolean().optional()
 });
 
 const annualEmployeeTotalsSchema = z.object({

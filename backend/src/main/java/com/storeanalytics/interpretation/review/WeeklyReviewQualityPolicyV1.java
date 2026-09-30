@@ -9,6 +9,8 @@ import com.storeanalytics.interpretation.review.WeeklyReviewResponse.QualitySumm
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.ReportState;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.SourceCode;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.SourceCoverage;
+import com.storeanalytics.metrics.service.SellerPeriodMetrics;
+import com.storeanalytics.metrics.service.SellerReturnAttributionQuality;
 import com.storeanalytics.metrics.service.StoreKpiResult;
 import com.storeanalytics.store.service.StoreDataStatusView;
 import java.time.LocalDate;
@@ -17,6 +19,161 @@ import java.util.List;
 
 /** Routes data quality to the exact weekly-review metrics it can affect. */
 public final class WeeklyReviewQualityPolicyV1 {
+
+    /** Requires continuous source coverage and selected-seller item quality for v3 facts. */
+    Decision decideSellers(
+            SellerWeeklySourceCoverage source,
+            SellerPeriodMetrics current,
+            SellerPeriodMetrics previous,
+            AttributionWindows attribution,
+            DateRange currentPeriod,
+            DateRange previousPeriod,
+            SellerWeeklySourceStability sourceStability
+    ) {
+        SellerWeeklySourceCoverage sourceWindows = requireNonNull(source, "source");
+        SellerPeriodMetrics currentMetrics = requireNonNull(current, "current");
+        SellerPeriodMetrics previousMetrics = requireNonNull(previous, "previous");
+        DateRange currentRange = requireNonNull(currentPeriod, "currentPeriod");
+        DateRange previousRange = requireNonNull(previousPeriod, "previousPeriod");
+        AttributionWindows returnWindows = requireNonNull(attribution, "attribution");
+        List<SourceCoverage> coverage = List.of(
+                sellerCoverage(SourceCode.SALES, sourceWindows.sales(), currentRange, previousRange),
+                sellerCoverage(SourceCode.RETURNS, sourceWindows.returns(), currentRange, previousRange)
+        );
+        List<Limitation> limitations = new ArrayList<>();
+        coverage.stream().filter(item -> item.state() != CoverageState.COMPLETE)
+                .map(item -> sellerSourceLimitation(item, currentRange, previousRange))
+                .forEach(limitations::add);
+        boolean ordersIncomplete = !sourceWindows.orders().current()
+                || !sourceWindows.orders().previous();
+        if (ordersIncomplete) {
+            limitations.add(ordersCoverageLimitation(sourceWindows.orders(),
+                    currentRange, previousRange));
+        }
+        boolean unstable = addSellerSourceStabilityLimitation(
+                requireNonNull(sourceStability, "sourceStability"), currentRange, limitations);
+        boolean blocked = coverage.stream().anyMatch(item -> item.state() != CoverageState.COMPLETE)
+                || ordersIncomplete || unstable;
+        if (!blocked) {
+            addSellerLimitations(currentMetrics, currentRange, "current", limitations);
+            addSellerLimitations(previousMetrics, previousRange, "previous", limitations);
+            addSellerReturnAttributionLimitations(
+                    returnWindows.current(), currentRange, "current", limitations);
+            addSellerReturnAttributionLimitations(
+                    returnWindows.previous(), previousRange, "previous", limitations);
+        }
+        return decision(blocked, coverage, limitations);
+    }
+
+    private SourceCoverage sellerCoverage(
+            SourceCode code, SellerWeeklySourceCoverage.Window window,
+            DateRange current, DateRange previous
+    ) {
+        CoverageState state = window.current() && window.previous() ? CoverageState.COMPLETE
+                : window.current() || window.previous() ? CoverageState.PARTIAL
+                : CoverageState.MISSING;
+        return new SourceCoverage(code, true, sellerSourceAffectedBlocks(),
+                window.current() ? current.end() : null,
+                window.previous() ? previous.end() : null, state,
+                state == CoverageState.COMPLETE ? null
+                        : sourceLabel(code) + " не покрывают обе сравниваемые недели непрерывно");
+    }
+
+    private Limitation sellerSourceLimitation(
+            SourceCoverage coverage, DateRange current, DateRange previous
+    ) {
+        Limitation item = sourceLimitation(coverage, current, previous);
+        return new Limitation(item.limitationId(), item.code(), "BLOCKING", "SELLERS", null,
+                sellerSourceAffectedBlocks(), item.affectedMetricCodes(), item.period(),
+                item.affectedCount(), item.summary(), item.resolution(), item.evidenceRefs());
+    }
+
+    private Limitation ordersCoverageLimitation(
+            SellerWeeklySourceCoverage.Window window, DateRange current, DateRange previous
+    ) {
+        return new Limitation("source:orders", "ORDERS_COVERAGE_INCOMPLETE", "BLOCKING",
+                "SELLERS", null, sellerSourceAffectedBlocks(),
+                List.of("SALES_REVENUE", "SALE_DOCUMENT_COUNT", "NET_REVENUE",
+                        "GROSS_PROFIT", "SALES_STRUCTURE", "ADDITIONAL_REVENUE", "ATTACH"),
+                window.current() ? previous : current, 1,
+                "Позиции заказов не покрывают обе сравниваемые недели непрерывно", null, List.of());
+    }
+
+    private boolean addSellerSourceStabilityLimitation(
+            SellerWeeklySourceStability stability, DateRange period, List<Limitation> limitations
+    ) {
+        if (stability == SellerWeeklySourceStability.STABLE) {
+            return false;
+        }
+        boolean syncing = stability == SellerWeeklySourceStability.IN_PROGRESS;
+        limitations.add(new Limitation(
+                syncing ? "source:sync-in-progress" : "source:reconciliation-pending",
+                syncing ? "SOURCE_SYNC_IN_PROGRESS" : "SOURCE_RECONCILIATION_PENDING",
+                "BLOCKING", "SELLERS", null, sellerSourceAffectedBlocks(),
+                List.of("SALES_REVENUE", "RETURN_REVENUE", "NET_REVENUE",
+                        "GROSS_PROFIT", "SALES_STRUCTURE", "ADDITIONAL_REVENUE", "ATTACH"),
+                period, 1,
+                syncing ? "Синхронизация ещё идёт; недельные данные могут измениться"
+                        : "Последняя синхронизация завершилась ошибкой; полнота данных не подтверждена",
+                null, List.of()));
+        return true;
+    }
+
+    private void addSellerLimitations(
+            SellerPeriodMetrics metrics,
+            DateRange period,
+            String suffix,
+            List<Limitation> limitations
+    ) {
+        addSellerCountLimitation(new Issue("classification:" + suffix, "PRODUCTS_UNCLASSIFIED"),
+                List.of("sales-structure", "additional-sales"),
+                List.of("SALES_STRUCTURE", "ADDITIONAL_REVENUE", "ATTACH"), period,
+                metrics.unmappedItemCount(), "Часть товарных позиций продавцов не классифицирована",
+                limitations);
+        addSellerCountLimitation(new Issue("cost:missing:" + suffix, "COST_DATA_MISSING"),
+                List.of("results"), List.of("GROSS_PROFIT", "MARGIN_PERCENT"), period,
+                metrics.totals().dataQuality().missingCostItemCount(),
+                "Для части позиций продавцов отсутствует себестоимость", limitations);
+    }
+
+    private void addSellerReturnAttributionLimitations(
+            SellerReturnAttributionQuality quality,
+            DateRange period,
+            String suffix,
+            List<Limitation> limitations
+    ) {
+        addSellerCountLimitation(new Issue("attribution:orphan-return:" + suffix, "ORPHAN_RETURN"),
+                List.of("results", "sales-structure", "additional-sales", "team", "employees"),
+                List.of("RETURN_REVENUE", "NET_REVENUE", "GROSS_PROFIT", "MARGIN_PERCENT",
+                        "ADDITIONAL_REVENUE", "ADDITIONAL_SHARE", "SALES_STRUCTURE", "ATTACH"),
+                period, quality.orphanReturnDocumentCount(),
+                "Есть возвраты без доступной исходной продажи; их нельзя отнести к продавцам рейтинга",
+                limitations);
+        addSellerCountLimitation(new Issue("attribution:unknown-original-author:" + suffix,
+                        "RETURN_ORIGINAL_AUTHOR_UNKNOWN"),
+                List.of("results", "sales-structure", "additional-sales", "team", "employees"),
+                List.of("RETURN_REVENUE", "NET_REVENUE", "GROSS_PROFIT", "MARGIN_PERCENT",
+                        "ADDITIONAL_REVENUE", "ADDITIONAL_SHARE", "SALES_STRUCTURE", "ATTACH"),
+                period, quality.unattributedOriginalReturnDocumentCount(),
+                "Есть возвраты к продажам без автора; они не включены в итоги продавцов рейтинга",
+                limitations);
+    }
+
+    private void addSellerCountLimitation(
+            Issue issue,
+            List<String> blocks,
+            List<String> metricCodes,
+            DateRange period,
+            long count,
+            String summary,
+            List<Limitation> limitations
+    ) {
+        if (count > 0) {
+            limitations.add(new Limitation(issue.limitationId(), issue.code(), "WARNING",
+                    "SELLERS", null, blocks, metricCodes, period, Math.toIntExact(count),
+                    summary, null, List.of()));
+        }
+    }
 
     public Decision decide(
             StoreDataStatusView source,
@@ -71,19 +228,8 @@ public final class WeeklyReviewQualityPolicyV1 {
                 )
         );
         List<Limitation> limitations = new ArrayList<>();
-        coverage.stream()
-                .filter(SourceCoverage::requiredForReport)
-                .filter(item -> item.state() != CoverageState.COMPLETE)
-                .map(item -> sourceLimitation(item, currentRange, previousRange))
-                .forEach(limitations::add);
-        boolean blocked = coverage.stream()
-                .filter(SourceCoverage::requiredForReport)
-                .anyMatch(item ->
-                item.state() == CoverageState.MISSING
-                        || item.state() == CoverageState.PARTIAL
-                        && item.currentThroughDate() != null
-                        && item.currentThroughDate().isBefore(currentRange.end())
-        );
+        addSourceLimitations(coverage, currentRange, previousRange, limitations);
+        boolean blocked = sourceBlocked(coverage, currentRange);
         if (!blocked) {
             addClassificationLimitations(
                     currentKpi, previousKpi, currentRange, previousRange, limitations
@@ -96,8 +242,36 @@ public final class WeeklyReviewQualityPolicyV1 {
             );
         }
 
-        ReportState reportState = blocked
-                ? ReportState.BLOCKED
+        return decision(blocked, coverage, limitations);
+    }
+
+    private void addSourceLimitations(
+            List<SourceCoverage> coverage,
+            DateRange current,
+            DateRange previous,
+            List<Limitation> limitations
+    ) {
+        coverage.stream()
+                .filter(SourceCoverage::requiredForReport)
+                .filter(item -> item.state() != CoverageState.COMPLETE)
+                .map(item -> sourceLimitation(item, current, previous))
+                .forEach(limitations::add);
+    }
+
+    private boolean sourceBlocked(List<SourceCoverage> coverage, DateRange current) {
+        return coverage.stream().filter(SourceCoverage::requiredForReport).anyMatch(item ->
+                item.state() == CoverageState.MISSING
+                        || item.state() == CoverageState.PARTIAL
+                        && item.currentThroughDate() != null
+                        && item.currentThroughDate().isBefore(current.end()));
+    }
+
+    private Decision decision(
+            boolean blocked,
+            List<SourceCoverage> coverage,
+            List<Limitation> limitations
+    ) {
+        ReportState reportState = blocked ? ReportState.BLOCKED
                 : limitations.isEmpty() ? ReportState.READY : ReportState.PARTIAL;
         int blockingCount = Math.toIntExact(limitations.stream()
                 .filter(item -> "BLOCKING".equals(item.severity()))
@@ -221,6 +395,11 @@ public final class WeeklyReviewQualityPolicyV1 {
                 "team",
                 "employees"
         );
+    }
+
+    private List<String> sellerSourceAffectedBlocks() {
+        return List.of("summary", "results", "revenue-decomposition", "sales-structure",
+                "additional-sales", "team", "employees");
     }
 
     private String sourceLabel(SourceCode sourceCode) {
@@ -373,6 +552,15 @@ public final class WeeklyReviewQualityPolicyV1 {
         private Issue {
             requireNonNull(limitationId, "limitationId");
             requireNonNull(code, "code");
+        }
+    }
+
+    record AttributionWindows(SellerReturnAttributionQuality current,
+            SellerReturnAttributionQuality previous) {
+
+        AttributionWindows {
+            requireNonNull(current, "current");
+            requireNonNull(previous, "previous");
         }
     }
 

@@ -124,7 +124,8 @@ public final class WeeklyReviewAssembler {
         );
         return new WeeklyReviewResponse(
                 2,
-                WeeklyReviewPolicyV1.VERSIONS,
+                WeeklyReviewPolicyV1.versionsForAttach(
+                        "attach-rate-v4".equals(source.current().attachRates().formulaVersion())),
                 source.period(),
                 snapshot,
                 reportState,

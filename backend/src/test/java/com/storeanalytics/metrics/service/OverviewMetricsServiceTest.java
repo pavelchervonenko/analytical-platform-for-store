@@ -3,6 +3,8 @@ package com.storeanalytics.metrics.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.storeanalytics.product.model.AnalyticsCategoryKind;
@@ -28,6 +30,7 @@ class OverviewMetricsServiceTest {
     private CategoryKpiService categoryKpiService;
     private EmployeeKpiService employeeKpiService;
     private EmployeeCategoryKpiService employeeCategoryKpiService;
+    private SellerPeriodAnalyticsService sellerAnalytics;
     private OverviewMetricsService service;
 
     @BeforeEach
@@ -36,11 +39,13 @@ class OverviewMetricsServiceTest {
         categoryKpiService = mock(CategoryKpiService.class);
         employeeKpiService = mock(EmployeeKpiService.class);
         employeeCategoryKpiService = mock(EmployeeCategoryKpiService.class);
+        sellerAnalytics = mock(SellerPeriodAnalyticsService.class);
         service = new OverviewMetricsService(
                 storeKpiService,
                 categoryKpiService,
                 employeeKpiService,
-                employeeCategoryKpiService
+                employeeCategoryKpiService,
+                sellerAnalytics
         );
         stubConsistentProjections("225.00");
     }
@@ -67,6 +72,19 @@ class OverviewMetricsServiceTest {
                 .isEqualByComparingTo("100.00");
         assertThat(result.dataQuality().includedItemCount()).isEqualTo(2);
         assertThat(result.dataQuality().reconciliationPassed()).isTrue();
+        assertThat(result.dataQuality().periodOpenConsistencyIssueCount()).isEqualTo(2);
+        assertThat(result.dataQuality().storeOpenQualityIssueCount()).isEqualTo(3);
+        verify(sellerAnalytics).readForOverview(STORE_ID, PERIOD);
+        verifyNoInteractions(employeeKpiService, employeeCategoryKpiService);
+    }
+
+    @Test
+    void missingSellerProjectionDoesNotFallBackToStore() {
+        when(sellerAnalytics.readForOverview(STORE_ID, PERIOD)).thenReturn(null);
+
+        assertThatThrownBy(() -> service.calculate(STORE_ID, PERIOD, OverviewMetricScope.SELLERS))
+                .isInstanceOf(NullPointerException.class);
+        verifyNoInteractions(employeeKpiService, employeeCategoryKpiService);
     }
 
     @Test
@@ -82,6 +100,7 @@ class OverviewMetricsServiceTest {
         assertThat(group(result.salesGroups(), "ACCESSORY").metrics().netRevenue())
                 .isEqualByComparingTo("150.00");
         assertThat(result.dataQuality().includedItemCount()).isEqualTo(4);
+        verifyNoInteractions(sellerAnalytics);
     }
 
     @Test
@@ -105,6 +124,23 @@ class OverviewMetricsServiceTest {
         when(employeeCategoryKpiService.calculate(STORE_ID, PERIOD)).thenReturn(
                 employeeCategoryKpi()
         );
+        when(sellerAnalytics.readForOverview(STORE_ID, PERIOD)).thenReturn(
+                new SellerOverviewMetrics(sellerMetrics(), employeeKpi(), employeeCategoryKpi()));
+    }
+
+    private SellerPeriodMetrics sellerMetrics() {
+        CategoryKpiMetrics totals = new CategoryKpiMetrics(
+                amount("1000.00"), amount("10.000"), amount("600.00"), amount("400.00"),
+                amount("40.00"), amount("40.00"), new CategoryKpiDataQuality(true, 2, 0, 0));
+        CategoryKpiResult categories = new CategoryKpiResult(
+                STORE_ID, PERIOD.start(), PERIOD.end(), "category-kpi-v3",
+                List.of(categoryGroup("ACCESSORY", "100.00", "1.000"),
+                        categoryGroup("SERVICE", "50.00", "0.500"),
+                        categoryGroup("ADDITIONAL_REVENUE", "150.00", "1.500")),
+                List.of(new CategoryKpiEntry("ALL", "All", AnalyticsCategoryKind.OTHER,
+                        DeviceFamily.NONE, true, false, false, false, totals)));
+        return new SellerPeriodMetrics(new SellerCohortSnapshot(STORE_ID, List.of(SELLER_ID)),
+                PERIOD, totals, 0, categories, List.of(), List.of());
     }
 
     private StoreKpiResult storeKpi() {

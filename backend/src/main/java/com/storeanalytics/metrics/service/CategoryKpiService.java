@@ -7,6 +7,7 @@ import com.storeanalytics.metrics.repository.CategoryKpiAggregate;
 import com.storeanalytics.metrics.repository.CategoryKpiRepository;
 import com.storeanalytics.product.model.AnalyticsCategoryKind;
 import com.storeanalytics.store.repository.StoreRepository;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
@@ -42,10 +43,17 @@ public class CategoryKpiService {
                 validatedPeriod.start(),
                 validatedPeriod.end()
         );
+        return project(validatedStoreId, validatedPeriod, aggregates);
+    }
+
+    /** Shared pure projection; callers provide already scoped, unrounded category facts. */
+    static CategoryKpiResult project(
+            UUID storeId, StoreKpiPeriod period, List<CategoryKpiAggregate> aggregates
+    ) {
         List<CategoryKpiEntry> categories = aggregates.stream()
-                .map(this::toEntry)
+                .map(CategoryKpiService::toEntry)
                 .toList();
-        List<CategoryKpiGroup> groups = List.of(
+        List<CategoryKpiGroup> groups = new ArrayList<>(List.of(
                 group(
                         "PHONES",
                         "Телефоны",
@@ -68,7 +76,7 @@ public class CategoryKpiService {
                         "SERVICE",
                         "Услуги",
                         aggregates,
-                        this::isServiceCategory
+                        CategoryKpiService::isServiceCategory
                 ),
                 group(
                         "ADDITIONAL_REVENUE",
@@ -76,18 +84,21 @@ public class CategoryKpiService {
                         aggregates,
                         CategoryKpiAggregate::countsAsAdditionalRevenue
                 )
-        );
+        ));
+        CategoryFinancialDetails.devices(aggregates).forEach(row -> groups.add(new CategoryKpiGroup(
+                CategoryFinancialDetails.DEVICE_PREFIX + row.categoryCode(),
+                CategoryFinancialDetails.name(row), metrics(List.of(row)))));
         return new CategoryKpiResult(
-                validatedStoreId,
-                validatedPeriod.start(),
-                validatedPeriod.end(),
+                storeId,
+                period.start(),
+                period.end(),
                 FORMULA_VERSION,
-                groups,
+                List.copyOf(groups),
                 categories
         );
     }
 
-    private CategoryKpiEntry toEntry(CategoryKpiAggregate aggregate) {
+    private static CategoryKpiEntry toEntry(CategoryKpiAggregate aggregate) {
         return new CategoryKpiEntry(
                 aggregate.categoryCode(),
                 aggregate.categoryName(),
@@ -101,7 +112,7 @@ public class CategoryKpiService {
         );
     }
 
-    private CategoryKpiGroup group(
+    private static CategoryKpiGroup group(
             String code,
             String name,
             List<CategoryKpiAggregate> aggregates,
@@ -113,14 +124,14 @@ public class CategoryKpiService {
         return new CategoryKpiGroup(code, name, metrics(members));
     }
 
-    private boolean isServiceCategory(CategoryKpiAggregate row) {
+    private static boolean isServiceCategory(CategoryKpiAggregate row) {
         return switch (row.categoryKind()) {
             case SERVICE, WARRANTY, PROTECTION -> true;
             default -> false;
         };
     }
 
-    private CategoryKpiMetrics metrics(List<CategoryKpiAggregate> aggregates) {
+    private static CategoryKpiMetrics metrics(List<CategoryKpiAggregate> aggregates) {
         return CategoryKpiMetricsCalculator.calculate(aggregates);
     }
 }

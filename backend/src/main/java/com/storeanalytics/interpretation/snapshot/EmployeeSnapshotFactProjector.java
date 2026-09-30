@@ -460,6 +460,8 @@ final class EmployeeSnapshotFactProjector {
                         Function.identity()
                 ));
         current.groups().stream()
+                // Detailed device groups repeat the category facts emitted below.
+                .filter(group -> !group.groupCode().startsWith("DEVICE_CATEGORY:"))
                 .filter(group -> hasActivity(
                         group.metrics(),
                         groupMetrics(previousGroups.get(group.groupCode()))

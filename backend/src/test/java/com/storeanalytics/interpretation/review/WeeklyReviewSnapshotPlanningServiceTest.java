@@ -42,6 +42,8 @@ class WeeklyReviewSnapshotPlanningServiceTest {
     void setUp() {
         sourceStore = mock(WeeklySnapshotPlanningStore.class);
         snapshotStore = mock(WeeklyReviewSnapshotStore.class);
+        when(snapshotStore.currentAttributionPolicy(any()))
+                .thenAnswer(call -> WeeklyReviewPolicyV1.VERSIONS.equals(call.getArgument(0)));
         reviewService = mock(WeeklyReviewService.class);
         service = service(25);
         when(sourceStore.activeStoresAfter(null, 25)).thenReturn(List.of(STORE));

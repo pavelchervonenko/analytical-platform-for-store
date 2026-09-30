@@ -29,5 +29,7 @@ superseded_by: null
 - [ADR-0001: атрибуция возврата сотруднику исходной продажи](ADR-0001-return-employee-attribution.md) — accepted, implemented.
 - [ADR-0002: период и cohort показателей главной](ADR-0002-overview-period-scope.md) — accepted, implemented.
 
-Оба решения приняты 2026-08-31. Переход `implementation_status` в `verified` требует выполнения
+Первые два решения приняты 2026-08-31. Переход `implementation_status` в `verified` требует выполнения
 указанных внутри integration/visual gates.
+
+- [ADR-0003: независимая атрибуция гарантий](ADR-0003-warranty-attach-attribution.md) — accepted, implemented за настройкой включения.

@@ -184,7 +184,7 @@ class StoreSyncIntegrationTest {
                 Integer.class
         );
 
-        assertThat(tableCount).isEqualTo(65);
+        assertThat(tableCount).isEqualTo(96);
         assertThat(entityManagerFactory.getMetamodel().getEntities()).hasSize(40);
         assertThat(applicationContext.getBeanNamesForType(JpaRepository.class)).hasSize(40);
         assertThat(jdbcTemplate.queryForObject(
@@ -234,9 +234,40 @@ class StoreSyncIntegrationTest {
                       'attach_rate_item_facts_v3',
                       'attach_rate_metric_definitions_v3',
                       'weekly_review_snapshots',
+                      'weekly_review_generation_state',
+                      'store_analytics_source_state',
+                      'store_analytics_source_events',
                       'weekly_review_ai_enrichments',
                       'weekly_review_ai_jobs',
-                      'weekly_review_ai_attempts'
+                      'weekly_review_ai_attempts',
+                      'attach_attribution_changes',
+                      'attach_rate_item_facts_v3_with_cases',
+                      'attach_rate_item_facts_v4',
+                      'attach_rate_item_facts_v4_with_cases',
+                      'attach_rate_ordinary_item_facts_v4',
+                      'attach_rate_ordinary_item_facts_v4_with_reviews',
+                      'attach_snapshot_checks',
+                      'case_attach_confirmed_facts',
+                      'case_attach_confirmed_facts_v3',
+                      'case_attach_current_decisions',
+                      'case_attach_decisions',
+                      'case_attach_review_items',
+                      'catalog_compatibility_decisions',
+                      'catalog_compatibility_history',
+                      'catalog_sale_role_snapshots',
+                      'catalog_sale_role_snapshot_states',
+                      'warranty_attach_allocations',
+                      'warranty_attach_cases',
+                      'warranty_attach_coverage',
+                      'warranty_attach_decisions',
+                      'warranty_attach_document_context',
+                      'warranty_attach_effective_allocations',
+                      'warranty_attach_items',
+                      'warranty_attach_latest_decisions',
+                      'warranty_attach_return_allocations',
+                      'warranty_attach_sale_allocations',
+                      'warranty_attach_sources',
+                      'warranty_attach_warning_sources'
                   )
                 ORDER BY table_name, ordinal_position
                 """,

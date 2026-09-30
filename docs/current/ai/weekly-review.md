@@ -7,7 +7,7 @@ audience:
   - developer
   - operator
   - manager
-last_verified: 2026-09-20
+last_verified: 2026-09-29
 requirement_sources:
   - docs/archive/legacy-contracts/AI_WEEKLY_REDESIGN_STAGE2_CONTRACT.md
   - docs/archive/legacy-contracts/weekly-review-ai-management-rubric.md
@@ -20,11 +20,40 @@ implementation_sources:
   - frontend/src/insights/weekly-review/weeklyReviewViewModel.ts
   - frontend/src/insights/weekly-review/weekly-review.css
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewAssembler.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyReviewService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/web/SellerWeeklyReviewController.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyReviewSnapshotPlanner.java
+  - frontend/src/api/sellerWeeklyReviewContract.ts
+  - backend/src/main/java/com/storeanalytics/interpretation/review/ai/SellerWeeklyReviewAiInputCompactor.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/ai/SellerWeeklyReviewAiEnricher.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyV3Assembler.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyV3TeamPresenter.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyReviewFactsSource.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklySourceCoverageRepository.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklySourceStabilityRepository.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklySourceRevisionRepository.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklySourceIdentity.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyIdentityFacts.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyIdentityFactsSource.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyTemporalFence.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyV3CandidateService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyV3ReadService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyV3ReadResult.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyV3PlanningService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyV3PlanningResult.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyV3BatchPlanningService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyV3BatchPlanningResult.java
+  - backend/src/main/java/com/storeanalytics/metrics/repository/AttachAttributionQualityRepository.java
+  - backend/src/main/java/com/storeanalytics/metrics/repository/AttachAttributionQuality.java
+  - backend/src/main/resources/db/migration/V78__fence_seller_analytics_sources.sql
+  - backend/src/main/resources/db/migration/V79__add_weekly_review_generation_state.sql
+  - backend/src/main/resources/db/migration/V80__bound_warranty_fingerprint_context_to_document.sql
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewCoreProjector.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewQualityPolicyV1.java
   - backend/src/main/java/com/storeanalytics/quality/repository/PeriodQualityIssueRepository.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewSummaryPresenter.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewAttributionRepository.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewSnapshotStore.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewTeamEmployeeProjector.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiContract.java
@@ -37,11 +66,30 @@ implementation_sources:
   - backend/src/main/resources/db/migration/V47__add_weekly_review_ai_generation_jobs.sql
   - backend/src/main/resources/db/migration/V48__harden_weekly_review_rollout.sql
 verification_sources:
+  - backend/src/test/java/com/storeanalytics/common/database/WarrantyFingerprintContextMigrationIntegrationTest.java
   - frontend/src/insights/WeeklyReviewView.test.tsx
+  - frontend/src/api/sellerWeeklyReviewContract.test.ts
+  - backend/src/test/java/com/storeanalytics/interpretation/review/ai/SellerWeeklyReviewAiTest.java
   - backend/src/test/java/com/storeanalytics/metrics/repository/StoreKpiIntegrationTest.java
   - frontend/src/insights/weekly-review/weeklyReviewViewModel.test.ts
   - frontend/src/insights/weekly-review-presentation.test.ts
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewAssemblerTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyV3AssemblerTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyV3TeamPresenterTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyQualityPolicyTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklySourceStabilityRepositoryIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklySourceIdentityTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyIdentityFactsSourceTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyTemporalFenceTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyV3CandidateServiceTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyV3ReadServiceTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyV3PlanningServiceTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyV3BatchPlanningServiceTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyV3LoadIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/metrics/repository/AttachAttributionQualityTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewStructureProjectorTest.java
+  - backend/src/test/java/com/storeanalytics/metrics/repository/AttachRateAggregateTest.java
+  - backend/src/test/java/com/storeanalytics/metrics/warranty/WarrantyAttributionIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewServiceTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewSnapshotStoreIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewTeamEmployeeProjectorTest.java
@@ -68,7 +116,7 @@ supersedes: []
 superseded_by: null
 ---
 
-# Weekly Review v25/schema4
+# Weekly Review: legacy STORE и seller-контур
 
 ## Назначение и границы
 
@@ -80,6 +128,46 @@ Weekly Review — основной контракт страницы «ИИ-ра
 [`project-state.md`](../project-state.md).
 
 ## Контур
+
+### Seller API и совместимый cutover этапа A
+
+Candidate-код добавляет GET `/api/stores/{storeId}/weekly-reviews/seller-current` и ADMIN POST
+`/api/admin/seller-weekly-reviews/stores/{storeId}/generate`. Нужны parent weekly-review и отдельный
+`app.interpretation.seller-weekly-review.enabled`; включение seller feature без parent отвергается
+при startup. Это не утверждение о включении флагов в окружении и не разрешение на rollout.
+
+GET только читает. Envelope различает `PREPARING` с `report=null`, `CURRENT` и `STALE` с прежним
+совместимым v3 report. Freshness не заменяет quality state. POST использует stable-source/coverage/
+identity fences, штатную session/CSRF и ADMIN authorization; возвращает идемпотентный 200 envelope,
+а не обещает новую revision. Оба endpoints имеют `Cache-Control: private, no-store`.
+При разрешённом расписании в worker/combined role seller planner заменяет старый v2 planner,
+сохраняя bounded batch/cursor. Automatic publication включается только после отдельных gates.
+
+Frontend cache key отделяет v3/SELLERS от v2. Только 404 отключённого seller endpoint разрешает
+legacy fallback; auth, server, parsing errors и seller `PREPARING` не разрешают подмену STORE.
+Legacy явно подписан как результат всего магазина. При `STALE` будущие действия скрыты,
+исторические показатели/evidence сохранены. Scope и время расчёта показаны один раз в заголовке.
+В результатах добавлены выручка допов и доля от чистой выручки продавцов. Раскрытие показывает
+аксессуары/услуги и доли от выручки допов: это другой знаменатель. Отрицательные/нулевые компоненты
+не изображаются диаграммой частей целого. Пустой рейтинг имеет явное объяснение; без подтверждённых
+смен команда показывает деньги и может предложить личную финансовую проверку при достаточной
+выборке завершённых продаж в обеих неделях. Оценка по часам и peer benchmark без подтверждённых
+смен не строятся; отсутствие смен само по себе не понижает состояние всего v3-отчёта.
+Отдельные OpenAPI schemas карточек и coverage v3 не подменяют v2; `ORDERS` входит только в v3.
+
+Optional seller AI использует отдельный prompt `weekly-interpretation-v26` и input schema5,
+с неизменными selector schema1/content schema4. Allowlist содержит только seller-агрегаты, без
+employee IDs/имён/карточек и raw rows. V2 сохраняет v25/input4. Job store фильтрует report version
+до выбора latest snapshot; разные prompt/cache пары не смешиваются. Seller planning/preflight/
+worker требуют exact CURRENT snapshot. После ответа worker повторяет freshness gate; stale ответ
+не публикуется, receipt сохраняется с terminal `SNAPSHOT_NOT_CURRENT`. Read-time enrichment
+проверяет точный input/content hash и оставляет все backend-owned факты, состав и действия
+неизменными. Отказ чтения необязательных AI status/enrichment данных не скрывает уже готовый
+deterministic report: ответ остаётся `CURRENT` с AI `UNAVAILABLE`, без изменения финансовых фактов.
+При задержке AI pending states опрашиваются frontend. Существующие snapshots и опубликованные
+prompt/schema версии не переписываются.
+
+Приведённый ниже STORE provider flow относится к совместимому legacy v2 пути.
 
 ```text
 weekly-review facts
@@ -102,10 +190,151 @@ GET /api/stores/{storeId}/weekly-reviews/current
 Snapshot формируется отдельно от AI. Отчёт остаётся доступным в детерминированном виде, если AI
 выключен, задержан, недоступен или ответ не прошёл проверку.
 
+Legacy публичный путь сохраняет контракт v2 с показателями всего магазина. Отдельный flag-gated
+путь собирает v3 по выбранным продавцам: core, структура, допы и финансовые
+факты команды используют единый seller facts bundle. Его scope/evidence — `SELLERS`/`EMPLOYEE`,
+действия на уровне агрегата — `TEAM`, а проверка доказанного личного снижения — `EMPLOYEE`;
+v2 payload/hash не изменены. Незаполненные смены ограничивают только workload-метрики и peer
+benchmark: при полном источнике и отсутствии других quality limitations v3 имеет `READY`.
+Личное финансовое действие возможно только при не менее шести завершённых продажах в каждой
+сравниваемой неделе и материальном отрицательном изменении; смены не используются как суррогат
+активности или эффективности. При неполном обязательном source coverage персональные карточки скрыты,
+а `BLOCKED` не публикует финансовые значения. Лимит 100 карточек не отбрасывает суммы остальных
+выбранных продавцов: v3 хранит `totalCount`, `displayedCount` и финансовый остаток. Это не разрешение
+на автопубликацию. V3 writer проверен на цепочке v2→v3→v2→v3: V78 уже
+коалесцирует изменения seller-источников до одной revision на магазин за транзакцию, reader читает
+её вместе с фактами в REPEATABLE_READ, а writer под блокировкой отклоняет устаревший input.
+Проверена и гонка с изменением источника между сверкой revision и insert snapshot. Внутренний
+candidate service заново читает весь facts bundle при таком конфликте и прекращает попытки после
+трёх повторов; canonical source identity включает revision, cohort, недели, coverage, freshness
+и версии формул без имён и финансовых значений. Writer дополнительно сверяет по текущим часам
+магазина дату ожидаемой полноты и пару отчётных недель: смена локальных суток/недели между чтением
+facts и записью snapshot вызывает полный повтор, даже если revision БД не менялась. Под store lock
+timezone facts также сверяется с authoritative timezone магазина: новая revision не делает input
+с timezone, прочитанной до её смены, корректным. Несовпадение отклоняется до snapshot/checkpoint.
+Это пока не
+полный протокол публикации: внутренний mutable v3 checkpoint уже фиксирует проверенную identity,
+revision и совместимый snapshot атомарно при `CREATED` и `REUSED`; неуспешная попытка его не
+продвигает. Внутренний read-only `assessForPlanning` сверяет checkpoint с последней ревизией,
+локальным днём и заново вычисленной canonical identity в одной `REPEATABLE_READ` транзакции.
+Он различает `PREPARING`, `CURRENT`, `STALE` и сохраняет доступ к предыдущему совместимому
+snapshot при `STALE`; откат последней ревизии на v2 не выдаёт v3 за актуальный. Проверка читает
+полный metadata input identity без финансовых агрегатов, attach quantities и карточек команды;
+source revision сама по себе не заменяет cohort, coverage, freshness, runtime formula versions
+и temporal fence. Canonical bytes/hash сохранены. Её вызывают отдельный flag-gated v3 planner
+и seller API, но не действующий v2 reader. При `CURRENT` planner возвращает `UNCHANGED`
+без генерации и записи checkpoint. При `PREPARING/STALE` генерация допускается только при
+`STABLE` и полном непрерывном `SUCCESS` coverage `SALES/RETURNS/ORDERS` для обеих недель;
+gate проверяется заново при каждой из максимум трёх попыток. Иначе возвращается `DEFERRED`,
+включая незавершённые изменения после `CANCELLED` sync: отмена не откатывает уже записанные окна.
+Для восстановления требуется более поздний successful reconciliation затронутого источника/периода,
+а не просто старое `SUCCESS` coverage или успех другого магазина. Несколько более поздних окон
+могут вместе закрыть затронутый интервал, но gap или окна с неизвестными границами не доказывают reconciliation.
+Для metadata-фаз job (`STORES/EMPLOYEES`) достаточно более позднего полного successful job той же
+connection независимо от запрошенного финансового периода. Пока reconciliation не доказан,
+генерация откладывается без нового snapshot или продвижения identity. После записи, deferral
+или исчерпания source-conflict повторов freshness оценивается заново: успешная запись сама
+по себе не обещает `CURRENT`.
+Для заведомо нестабильного/неполного источника candidate service сначала читает лёгкие metadata
+и откладывает generation без финансовых запросов. Успешный preflight не разрешает запись:
+полный facts bundle проверяет gate заново в своей RR, hash строится только из полных facts,
+writer сохраняет revision/timezone/temporal fences. Metadata проверяются при каждой retry;
+ошибка metadata query передаётся вызывающему коду, не превращается в `DEFERRED`.
+Обычные ошибки БД не маскируются как deferral. Planner запрещает охватывающую транзакцию, чтобы
+RR-чтения и короткая fenced RC-запись оставались раздельными. Это не включает публикацию,
+автоматический обход магазинов или AI enqueue. Для активации этапа A остаются gates стабильности источника,
+нагрузки, совместимости scheduler/public v3, AI и пользовательского чтения. Исторический membership
+и его publication-deadline freshness относятся к отдельному этапу B; этап A не обеспечивает
+forward-only изменение состава. Следующие правила
+персонального блока описывают действующий
+публичный v2, а не целевое историческое membership v3.
+Имя сотрудника остаётся в v3 payload для отображения, но исключено из semantic content hash:
+одно лишь переименование не должно создавать новую финансовую ревизию.
+
+При attach v4 seller-reader получает только store-wide потенциальные риски атрибуции из
+`AttachAttributionQualityRepository`, без повторного расчёта магазинных числителей/знаменателей.
+Правила pending warranties и неизвестных авторов возврата совпадают с прежним store path;
+unassigned ordinary returns материализуются один раз за запрос. Эти счётчики не становятся
+seller-ошибками: seller quantities и собственные classification/condition counters сохраняются,
+предварительность применяется только к потенциально затронутым метрикам. Quality reader временно
+отключает JIT через `SET LOCAL` в своей/охватывающей транзакции и восстанавливает прежнее значение
+после успешного чтения; при ошибке настройка сбрасывается rollback. Это не session/global tuning;
+тест с одним доступным физическим соединением проверяет восстановление caller `on/off` и отсутствие
+утечки после ошибки. Store attach path, published v2, версии формул и глобальные настройки
+PostgreSQL этим изменением не затронуты. Synthetic load проверяет 130 продавцов/19200 item rows:
+число SQL round-trips не растёт по одному на продавца, лимит 100 карточек сохраняет точный остаток
+финансовых фактов. Внутренний CURRENT scan использует отдельный `SellerWeeklyIdentityFactsSource`,
+без вызова полного facts reader. Hash metadata и полного facts bundle сверяются на synthetic load,
+отдельный golden фиксирует прежние canonical bytes. Это не production SLA: более широкий
+нагрузочный gate и локальный authenticated shadow parity остаются отдельными release gates.
+
+Fingerprint-контекст warranty source/target теперь агрегируется только для соответствующего
+документа через LATERAL, а не через полный document-context GROUP BY внутри каждой проверки
+allocation. Это отдельная добавочная миграция; прежние ordered MD5 bytes, validity predicates,
+deferred constraints и аналитические/финансовые формулы сохраняются. Изменение общей warranty
+view действует также на действующие v4 readers, поэтому требует migration parity regression
+и полного backend check, а не только seller unit tests. Synthetic mixed workload содержит
+320 решений / 432 allocations; отдельный extreme scenario — 320 / 2560. Это не production latency
+или bulk-write SLA. Query-count benchmark использует database-wide pg_stat_statements:
+во время измерения нельзя выполнять диагностические SELECT в той же test DB.
+
+Для локальных испытаний добавлен внутренний, **неподключённый к расписанию**
+`SellerWeeklyV3BatchPlanningService`: последовательный обход активных LiveSklad-магазинов по UUID
+через существующий target repository. Бюджет задаётся явно: 1–100 магазинов, страница 1–25 targets,
+1 ms–5 min монотонного elapsed time. В памяти остаются одна страница targets и результат одного
+магазина; наружу возвращаются только counters, причина остановки и cursor последнего обработанного
+магазина, без facts/snapshot graphs. Проверка бюджета происходит перед fetch и каждым магазином:
+это cooperative deadline, не отмена текущей транзакции и не hard wall-time/heap SLA.
+`STORE_LIMIT` не делает дополнительный fetch: при точном cap следующий resume может вернуть
+`EXHAUSTED`. `DEFERRED` означает только source/coverage deferral одиночного planner; ошибки БД
+и конфигурации распространяются вызывающему коду. Охватывающая транзакция запрещена.
+При failure уже завершённые магазины могут иметь локальные snapshots; повтор прежнего cursor
+безопасен через unchanged/content-reuse paths. Набор targets не зафиксирован на весь sweep:
+добавление/активация UUID до cursor попадёт в следующий полный sweep с `null`, не в resume.
+Это не публичный API, scheduler activation, AI enqueue или разрешение на production rollout.
+Synthetic batch/concurrent-bulk/manual-allocation проверки измеряют конкретную локальную среду;
+thread allocated bytes — объём выделений текущего потока, не retained/peak heap всего процесса.
+Проверки не включают глобальные JVM/PostgreSQL настройки или отключение source fences.
+Внутренний v3 дополнительно проверяет непрерывное `SUCCESS`-покрытие обеих недель по SALES,
+RETURNS и ORDERS: позиции заказов могут входить в продавческие SALE-документы. Дыра между sync
+окнами, `PARTIAL_SUCCESS`, активный или неустранённый failed sync блокируют числовую выдачу
+кандидата. ORDERS пока обозначается отдельным `ORDERS_COVERAGE_INCOMPLETE` limitation, чтобы не
+расширять enum публичного v2 OpenAPI. Это защита полноты; revision fence отдельно защищает
+согласованность уже прочитанных фактов с записью snapshot.
+
+Legacy v2 подтверждает атрибуцию точным DB `changed_at`, прочитанным в той же `REPEATABLE_READ`
+транзакции, что и facts. `calculatedAt` остаётся только временем расчёта/отображения и не является
+watermark. `attach_snapshot_checks.checked_through` хранит наблюдавшийся marker; его сравнивают
+на равенство, не `>`/`greatest` с application clock. Отсутствие marker записывается как `-infinity`.
+Решение, зафиксированное после чтения facts, не подтверждается задним числом. Старый checkpoint
+с wall-clock временем при несовпадении требует повторного расчёта; неизменное содержимое сохраняет
+snapshot ID/hash без лишней revision. Опубликованные payload, формулы и migrations не меняются.
+Это legacy invalidation protocol; v3 по-прежнему использует отдельный monotonic source revision fence.
+
 Персональный блок сотрудников использует тот же roster продавцов, что и рейтинг: активный
 сотрудник, активное назначение и `participatesInRanking=true`. Сотрудники вне рейтинга не попадают
 ни в персональные карточки Weekly Review, ни в командный benchmark. Для появления сотрудника в
 карточках также нужна активность хотя бы в одном из двух сравниваемых недельных периодов.
+
+Когда в любой из двух недель гарантийный attach-rate предварителен из-за неразобранного конфликта,
+соответствующее сравнение в карточке сотрудника недоступно: значения и выборки не передаются в
+персональные выводы, а снижение не создаёт действие для руководителя. Финансовые показатели
+сотрудника при этом остаются доступными. После решения конфликта новый snapshot пересчитывает
+показатель. Для v4 наличие возвратов без назначенного сотрудника консервативно ограничивает все
+персональные сравнения attach-rate за затронутую неделю.
+Во внутреннем seller-v3 неизвестная атрибуция возврата также делает предварительным только
+затронутый код attach-rate, хотя числитель и знаменатель остаются выбранными по продавцам.
+Отдельно финансовый reader считает документы RETURN без доступной исходной продажи и RETURN,
+связанные с исходной продажей без автора, двумя разными причинами. Эти store-wide неопределённости
+не добавляются к seller-суммам и не блокируют отчёт. При наличии хотя бы одной v3 становится
+`PARTIAL`: затронутые return/net/profit, структура, допы и личные финансовые выводы получают
+`LIMITED`, а SALE revenue/count и средняя продажа остаются доступными. Менеджер видит адресное
+ограничение без персонального обвинения; общий заголовок не утверждает, что неделя лучше
+или хуже, пока чистый итог предварителен. После подтверждённой поздней привязки возврата новый
+snapshot может стать `READY`. Семантика выпущена `weekly-snapshot-v16` / `weekly-quality-v10`;
+ранее сохранённые v3 и legacy v2 остаются неизменяемыми и читаемыми.
+Счётчики таких возвратов и pending warranty описывают потенциальный риск по всему магазину,
+а не количество ошибок конкретного продавца; окончательный вывод по ним не формируется.
 
 ### Roster и исторические snapshots
 
@@ -359,7 +588,9 @@ success-плашку. `BLOCKED` скрывает длинный недостов
 - Нулевая себестоимость не является quality limitation Weekly Review; отсутствие себестоимости
   остаётся ограничением.
 - Отсутствие исходной продажи или позиции у части возвратов не входит в store-level consistency
-  count; недоступная связь с сотрудником объясняется только внутри блока команды.
+  count. В legacy v2 недоступная связь с сотрудником объясняется внутри блока команды; в seller-v3
+  RETURN без исходной продажи и RETURN с исходной продажей без автора получают отдельные
+  metric-scoped ограничения без блокировки всего отчёта.
 - У сотрудника, уже попавшего в список по независимому sales-сигналу, отсутствие time-оценки
   объясняется локально: `Часть смен не заполнена — оценка по часам недоступна`. Эта подпись не
   меняет attention, action или report state.
@@ -384,3 +615,16 @@ job lifecycle и атомарное завершение. Полноценное
 Новая версия prompt/schema, изменение selector vocabulary, compactor, renderer, read-order,
 enrichment immutability, AI state, frontend fallback или Telegram publication обновляет этот
 документ в том же PR.
+
+## Изменения атрибуции attach v4
+
+Гарантийные конфликты ограничивают только затронутые attach-метрики. Для v4 общий счётчик
+неоднозначных гарантий не делает остальные attach-строки неполными. Версии metricsPolicy и
+qualityPolicy получают суффикс `-attach-v4`; форма опубликованных старых контрактов сохраняется.
+
+Решение гарантии записывает durable invalidation магазина в своей транзакции. Материальное
+изменение источника также помечает существующие обзоры. `current` и planner проверяют изменение
+после расчёта/последней проверки конкретного снимка; создают новую детерминированную ревизию
+или подтверждают неизменившийся content hash. Проверка отделена от immutable payload.
+Автоматического платного AI-вызова в сохранении решения нет; enrichment старого snapshot ID
+не используется для нового снимка. Опубликованные месячные/годовые отчёты не переписываются.

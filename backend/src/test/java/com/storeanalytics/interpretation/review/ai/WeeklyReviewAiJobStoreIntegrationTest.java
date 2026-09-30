@@ -99,6 +99,37 @@ class WeeklyReviewAiJobStoreIntegrationTest {
     }
 
     @Test
+    void legacyPlannerIgnoresSellerSnapshotsBeforeSelectingLatestCompatibleRevision() {
+        UUID storeId = addStore("AI mixed contracts synthetic");
+        UUID legacy = addSnapshot(storeId, LocalDate.of(2026, 8, 17), 1);
+        UUID seller = UUID.randomUUID();
+        String hash = "a".repeat(64);
+        jdbcTemplate.update("""
+                INSERT INTO weekly_review_snapshots (id, store_id, period_start, period_end, timezone, revision,
+                    supersedes_snapshot_id, report_contract_version, metrics_policy_version, snapshot_policy_version,
+                    quality_policy_version, report_state, report_payload, content_hash,
+                    report_scope, source_identity_hash)
+                SELECT ?, store_id, period_start, period_end, timezone, revision + 1, id, 3,
+                    metrics_policy_version, snapshot_policy_version, quality_policy_version, report_state,
+                    jsonb_set(report_payload, '{provenance}', (report_payload -> 'provenance')
+                        || jsonb_build_object('snapshotPublicId', ?::text, 'revision', revision + 1))
+                    || jsonb_build_object(
+                        'contractVersion', 3, 'scope', 'SELLERS', 'sourceIdentityHash', ?::text,
+                        'membership', jsonb_build_object('currentCohortHash', ?::text,
+                                                        'previousCohortHash', ?::text)),
+                    content_hash, 'SELLERS', ?
+                FROM weekly_review_snapshots
+                WHERE id = ?
+                """, seller, seller.toString(), hash, hash, hash, hash, legacy);
+        assertThat(store.enqueueLatest("YANDEX", "synthetic-model", 2, 10,
+                NOW, Duration.ofHours(2))).isOne();
+        assertThat(store.findBySnapshot(legacy)).isPresent();
+        assertThat(store.findBySnapshot(seller)).isEmpty();
+        assertThatThrownBy(() -> store.enqueueApproved(seller, "YANDEX", "synthetic-model",
+                2, NOW, Duration.ofHours(2))).isInstanceOf(PreconditionFailedException.class);
+    }
+
+    @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void concurrentApprovedEnqueueCreatesExactlyOneJob() throws Exception {
         UUID snapshotId = addSnapshot(

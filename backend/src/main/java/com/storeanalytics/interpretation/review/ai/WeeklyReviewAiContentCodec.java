@@ -31,7 +31,7 @@ final class WeeklyReviewAiContentCodec {
         return encode(content, "AI enrichment could not be encoded");
     }
 
-    String canonical(WeeklyReviewAiInput input) {
+    String canonical(WeeklyReviewAiEditorialInput input) {
         return encode(input, "AI enrichment input could not be encoded");
     }
 

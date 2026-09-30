@@ -26,6 +26,7 @@ import com.storeanalytics.metrics.service.CategoryKpiEntry;
 import com.storeanalytics.metrics.service.CategoryKpiGroup;
 import com.storeanalytics.metrics.service.CategoryKpiResult;
 import com.storeanalytics.metrics.service.StoreKpiResult;
+import com.storeanalytics.metrics.service.SellerPeriodFacts;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -65,43 +66,98 @@ public final class WeeklyReviewStructureProjector {
         AttachRateResult attach = requireNonNull(currentAttach, "currentAttach");
         AttachRateResult beforeAttach = requireNonNull(previousAttach, "previousAttach");
 
+        return projectInternal(
+                new StructurePeriod(current.netRevenue(), categories, attach,
+                        current.dataQuality().unmappedItemCount()),
+                new StructurePeriod(previous.netRevenue(), beforeCategories, beforeAttach,
+                        previous.dataQuality().unmappedItemCount()), "STORE");
+    }
+
+    public SalesStructureBlock projectSellers(SellerPeriodFacts current, SellerPeriodFacts previous) {
+        return projectSellers(current, previous, true);
+    }
+
+    public SalesStructureBlock projectSellers(SellerPeriodFacts current, SellerPeriodFacts previous,
+            boolean sourceCoverageComplete) {
+        return projectSellers(current, previous, sourceCoverageComplete, true);
+    }
+
+    public SalesStructureBlock projectSellers(SellerPeriodFacts current, SellerPeriodFacts previous,
+            boolean sourceCoverageComplete, boolean returnAttributionComplete) {
+        SellerPeriodFacts selected = requireNonNull(current, "current");
+        SellerPeriodFacts baseline = requireNonNull(previous, "previous");
+        return projectInternal(
+                new StructurePeriod(selected.metrics().totals().netRevenue(),
+                        selected.metrics().categories(), selected.projectedAttachRates(),
+                        selected.metrics().unmappedItemCount()),
+                new StructurePeriod(baseline.metrics().totals().netRevenue(),
+                        baseline.metrics().categories(), baseline.projectedAttachRates(),
+                        baseline.metrics().unmappedItemCount()), "SELLERS", sourceCoverageComplete,
+                returnAttributionComplete);
+    }
+
+    private SalesStructureBlock projectInternal(
+            StructurePeriod current,
+            StructurePeriod previous,
+            String scope
+    ) {
+        return projectInternal(current, previous, scope, true, true);
+    }
+
+    private SalesStructureBlock projectInternal(
+            StructurePeriod current,
+            StructurePeriod previous,
+            String scope,
+            boolean sourceCoverageComplete,
+            boolean returnAttributionComplete
+    ) {
         List<String> limitations = new ArrayList<>();
-        boolean classificationComplete = current.dataQuality().unmappedItemCount() == 0
-                && previous.dataQuality().unmappedItemCount() == 0;
+        if (!sourceCoverageComplete) {
+            limitations.add("Сравнение ограничено неполным покрытием продаж или возвратов");
+        }
+        if (!returnAttributionComplete) {
+            limitations.add("Часть возвратов нельзя уверенно отнести к продавцам рейтинга");
+        }
+        boolean classificationComplete = current.unmappedItemCount() == 0
+                && previous.unmappedItemCount() == 0;
         if (!classificationComplete) {
             limitations.add("Часть товарных позиций не классифицирована");
         }
-        boolean hierarchyValid = hierarchyValid(current, categories)
-                && hierarchyValid(previous, beforeCategories);
+        boolean hierarchyValid = hierarchyValid(current.netRevenue(), current.categories())
+                && hierarchyValid(previous.netRevenue(), previous.categories());
         if (!hierarchyValid) {
             limitations.add("Группы структуры продаж пересекаются или дают отрицательный остаток");
         }
-        boolean attachQualityComplete = attachQualityComplete(attach.dataQuality())
-                && attachQualityComplete(beforeAttach.dataQuality());
+        boolean attachQualityComplete = attachQualityComplete(current.attach())
+                && attachQualityComplete(previous.attach());
         if (!attachQualityComplete) {
             limitations.add("Классификация части позиций для расчёта допродаж требует проверки");
         }
 
         MetricState structureMetricState = classificationComplete && hierarchyValid
+                && sourceCoverageComplete && returnAttributionComplete
                 ? MetricState.READY
                 : MetricState.LIMITED;
         Sufficiency structureSufficiency = structureMetricState == MetricState.READY
                 ? Sufficiency.SUFFICIENT
                 : Sufficiency.LIMITED;
         StructureNode root = root(
-                current,
-                previous,
-                categories,
-                beforeCategories,
+                current.netRevenue(),
+                previous.netRevenue(),
+                current.categories(),
+                previous.categories(),
                 structureMetricState,
-                structureSufficiency
+                structureSufficiency,
+                scope
         );
         List<AttachMetric> attachMetrics = attachMetrics(
-                attach,
-                beforeAttach,
-                categories,
-                beforeCategories,
-                attachQualityComplete && classificationComplete
+                current.attach(),
+                previous.attach(),
+                current.categories(),
+                previous.categories(),
+                attachQualityComplete && classificationComplete && sourceCoverageComplete
+                        && returnAttributionComplete,
+                scope
         );
         BlockState state = limitations.isEmpty() ? READY : LIMITED;
         return new SalesStructureBlock(
@@ -114,6 +170,14 @@ public final class WeeklyReviewStructureProjector {
     }
 
     public SalesStructureBlock unavailable() {
+        return unavailable("STORE");
+    }
+
+    public SalesStructureBlock unavailableSellers() {
+        return unavailable("SELLERS");
+    }
+
+    private SalesStructureBlock unavailable(String scope) {
         MetricComparison revenue = policy.compare(
                 new MetricSpec(
                         "structure:net-revenue:revenue",
@@ -123,7 +187,7 @@ public final class WeeklyReviewStructureProjector {
                         HIGHER_IS_BETTER,
                         RELATIVE,
                         CATEGORY_THRESHOLD,
-                        "STORE.STRUCTURE.NET_REVENUE.REVENUE"
+                        scope + ".STRUCTURE.NET_REVENUE.REVENUE"
                 ),
                 null,
                 null,
@@ -141,7 +205,7 @@ public final class WeeklyReviewStructureProjector {
                         CONTEXT,
                         ABSOLUTE,
                         CATEGORY_THRESHOLD,
-                        "STORE.STRUCTURE.NET_REVENUE.SHARE"
+                        scope + ".STRUCTURE.NET_REVENUE.SHARE"
                 ),
                 null,
                 null,
@@ -169,27 +233,29 @@ public final class WeeklyReviewStructureProjector {
     }
 
     private StructureNode root(
-            StoreKpiResult currentStore,
-            StoreKpiResult previousStore,
+            BigDecimal currentNetRevenue,
+            BigDecimal previousNetRevenue,
             CategoryKpiResult current,
             CategoryKpiResult previous,
             MetricState state,
-            Sufficiency sufficiency
+            Sufficiency sufficiency,
+            String scope
     ) {
         NodeContext context = new NodeContext(
-                currentStore.netRevenue(),
-                previousStore.netRevenue(),
+                currentNetRevenue,
+                previousNetRevenue,
                 state,
-                sufficiency
+                sufficiency,
+                scope
         );
         BigDecimal currentDevices = groupRevenue(current, "DEVICES");
         BigDecimal previousDevices = groupRevenue(previous, "DEVICES");
         BigDecimal currentAdditional = groupRevenue(current, "ADDITIONAL_REVENUE");
         BigDecimal previousAdditional = groupRevenue(previous, "ADDITIONAL_REVENUE");
-        BigDecimal currentOther = currentStore.netRevenue()
+        BigDecimal currentOther = currentNetRevenue
                 .subtract(currentDevices)
                 .subtract(currentAdditional);
-        BigDecimal previousOther = previousStore.netRevenue()
+        BigDecimal previousOther = previousNetRevenue
                 .subtract(previousDevices)
                 .subtract(previousAdditional);
 
@@ -267,8 +333,8 @@ public final class WeeklyReviewStructureProjector {
                 context,
                 "NET_REVENUE",
                 "Чистая выручка",
-                currentStore.netRevenue(),
-                previousStore.netRevenue(),
+                currentNetRevenue,
+                previousNetRevenue,
                 List.of(devices, additional, other)
         );
     }
@@ -294,7 +360,7 @@ public final class WeeklyReviewStructureProjector {
                         HIGHER_IS_BETTER,
                         RELATIVE,
                         CATEGORY_THRESHOLD,
-                        "STORE.STRUCTURE." + code + ".REVENUE"
+                        context.scope() + ".STRUCTURE." + code + ".REVENUE"
                 ),
                 current,
                 previous,
@@ -320,7 +386,7 @@ public final class WeeklyReviewStructureProjector {
                         CONTEXT,
                         ABSOLUTE,
                         policy.shareThreshold(),
-                        "STORE.STRUCTURE." + code + ".SHARE"
+                        context.scope() + ".STRUCTURE." + code + ".SHARE"
                 ),
                 currentShare,
                 previousShare,
@@ -346,7 +412,8 @@ public final class WeeklyReviewStructureProjector {
             AttachRateResult previous,
             CategoryKpiResult currentCategories,
             CategoryKpiResult previousCategories,
-            boolean qualityComplete
+            boolean qualityComplete,
+            String scope
     ) {
         Map<String, AttachRateEntry> currentByCode = byCode(current.rates());
         Map<String, AttachRateEntry> previousByCode = byCode(previous.rates());
@@ -364,6 +431,9 @@ public final class WeeklyReviewStructureProjector {
                         previousByCode.get(code),
                         categoryLabels,
                         qualityComplete
+                                && (currentByCode.get(code) == null || !currentByCode.get(code).preliminary())
+                                && (previousByCode.get(code) == null || !previousByCode.get(code).preliminary()),
+                        scope
                 ))
                 .toList();
     }
@@ -373,7 +443,8 @@ public final class WeeklyReviewStructureProjector {
             AttachRateEntry current,
             AttachRateEntry previous,
             Map<String, String> categoryLabels,
-            boolean qualityComplete
+            boolean qualityComplete,
+            String scope
     ) {
         BigDecimal currentDenominator = value(
                 current, AttachRateEntry::denominatorReceiptCount
@@ -406,7 +477,7 @@ public final class WeeklyReviewStructureProjector {
                         HIGHER_IS_BETTER,
                         ABSOLUTE,
                         policy.attachThreshold(),
-                        "STORE.ATTACH." + code
+                        scope + ".ATTACH." + code
                 ),
                 currentRate,
                 previousRate,
@@ -435,7 +506,7 @@ public final class WeeklyReviewStructureProjector {
         );
     }
 
-    private boolean hierarchyValid(StoreKpiResult store, CategoryKpiResult result) {
+    private boolean hierarchyValid(BigDecimal netRevenue, CategoryKpiResult result) {
         BigDecimal devices = groupRevenue(result, "DEVICES");
         BigDecimal phones = groupRevenue(result, "PHONES");
         BigDecimal additional = groupRevenue(result, "ADDITIONAL_REVENUE");
@@ -446,7 +517,7 @@ public final class WeeklyReviewStructureProjector {
                 category -> category.countsAsDevice()
                         && category.countsAsAdditionalRevenue()
         ).signum() != 0;
-        BigDecimal other = store.netRevenue().subtract(devices).subtract(additional);
+        BigDecimal other = netRevenue.subtract(devices).subtract(additional);
         BigDecimal otherDevices = devices.subtract(phones);
         BigDecimal otherAdditional = additional.subtract(accessory).subtract(service);
         return other.signum() >= 0
@@ -494,9 +565,10 @@ public final class WeeklyReviewStructureProjector {
         return result;
     }
 
-    private boolean attachQualityComplete(AttachRateDataQuality quality) {
+    private boolean attachQualityComplete(AttachRateResult result) {
+        AttachRateDataQuality quality = result.dataQuality();
         return quality.unmatchedNumeratorItemCount() == 0
-                && quality.ambiguousWarrantyItemCount() == 0
+                && ("attach-rate-v4".equals(result.formulaVersion()) || quality.ambiguousWarrantyItemCount() == 0)
                 && quality.unknownDeviceConditionItemCount() == 0;
     }
 
@@ -521,7 +593,16 @@ public final class WeeklyReviewStructureProjector {
             BigDecimal currentStoreRevenue,
             BigDecimal previousStoreRevenue,
             MetricState state,
-            Sufficiency sufficiency
+            Sufficiency sufficiency,
+            String scope
+    ) {
+    }
+
+    private record StructurePeriod(
+            BigDecimal netRevenue,
+            CategoryKpiResult categories,
+            AttachRateResult attach,
+            long unmappedItemCount
     ) {
     }
 

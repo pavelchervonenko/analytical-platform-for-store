@@ -51,6 +51,7 @@ class ProductClassificationResolverTest {
                 productId,
                 occurredAt
         )).thenReturn(List.of(assignment));
+        when(category.isActive()).thenReturn(false);
         when(assignment.getAnalyticsCategory()).thenReturn(category);
         when(assignment.getConditionType()).thenReturn(ProductConditionType.USED);
         when(assignment.getRuleVersion()).thenReturn("customer-approved-v1");
@@ -82,6 +83,7 @@ class ProductClassificationResolverTest {
                         "charger-cable"
                 )
         ));
+        when(category.isActive()).thenReturn(true);
         when(categoryRepository.findByCode("CHARGER_CABLE"))
                 .thenReturn(Optional.of(category));
 
@@ -91,6 +93,57 @@ class ProductClassificationResolverTest {
         assertThat(result.orElseThrow().category()).isSameAs(category);
         assertThat(result.orElseThrow().assignment()).isNull();
         assertThat(result.orElseThrow().version())
-                .isEqualTo("livesklad-product-rules-v9:charger-cable");
+                .isEqualTo("livesklad-product-rules-v32:charger-cable");
+    }
+
+    @Test
+    void inactiveAutomaticCategoryLeavesProductUnmapped() {
+        Product product = mock(Product.class);
+        UUID productId = UUID.randomUUID();
+        Instant occurredAt = Instant.parse("2026-09-30T10:00:00Z");
+        when(product.getId()).thenReturn(productId);
+        when(assignmentRepository.findEffectiveAssignments(productId, occurredAt))
+                .thenReturn(List.of());
+        when(ruleEngine.classify(product)).thenReturn(Optional.of(
+                new ProductAutoClassificationDecision(
+                        "WATCH_APPLE", ProductConditionType.NEW, "watch-test")));
+        AnalyticsCategory category = mock(AnalyticsCategory.class);
+        when(category.isActive()).thenReturn(false);
+        when(categoryRepository.findByCode("WATCH_APPLE")).thenReturn(Optional.of(category));
+
+        assertThat(resolver.resolve(product, occurredAt)).isEmpty();
+        verify(assignmentRepository, never()).save(
+                org.mockito.ArgumentMatchers.any(ProductCategoryAssignment.class));
+    }
+
+    @Test
+    void missingAutomaticCategoryRemainsConfigurationFailure() {
+        Product product = mock(Product.class);
+        UUID productId = UUID.randomUUID();
+        Instant occurredAt = Instant.parse("2026-09-30T10:00:00Z");
+        when(product.getId()).thenReturn(productId);
+        when(assignmentRepository.findEffectiveAssignments(productId, occurredAt))
+                .thenReturn(List.of());
+        when(ruleEngine.classify(product)).thenReturn(Optional.of(
+                new ProductAutoClassificationDecision(
+                        "WATCH_APPLE", ProductConditionType.NEW, "watch-test")));
+        when(categoryRepository.findByCode("WATCH_APPLE")).thenReturn(Optional.empty());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> resolver.resolve(product, occurredAt))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("WATCH_APPLE");
+    }
+
+    @Test
+    void unmatchedProductRemainsUnmapped() {
+        Product product = mock(Product.class);
+        Instant occurredAt = Instant.parse("2026-09-30T10:00:00Z");
+        when(assignmentRepository.findEffectiveAssignments(null, occurredAt))
+                .thenReturn(List.of());
+        when(ruleEngine.classify(product)).thenReturn(Optional.empty());
+
+        assertThat(resolver.resolve(product, occurredAt)).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(categoryRepository);
     }
 }

@@ -222,6 +222,61 @@ sanitized evidence. Затем удалить exact sudoers-файл, повто
 убедиться, что audit command больше не разрешена, и только после этого удалить перечисленные
 root-owned audit scripts. Другие sudoers entries и `authorized_keys` не затрагивать.
 
+## Маршрут через Windows TCP-прокси при недоступности прямого WSL
+
+2026-09-30 владелец уточнил рабочий маршрут: SSH в WSL → `ProxyCommand` → Windows
+PowerShell → production:22. Прямой WSL-маршрут завершался таймаутом, а TCP-проверка Windows
+и SSH через существующий прокси прошли. Поэтому таймаут прямого WSL-подключения сам по себе
+не доказывает недоступность production из Windows.
+
+В текущей локальной среде используются два существующих файла (локальные инструменты доступа,
+не переносить их вместе с секретами в репозиторий):
+
+- `/home/pavel/analytical-platform-for-store/.codex-prod-recovery/windows-production-ssh-tcp-proxy`;
+- `/home/pavel/analytical-platform-for-store/.codex-prod-recovery/windows-production-ssh-tcp-proxy.ps1`.
+
+Сначала выполнить проверки owner-key fingerprint и agent socket из предыдущих разделов,
+проверить наличие/executable wrapper и прочитать оба proxy-файла. Wrapper запускает PowerShell,
+PS1 открывает TCP к фиксированному production:22 и пересылает stdin/stdout; ключ остаётся в WSL.
+Пути Windows/WSL и имя дистрибутива в wrapper зависят от локальной машины. Отсутствующий или
+неожиданный proxy не заменять скачанным/новым скриптом без проверки его происхождения.
+
+Проверка маршрута Windows:
+
+```bash
+/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe \
+  -NoLogo -NoProfile -NonInteractive -Command \
+  '$c=[Net.Sockets.TcpClient]::new(); try { if (-not $c.ConnectAsync("92.53.127.24",22).Wait(10000)) { throw "TCP timeout" }; "TCP22=OK" } finally { $c.Dispose() }'
+```
+
+После `TCP22=OK` выполнить одну SSH-попытку:
+
+```bash
+SSH_AUTH_SOCK=/tmp/codex-store-analytics-agent \
+ssh -i /home/pavel/.ssh/store-analytics-prod \
+  -o IdentitiesOnly=yes -o BatchMode=yes \
+  -o ConnectTimeout=20 -o ConnectionAttempts=1 \
+  -o StrictHostKeyChecking=yes \
+  -o UserKnownHostsFile=/home/pavel/.ssh/known_hosts \
+  -o ProxyCommand=/home/pavel/analytical-platform-for-store/.codex-prod-recovery/windows-production-ssh-tcp-proxy \
+  pavel@92.53.127.24 hostname
+```
+
+Для серии команд использовать `ControlMaster` с socket в отдельной локальной директории mode
+`0700`, `ControlPersist=1800`, `ServerAliveInterval=15`, `ServerAliveCountMax=3`. В среде агента
+удерживать master через отдельную активную exec-сессию (`ssh -M -N -S <socket>` с теми же
+параметрами маршрута), затем проверять `ssh -S <socket> -O check pavel@92.53.127.24`.
+Сам факт успешной первой команды не доказывает, что фоновый master пережил её завершение.
+Последующие команды используют `-S <socket> -o ProxyCommand=false -o BatchMode=yes`, чтобы
+при исчезновении master не переходить незаметно на прямой маршрут. Временный socket не является
+долговечным способом восстановления доступа и после завершения сессии может исчезнуть.
+
+Если одна попытка через проверенный proxy не прошла, разбирать краткую ошибку без `-vvv`:
+TCP timeout, host-key mismatch и отказ авторизации требуют разных действий. Серия десятков
+повторов прямого WSL-маршрута не проверяет Windows-маршрут. Production:443 — HTTPS, не
+альтернативный SSH; `ssh.github.com:443` в этом runbook относится только к GitHub.
+Ограничения exact-command sudo allowlist сохраняются при любом TCP-маршруте.
+
 ## Диагностика `Permission denied (publickey)`
 
 Сначала выполнить локально:

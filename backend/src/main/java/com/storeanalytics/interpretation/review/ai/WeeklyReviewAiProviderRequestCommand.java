@@ -1,6 +1,6 @@
 package com.storeanalytics.interpretation.review.ai;
 
-import com.storeanalytics.interpretation.review.PersistedWeeklyReviewSnapshot;
+import com.storeanalytics.interpretation.review.PersistedWeeklyReview;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
@@ -9,7 +9,7 @@ import java.util.UUID;
 
 public record WeeklyReviewAiProviderRequestCommand(
         UUID jobId,
-        PersistedWeeklyReviewSnapshot snapshot,
+        PersistedWeeklyReview snapshot,
         String providerCode,
         String requestedModel,
         BigDecimal temperature,

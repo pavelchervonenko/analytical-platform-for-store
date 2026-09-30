@@ -10,6 +10,7 @@ import com.storeanalytics.store.repository.StoreRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -47,31 +48,34 @@ public class EmployeeCategoryKpiService {
             throw new StoreNotFoundException(validatedStoreId);
         }
 
+        return project(validatedStoreId, validatedPeriod, repository.aggregate(
+                validatedStoreId, validatedPeriod.start(), validatedPeriod.end()));
+    }
+
+    static EmployeeCategoryKpiResult project(
+            UUID storeId, StoreKpiPeriod period, List<EmployeeCategoryKpiAggregate> rows
+    ) {
         Map<EmployeeKey, List<EmployeeCategoryKpiAggregate>> rowsByEmployee =
-                repository.aggregate(
-                        validatedStoreId,
-                        validatedPeriod.start(),
-                        validatedPeriod.end()
-                ).stream().collect(Collectors.groupingBy(
+                rows.stream().collect(Collectors.groupingBy(
                         row -> new EmployeeKey(row.employeeId(), row.unassigned()),
                         LinkedHashMap::new,
                         Collectors.toList()
                 ));
 
         List<EmployeeCategoryKpiEmployee> employees = rowsByEmployee.values().stream()
-                .map(this::toEmployee)
+                .map(EmployeeCategoryKpiService::toEmployee)
                 .toList();
         return new EmployeeCategoryKpiResult(
-                validatedStoreId,
-                validatedPeriod.start(),
-                validatedPeriod.end(),
+                storeId,
+                period.start(),
+                period.end(),
                 FORMULA_VERSION,
                 CategoryKpiService.FORMULA_VERSION,
                 employees
         );
     }
 
-    private EmployeeCategoryKpiEmployee toEmployee(
+    private static EmployeeCategoryKpiEmployee toEmployee(
             List<EmployeeCategoryKpiAggregate> rows
     ) {
         EmployeeCategoryKpiAggregate identity = rows.getFirst();
@@ -80,7 +84,7 @@ public class EmployeeCategoryKpiService {
         List<EmployeeCategoryKpiEntry> categories = rows.stream()
                 .map(row -> toCategory(row, employeeRevenue))
                 .toList();
-        List<EmployeeCategoryKpiGroup> groups = List.of(
+        List<EmployeeCategoryKpiGroup> groups = new ArrayList<>(List.of(
                 group("PHONES", "Телефоны", rows,
                         EmployeeCategoryKpiAggregate::countsAsPhone, employeeRevenue),
                 group("DEVICES", "Устройства", rows,
@@ -89,11 +93,14 @@ public class EmployeeCategoryKpiService {
                         row -> row.categoryKind() == AnalyticsCategoryKind.ACCESSORY,
                         employeeRevenue),
                 group("SERVICE", "Услуги", rows,
-                        this::isServiceCategory, employeeRevenue),
+                        EmployeeCategoryKpiService::isServiceCategory, employeeRevenue),
                 group("ADDITIONAL_REVENUE", "Дополнительная выручка", rows,
                         EmployeeCategoryKpiAggregate::countsAsAdditionalRevenue,
                         employeeRevenue)
-        );
+        ));
+        CategoryFinancialDetails.devices(rows).forEach(row -> groups.add(new EmployeeCategoryKpiGroup(
+                CategoryFinancialDetails.DEVICE_PREFIX + row.categoryCode(),
+                CategoryFinancialDetails.name(row), metrics(List.of(row), employeeRevenue))));
         long unmappedItemCount = rows.stream()
                 .filter(row -> "UNMAPPED".equals(row.categoryCode()))
                 .mapToLong(EmployeeCategoryKpiAggregate::includedItemCount)
@@ -122,12 +129,12 @@ public class EmployeeCategoryKpiService {
                         overall.dataQuality().missingCostItemCount(),
                         overall.dataQuality().unexpectedZeroCostItemCount()
                 ),
-                groups,
+                List.copyOf(groups),
                 categories
         );
     }
 
-    private EmployeeCategoryKpiEntry toCategory(
+    private static EmployeeCategoryKpiEntry toCategory(
             EmployeeCategoryKpiAggregate row,
             BigDecimal employeeRevenue
     ) {
@@ -144,7 +151,7 @@ public class EmployeeCategoryKpiService {
         );
     }
 
-    private EmployeeCategoryKpiGroup group(
+    private static EmployeeCategoryKpiGroup group(
             String code,
             String name,
             List<EmployeeCategoryKpiAggregate> rows,
@@ -161,7 +168,7 @@ public class EmployeeCategoryKpiService {
         );
     }
 
-    private EmployeeCategoryKpiMetrics metrics(
+    private static EmployeeCategoryKpiMetrics metrics(
             List<EmployeeCategoryKpiAggregate> rows,
             BigDecimal employeeRevenue
     ) {
@@ -182,7 +189,7 @@ public class EmployeeCategoryKpiService {
         );
     }
 
-    private boolean isServiceCategory(EmployeeCategoryKpiAggregate row) {
+    private static boolean isServiceCategory(EmployeeCategoryKpiAggregate row) {
         return switch (row.categoryKind()) {
             case SERVICE, WARRANTY, PROTECTION -> true;
             default -> false;

@@ -84,6 +84,10 @@ public class AnalyticsCategory extends AbstractMutableEntity {
         return code;
     }
 
+    public boolean isActive() {
+        return active;
+    }
+
     public boolean permitsZeroCost() {
         return categoryKind == AnalyticsCategoryKind.SERVICE
                 || categoryKind == AnalyticsCategoryKind.WARRANTY

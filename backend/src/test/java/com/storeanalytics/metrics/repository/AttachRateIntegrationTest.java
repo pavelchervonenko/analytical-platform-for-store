@@ -65,6 +65,7 @@ class AttachRateIntegrationTest {
         addItem(graph, iphoneWithAdditions, "iphone", "IPHONE_NEW_ASIS", "1.000", "NEW");
         addItem(graph, iphoneWithAdditions, "cases", "CASE_APPLE_IPHONE", "2.000", "NOT_APPLICABLE");
         addItem(graph, iphoneWithAdditions, "charger", "CHARGER_CABLE", "1.000", "NOT_APPLICABLE");
+        addItem(graph, iphoneWithAdditions, "power bank", "POWER_BANK", "1.000", "NOT_APPLICABLE");
         addItem(
                 graph, iphoneWithAdditions, "wrong-glass", "GLASS_CAMERA_SAMSUNG",
                 "1.000", "NOT_APPLICABLE"
@@ -142,7 +143,7 @@ class AttachRateIntegrationTest {
 
         AttachRateResult result = attachRateService.calculate(graph.storeId(), period());
 
-        assertThat(result.rates()).hasSize(14);
+        assertThat(result.rates()).hasSize(17);
         assertThat(result.formulaVersion()).isEqualTo("attach-rate-v3");
         assertThat(result.rates()).extracting(AttachRateEntry::metricCode)
                 .containsExactlyElementsOf(List.of(
@@ -159,10 +160,14 @@ class AttachRateIntegrationTest {
                         "ACCESSORY_IPAD",
                         "WARRANTY_GENERIC_USED",
                         "WARRANTY_GENERIC_NEW",
-                        "PREMIUM_PROTECTION"
+                        "PREMIUM_PROTECTION",
+                        "POWER_BANK",
+                        "ACCESSORY_AIRPODS",
+                        "ACCESSORY_APPLE_WATCH"
                 ));
         assertRate(result, "CASE_APPLE_IPHONE", "3", "2", "150");
         assertRate(result, "CHARGER_CABLE", "1", "4", "25");
+        assertRate(result, "POWER_BANK", "1", "4", "25");
         assertRate(result, "FILM_PHONE", "0", "4", "0");
         assertRate(result, "SETUP_SERVICE", "0", "5", "0");
         assertRate(result, "GLASS_IPHONE", "1", "2", "50");

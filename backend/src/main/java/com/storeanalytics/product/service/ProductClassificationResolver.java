@@ -38,19 +38,24 @@ public class ProductClassificationResolver {
             return assigned;
         }
 
-        return ruleEngine.classify(product).map(decision -> {
+        return ruleEngine.classify(product).flatMap(decision -> {
             var category = categoryRepository.findByCode(decision.categoryCode())
                     .orElseThrow(() -> new IllegalStateException(
                             "Auto-classification category is not configured: "
                                     + decision.categoryCode()
                     ));
-            return new ProductClassificationResolution(
+            // An inactive taxonomy leaf is not permission to assign it during sync.
+            // Explicit historical assignments above remain valid after retirement.
+            if (!category.isActive()) {
+                return Optional.empty();
+            }
+            return Optional.of(new ProductClassificationResolution(
                     category,
                     null,
                     ProductAutoClassificationRuleEngine.RULE_VERSION
                             + ":" + decision.ruleId(),
                     decision.conditionType()
-            );
+            ));
         });
     }
 

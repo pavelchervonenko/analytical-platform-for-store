@@ -16,9 +16,15 @@ import com.storeanalytics.store.model.Store;
 import com.storeanalytics.store.repository.StoreRepository;
 import com.storeanalytics.sync.model.SourceSystem;
 import java.time.Duration;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -34,6 +40,16 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 })
 @Testcontainers(disabledWithoutDocker = true)
 class ReportBackfillJobPersistenceIntegrationTest {
+
+    @TestConfiguration
+    static class FixedPersistenceClock {
+        @Bean
+        @Primary
+        Clock persistenceClock() {
+            // Persistence transitions do not test wall-clock drift or passage of time.
+            return Clock.fixed(Instant.parse("2026-08-24T04:00:00Z"), ZoneOffset.UTC);
+        }
+    }
 
     private static final String IDEMPOTENCY_KEY = "integration-request-12345678";
 

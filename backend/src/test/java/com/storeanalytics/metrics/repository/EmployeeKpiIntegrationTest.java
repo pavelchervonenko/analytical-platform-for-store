@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.storeanalytics.metrics.service.EmployeeKpiEntry;
 import com.storeanalytics.metrics.service.EmployeeKpiResult;
 import com.storeanalytics.metrics.service.EmployeeKpiService;
+import com.storeanalytics.metrics.service.OverviewMetricScope;
+import com.storeanalytics.metrics.service.OverviewMetricsService;
+import com.storeanalytics.metrics.service.SellerPeriodAnalyticsService;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.metrics.service.StoreKpiResult;
 import com.storeanalytics.metrics.service.StoreKpiService;
@@ -16,6 +19,8 @@ import java.time.ZoneOffset;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -41,6 +46,12 @@ class EmployeeKpiIntegrationTest {
 
     @Autowired
     private StoreKpiService storeKpiService;
+
+    @Autowired
+    private SellerPeriodAnalyticsService sellerAnalytics;
+
+    @Autowired
+    private OverviewMetricsService overviewMetrics;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -147,6 +158,174 @@ class EmployeeKpiIntegrationTest {
         StoreKpiResult storeKpi = storeKpiService.calculate(graph.storeId(), period());
         assertThat(employeeRevenue).isEqualByComparingTo(storeKpi.netRevenue());
         assertThat(storeKpi.netRevenue()).isEqualByComparingTo("225.00");
+
+        var sellers = sellerAnalytics.readComparison(graph.storeId(), period(), period());
+        assertThat(sellers.current().metrics().cohort().employeeIds())
+                .containsExactlyInAnyOrder(eligibleId, zeroId);
+        assertThat(sellers.current().metrics().totals().netRevenue()).isEqualByComparingTo("80.00");
+        assertThat(sellers.current().metrics().totals().costAmount()).isEqualByComparingTo("50.00");
+        assertThat(sellers.current().documents()).singleElement().satisfies(document -> {
+            assertThat(document.salesRevenue()).isEqualByComparingTo("100.00");
+            assertThat(document.returnRevenue()).isEqualByComparingTo("20.00");
+            assertThat(document.saleDocumentCount()).isOne();
+            assertThat(document.returnDocumentCount()).isOne();
+            assertThat(document.completedSaleCount()).isOne();
+        });
+        assertSellerOverviewParity(graph.storeId(), period());
+    }
+
+    @Test
+    void sellerDocumentsKeepAllSaleCountsSeparateFromCompletedSamples() {
+        TestGraph graph = createGraph();
+        UUID seller = addEmployee(graph, "samples", "Synthetic", true);
+        addAssignment(seller, graph.storeId(), true, true);
+        addSaleWithItem(graph, seller, "normal", "100", "60");
+        UUID excluded = addDocument(graph, sale(
+                graph.storeId(), seller, "excluded-only", PERIOD_START, "900"));
+        addItem(graph, knownItem(excluded, "excluded-item", "EXCLUDE", "1", "900", "600"));
+        addDocument(graph, sale(graph.storeId(), seller, "empty", PERIOD_START, "0"));
+        UUID deleted = addDocument(graph, sale(
+                graph.storeId(), seller, "deleted-items", PERIOD_START, "700"));
+        addItem(graph, deletedKnownItem(deleted, "deleted-item", "IPHONE_NEW_ASIS", "1", "700", "400"));
+        addSaleWithItem(graph, seller, "non-sale-source", "20", "0");
+        jdbcTemplate.update("UPDATE sales_documents SET source_document_type = 'order' WHERE external_id = ?",
+                "non-sale-source");
+
+        var facts = sellerAnalytics.readComparison(graph.storeId(), period(), period()).current();
+        assertThat(facts.documents()).singleElement().satisfies(document -> {
+            assertThat(document.salesRevenue()).isEqualByComparingTo("120");
+            assertThat(document.saleDocumentCount()).isEqualTo(5);
+            assertThat(document.completedSaleCount()).isOne();
+        });
+        assertSellerOverviewParity(graph.storeId(), period());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "2026-07-01,2026-07-07,100",
+        "2026-07-01,2026-07-31,120",
+        "2026-07-02,2026-07-12,20",
+        "2026-08-01,2026-08-07,0"
+    })
+    void sellerOverviewPreservesWeekMonthCustomAndEmptyPeriod(
+            LocalDate start, LocalDate end, String expected
+    ) {
+        TestGraph graph = createGraph();
+        UUID seller = addEmployee(graph, "period-seller", "Synthetic", true);
+        UUID excluded = addEmployee(graph, "period-excluded", "Synthetic", true);
+        addAssignment(seller, graph.storeId(), true, true);
+        addAssignment(excluded, graph.storeId(), true, false);
+        addSaleWithItem(graph, seller, "first", "100", "60");
+        UUID later = addDocument(graph, sale(
+                graph.storeId(), seller, "later", LocalDate.of(2026, 7, 12), "20"));
+        addItem(graph, knownItem(later, "later-item", "CHARGER_CABLE", "1", "20", "0"));
+        addSaleWithItem(graph, excluded, "outside", "900", "600");
+        StoreKpiPeriod selected = new StoreKpiPeriod(start, end);
+
+        var result = overviewMetrics.calculate(graph.storeId(), selected, OverviewMetricScope.SELLERS);
+
+        assertThat(result.netRevenue()).isEqualByComparingTo(expected);
+        assertThat(result.periodStart()).isEqualTo(start);
+        assertThat(result.periodEnd()).isEqualTo(end);
+        assertSellerOverviewParity(graph.storeId(), selected);
+        var full = overviewMetrics.calculate(graph.storeId(), selected, OverviewMetricScope.STORE);
+        assertThat(full.netRevenue()).isEqualTo(storeKpiService.calculate(graph.storeId(), selected).netRevenue());
+    }
+
+    @Test
+    void currentRosterIsSharedAcrossPeriodsAndChangesOnlyOnNextRead() {
+        TestGraph graph = createGraph();
+        UUID seller = addEmployee(graph, "current-seller", "Synthetic", true);
+        UUID inactive = addEmployee(graph, "inactive-seller", "Synthetic", false);
+        addAssignment(seller, graph.storeId(), true, true);
+        addAssignment(inactive, graph.storeId(), true, true);
+        addSaleWithItem(graph, seller, "current", "100", "60");
+        addSaleWithItem(graph, inactive, "inactive", "900", "600");
+        StoreKpiPeriod previous = new StoreKpiPeriod(PERIOD_START.minusMonths(1), PERIOD_START.minusDays(1));
+        UUID old = addDocument(graph, sale(
+                graph.storeId(), seller, "previous", previous.start(), "80"));
+        addItem(graph, knownItem(old, "previous-item", "IPHONE_NEW_ASIS", "1", "80", "40"));
+
+        var before = sellerAnalytics.readComparison(graph.storeId(), period(), previous);
+        assertThat(before.current().metrics().cohort()).isEqualTo(before.previous().metrics().cohort());
+        assertThat(before.current().metrics().cohort().employeeIds()).containsExactly(seller);
+        assertThat(before.previous().metrics().totals().netRevenue()).isEqualByComparingTo("80");
+        jdbcTemplate.update("UPDATE employee_store_assignments SET participates_in_ranking = false "
+                + "WHERE employee_id = ? AND store_id = ?", seller, graph.storeId());
+        var after = sellerAnalytics.readComparison(graph.storeId(), period(), previous);
+        assertThat(after.current().metrics().cohort().employeeIds()).isEmpty();
+        assertThat(after.previous().metrics().totals().netRevenue()).isEqualByComparingTo("0");
+        assertThat(after.current().attachRates()).isNotEmpty().allSatisfy(rate -> {
+            assertThat(rate.numeratorReceiptCount()).isEqualByComparingTo("0");
+            assertThat(rate.denominatorReceiptCount()).isEqualByComparingTo("0");
+        });
+        assertThat(before.current().metrics().totals().netRevenue()).isEqualByComparingTo("100");
+        assertSellerOverviewParity(graph.storeId(), period());
+    }
+
+    @Test
+    void sellerAttachAggregatesSignedQuantitiesBeforeClampingAndExcludesOutsideFacts() {
+        TestGraph graph = createGraph();
+        UUID first = addEmployee(graph, "first", "Synthetic", true);
+        UUID second = addEmployee(graph, "second", "Synthetic", true);
+        UUID outside = addEmployee(graph, "outside", "Synthetic", true);
+        addAssignment(first, graph.storeId(), true, true);
+        addAssignment(second, graph.storeId(), true, true);
+        addAssignment(outside, graph.storeId(), true, false);
+        addSaleWithItem(graph, first, "phone-first", "100", "60");
+        addSaleWithItem(graph, second, "phone-second", "100", "60");
+        addSaleWithItem(graph, outside, "phone-outside", "900", "600");
+        UUID returned = addDocument(graph, returnDocument(
+                graph.storeId(), first, "return-cable", PERIOD_START, "20", null));
+        addItem(graph, knownItem(returned, "return-cable-item", "CHARGER_CABLE", "2", "20", "0"));
+        UUID sold = addDocument(graph, sale(graph.storeId(), second, "sale-cable", PERIOD_START, "50"));
+        addItem(graph, knownItem(sold, "sale-cable-item", "CHARGER_CABLE", "5", "50", "0"));
+
+        var facts = sellerAnalytics.readComparison(graph.storeId(), period(), period()).current();
+        assertThat(facts.attachRates()).filteredOn(rate -> "CHARGER_CABLE".equals(rate.metricCode()))
+                .singleElement().satisfies(rate -> {
+                    assertThat(rate.numeratorReceiptCount()).isEqualByComparingTo("3");
+                    assertThat(rate.denominatorReceiptCount()).isEqualByComparingTo("2");
+                });
+        assertThat(facts.metrics().categories().groups())
+                .filteredOn(group -> "ADDITIONAL_REVENUE".equals(group.groupCode()))
+                .singleElement().satisfies(group ->
+                        assertThat(group.metrics().netRevenue()).isEqualByComparingTo("30"));
+        assertSellerOverviewParity(graph.storeId(), period());
+    }
+
+    @Test
+    void sellerReturnOnlyPeriodPreservesNegativeRevenueAndUnattributedReturnsStayOutside() {
+        TestGraph graph = createGraph();
+        UUID seller = addEmployee(graph, "return-only", "Synthetic", true);
+        addAssignment(seller, graph.storeId(), true, true);
+        UUID returned = addDocument(graph, returnDocument(
+                graph.storeId(), seller, "return-only", PERIOD_START, "50", null));
+        addItem(graph, knownItem(returned, "return-item", "IPHONE_NEW_ASIS", "1", "50", "30"));
+        UUID orphan = addDocument(graph, returnDocument(
+                graph.storeId(), null, "orphan", PERIOD_START, "500", null));
+        addItem(graph, knownItem(orphan, "orphan-item", "IPHONE_NEW_ASIS", "1", "500", "300"));
+
+        var facts = sellerAnalytics.readComparison(graph.storeId(), period(), period()).current();
+        assertThat(facts.metrics().totals().netRevenue()).isEqualByComparingTo("-50");
+        assertThat(facts.metrics().totals().costAmount()).isEqualByComparingTo("-30");
+        assertThat(facts.documents()).singleElement().satisfies(document -> {
+            assertThat(document.saleDocumentCount()).isZero();
+            assertThat(document.returnDocumentCount()).isOne();
+            assertThat(document.completedSaleCount()).isZero();
+        });
+        assertSellerOverviewParity(graph.storeId(), period());
+    }
+
+    private void assertSellerOverviewParity(UUID storeId, StoreKpiPeriod selectedPeriod) {
+        var seller = sellerAnalytics.readMetrics(storeId, selectedPeriod);
+        var overview = overviewMetrics.calculate(storeId, selectedPeriod, OverviewMetricScope.SELLERS);
+        assertThat(seller.totals().netRevenue()).isEqualTo(overview.netRevenue());
+        assertThat(seller.totals().netQuantity()).isEqualTo(overview.netQuantity());
+        assertThat(seller.totals().costAmount()).isEqualTo(overview.costAmount());
+        assertThat(seller.totals().grossProfit()).isEqualTo(overview.grossProfit());
+        assertThat(seller.totals().marginPercent()).isEqualTo(overview.marginPercent());
+        assertThat(seller.categories().groups()).isEqualTo(overview.salesGroups());
     }
 
     @Test
@@ -212,6 +391,18 @@ class EmployeeKpiIntegrationTest {
         assertThat(incomplete.marginPercent()).isNull();
         assertThat(incomplete.dataQuality().missingCostItemCount()).isOne();
         assertThat(incomplete.dataQuality().unmappedItemCount()).isOne();
+
+        var seller = sellerAnalytics.readMetrics(graph.storeId(), period());
+        assertThat(seller.totals().netRevenue()).isEqualByComparingTo("80");
+        assertThat(seller.totals().grossProfit()).isNull();
+        assertThat(seller.unmappedItemCount()).isOne();
+        assertSellerOverviewParity(graph.storeId(), period());
+        jdbcTemplate.update("UPDATE employee_store_assignments SET participates_in_ranking = false "
+                + "WHERE employee_id = ? AND store_id = ?", incompleteId, graph.storeId());
+        var remaining = sellerAnalytics.readMetrics(graph.storeId(), period());
+        assertThat(remaining.totals().grossProfit()).isEqualByComparingTo("30");
+        assertThat(remaining.unmappedItemCount()).isZero();
+        assertSellerOverviewParity(graph.storeId(), period());
     }
 
     private TestGraph createGraph() {

@@ -21,6 +21,7 @@ release_env="${temporary_directory}/release.env"
 
 printf '%s\n' \
   'WEEKLY_REVIEW_ENABLED=true' \
+  'SELLER_WEEKLY_REVIEW_ENABLED=false' \
   'WEEKLY_REVIEW_SNAPSHOT_PLANNER_ENABLED=false' \
   'WEEKLY_REVIEW_AI_ENABLED=true' \
   'WEEKLY_REVIEW_AI_PLANNER_ENABLED=false' \
@@ -65,6 +66,24 @@ if release_validate_weekly_review_ai_configuration "${release_env}" \
   fail_test 'invalid read flag boolean was accepted'
 fi
 sed -i 's/WEEKLY_REVIEW_ENABLED=invalid/WEEKLY_REVIEW_ENABLED=true/' "${release_env}"
+
+sed -i 's/SELLER_WEEKLY_REVIEW_ENABLED=false/SELLER_WEEKLY_REVIEW_ENABLED=invalid/' \
+  "${release_env}"
+if release_validate_weekly_review_ai_configuration "${release_env}" \
+    >/dev/null 2>&1; then
+  fail_test 'invalid seller review flag boolean was accepted'
+fi
+sed -i 's/SELLER_WEEKLY_REVIEW_ENABLED=invalid/SELLER_WEEKLY_REVIEW_ENABLED=true/' \
+  "${release_env}"
+release_validate_weekly_review_ai_configuration "${release_env}" \
+  || fail_test 'valid seller review configuration was rejected'
+
+sed -i 's/^WEEKLY_REVIEW_ENABLED=true/WEEKLY_REVIEW_ENABLED=false/' "${release_env}"
+if release_validate_weekly_review_ai_configuration "${release_env}" \
+    >/dev/null 2>&1; then
+  fail_test 'seller review without parent review was accepted'
+fi
+sed -i 's/^WEEKLY_REVIEW_ENABLED=false/WEEKLY_REVIEW_ENABLED=true/' "${release_env}"
 
 sed -i \
   's/WEEKLY_REVIEW_SNAPSHOT_PLANNER_ENABLED=false/WEEKLY_REVIEW_SNAPSHOT_PLANNER_ENABLED=invalid/' \

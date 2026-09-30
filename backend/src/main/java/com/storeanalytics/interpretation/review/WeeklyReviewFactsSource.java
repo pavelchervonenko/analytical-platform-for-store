@@ -7,12 +7,14 @@ import com.storeanalytics.interpretation.review.WeeklyReviewFacts.PeriodFacts;
 import com.storeanalytics.interpretation.review.WeeklyReviewRevenueRepository.RevenueComparison;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.PeriodContext;
 import com.storeanalytics.metrics.service.AttachRateService;
+import com.storeanalytics.metrics.service.AttachRateResult;
 import com.storeanalytics.metrics.service.CategoryKpiService;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.metrics.service.StoreKpiService;
 import com.storeanalytics.store.service.StoreDataStatusService;
 import com.storeanalytics.store.service.StoreDataStatusView;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
@@ -28,6 +30,7 @@ public class WeeklyReviewFactsSource {
     private final WeeklyReviewEmployeeFactsReader employeeFactsReader;
     private final StoreDataStatusService dataStatusService;
     private final WeeklyReviewRevenueRepository revenueRepository;
+    private final WeeklyReviewAttributionRepository attribution;
     private final WeeklyReviewPolicyV1 policy = new WeeklyReviewPolicyV1();
 
     public WeeklyReviewFactsSource(
@@ -36,7 +39,8 @@ public class WeeklyReviewFactsSource {
             AttachRateService attachRateService,
             WeeklyReviewEmployeeFactsReader employeeFactsReader,
             StoreDataStatusService dataStatusService,
-            WeeklyReviewRevenueRepository revenueRepository
+            WeeklyReviewRevenueRepository revenueRepository,
+            WeeklyReviewAttributionRepository attribution
     ) {
         this.storeKpiService = storeKpiService;
         this.categoryKpiService = categoryKpiService;
@@ -44,6 +48,22 @@ public class WeeklyReviewFactsSource {
         this.employeeFactsReader = employeeFactsReader;
         this.dataStatusService = dataStatusService;
         this.revenueRepository = revenueRepository;
+        this.attribution = attribution;
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public GenerationFacts loadForGeneration(UUID storeId, Instant now, String timezone) {
+        UUID selectedStore = requireNonNull(storeId, "storeId");
+        // Pin the MVCC snapshot before any financial read; later decisions must remain unacknowledged.
+        Optional<Instant> observedChange = attribution.observe(selectedStore);
+        return new GenerationFacts(load(selectedStore, now, timezone), observedChange);
+    }
+
+    public record GenerationFacts(WeeklyReviewFacts facts, Optional<Instant> attributionChange) {
+        public GenerationFacts {
+            requireNonNull(facts, "facts");
+            requireNonNull(attributionChange, "attributionChange");
+        }
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -78,11 +98,12 @@ public class WeeklyReviewFactsSource {
             StoreKpiPeriod period,
             WeeklyReviewPolicyV1.RevenuePeriod revenue
     ) {
-        EmployeePeriod employees = employeeFactsReader.read(storeId, period);
+        AttachRateResult attach = attachRateService.calculate(storeId, period);
+        EmployeePeriod employees = employeeFactsReader.read(storeId, period, attach);
         return new PeriodFacts(
                 storeKpiService.calculate(storeId, period),
                 categoryKpiService.calculate(storeId, period),
-                attachRateService.calculate(storeId, period),
+                attach,
                 employees.employees(),
                 employees.salesSamples(),
                 employees.unattributedReturnDocumentCount(),

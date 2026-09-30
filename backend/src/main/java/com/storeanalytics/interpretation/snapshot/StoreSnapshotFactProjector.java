@@ -137,6 +137,8 @@ final class StoreSnapshotFactProjector {
         BigDecimal currentRevenue = source.current().store().netRevenue();
         BigDecimal previousRevenue = source.previous().store().netRevenue();
         source.current().categories().groups().stream()
+                // Detailed device groups repeat the category facts emitted below.
+                .filter(group -> !group.groupCode().startsWith("DEVICE_CATEGORY:"))
                 .filter(group -> hasActivity(
                         group.metrics(),
                         metrics(previous.get(group.groupCode()))

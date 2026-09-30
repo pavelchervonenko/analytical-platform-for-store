@@ -29,7 +29,7 @@ public record WeeklyReviewResponse(
         List<Limitation> limitations,
         List<Evidence> evidence,
         AiEnhancement aiEnhancement
-) {
+) implements WeeklyReviewContract {
 
     public WeeklyReviewResponse {
         require(contractVersion == 2, "contractVersion must be 2");

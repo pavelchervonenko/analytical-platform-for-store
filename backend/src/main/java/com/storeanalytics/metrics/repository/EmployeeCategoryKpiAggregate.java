@@ -27,5 +27,5 @@ public record EmployeeCategoryKpiAggregate(
         long includedItemCount,
         long missingCostItemCount,
         long unexpectedZeroCostItemCount
-) implements CategoryMetricValues {
+) implements CategorizedMetricValues {
 }

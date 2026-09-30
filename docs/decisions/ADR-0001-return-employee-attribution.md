@@ -41,8 +41,10 @@ superseded_by: null
 ## Текущее реализованное поведение
 
 `ReturnSyncPersistence` выбирает только `original.map(SalesDocument::getEmployee)`.
-Store/category signed totals от выбора сотрудника не меняются. Employee KPI, GP, mix, rating и
-employee attach уменьшаются у продавца исходной продажи.
+Store/category signed totals от выбора сотрудника не меняются. Денежные Employee KPI, GP, mix
+и финансовые составляющие rating уменьшаются у продавца исходной продажи. Для аналитического
+attach v4 применяется уточнение [ADR-0003](ADR-0003-warranty-attach-attribution.md); финансовая
+атрибуция этого решения сохраняется.
 
 ## Условия вступления решения в силу
 

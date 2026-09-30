@@ -464,6 +464,7 @@ public class ReturnSyncPersistence {
         }
 
         if (sourceVersionAccepted) {
+            changed |= document.updateAttachSourceEmployee(detail.processingEmployeeExternalId());
             changed |= synchronizeItems(
                     context,
                     store,
@@ -709,7 +710,7 @@ public class ReturnSyncPersistence {
             );
             SalesDocumentItem existing = existingItems.get(source.externalId());
             if (existing == null) {
-                factRepositories.items().save(new SalesDocumentItem(
+                var createdItem = factRepositories.items().save(new SalesDocumentItem(
                         new SalesItemIdentity(
                                 returnDocument,
                                 source.externalId(),
@@ -721,6 +722,7 @@ public class ReturnSyncPersistence {
                         costQuality,
                         source.work()
                 ));
+                referenceRepositories.roleSnapshots().captureNewItem(createdItem.getId());
                 context.result().itemsCreated++;
                 changed = true;
             } else if (existing.update(

@@ -1,0 +1,186 @@
+package com.storeanalytics.interpretation.review;
+
+import static com.storeanalytics.common.validation.ModelValidation.requireNonNull;
+import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.AiState.DISABLED;
+import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.Effect.NEGATIVE;
+import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.Effect.POSITIVE;
+import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.GeneratedBy.DETERMINISTIC;
+import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.Materiality.MATERIAL;
+import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricState.UNAVAILABLE;
+import static com.storeanalytics.interpretation.review.WeeklyReviewResponse.CoverageState.COMPLETE;
+
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Action;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.ActionTarget;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.AiEnhancement;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Evidence;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.CoverageState;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Factor;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Limitation;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricComparison;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Provenance;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.QualitySummary;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.ReportState;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.StructureNode;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.VersionSet;
+import com.storeanalytics.metrics.service.SellerCohortSnapshot;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+/** Builds a seller-only v3 candidate; publishing still requires the source identity and coverage gates. */
+final class SellerWeeklyV3Assembler {
+
+    private static final VersionSet VERSIONS = new VersionSet(
+            "weekly-metrics-v8-sellers-current", "weekly-snapshot-v16", "weekly-quality-v10");
+
+    static VersionSet versions() {
+        return VERSIONS;
+    }
+
+    private final SellerWeeklyReviewProjector projector = new SellerWeeklyReviewProjector();
+    private final SellerWeeklyV3TeamPresenter teamPresenter = new SellerWeeklyV3TeamPresenter();
+    private final WeeklyReviewSummaryPresenter summaryPresenter = new WeeklyReviewSummaryPresenter();
+
+    WeeklyReviewV3Response assemble(SellerWeeklyReviewFacts facts, Provenance provenance,
+            String sourceIdentityHash, Instant actionabilityAsOf) {
+        SellerWeeklyReviewFacts source = requireNonNull(facts, "facts");
+        SellerWeeklyReviewProjector.Projection projected = projector.project(source);
+        SellerCohortSnapshot cohort = source.comparison().current().metrics().cohort();
+        boolean blocked = projected.quality().reportState() == ReportState.BLOCKED;
+        boolean sourceCoverageComplete = projected.quality().sourceCoverage().stream()
+                .filter(item -> item.requiredForReport())
+                .allMatch(item -> item.state() == COMPLETE);
+        var people = !sourceCoverageComplete ? teamPresenter.unavailable()
+                : projected.teamFacts().map(factsForTeam -> teamPresenter.present(
+                        factsForTeam, projected.returnAttributionComplete(),
+                        projected.additionalSales().additionalRevenue().metricState()
+                                == com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricState.READY))
+                        .orElseGet(teamPresenter::unavailable);
+        var additional = projected.additionalSales();
+        var additionalSales = new WeeklyReviewV3Response.AdditionalSales(
+                additional.additionalRevenue(), additional.additionalShare(),
+                additional.accessoryRevenue(), additional.serviceRevenue(),
+                additional.accessoryMixShare(), additional.serviceMixShare(),
+                additional.integrityResidual(), additional.compositionChartSafe());
+        List<Factor> factors = blocked ? List.of() : factors(projected);
+        List<Action> actions = blocked ? List.of() : actions(factors);
+        List<Limitation> limitations = projected.quality().limitations();
+        ReportState reportState = projected.quality().reportState();
+        QualitySummary qualitySummary = projected.quality().qualitySummary();
+        var membership = new WeeklyReviewV3Response.Membership(SellerCohortSnapshot.BASIS,
+                cohort.fingerprint(), cohort.fingerprint(), cohort.fingerprint(),
+                requireNonNull(actionabilityAsOf, "actionabilityAsOf"), cohort.employeeIds().size());
+        List<Evidence> evidence = evidence(source, projected, additionalSales, people);
+        var response = new WeeklyReviewV3Response(3, VERSIONS, source.period(),
+                requireNonNull(provenance, "provenance"), reportState, qualitySummary,
+                coverage(source, projected), "SELLERS", membership, sourceIdentityHash,
+                summaryPresenter.present(reportState, projected.core().results(), factors,
+                        projected.returnAttributionComplete()),
+                projected.core().results(), projected.core().revenueDecomposition(),
+                additionalSales, factors, projected.structure(), people.team(), people.display(),
+                people.cards(), actions, limitations, evidence,
+                new AiEnhancement(DISABLED, null, null, null));
+        WeeklyReviewV3ScopeValidator.validate(response);
+        return response;
+    }
+
+    private List<WeeklyReviewV3Response.SellerSourceCoverage> coverage(
+            SellerWeeklyReviewFacts source, SellerWeeklyReviewProjector.Projection projected) {
+        var coverage = new ArrayList<>(projected.quality().sourceCoverage().stream()
+                .map(WeeklyReviewV3Response.SellerSourceCoverage::from).toList());
+        var orders = source.sourceCoverage().orders();
+        CoverageState state = orders.current() && orders.previous() ? CoverageState.COMPLETE
+                : orders.current() || orders.previous() ? CoverageState.PARTIAL : CoverageState.MISSING;
+        coverage.add(new WeeklyReviewV3Response.SellerSourceCoverage("ORDERS", true,
+                List.of("summary", "results", "sales-structure", "team", "employees"),
+                orders.current() ? source.period().current().end() : null,
+                orders.previous() ? source.period().previous().end() : null, state,
+                state == CoverageState.COMPLETE ? "Заказы загружены за обе недели."
+                        : "Полнота заказов за обе недели не подтверждена."));
+        return List.copyOf(coverage);
+    }
+
+    private List<Factor> factors(SellerWeeklyReviewProjector.Projection projection) {
+        List<MetricComparison> candidates = List.of(
+                projection.core().revenueDecomposition().returnRevenue(),
+                projection.additionalSales().additionalRevenue());
+        return candidates.stream().filter(item -> item.metricState() != UNAVAILABLE)
+                .filter(item -> item.materiality() == MATERIAL)
+                .filter(item -> item.effect() == POSITIVE || item.effect() == NEGATIVE)
+                .limit(2).map(item -> new Factor("factor:" + item.code().toLowerCase(Locale.ROOT),
+                        "SELLER_RESULT_CHANGE", item.label() + " изменилась",
+                        "Сравните показатель продавцов с предыдущей неделей.", item,
+                        "RETURN_REVENUE".equals(item.code()) && item.absoluteDelta() != null
+                                ? item.absoluteDelta().negate() : item.absoluteDelta(),
+                        item.effect(), item.evidenceRefs())).toList();
+    }
+
+    private List<Action> actions(List<Factor> factors) {
+        return factors.stream().filter(item -> item.effect() == NEGATIVE)
+                .filter(item -> item.comparison().previous() != null)
+                .map(item -> {
+                    MetricComparison metric = item.comparison();
+                    boolean returns = "RETURN_REVENUE".equals(metric.code());
+                    return new Action("action:team:" + metric.code().toLowerCase(Locale.ROOT),
+                            "HIGH", "REVIEW_SELLER_METRIC", "TEAM", null,
+                            returns ? "Разобрать возвраты продавцов" : "Разобрать динамику допов",
+                            metric.code(), new ActionTarget(returns ? "AT_MOST" : "AT_LEAST",
+                                    metric.previous(), metric.unit()),
+                            "Проверить показатель по завершении следующей полной недели.",
+                            "NEXT_FULL_WEEK", DETERMINISTIC, item.evidenceRefs());
+                }).limit(3).toList();
+    }
+
+    private List<Evidence> evidence(SellerWeeklyReviewFacts source,
+            SellerWeeklyReviewProjector.Projection projection,
+            WeeklyReviewV3Response.AdditionalSales additional,
+            SellerWeeklyV3TeamPresenter.Projection people) {
+        Map<String, Evidence> collected = new LinkedHashMap<>();
+        projection.core().results().forEach(item -> add(collected, source, item, "SELLERS", null));
+        var revenue = projection.core().revenueDecomposition();
+        List.of(revenue.salesRevenue(), revenue.returnRevenue(), revenue.netRevenue(),
+                revenue.saleDocumentCount(), revenue.returnDocumentCount(),
+                additional.revenue(), additional.shareOfSellerRevenue())
+                .forEach(item -> add(collected, source, item, "SELLERS", null));
+        structure(collected, source, projection.structure().root());
+        projection.structure().attachMetrics().forEach(item ->
+                add(collected, source, item.comparison(), "SELLERS", null));
+        people.cards().forEach(item -> {
+            var card = item.card();
+            var metrics = card.metrics();
+            List.of(metrics.completedSales(), metrics.netRevenue(), metrics.additionalRevenue(),
+                    metrics.additionalShare(), metrics.shiftCount(), metrics.workedHours(),
+                    metrics.revenuePerHour()).forEach(metric ->
+                    add(collected, source, metric, "EMPLOYEE", card.employeePublicId()));
+        });
+        return List.copyOf(collected.values());
+    }
+
+    private void structure(Map<String, Evidence> target, SellerWeeklyReviewFacts source,
+            StructureNode node) {
+        add(target, source, node.comparison(), "SELLERS", null);
+        add(target, source, node.shareComparison(), "SELLERS", null);
+        node.children().forEach(child -> structure(target, source, child));
+    }
+
+    private void add(Map<String, Evidence> target, SellerWeeklyReviewFacts source,
+            MetricComparison metric, String scope, String employeeId) {
+        for (String ref : metric.evidenceRefs()) {
+            var currentSample = metric.currentSample();
+            var previousSample = metric.previousSample();
+            Evidence item = new Evidence(ref, scope, employeeId, metric.code(), metric.label(),
+                    metric.unit(), source.period().current(), source.period().previous(),
+                    metric.current(), metric.previous(),
+                    currentSample == null ? null : currentSample.numerator(),
+                    currentSample == null ? null : currentSample.denominator(),
+                    previousSample == null ? null : previousSample.numerator(),
+                    previousSample == null ? null : previousSample.denominator(),
+                    VERSIONS.metricsPolicy(), metric.sufficiency(), metric.materiality(),
+                    metric.metricState() != UNAVAILABLE && metric.current() != null);
+            target.putIfAbsent(ref, item);
+        }
+    }
+}

@@ -105,7 +105,9 @@ public class WeeklyReviewSnapshotPlanningService {
         Optional<PersistedWeeklyReviewSnapshot> latest = snapshotStore.findLatest(
                 store.storeId(), current
         );
-        if (latest.isPresent() && sourceUnchanged(latest.get(), source.get())) {
+        if (latest.isPresent() && sourceUnchanged(latest.get(), source.get())
+                && !snapshotStore.attributionChangedSince(store.storeId(), latest.get().id(),
+                        latest.get().response().provenance().calculatedAt())) {
             return PlanningOutcome.SOURCE_UNCHANGED;
         }
 
@@ -124,7 +126,7 @@ public class WeeklyReviewSnapshotPlanningService {
             PersistedWeeklyReviewSnapshot latest,
             SourceSync source
     ) {
-        if (!WeeklyReviewPolicyV1.VERSIONS.equals(latest.response().versions())) {
+        if (!snapshotStore.currentAttributionPolicy(latest.response().versions())) {
             return false;
         }
         Instant sourceUpdatedAt = latest.response()

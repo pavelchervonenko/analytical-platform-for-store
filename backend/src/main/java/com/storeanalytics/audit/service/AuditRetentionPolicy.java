@@ -27,7 +27,10 @@ public class AuditRetentionPolicy {
 
     public AuditRetentionClass retentionClass(AuditAction action) {
         return switch (action) {
-            case PERFORMANCE_PLAN_CHANGED,
+            case WARRANTY_ATTACH_DECIDED,
+                    CASE_ATTACH_DECIDED,
+                    CATALOG_COMPATIBILITY_DECIDED,
+                    PERFORMANCE_PLAN_CHANGED,
                     WORK_SCHEDULE_REPLACED,
                     PAYROLL_SCHEME_CREATED,
                     PAYROLL_PRODUCT_CLASSIFIED,

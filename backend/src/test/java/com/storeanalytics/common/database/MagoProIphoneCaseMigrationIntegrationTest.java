@@ -1,0 +1,210 @@
+package com.storeanalytics.common.database;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.Test;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+
+@Testcontainers(disabledWithoutDocker = true)
+class MagoProIphoneCaseMigrationIntegrationTest {
+
+    @Container
+    private static final PostgreSQLContainer POSTGRES =
+            new PostgreSQLContainer("postgres:16-alpine");
+
+    @Test
+    void correctsEightCasesAndTheirSalesAndReturnsWithoutChangingAmounts()
+            throws SQLException {
+        flyway("65").migrate();
+        addFixtures();
+        assertThat(count("product_category_assignments", "CASE_APPLE_IPHONE"))
+                .isEqualTo("0");
+
+        flyway("66").migrate();
+
+        assertThat(count("product_category_assignments", "CASE_APPLE_IPHONE"))
+                .isEqualTo("8");
+        assertThat(count("sales_document_items", "CASE_APPLE_IPHONE"))
+                .isEqualTo("9");
+        assertThat(count("product_category_assignments", "OTHER_ACCESSORY_PRODUCT"))
+                .isEqualTo("2");
+        assertThat(count("sales_document_items", "OTHER_ACCESSORY_PRODUCT"))
+                .isEqualTo("2");
+        assertThat(query("SELECT count(*)::text FROM sales_document_items "
+                + "WHERE classification_version = 'customer-approved-2026-09-26-"
+                + "mago-pro-iphone-cases-v1'"))
+                .isEqualTo("9");
+        for (String view : new String[]{
+                "attach_rate_item_facts_v3", "attach_rate_ordinary_item_facts_v4"
+        }) {
+            assertThat(units(view, "CASE_APPLE_IPHONE")).isEqualTo("7");
+        }
+        assertThat(query("SELECT sum(net_amount)::text || '|' || "
+                + "sum(cost_amount)::text FROM sales_document_items"))
+                .isEqualTo("1100.00|550.00");
+        assertThat(query("SELECT payroll_category_code FROM analytics_categories "
+                + "WHERE code = 'CASE_APPLE_IPHONE'"))
+                .isEqualTo("ACCESSORY");
+    }
+
+    private void addFixtures() throws SQLException {
+        try (Connection connection = connection();
+             Statement statement = connection.createStatement()) {
+            statement.executeUpdate("""
+                    INSERT INTO stores (id, connection_id, source_system, external_id, name)
+                    SELECT '00000000-0000-4000-8000-000000000661',
+                           id, 'LIVESKLAD', 'mago-test-store', 'Mago test store'
+                    FROM integration_connections
+                    WHERE connection_key = 'livesklad-default'
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO sync_runs (
+                        id, connection_id, store_id, source_system,
+                        trigger_type, sync_scope, status, started_at, finished_at
+                    )
+                    SELECT '00000000-0000-4000-8000-000000000662',
+                           id, '00000000-0000-4000-8000-000000000661',
+                           'LIVESKLAD', 'MANUAL', 'SALES', 'SUCCESS',
+                           '2026-09-01T10:00:00Z', '2026-09-01T10:01:00Z'
+                    FROM integration_connections
+                    WHERE connection_key = 'livesklad-default'
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO products (
+                        connection_id, source_system, external_id, code, name, source_kind
+                    )
+                    SELECT connection.id, 'LIVESKLAD', fixture.code,
+                           fixture.code, fixture.name, 'PRODUCT'
+                    FROM integration_connections connection
+                    CROSS JOIN (VALUES
+                        ('2539', 'Чехол Keephone Mago Pro Matte Magsafe 17 Pro Orange'),
+                        ('2540', 'Чехол Keephone Mago Pro Matte Magsafe 17 Pro Blue'),
+                        ('2541', 'Чехол Keephone Mago Pro Matte Magsafe 17 Pro Black'),
+                        ('2618', 'Чехол Keephone Mago Pro Matte Magsafe 17 Pro Silver'),
+                        ('2542', 'Чехол Keephone Mago Pro Matte Magsafe 17 Pro Max Orange'),
+                        ('2543', 'Чехол Keephone Mago Pro Matte Magsafe 17 Pro Max Blue'),
+                        ('2544', 'Чехол Keephone Mago Pro Matte Magsafe 17 Pro Max Black'),
+                        ('2619', 'Чехол Keephone Mago Pro Matte Magsafe 17 Pro Max Silver'),
+                        ('38', 'Чехол Keephone Mago'),
+                        ('9001', 'Чехол Keephone Mago Samsung S25')
+                    ) fixture(code, name)
+                    WHERE connection.connection_key = 'livesklad-default'
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO product_category_assignments (
+                        product_id, analytics_category_id, condition_type,
+                        assignment_source, rule_version, valid_from
+                    )
+                    SELECT product.id, category.id, 'NOT_APPLICABLE',
+                           'AUTO', 'fixture-v1', '2026-09-01T00:00:00Z'
+                    FROM products product
+                    JOIN analytics_categories category
+                      ON category.code = 'OTHER_ACCESSORY_PRODUCT'
+                    WHERE product.code IN (
+                        '2539', '2540', '2541', '2618', '2542', '2543',
+                        '2544', '2619', '38', '9001'
+                    )
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO sales_documents (
+                        id, connection_id, source_system, external_id, store_id,
+                        document_kind, source_document_type, occurred_at,
+                        business_date, net_amount, cost_amount, last_sync_run_id
+                    )
+                    SELECT fixture.id::uuid, connection.id, 'LIVESKLAD',
+                           fixture.external_id,
+                           '00000000-0000-4000-8000-000000000661',
+                           fixture.kind, fixture.kind, '2026-09-02T10:00:00Z',
+                           '2026-09-02', fixture.net_amount, fixture.cost_amount,
+                           '00000000-0000-4000-8000-000000000662'
+                    FROM integration_connections connection
+                    CROSS JOIN (VALUES
+                        ('00000000-0000-4000-8000-000000000663',
+                         'mago-test-sale', 'SALE', 1000, 500),
+                        ('00000000-0000-4000-8000-000000000664',
+                         'mago-test-return', 'RETURN', 100, 50)
+                    ) fixture(id, external_id, kind, net_amount, cost_amount)
+                    WHERE connection.connection_key = 'livesklad-default'
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO sales_document_items (
+                        sales_document_id, external_id, product_id,
+                        product_name_snapshot, analytics_category_id,
+                        classification_version, condition_type_snapshot,
+                        quantity, unit_price, gross_amount, discount_amount,
+                        net_amount, cost_amount, cost_quality, is_work
+                    )
+                    SELECT '00000000-0000-4000-8000-000000000663',
+                           'sale-' || product.code, product.id, product.name,
+                           category.id, 'fixture-v1', 'NOT_APPLICABLE',
+                           1, 100, 100, 0, 100, 50, 'KNOWN', false
+                    FROM products product
+                    JOIN analytics_categories category
+                      ON category.code = 'OTHER_ACCESSORY_PRODUCT'
+                    WHERE product.code IN (
+                        '2539', '2540', '2541', '2618', '2542', '2543',
+                        '2544', '2619', '38', '9001'
+                    )
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO sales_document_items (
+                        sales_document_id, external_id, product_id,
+                        product_name_snapshot, analytics_category_id,
+                        classification_version, condition_type_snapshot,
+                        quantity, unit_price, gross_amount, discount_amount,
+                        net_amount, cost_amount, cost_quality, is_work
+                    )
+                    SELECT '00000000-0000-4000-8000-000000000664',
+                           'return-2540', product.id, product.name,
+                           category.id, 'fixture-v1', 'NOT_APPLICABLE',
+                           1, 100, 100, 0, 100, 50, 'KNOWN', false
+                    FROM products product
+                    JOIN analytics_categories category
+                      ON category.code = 'OTHER_ACCESSORY_PRODUCT'
+                    WHERE product.code = '2540'
+                    """);
+        }
+    }
+
+    private String count(String table, String category) throws SQLException {
+        return query("SELECT count(*)::text FROM " + table + " item "
+                + "JOIN analytics_categories category ON category.id = item.analytics_category_id "
+                + "WHERE category.code = '" + category + "'");
+    }
+
+    private String units(String view, String category) throws SQLException {
+        return query("SELECT coalesce(sum(net_quantity), 0)::integer::text FROM "
+                + view + " WHERE numerator_metric_code = '" + category + "'");
+    }
+
+    private String query(String sql) throws SQLException {
+        try (Connection connection = connection();
+             Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery(sql)) {
+            assertThat(result.next()).isTrue();
+            return result.getString(1);
+        }
+    }
+
+    private Connection connection() throws SQLException {
+        return DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()
+        );
+    }
+
+    private Flyway flyway(String target) {
+        return Flyway.configure()
+                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .locations("classpath:db/migration")
+                .target(target)
+                .load();
+    }
+}

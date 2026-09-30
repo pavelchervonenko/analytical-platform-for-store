@@ -348,7 +348,7 @@ public class SalesSyncPersistence {
             );
             SalesDocumentItem existing = existingItems.get(sourceItem.externalId());
             if (existing == null) {
-                factRepositories.items().save(new SalesDocumentItem(
+                var createdItem = factRepositories.items().save(new SalesDocumentItem(
                         new SalesItemIdentity(
                                 document,
                                 sourceItem.externalId(),
@@ -360,6 +360,7 @@ public class SalesSyncPersistence {
                         costQuality,
                         sourceItem.work()
                 ));
+                referenceRepositories.roleSnapshots().captureNewItem(createdItem.getId());
                 result.itemsCreated++;
                 changed = true;
             } else if (existing.update(

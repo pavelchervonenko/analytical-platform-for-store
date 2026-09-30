@@ -153,7 +153,7 @@ class WeeklyReviewAiCompletionServiceIntegrationTest {
     }
 
     private WeeklyReviewAiValidationResult validation(
-            WeeklyReviewAiInput input
+            WeeklyReviewAiEditorialInput input
     ) {
         return new WeeklyReviewAiSemanticValidator(
                 new WeeklyReviewAiStructuralValidator()
