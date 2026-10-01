@@ -32,6 +32,72 @@ exit_target: archive
 
 # Передача seller-first «ИИ-разбора»: состояние и путь до рабочего контура
 
+## Интеграционный checkpoint 2026-10-01
+
+По запросу владельца весь новый код основного рабочего дерева сохранён в
+`codex/release-integration-20261001`, коммит `f95af8f` (195 изменённых файлов).
+Это checkpoint исходников, **не разрешение на deployment**. Родитель `f6b6e34`
+содержит ранее сохранённый большой seller-first пакет. Незавершённые функции не
+становятся завершёнными от включения в Git.
+
+Отдельные ветки `codex/catalog-prod-base-20261001` (`4d1cab2`) и
+`codex/seller-ai-guard-20261001` (`40e980f`) сохранены без переписывания.
+Три изменённых Java-файла paid-call guard совпадают с AI-веткой. Каталожная ветка
+создана от прежнего production-base и не является полным интеграционным кандидатом.
+В частности, её `MigrationApplication` и `CatalogMigrationPreflight` отличаются:
+там есть reviewed rollout с отпечатками исторических строк, а в общем checkpoint
+сохраняется отказ миграции заполненной БД. Этот предохранитель не снимался.
+Нельзя считать каталожную ветку целиком интегрированной только по совпадению UI.
+
+### Выполненные локальные проверки
+
+- Node 22: `npm --prefix frontend run check` — PASS: transport types, lint,
+  61 файл / 309 тестов, TypeScript и production-сборка.
+- `python3 -m unittest discover -s scripts/tests -p 'test_*.py'` — PASS:
+  191 тест, 10 skipped; skipped не считаются выполненными проверками.
+- `bash scripts/tests/catalog-release-safety-test.sh` — exit 0.
+- `python3 scripts/check-documentation.py --strict` — PASS после регистрации
+  новых файлов в Git: 447 inventory rows, 0 baseline warnings.
+- `git diff --cached --check` — PASS перед фиксацией checkpoint.
+- `python3 scripts/tests/verify-gradle-supply-chain.py` — PASS:
+  449 компонентов / 840 артефактов; проверка доверенных хешей не отключалась.
+- `bash scripts/tests/security-hardening-test.sh` — PASS, включая release safety,
+  bounded classification correction и weekly AI release safety.
+- Локальный `npm run visual:local` с fixture API на loopback, маршруты
+  `/admin?adminView=catalog-reviews` и `/insights`: 6/6 PASS.
+  Desktop/tablet/mobile изображения просмотрены: поля и кнопки доступны,
+  наложений содержимого не обнаружено. Дополнительный маршрут
+  `/insights?reviewScenario=seller-ready`: 3/3 PASS.
+  Это проверка на fixtures, не end-to-end с настоящим backend;
+  screenshots не включены в Git.
+
+### Обязательные незакрытые gates
+
+1. Полный Java 21 `:backend:check` **не прошёл**: online-запуск ожидал соединение
+   с Maven и был остановлен; отдельный HTTPS probe также получил timeout.
+   Offline-запуск завершился до тестов: отсутствует кэш
+   `org.apache.groovy:groovy-bom:5.0.4`. Не снижать версии и не отключать
+   dependency verification ради зелёного статуса. Повторить gate в окружении
+   с доступом к зафиксированным зависимостям.
+2. Интегрировать и проверить именно путь миграции общего кандидата, включая
+   seller-инвалидации и историю состава. Проверку отдельной каталожной ветки
+   нельзя выдавать за rehearsal общего дерева. Нужны fresh read-only preflight,
+   backup/restore, сравнение исторических финансовых фактов и репетиция rollback.
+3. Не включать постоянный seller AI planner до реализации и проверки требований
+   ADR-0004. В текущем коде история состава ещё не подключена к агрегатам;
+   durable backlog и historical period API остаются незавершёнными.
+4. Согласованный в плане передачи способ доставки без GitHub требует реализации
+   и проверки отдельной процедуры: существующий production runbook и image
+   guards используют GHCR. Обход provenance/checksum-проверок недопустим.
+5. До передачи разработчику заполнить фактические пути, доступы и владельцев
+   по [плану передачи](project-handover-blueprint.md), подготовить проверенную
+   копию исходников с Git-историей и документацией вне production-хоста.
+
+На этом этапе не выполнялись push, deployment, обращения к production,
+изменение данных или платные AI-вызовы. Текущие runtime-флаги не перепроверялись.
+Дальнейшие разделы сохраняют подробные критерии; старые утверждения о
+незарегистрированных файлах относятся к состоянию до этого checkpoint.
+
 ## Цель и границы
 
 Это карта передачи на 2026-09-30, а не подтверждение работающего окружения или разрешение на
