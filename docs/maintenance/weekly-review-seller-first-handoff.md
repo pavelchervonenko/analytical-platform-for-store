@@ -32,6 +32,72 @@ exit_target: archive
 
 # Передача seller-first «ИИ-разбора»: состояние и путь до рабочего контура
 
+## Продолжение интеграционной проверки 2026-10-01
+
+Владелец разрешил использовать существующие GitHub/CI/GHCR для ближайшего обновления.
+Это не передача доступа следующему разработчику: исходники и история передаются отдельно,
+без GitHub/registry/production credentials владельца.
+
+Локально интегрирован reviewed catalog migration path из отдельной каталожной ветки:
+проверка SQL fingerprints, будущей бизнес-полуночи и неизменности исторических строк.
+Для повторного deployment неизменная прошедшая граница разрешена только при совпадении
+с защищённой записью установленного каталожного релиза; runtime отдельно проверяет DB marker.
+Production migration этим не выполнялась и rehearsal общей комбинации ещё требуется.
+
+Исправлен transport drift каталожных endpoints: опубликован отдельный OpenAPI v14
+с именованными `productId` и `limit`, старый baseline не переписан. Обновлены generated types
+и consumer assertions. Полный frontend check: 61 файл / 310 тестов, lint, TypeScript и build PASS.
+Documentation unit tests: 25 PASS; strict inventory: 447 строк, 0 warnings.
+Operator/security и catalog release safety tests: PASS.
+
+Зависимости Java восстановлены из существующего Gradle cache и официального Maven Central
+через Windows transport; dependency locks и verification hashes не изменены. Прежний
+сетевой блокер больше не мешает выполнению тестов. Первый полный backend test действительно
+запущен, но не является зелёным gate: обнаружены устаревшие terminal schema assertions,
+ожидание исторического backfill в case fixture и сбои seller-load/warranty сценариев.
+Часть assertions исправлена после запуска; нужен повтор на окончательных исходниках.
+Дополнительные диагностические SELECT попали в database-wide счётчик нагрузочного теста;
+его query-count результаты не принимаются и будут повторены без внешних запросов в measured DB.
+Ни таймауты, ни финансовые assertions ради прохождения тестов не ослаблялись.
+
+Первый полный test run: 1850 tests, 12 failures, 29m40s. Чистый отдельный seller-load run:
+12 tests, 2 failures; SQL count 24/24 для small/large подтверждён без мониторинга measured DB.
+Остались timeout агрегата SELLERS и срыв concurrent commit: JIT guard защищал только
+quality-query, после чего настройки восстанавливались до чтения catalog quantities.
+Локальное исправление распространяет ту же область на оба запроса с прежним числом SQL.
+Проверки восстановления caller setting и rollback расширены. Повтор с этой областью
+по-прежнему показал SQL timeout; расширение JIT guard не считается достаточным исправлением.
+Стек указывает на startup `catalog_role_review_required` во вложенных catalog views.
+Следующий локальный вариант ограничивает запуск функции индексным поиском snapshot
+и сохраняет полный исходный предикат при его наличии. Добавлена old/new equivalence
+проверка проекций, ручных решений, stale roles и возвратов. Этот вариант отдельно ещё
+не устранил timeout: одиночный multi-store сценарий указал на startup
+`catalog_accessory_review_required` внутри `catalog_review_replaces_automatic`.
+Одного optimization barrier также оказалось недостаточно. Итоговый локальный вариант
+ограничивает lookup exact item, проверяет обязательный accessory-review predicate до
+подготовки графа очереди и использует PL/pgSQL для повторного использования планов.
+Условия исходных предикатов сохранены; equivalence matrix расширена на все четыре функции.
+
+Итоговый targeted run: 5 tests, 0 failures, build 5m29s. Четыре old/new equivalence
+сценария прошли; прежде падавший multi-store batch также PASS: 8 stores, 7 snapshots,
+1 deferred, 0 duplicates, cold 57491 ms, warm 357 ms, warm SQL 80 для всего batch.
+Это не полный load verdict: остальные конкурентные/объёмные сценарии входят в запущенный
+повторный `:backend:check`. Последний завершённый Checkstyle main/test: PASS.
+Форматирование сохранено отдельным коммитом; production не изменялся.
+SQL timeout 30 s и test method budget 3 min сохранены. Общий CI job budget расширен до 60 min:
+один полный локальный test уже занял почти прежние 30 min без оставшихся стадий check.
+Это бюджет всей сборки, не увеличение времени отдельных SQL/нагрузочных сценариев.
+
+Отдельная additive migration согласует CHECK справочника категорий с новыми Java enum
+базами AirPods/Apple Watch. Не выполняет DML, исторические документы и назначения не меняет.
+Schema inventory теста дополнен JDBC-managed таблицами/проекциями; они не объявлены JPA entities.
+Mock quality-события теперь содержит detectedAt, включая clock skew в обе стороны.
+Legacy USB-C adapter expectation сохраняет доактивационную эвристику; отдельные cutover tests
+по-прежнему проверяют исключение generic USB после даты перехода.
+
+Ни публикация production images, ни production deploy, ни платный provider call этой
+локальной проверкой не выполнялись. Ниже сохранён предыдущий checkpoint, а не свежий verdict.
+
 ## Интеграционный checkpoint 2026-10-01
 
 По запросу владельца весь новый код основного рабочего дерева сохранён в
@@ -86,9 +152,9 @@ exit_target: archive
 3. Не включать постоянный seller AI planner до реализации и проверки требований
    ADR-0004. В текущем коде история состава ещё не подключена к агрегатам;
    durable backlog и historical period API остаются незавершёнными.
-4. Согласованный в плане передачи способ доставки без GitHub требует реализации
-   и проверки отдельной процедуры: существующий production runbook и image
-   guards используют GHCR. Обход provenance/checksum-проверок недопустим.
+4. Уточнение владельца от 2026-10-01 снимает блокер offline-доставки: для ближайшего
+   релиза разрешены GitHub, CI и GHCR. Доступ новому разработчику к GitHub владельца
+   не передаётся; копия исходников/истории предоставляется отдельно.
 5. До передачи разработчику заполнить фактические пути, доступы и владельцев
    по [плану передачи](project-handover-blueprint.md), подготовить проверенную
    копию исходников с Git-историей и документацией вне production-хоста.

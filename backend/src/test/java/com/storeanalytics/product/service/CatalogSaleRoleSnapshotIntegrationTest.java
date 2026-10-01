@@ -24,6 +24,8 @@ import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -293,15 +295,24 @@ class CatalogSaleRoleSnapshotIntegrationTest {
                 .findFirst().orElseThrow().preliminary()).isFalse();
     }
 
-    @Test
-    void boundedPendingRoleLookupPreservesRolesReviewsAndReturns() throws IOException {
+    @ParameterizedTest
+    @CsvSource({
+        "catalog_role_pending_issue, catalog_attach_metric_uncertain, V88__bound_catalog_pending_role_lookup.sql",
+        "catalog_role_review_required, catalog_accessory_review_required, V93__bound_catalog_role_review_startup.sql",
+        "catalog_accessory_review_required, catalog_accessory_review_allowed_targets, "
+                + "V93__bound_catalog_role_review_startup.sql",
+        "catalog_review_replaces_automatic, catalog_role_pending_issue, V93__bound_catalog_role_review_startup.sql"
+    })
+    void boundedPendingRoleLookupPreservesRolesReviewsAndReturns(
+            String function, String nextFunction, String migrationName
+    ) throws IOException {
         String previous = migration("V86__apply_confirmed_catalog_attach_roles.sql");
-        int start = previous.indexOf("CREATE FUNCTION catalog_role_pending_issue(");
-        int end = previous.indexOf("CREATE FUNCTION catalog_attach_metric_uncertain(", start);
+        int start = previous.indexOf("CREATE FUNCTION " + function + "(");
+        int end = previous.indexOf("CREATE FUNCTION " + nextFunction + "(", start);
         assertThat(start).isGreaterThanOrEqualTo(0);
         assertThat(end).isGreaterThan(start);
         String legacy = previous.substring(start, end).replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
-        String optimized = migration("V88__bound_catalog_pending_role_lookup.sql");
+        String optimized = migration(migrationName);
 
         var f = fixture();
         UUID sale = item(f, null, f.confirmedAt());
@@ -351,6 +362,10 @@ class CatalogSaleRoleSnapshotIntegrationTest {
             assertThat(pendingRoleProjections(f)).isEqualTo(before);
             assertThat(jdbc.queryForObject("SELECT catalog_role_pending_issue(NULL::uuid)",
                     Map.of(), String.class)).isNull();
+            assertThat(jdbc.queryForObject("SELECT catalog_role_review_required(NULL::uuid)",
+                    Map.of(), Boolean.class)).isFalse();
+            assertThat(jdbc.queryForObject("SELECT catalog_review_replaces_automatic(NULL::uuid)",
+                    Map.of(), Boolean.class)).isFalse();
             status.setRollbackOnly();
         });
     }
@@ -364,7 +379,9 @@ class CatalogSaleRoleSnapshotIntegrationTest {
                     Map.of("store", f.store()), String.class));
         }
         result.put("roles", jdbc.queryForList("""
-                SELECT jsonb_build_array(i.id, catalog_role_pending_issue(i.id))::text
+                SELECT jsonb_build_array(i.id, catalog_role_pending_issue(i.id),
+                    catalog_role_review_required(i.id), catalog_review_replaces_automatic(i.id),
+                    catalog_accessory_review_required(i.id))::text
                 FROM sales_document_items i JOIN sales_documents d ON d.id = i.sales_document_id
                 WHERE d.store_id = :store ORDER BY i.id
                 """, Map.of("store", f.store()), String.class));

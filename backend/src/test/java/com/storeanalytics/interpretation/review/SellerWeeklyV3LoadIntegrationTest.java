@@ -339,8 +339,18 @@ class SellerWeeklyV3LoadIntegrationTest {
                     jdbc.execute("SET LOCAL jit = " + callerJit);
                     attributionQuality.read(fixture.storeId(), CURRENT_START, CURRENT_START.plusDays(6));
                     assertThat(jdbc.queryForObject("SELECT current_setting('jit')", String.class)).isEqualTo(callerJit);
+                    String during = attributionQuality.readWith(fixture.storeId(), CURRENT_START,
+                            CURRENT_START.plusDays(6), quality ->
+                                    jdbc.queryForObject("SELECT current_setting('jit')", String.class));
+                    assertThat(during).isEqualTo("off");
+                    assertThat(jdbc.queryForObject("SELECT current_setting('jit')", String.class)).isEqualTo(callerJit);
                 });
             }
+            assertThat(jdbc.queryForObject("SELECT current_setting('jit')", String.class)).isEqualTo(initial);
+            assertThatThrownBy(() -> attributionQuality.readWith(fixture.storeId(), CURRENT_START,
+                    CURRENT_START.plusDays(6), quality -> {
+                        throw new RuntimeException("Synthetic aggregate failure");
+                    })).isExactlyInstanceOf(RuntimeException.class).hasMessage("Synthetic aggregate failure");
             assertThat(jdbc.queryForObject("SELECT current_setting('jit')", String.class)).isEqualTo(initial);
             assertThatThrownBy(() -> attributionQuality.read(fixture.storeId(), null, CURRENT_START.plusDays(6)))
                     .isInstanceOf(NullPointerException.class);

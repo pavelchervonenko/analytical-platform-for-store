@@ -72,11 +72,18 @@ public class SellerAttachRateRepository {
             filter = "fact.employee_id IN (:employeeIds)";
             parameters.put("employeeIds", cohort.employeeIds());
         }
-        Map<String, AttachAttributionQuality> quality = new HashMap<>();
+        String selectedFilter = filter;
         if (policy.enabled()) {
-            storeQuality.read(cohort.storeId(), period.start(), period.end())
-                    .forEach(value -> quality.put(value.metricCode(), value));
+            return storeQuality.readWith(cohort.storeId(), period.start(), period.end(),
+                    quality -> readRates(parameters, selectedFilter, quality));
         }
+        return readRates(parameters, selectedFilter, List.of());
+    }
+
+    private List<AttachRateAggregate> readRates(Map<String, Object> parameters, String filter,
+                                               List<AttachAttributionQuality> qualityRows) {
+        Map<String, AttachAttributionQuality> quality = new HashMap<>();
+        qualityRows.forEach(value -> quality.put(value.metricCode(), value));
         String query = policy.enabled()
                 ? QUERY.replace("attach_rate_item_facts_v3", "attach_rate_item_facts_v4") : QUERY;
         return jdbcTemplate.query(query.formatted(filter), parameters,

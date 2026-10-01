@@ -421,7 +421,9 @@ class WarrantyAttributionIntegrationTest {
             assertThat(entry.denominatorQuantity()).as(entry.metricCode())
                     .isEqualByComparingTo(bases.get(entry.metricCode()));
             String expectedNumerator = switch (entry.metricCode()) {
-                case "PREMIUM_PROTECTION" -> "2";
+                // Before activation, legacy v4 also counts the generic USB-C adapter.
+                // Boundary-specific exclusion is covered by CatalogChargerAdapterCutoverIntegrationTest.
+                case "PREMIUM_PROTECTION", "CHARGER_CABLE" -> "2";
                 case "POWER_BANK", "ACCESSORY_AIRPODS", "ACCESSORY_APPLE_WATCH" -> "0";
                 default -> "1";
             };

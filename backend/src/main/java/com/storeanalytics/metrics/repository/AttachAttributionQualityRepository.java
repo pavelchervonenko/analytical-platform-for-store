@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +55,13 @@ public class AttachAttributionQualityRepository {
 
     @Transactional(readOnly = true)
     public List<AttachAttributionQuality> read(UUID storeId, LocalDate start, LocalDate end) {
+        return readWith(storeId, start, end, Function.identity());
+    }
+
+    /** Keeps the related seller aggregate in the same bounded, transaction-local query setting. */
+    @Transactional(readOnly = true)
+    public <T> T readWith(UUID storeId, LocalDate start, LocalDate end,
+                         Function<List<AttachAttributionQuality>, T> reader) {
         // The nested warranty views otherwise spend seconds compiling thousands of JIT functions.
         // SET LOCAL is transaction-scoped, never a pool/global setting; rollback resets it on failure.
         String previousJit = jdbc.getJdbcTemplate().queryForObject("SELECT current_setting('jit')", String.class);
@@ -63,8 +71,9 @@ public class AttachAttributionQualityRepository {
                 (row, index) -> new AttachAttributionQuality(row.getString("metric_code"),
                         row.getLong("pending_warranty_count"), row.getLong("unassigned_return_count"),
                         row.getLong("unassigned_metric_return_count"), row.getBoolean("pending_catalog_role")));
+        T value = reader.apply(result);
         jdbc.queryForObject("SELECT set_config('jit', :previous, true)",
                 Map.of("previous", previousJit), String.class);
-        return result;
+        return value;
     }
 }

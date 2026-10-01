@@ -30,7 +30,7 @@ class UserFeatureAccessMigrationIntegrationTest {
 
         flyway(null).migrate();
 
-        assertThat(currentVersion()).isEqualTo("91");
+        assertThat(currentVersion()).isEqualTo("93");
         assertThat(featuresFor("manager@example.com"))
                 .containsExactly("PAYROLL", "PLAN", "SHIFTS");
         assertThat(featuresFor("admin@example.com")).isEmpty();

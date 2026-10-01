@@ -184,7 +184,7 @@ class StoreSyncIntegrationTest {
                 Integer.class
         );
 
-        assertThat(tableCount).isEqualTo(96);
+        assertThat(tableCount).isEqualTo(108);
         assertThat(entityManagerFactory.getMetamodel().getEntities()).hasSize(40);
         assertThat(applicationContext.getBeanNamesForType(JpaRepository.class)).hasSize(40);
         assertThat(jdbcTemplate.queryForObject(
@@ -256,6 +256,18 @@ class StoreSyncIntegrationTest {
                       'catalog_compatibility_history',
                       'catalog_sale_role_snapshots',
                       'catalog_sale_role_snapshot_states',
+                      'catalog_classification_activation',
+                      'catalog_pending_role_returns',
+                      'store_seller_membership_state',
+                      'seller_membership_history',
+                      'attach_rate_metric_definitions_catalog',
+                      'attach_rate_automatic_item_facts_v3_catalog',
+                      'attach_rate_item_facts_v3_catalog',
+                      'attach_rate_item_facts_v4_catalog',
+                      'attach_rate_ordinary_item_facts_v4_catalog',
+                      'attach_rate_ordinary_item_facts_v4_catalog_with_reviews',
+                      'case_attach_confirmed_facts_catalog',
+                      'case_attach_confirmed_facts_v3_catalog',
                       'warranty_attach_allocations',
                       'warranty_attach_cases',
                       'warranty_attach_coverage',

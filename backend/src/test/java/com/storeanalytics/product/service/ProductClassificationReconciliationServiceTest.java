@@ -29,6 +29,8 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class ProductClassificationReconciliationServiceTest {
 
@@ -97,8 +99,9 @@ class ProductClassificationReconciliationServiceTest {
                 );
     }
 
-    @Test
-    void reclassifiesOnlyExactApprovedScopeAndResolvesIssue() {
+    @ParameterizedTest
+    @ValueSource(longs = {-60, 0, 60})
+    void reclassifiesOnlyExactApprovedScopeAndResolvesIssue(long detectedOffsetSeconds) {
         String externalId = "approved-product";
         UUID connectionId = UUID.randomUUID();
         Instant occurredAt = Instant.parse("2026-08-09T10:00:00Z");
@@ -110,6 +113,8 @@ class ProductClassificationReconciliationServiceTest {
         UUID storeId = UUID.randomUUID();
         AnalyticsCategory category = mock(AnalyticsCategory.class);
         DataQualityIssue issue = mock(DataQualityIssue.class);
+        Instant detectedAt = NOW.plusSeconds(detectedOffsetSeconds);
+        when(issue.getDetectedAt()).thenReturn(detectedAt);
 
         when(product.getExternalId()).thenReturn(externalId);
         when(product.getName()).thenReturn("Кабель USB-C");
@@ -154,7 +159,7 @@ class ProductClassificationReconciliationServiceTest {
         assertThat(result.unresolvedItems()).isZero();
         assertThat(result.resolvedQualityIssues()).isEqualTo(1);
         assertThat(result.affectedStoreIds()).containsExactly(storeId);
-        verify(issue).resolve(null, NOW);
+        verify(issue).resolve(null, detectedAt.isAfter(NOW) ? detectedAt : NOW);
     }
 
     @Test
