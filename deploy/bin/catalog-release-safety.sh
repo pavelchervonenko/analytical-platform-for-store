@@ -4,6 +4,7 @@
 release_validate_catalog_cutover() {
   local env_file="$1"
   local schema_version activation snapshots_enabled snapshots_from activation_epoch now_epoch business_time
+  local installed_env installed_schema installed_activation
 
   schema_version="$(release_env_value "${env_file}" SCHEMA_VERSION)" || return 1
   if ! release_version_lte '90' "${schema_version}"; then
@@ -23,8 +24,19 @@ release_validate_catalog_cutover() {
   [[ "${business_time}" == '00:00:00.000000000' ]] \
     || { release_safety_fail 'Catalog activation must begin at Europe/Kaliningrad business-day midnight'; return 1; }
   now_epoch="$(date -u +%s)"
-  (( activation_epoch > now_epoch + 3600 )) \
-    || { release_safety_fail 'Catalog activation must be more than one hour in the future at release preflight'; return 1; }
+  if (( activation_epoch <= now_epoch + 3600 )); then
+    # A later release must retain the immutable boundary, not invent another future date.
+    # Only the protected installed release record can establish this is a repeat rollout.
+    # The migration role and API/worker independently verify the actual database marker.
+    installed_env="${STATE_DIR:-/var/lib/store-analytics/release-state}/current.env"
+    release_validate_secret_file 'installed catalog release record' "${installed_env}" || return 1
+    installed_schema="$(release_env_value "${installed_env}" SCHEMA_VERSION)" || return 1
+    installed_activation="$(release_env_value "${installed_env}" APP_CATALOG_CLASSIFICATION_ACTIVATE_FROM)" || return 1
+    release_require_version 'installed catalog schema' "${installed_schema}" || return 1
+    release_version_lte '90' "${installed_schema}" \
+      && [[ "${installed_activation}" == "${activation}" ]] \
+      || { release_safety_fail 'Past catalog boundary must match a protected installed catalog release'; return 1; }
+  fi
   [[ "${snapshots_enabled}" == 'true' && "${snapshots_from}" == "${activation}" ]] \
     || { release_safety_fail 'Catalog snapshot capture must be enabled from the same activation instant'; return 1; }
 }

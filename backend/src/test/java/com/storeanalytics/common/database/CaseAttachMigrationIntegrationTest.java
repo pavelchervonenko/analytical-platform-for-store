@@ -28,7 +28,20 @@ class CaseAttachMigrationIntegrationTest {
     void keepsReceiptSuggestionOutOfOfficialRateAndRecalculatesConfirmedReturn() throws SQLException {
         flyway("69").migrate();
         addFixtures();
-        flyway("72").migrate();
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            var historical = HistoricalCatalogRows.snapshot(connection);
+            flyway("72").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(historical);
+        }
+
+        // Prospective migrations do not classify old receipts. Prepare explicit fixture
+        // decisions separately before testing the confirmed-case attach projection.
+        update("""
+                UPDATE sales_document_items
+                SET analytics_category_id = (SELECT id FROM analytics_categories WHERE code = 'OTHER_CASE')
+                WHERE external_id IN ('case-mixed', 'case-iphone', 'case-return')
+                """);
 
         assertThat(query("SELECT payroll_category_code FROM analytics_categories "
                 + "WHERE code = 'OTHER_CASE' ")).isEqualTo("ACCESSORY");

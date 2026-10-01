@@ -73,8 +73,9 @@ final class MigrationApplication {
             var boundary = CatalogActivationState.requireBusinessDayBoundary(
                     CatalogActivationState.parse(activateFrom));
             return flyway -> {
-                CatalogMigrationPreflight.verify(flyway);
+                var history = CatalogMigrationPreflight.prepareReviewedRollout(flyway, boundary);
                 flyway.migrate();
+                CatalogMigrationPreflight.verifyUnchanged(flyway, history);
                 CatalogActivationState.register(flyway, boundary);
             };
         }

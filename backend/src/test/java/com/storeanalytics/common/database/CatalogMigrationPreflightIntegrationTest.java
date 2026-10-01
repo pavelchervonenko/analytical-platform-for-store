@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -33,6 +36,57 @@ class CatalogMigrationPreflightIntegrationTest {
                     .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
                     .locations("classpath:db/migration").defaultSchema("public").load();
             assertThatCode(() -> CatalogMigrationPreflight.verify(empty)).doesNotThrowAnyException();
+        }
+    }
+
+    @Test
+    void reviewedRolloutPinsSqlAndDetectsChangedHistoricalRows() throws SQLException {
+        try (PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine")) {
+            postgres.start();
+            Flyway.configure().dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+                    .locations("classpath:db/migration").target("51").load().migrate();
+            try (var connection = DriverManager.getConnection(
+                    postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+                 var statement = connection.createStatement()) {
+                statement.executeUpdate("""
+                        INSERT INTO products(id, connection_id, external_id, name)
+                        SELECT '00000000-0000-0000-0000-000000000195', id, 'guard-fixture', 'Guard fixture'
+                        FROM integration_connections WHERE connection_key = 'livesklad-default'
+                        """);
+                statement.executeUpdate("""
+                        INSERT INTO product_category_assignments(
+                            product_id, analytics_category_id, assignment_source, valid_from)
+                        SELECT '00000000-0000-0000-0000-000000000195', id, 'MANUAL', '2026-01-01Z'
+                        FROM analytics_categories WHERE code = 'UNMAPPED'
+                        """);
+            }
+            Flyway full = Flyway.configure()
+                    .dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+                    .locations("classpath:db/migration").load();
+            assertThatThrownBy(() -> CatalogMigrationPreflight.prepareReviewedRollout(full, null))
+                    .hasMessageContaining("CATALOG_PROSPECTIVE_ROLLOUT_REQUIRED");
+            assertThatThrownBy(() -> CatalogMigrationPreflight.prepareReviewedRollout(full,
+                    Instant.parse("2020-01-01T22:00:00Z")))
+                    .hasMessageContaining("CATALOG_PROSPECTIVE_ROLLOUT_REQUIRED");
+            assertThatThrownBy(() -> CatalogMigrationPreflight.prepareReviewedRollout(full,
+                    Instant.parse("2099-01-01T12:00:00Z")))
+                    .hasMessageContaining("business-day midnight");
+            var fingerprint = CatalogMigrationPreflight.prepareReviewedRollout(
+                    full, LocalDate.now(ZoneId.of("Europe/Kaliningrad")).plusDays(2)
+                            .atStartOfDay(ZoneId.of("Europe/Kaliningrad")).toInstant());
+            full.migrate();
+            assertThatCode(() -> CatalogMigrationPreflight.verifyUnchanged(full, fingerprint))
+                    .doesNotThrowAnyException();
+            try (var connection = DriverManager.getConnection(
+                    postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+                 var statement = connection.createStatement()) {
+                statement.executeUpdate("""
+                        UPDATE product_category_assignments SET change_reason = 'synthetic drift'
+                        WHERE product_id = '00000000-0000-0000-0000-000000000195'
+                        """);
+            }
+            assertThatThrownBy(() -> CatalogMigrationPreflight.verifyUnchanged(full, fingerprint))
+                    .hasMessageContaining("CATALOG_HISTORICAL_ROWS_CHANGED");
         }
     }
 
