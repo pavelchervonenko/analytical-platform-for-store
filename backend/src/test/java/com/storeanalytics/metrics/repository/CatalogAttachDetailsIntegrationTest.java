@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.storeanalytics.metrics.service.AttachRateService;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.metrics.warranty.AttachAttributionPolicy;
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -25,8 +24,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 class CatalogAttachDetailsIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
-    static JdbcTemplate jdbc;
-    static TransactionTemplate transaction;
+    private static JdbcTemplate jdbc;
+    private static TransactionTemplate transaction;
     static final LocalDate START = LocalDate.parse("2026-09-01");
     static final LocalDate END = LocalDate.parse("2026-09-30");
 
@@ -115,9 +114,11 @@ class CatalogAttachDetailsIntegrationTest {
         return rates.stream().filter(rate -> rate.metricCode().equals(code)).findFirst().orElseThrow();
     }
 
-    private static void assertQuantities(List<AttachRateAggregate> rates, String code, String numerator, String denominator) {
+    private static void assertQuantities(List<AttachRateAggregate> rates, String code,
+                                         String numerator, String denominator) {
         assertThat(find(rates, code).numeratorReceiptCount()).as(code + " numerator").isEqualByComparingTo(numerator);
-        assertThat(find(rates, code).denominatorReceiptCount()).as(code + " denominator").isEqualByComparingTo(denominator);
+        assertThat(find(rates, code).denominatorReceiptCount()).as(code + " denominator")
+                .isEqualByComparingTo(denominator);
     }
 
     private static List<AttachRateAggregate> read(Graph graph, boolean v4) {
@@ -129,18 +130,22 @@ class CatalogAttachDetailsIntegrationTest {
     }
 
     private static Graph graph() {
-        UUID connection = jdbc.queryForObject("SELECT id FROM integration_connections WHERE connection_key='livesklad-default'", UUID.class);
+        UUID connection = jdbc.queryForObject(
+                "SELECT id FROM integration_connections WHERE connection_key='livesklad-default'", UUID.class);
         var graph = new Graph(connection, UUID.randomUUID(), UUID.randomUUID());
-        jdbc.update("INSERT INTO stores(id,connection_id,name) VALUES (?,?,'Synthetic detail store')", graph.store(), connection);
+        jdbc.update("INSERT INTO stores(id,connection_id,name) VALUES (?,?,'Synthetic detail store')",
+                graph.store(), connection);
         jdbc.update("INSERT INTO sync_runs(id,connection_id,source_system,trigger_type,sync_scope,status) "
                 + "VALUES (?,?,'LIVESKLAD','MANUAL','SALES','RUNNING')", graph.run(), connection);
         return graph;
     }
 
     private static Item item(Graph graph, String category, String name, String quantity, Item original) {
-        var item = new Item(UUID.randomUUID(), UUID.randomUUID(), original == null ? UUID.randomUUID() : original.product());
+        var item = new Item(UUID.randomUUID(), UUID.randomUUID(),
+                original == null ? UUID.randomUUID() : original.product());
         if (original == null) {
-            jdbc.update("INSERT INTO products(id,connection_id,external_id,name,source_kind) VALUES (?,?,?,?,'PRODUCT')",
+            jdbc.update("INSERT INTO products(id,connection_id,external_id,name,source_kind) "
+                    + "VALUES (?,?,?,?,'PRODUCT')",
                     item.product(), graph.connection(), item.product().toString(), name);
         }
         String day = original == null ? "2026-09-01" : "2026-09-02";
@@ -152,7 +157,8 @@ class CatalogAttachDetailsIntegrationTest {
         jdbc.update("INSERT INTO sales_document_items(id,sales_document_id,external_id,original_item_id,product_id,"
                 + "product_name_snapshot,analytics_category_id,condition_type_snapshot,quantity,unit_price,"
                 + "gross_amount,discount_amount,net_amount,cost_amount,cost_quality) "
-                + "SELECT ?,?,?,?,?,?,id,'NEW',?::numeric,100,100,0,100,50,'KNOWN' FROM analytics_categories WHERE code=?",
+                + "SELECT ?,?,?,?,?,?,id,'NEW',?::numeric,100,100,0,100,50,'KNOWN' "
+                + "FROM analytics_categories WHERE code=?",
                 item.id(), item.document(), item.id().toString(), original == null ? null : original.id(),
                 item.product(), name, quantity, category);
         return item;

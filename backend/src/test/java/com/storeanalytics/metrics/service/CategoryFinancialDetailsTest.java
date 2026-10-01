@@ -26,11 +26,14 @@ class CategoryFinancialDetailsTest {
                 || group.groupCode().startsWith("DEVICE_CATEGORY:")).toList();
         var parent = result.groups().stream().filter(group -> group.groupCode().equals("DEVICES"))
                 .findFirst().orElseThrow().metrics();
-        assertThat(children.stream().map(group -> group.metrics().netRevenue()).reduce(BigDecimal.ZERO, BigDecimal::add))
+        assertThat(children.stream().map(group -> group.metrics().netRevenue())
+                .reduce(BigDecimal.ZERO, BigDecimal::add))
                 .isEqualByComparingTo(parent.netRevenue());
-        assertThat(children.stream().map(group -> group.metrics().netQuantity()).reduce(BigDecimal.ZERO, BigDecimal::add))
+        assertThat(children.stream().map(group -> group.metrics().netQuantity())
+                .reduce(BigDecimal.ZERO, BigDecimal::add))
                 .isEqualByComparingTo(parent.netQuantity());
-        assertThat(children.stream().map(group -> group.metrics().costAmount()).reduce(BigDecimal.ZERO, BigDecimal::add))
+        assertThat(children.stream().map(group -> group.metrics().costAmount())
+                .reduce(BigDecimal.ZERO, BigDecimal::add))
                 .isEqualByComparingTo(parent.costAmount());
         assertThat(children.stream().mapToLong(group -> group.metrics().dataQuality().includedItemCount()).sum())
                 .isEqualTo(parent.dataQuality().includedItemCount());
@@ -48,7 +51,8 @@ class CategoryFinancialDetailsTest {
                 row("SPEAKERS", "-25.00", "-1.000", 1, 0),
                 row("TABLET_APPLE", "0.00", "0.000", 2, 1),
                 row("LAPTOP_OTHER", "0.00", "0.000", 0, 0)));
-        var details = result.groups().stream().filter(group -> group.groupCode().startsWith("DEVICE_CATEGORY:")).toList();
+        var details = result.groups().stream()
+                .filter(group -> group.groupCode().startsWith("DEVICE_CATEGORY:")).toList();
         assertThat(details).extracting(CategoryKpiGroup::groupCode)
                 .containsExactly("DEVICE_CATEGORY:SPEAKERS", "DEVICE_CATEGORY:TABLET_APPLE");
         assertThat(details.getFirst().metrics().netQuantity()).isEqualByComparingTo("-1.000");

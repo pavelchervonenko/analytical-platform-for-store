@@ -32,7 +32,8 @@ public record AttachRateAggregate(
     public AttachRateAggregate withPotentialStoreAttributionRisk(AttachAttributionQuality quality) {
         return new AttachRateAggregate(metricCode, numeratorCategoryCode, denominatorCode,
                 numeratorReceiptCount, denominatorReceiptCount, unmatchedNumeratorItemCount,
-                quality.pendingWarrantyItemCount(), unknownDeviceConditionItemCount, preliminary || quality.preliminary(),
+                quality.pendingWarrantyItemCount(), unknownDeviceConditionItemCount,
+                preliminary || quality.preliminary(),
                 quality.unassignedReturnItemCount(), quality.unassignedMetricReturnItemCount());
     }
 }

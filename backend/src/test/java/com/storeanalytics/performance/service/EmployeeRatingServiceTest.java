@@ -141,8 +141,10 @@ class EmployeeRatingServiceTest {
         when(performanceRepository.aggregate(store, PERIOD_START, PERIOD_END))
                 .thenReturn(List.of(employee(employeeId, "Employee", "600.00", "24.00", "18.00", 2, "22.00")));
         var standardEmployee = employeeAttachRate(employeeId, "1.000", "5.000");
-        when(storeAttachRateRepository.aggregate(store, PERIOD_START, PERIOD_END)).thenReturn(List.of(storeAttachRate()));
-        when(employeeAttachRateRepository.aggregate(store, PERIOD_START, PERIOD_END)).thenReturn(List.of(standardEmployee));
+        when(storeAttachRateRepository.aggregate(store, PERIOD_START, PERIOD_END))
+                .thenReturn(List.of(storeAttachRate()));
+        when(employeeAttachRateRepository.aggregate(store, PERIOD_START, PERIOD_END))
+                .thenReturn(List.of(standardEmployee));
         var before = service.calculate(store, period()).employees().getFirst().scores();
         var storeRates = new java.util.ArrayList<AttachRateAggregate>(List.of(storeAttachRate()));
         var employeeRates = new java.util.ArrayList<EmployeeAttachRateAggregate>(List.of(standardEmployee));
