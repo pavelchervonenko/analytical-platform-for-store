@@ -40,7 +40,7 @@ idempotency, timeout и structured error с correlation ID/Retry-After.
 failure и несовместимый response contract. Для 403/404 бесполезный retry не показывается;
 correlation ID выводится только как ссылка для обращения в поддержку.
 
-OpenAPI v13 делает `features` обязательным в session/admin user responses и в create/update user
+OpenAPI v14 сохраняет обязательное поле `features` в session/admin user responses и в create/update user
 commands; combined update также требует `active`, `storeIds` и optimistic `version`. Runtime-схема
 при чтении допускает неизвестное enum-значение как `UNKNOWN`, но fail-closed админка не сохраняет
 такого пользователя старым набором полей.

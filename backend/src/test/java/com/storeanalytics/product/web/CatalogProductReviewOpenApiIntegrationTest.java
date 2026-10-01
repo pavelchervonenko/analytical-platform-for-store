@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
 @AutoConfigureMockMvc(addFilters = false)
@@ -42,6 +43,18 @@ class CatalogProductReviewOpenApiIntegrationTest {
         assertThat(json).contains("/api/admin/catalog-product-reviews",
                 "/api/admin/catalog-product-reviews/{productId}/decision",
                 "CatalogProductReviewDecisionResult");
+        var paths = new ObjectMapper().readTree(json).path("paths");
+        var decisionParameters = paths.path("/api/admin/catalog-product-reviews/{productId}/decision")
+                .path("post").path("parameters");
+        assertThat(decisionParameters.size()).isEqualTo(1);
+        assertThat(decisionParameters.get(0).path("name").asText()).isEqualTo("productId");
+        assertThat(decisionParameters.get(0).path("in").asText()).isEqualTo("path");
+        assertThat(decisionParameters.get(0).path("required").asBoolean()).isTrue();
+        assertThat(decisionParameters.get(0).path("schema").path("format").asText()).isEqualTo("uuid");
+        var listParameters = paths.path("/api/admin/catalog-product-reviews").path("get").path("parameters");
+        assertThat(listParameters.size()).isEqualTo(1);
+        assertThat(listParameters.get(0).path("name").asText()).isEqualTo("limit");
+        assertThat(listParameters.get(0).path("in").asText()).isEqualTo("query");
         String output = System.getProperty("catalog.open-api.output", "");
         if (!output.isBlank()) {
             Files.writeString(Path.of(output), json);

@@ -49,12 +49,12 @@ transport authority для публичных paths, methods, parameters и sche
 - Ошибки используют единый контракт из
   [`../architecture/error-handling.md`](../architecture/error-handling.md).
 
-## Подтверждённые gaps OpenAPI v13
+## Подтверждённые gaps OpenAPI v14
 
 В baseline отсутствуют полноценные `securitySchemes`, общие 401/403 responses и reusable
 `ApiError`. Spring Security и backend tests обеспечивают фактическую защиту, но transport baseline
 ещё не выражает её полностью. `POST /api/auth/logout`, обслуживаемый security filter, также не
-представлен как path в OpenAPI v13.
+представлен как path в OpenAPI v14.
 
 До исправления gap:
 

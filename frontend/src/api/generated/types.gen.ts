@@ -1967,26 +1967,26 @@ export type JsonNode = {
     null?: boolean;
     float?: boolean;
     container?: boolean;
+    number?: boolean;
+    missingNode?: boolean;
+    floatingPointNumber?: boolean;
+    valueNode?: boolean;
+    nodeType?: 'ARRAY' | 'BINARY' | 'BOOLEAN' | 'MISSING' | 'NULL' | 'NUMBER' | 'OBJECT' | 'POJO' | 'STRING';
+    object?: boolean;
+    pojo?: boolean;
+    integralNumber?: boolean;
+    short?: boolean;
+    int?: boolean;
+    long?: boolean;
     double?: boolean;
+    bigDecimal?: boolean;
+    bigInteger?: boolean;
     /**
      * @deprecated
      */
     textual?: boolean;
-    number?: boolean;
-    short?: boolean;
-    pojo?: boolean;
-    object?: boolean;
-    int?: boolean;
-    long?: boolean;
     boolean?: boolean;
-    missingNode?: boolean;
-    integralNumber?: boolean;
-    floatingPointNumber?: boolean;
-    bigDecimal?: boolean;
-    bigInteger?: boolean;
     binary?: boolean;
-    valueNode?: boolean;
-    nodeType?: 'ARRAY' | 'BINARY' | 'BOOLEAN' | 'MISSING' | 'NULL' | 'NUMBER' | 'OBJECT' | 'POJO' | 'STRING';
     embeddedValue?: boolean;
 };
 
@@ -2243,8 +2243,8 @@ export type ActiveSessionResponse = {
 };
 
 export type CsrfToken = {
-    parameterName?: string;
     token?: string;
+    parameterName?: string;
     headerName?: string;
 };
 
@@ -3377,7 +3377,9 @@ export type RequestResponse = RequestResponses[keyof RequestResponses];
 
 export type Decide2Data = {
     body: CatalogProductReviewDecisionRequest;
-    path?: never;
+    path: {
+        productId: string;
+    };
     query?: never;
     url: '/api/admin/catalog-product-reviews/{productId}/decision';
 };
@@ -4437,7 +4439,7 @@ export type List4Data = {
     body?: never;
     path?: never;
     query?: {
-        arg0?: number;
+        limit?: number;
     };
     url: '/api/admin/catalog-product-reviews';
 };
