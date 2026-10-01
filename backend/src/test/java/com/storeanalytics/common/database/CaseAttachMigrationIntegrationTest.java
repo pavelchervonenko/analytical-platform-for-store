@@ -33,6 +33,11 @@ class CaseAttachMigrationIntegrationTest {
             var historical = HistoricalCatalogRows.snapshot(connection);
             flyway("72").migrate();
             assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(historical);
+            // The current repository uses catalog functions introduced after the
+            // historical case migration. Keep that migration assertion above, then
+            // exercise runtime behavior only against its supported complete schema.
+            flyway(new ExpectedSchemaVersion().value()).migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(historical);
         }
 
         // Prospective migrations do not classify old receipts. Prepare explicit fixture
