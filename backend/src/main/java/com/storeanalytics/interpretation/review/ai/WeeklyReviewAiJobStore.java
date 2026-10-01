@@ -19,6 +19,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -29,6 +30,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -134,6 +136,58 @@ public class WeeklyReviewAiJobStore {
         );
     }
 
+    /**
+     * One automatic seller AI job per store and completed week, across immutable revisions.
+     * A corrected revision requires the exact approved operator path instead.
+     */
+    @Transactional
+    public boolean enqueueAutomaticSellerWeek(
+            UUID snapshotId,
+            String providerCode,
+            String requestedModel,
+            int maxAttempts,
+            Instant now,
+            Duration deadline
+    ) {
+        if (reportContractVersion != 3) {
+            throw new IllegalStateException("Automatic seller AI requires the seller contract");
+        }
+        require(maxAttempts == 1, "Automatic seller AI allows exactly one provider attempt");
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("Automatic seller AI requires one writable transaction");
+        }
+        UUID snapshot = requireNonNull(snapshotId, "snapshotId");
+        List<SellerWeek> periods = jdbcTemplate.query("""
+                SELECT store_id, period_start, period_end
+                FROM weekly_review_snapshots
+                WHERE id = ? AND report_contract_version = 3
+                """, (row, index) -> new SellerWeek(
+                row.getObject("store_id", UUID.class),
+                row.getDate("period_start").toLocalDate(),
+                row.getDate("period_end").toLocalDate()), snapshot);
+        if (periods.size() != 1) {
+            throw new PreconditionFailedException("Seller snapshot is unavailable for automatic AI");
+        }
+        SellerWeek period = periods.getFirst();
+        lockStoreForAiPlanning(period.storeId());
+        Boolean alreadyPlanned = jdbcTemplate.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM weekly_review_ai_jobs job
+                    JOIN weekly_review_snapshots report ON report.id = job.snapshot_id
+                    WHERE report.store_id = ?
+                      AND report.period_start = ?
+                      AND report.period_end = ?
+                      AND report.report_contract_version = 3
+                )
+                """, Boolean.class, period.storeId(), period.start(), period.end());
+        if (Boolean.TRUE.equals(alreadyPlanned)) {
+            return false;
+        }
+        enqueue(snapshot, providerCode, requestedModel, maxAttempts, now, deadline);
+        return true;
+    }
+
     @Transactional
     public WeeklyReviewAiJob enqueueApproved(
             UUID snapshotId,
@@ -148,6 +202,18 @@ public class WeeklyReviewAiJobStore {
         Duration ttl = positive(deadline, "deadline");
         require(maxAttempts >= 1 && maxAttempts <= 2,
                 "maxAttempts must be 1 or 2");
+        List<UUID> owners = jdbcTemplate.query("""
+                SELECT store_id FROM weekly_review_snapshots
+                WHERE id = ? AND report_contract_version = ?
+                """, (row, index) -> row.getObject("store_id", UUID.class),
+                snapshot, reportContractVersion);
+        if (owners.size() != 1) {
+            throw new PreconditionFailedException(
+                    "Weekly review snapshot disappeared before enqueue"
+            );
+        }
+        // Same lock order as automatic enqueue: store first, then the exact snapshot.
+        lockStoreForAiPlanning(owners.getFirst());
         List<UUID> locked = jdbcTemplate.query(
                 LOCK_SNAPSHOT_SQL,
                 (resultSet, rowNumber) ->
@@ -279,6 +345,14 @@ public class WeeklyReviewAiJobStore {
                 this::mapJob,
                 requireNonNull(jobId, "jobId")
         ));
+    }
+
+    private void lockStoreForAiPlanning(UUID storeId) {
+        jdbcTemplate.queryForObject("SELECT id FROM stores WHERE id = ? FOR UPDATE",
+                UUID.class, requireNonNull(storeId, "storeId"));
+    }
+
+    private record SellerWeek(UUID storeId, LocalDate start, LocalDate end) {
     }
 
     private boolean activeEnrichmentExists(UUID snapshotId) {

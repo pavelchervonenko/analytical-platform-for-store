@@ -51,6 +51,7 @@ superseded_by: null
 - [Period quality](api/period-quality.md)
 - [Reports](api/reports.md)
 - [Product category import](api/product-category-import.md)
+- [Catalog product review](api/catalog-product-review.md)
 - [Store KPI](api/store-kpi.md)
 - [Employee KPI](api/employee-kpi.md)
 - [Category KPI](api/category-kpi.md)

@@ -21,68 +21,16 @@ class PowerBankMigrationIntegrationTest {
             new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
-    void separatesPowerBanksFromChargersInBothStoresAndBothAttachProjections()
-            throws SQLException {
+    void preservesHistoricalRowsDuringProspectiveSchemaPreparation() throws SQLException {
         flyway("74").migrate();
         addFixtures();
-
-        flyway("75").migrate();
-
-        assertThat(query("""
-                SELECT category.category_kind || '|' || category.device_family || '|'
-                       || category.counts_as_additional_revenue || '|'
-                       || category.attach_denominator_code || '|'
-                       || category.payroll_category_code
-                FROM analytics_categories category WHERE category.code = 'POWER_BANK'
-                """)).isEqualTo("ACCESSORY|NONE|true|PHONE|ACCESSORY");
-        assertThat(query("""
-                SELECT count(*)::text FROM attach_rate_metric_definitions_v3
-                WHERE metric_code = 'POWER_BANK'
-                  AND numerator_category_code = 'POWER_BANK'
-                  AND denominator_code = 'PHONE'
-                """)).isEqualTo("1");
-        assertThat(query("""
-                SELECT count(*)::text
-                FROM product_category_assignments assignment
-                JOIN products product ON product.id = assignment.product_id
-                JOIN analytics_categories category ON category.id = assignment.analytics_category_id
-                WHERE category.code = 'POWER_BANK'
-                  AND product.code IN ('3527', '69', '32532', '4543', '1936')
-                  AND assignment.condition_type = 'NOT_APPLICABLE'
-                """)).isEqualTo("5");
-        assertThat(query("""
-                SELECT count(*)::text
-                FROM sales_document_items item
-                JOIN analytics_categories category ON category.id = item.analytics_category_id
-                WHERE category.code = 'POWER_BANK'
-                  AND item.classification_version = 'customer-approved-2026-09-27-power-bank-v1'
-                """)).isEqualTo("6");
-        assertThat(query("""
-                SELECT category.code FROM sales_document_items item
-                JOIN products product ON product.id = item.product_id
-                JOIN analytics_categories category ON category.id = item.analytics_category_id
-                WHERE product.code = '9000'
-                """)).isEqualTo("CHARGER_CABLE");
-        assertThat(query("""
-                SELECT sum(net_amount)::text || '|' || sum(cost_amount)::text
-                FROM sales_document_items
-                """)).isEqualTo("800.00|400.00");
-        assertThat(query("SELECT count(*)::text FROM product_payroll_category_assignments"))
-                .isEqualTo("0");
-
-        for (String view : new String[]{
-                "attach_rate_item_facts_v3", "attach_rate_ordinary_item_facts_v4"
-        }) {
-            assertThat(query("SELECT sum(net_quantity)::text FROM " + view
-                    + " WHERE numerator_metric_code = 'POWER_BANK'"))
-                    .as(view + " power-bank net units").isEqualTo("4.000");
-            assertThat(query("SELECT sum(net_quantity)::text FROM " + view
-                    + " WHERE numerator_metric_code = 'CHARGER_CABLE'"))
-                    .as(view + " charger net units").isEqualTo("1.000");
-            assertThat(query("SELECT count(*)::text FROM " + view
-                    + " WHERE device_role = 'IPHONE_NEW_ASIS'"
-                    + " AND 'POWER_BANK' = ANY(denominator_metric_codes)"))
-                    .as(view + " phone denominator").isEqualTo("1");
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            var before = HistoricalCatalogRows.snapshot(connection);
+            flyway("75").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+            flyway("90").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
         }
     }
 

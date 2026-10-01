@@ -21,72 +21,17 @@ class ChargingStationsAndTrackersMigrationIntegrationTest {
             new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
-    void correctsOnlyConfirmedProductsAndReprojectsExistingSaleAndReturn() throws SQLException {
+    void preservesHistoricalRowsDuringProspectiveSchemaPreparation() throws SQLException {
         flyway("76").migrate();
         addFixtures();
-
-        flyway("77").migrate();
-
-        assertThat(query("""
-                SELECT count(*)::text
-                FROM product_category_assignments assignment
-                JOIN products product ON product.id = assignment.product_id
-                JOIN analytics_categories category ON category.id = assignment.analytics_category_id
-                WHERE product.code IN ('3481', '3480', '4013', '6108', '4350', '71')
-                  AND category.code = 'CHARGER_CABLE'
-                  AND assignment.condition_type = 'NOT_APPLICABLE'
-                """)).isEqualTo("6");
-        assertThat(query("""
-                SELECT count(*)::text
-                FROM product_category_assignments assignment
-                JOIN products product ON product.id = assignment.product_id
-                JOIN analytics_categories category ON category.id = assignment.analytics_category_id
-                WHERE product.code IN ('3390', '3391')
-                  AND category.code = 'OTHER_ACCESSORY_PRODUCT'
-                  AND assignment.condition_type = 'NOT_APPLICABLE'
-                """)).isEqualTo("2");
-        assertThat(query("""
-                SELECT assignment.rule_version
-                FROM product_category_assignments assignment
-                JOIN products product ON product.id = assignment.product_id
-                WHERE product.code = '71'
-                """)).isEqualTo("customer-approved-2026-09-27-charging-station-v1");
-        assertThat(query("""
-                SELECT count(*)::text
-                FROM sales_document_items item
-                JOIN products product ON product.id = item.product_id
-                WHERE product.code IN (
-                    '3481', '3480', '4013', '6108', '4350', '71', '3390', '3391'
-                )
-                  AND item.classification_version =
-                      'customer-approved-2026-09-27-charging-station-v1'
-                  AND item.condition_type_snapshot = 'NOT_APPLICABLE'
-                """)).isEqualTo("9");
-        assertThat(query("""
-                SELECT count(DISTINCT document.store_id)::text
-                FROM sales_document_items item
-                JOIN sales_documents document ON document.id = item.sales_document_id
-                WHERE item.classification_version =
-                    'customer-approved-2026-09-27-charging-station-v1'
-                """)).isEqualTo("2");
-        assertThat(query("""
-                SELECT category.code || '|' || item.classification_version
-                FROM sales_document_items item
-                JOIN products product ON product.id = item.product_id
-                JOIN analytics_categories category ON category.id = item.analytics_category_id
-                WHERE product.code = '9999'
-                """)).isEqualTo("OTHER_ACCESSORY_PRODUCT|fixture-v1");
-        assertThat(query("""
-                SELECT sum(net_amount)::text || '|' || sum(cost_amount)::text
-                FROM sales_document_items
-                """)).isEqualTo("1000.00|500.00");
-        assertThat(query("""
-                SELECT sum(net_quantity)::text
-                FROM attach_rate_ordinary_item_facts_v4
-                WHERE numerator_metric_code = 'CHARGER_CABLE'
-                """)).isEqualTo("5.000");
-        assertThat(query("SELECT count(*)::text FROM product_payroll_category_assignments"))
-                .isEqualTo("0");
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            var before = HistoricalCatalogRows.snapshot(connection);
+            flyway("77").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+            flyway("90").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+        }
     }
 
     private void addFixtures() throws SQLException {

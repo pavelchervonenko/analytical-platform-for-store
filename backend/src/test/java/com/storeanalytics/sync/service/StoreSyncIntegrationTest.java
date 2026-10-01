@@ -776,6 +776,28 @@ class StoreSyncIntegrationTest {
     }
 
     @Test
+    void employeeNormalizationFailureRollsBackEntireFetchedBatch() {
+        storeSyncService.synchronize();
+        fakeClient.setEmployees(Map.of(
+                "store-fixture-1", List.of(
+                        employeePayload("employee-valid", "Synthetic employee"),
+                        new LiveSkladEmployeePayload("employee-invalid", "Synthetic invalid", null)),
+                "store-fixture-2", List.of()
+        ));
+
+        assertThatThrownBy(employeeSyncService::synchronize)
+                .isInstanceOf(EmployeeSyncException.class);
+        assertThat(employeeRepository.count()).isZero();
+        assertThat(assignmentRepository.count()).isZero();
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM raw_record_versions WHERE entity_type = 'EMPLOYEE'
+                """, Integer.class)).isZero();
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT status FROM sync_runs WHERE sync_scope = 'EMPLOYEES'
+                """, String.class)).isEqualTo("FAILED");
+    }
+
+    @Test
     void employeeSourceFailureCreatesSanitizedFailedRunWithoutPartialWrites() {
         storeSyncService.synchronize();
         fakeClient.failEmployeesForStore(

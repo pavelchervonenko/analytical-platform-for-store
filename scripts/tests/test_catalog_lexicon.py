@@ -354,6 +354,40 @@ class CatalogLexiconTest(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual(self.lexicon.propose(name)['candidate_category'], expected)
 
+    def test_other_phone_proposal_is_model_scoped_and_group_mismatch_is_visible(self):
+        result = self.lexicon.propose('POCO F8 Ultra 12/256Gb Black NEW',
+                                      'PRODUCT', '/Основные/SAMSUNG NEW')
+        self.assertEqual(result['candidate_category'], 'PHONE_OTHER')
+        self.assertIn('SOURCE_GROUP_CONFLICT', result['reasons'])
+        self.assertEqual(result['status'], 'CONFLICT')
+        for name in ['Чехол POCO F8 Ultra', 'Зарядка POCO F8 Ultra',
+                     'POCO неизвестная модель', 'POCO F8 Ultra чехол']:
+            with self.subTest(name=name):
+                self.assertNotEqual(self.lexicon.propose(name)['candidate_category'],
+                                    'PHONE_OTHER')
+
+    def test_approved_used_samsung_group_supplies_missing_condition_only_for_phones(self):
+        for group in ['/SAMSUNG Б/У', '/Основные/SAMSUNG Б/У']:
+            for name in ['Samsung S24 256Gb', 'Samsung Galaxy S25 Ultra 1Tb']:
+                with self.subTest(group=group, name=name):
+                    result = self.lexicon.propose(name, 'PRODUCT', group)
+                    self.assertEqual(result['candidate_category'], 'SAMSUNG_USED')
+                    self.assertEqual(result['condition_source'], 'OWNER_APPROVED_SOURCE_GROUP')
+                    self.assertEqual(result['condition'], 'USED')
+            for name in ['Samsung Galaxy Watch 8', 'Чехол Samsung S24',
+                         'Galaxy Buds 3', 'POCO F8 Ultra 12/256Gb Black NEW']:
+                with self.subTest(group=group, name=name):
+                    result = self.lexicon.propose(name, 'PRODUCT', group)
+                    self.assertNotEqual(result['candidate_category'], 'SAMSUNG_USED')
+                    self.assertNotEqual(result['condition_source'], 'OWNER_APPROVED_SOURCE_GROUP')
+        result = self.lexicon.propose('Samsung S24 New', 'PRODUCT', '/SAMSUNG Б/У')
+        self.assertEqual(result['status'], 'CONFLICT')
+        self.assertEqual(result['candidate_category'], '')
+        self.assertIn('CONDITION_CONFLICT', result['reasons'])
+        result = self.lexicon.propose('Samsung S24', 'SERVICE', '/SAMSUNG Б/У')
+        self.assertNotEqual(result['candidate_category'], 'SAMSUNG_USED')
+        self.assertNotEqual(result['condition_source'], 'OWNER_APPROVED_SOURCE_GROUP')
+
     def test_owner_target_is_separate_from_name_evidence(self):
         row = {'source_kind': 'PRODUCT', 'code': 'synthetic-strap',
                'name': 'Ремешок uBear Spark M/L', 'source_group': '/Ремешки',
@@ -379,7 +413,8 @@ class CatalogLexiconTest(unittest.TestCase):
 
 
     def test_approved_used_iphone_group_supplies_missing_condition(self):
-        for group in ['/IPHONE (Б/У)', '/IPHONE 2 (Б/У)', 'iphone (б/у)']:
+        for group in ['/IPHONE (Б/У)', '/IPHONE 2 (Б/У)', 'iphone (б/у)',
+                      '/Основные/IPHONE (Б/У)', '/Основные/IPHONE 2 (Б/У)']:
             for name in ['iPhone 15', 'iPhone 16 (A) 100%', 'iPhone 16 Актив', 'iPhone 16 НЕ АКТИВ']:
                 with self.subTest(group=group, name=name):
                     result = self.lexicon.propose(name, 'PRODUCT', group)
@@ -401,7 +436,8 @@ class CatalogLexiconTest(unittest.TestCase):
                 result = self.lexicon.propose(name, 'PRODUCT', group)
                 self.assertEqual(result['candidate_category'], expected)
                 self.assertNotEqual(result['condition_source'], 'OWNER_APPROVED_SOURCE_GROUP')
-        for group in ['/IPHONE АКТИВ', '/IPHONE NEW', '/SAMSUNG Б/У', '/IPHONE (Б/У)/Чехлы', '']:
+        for group in ['/IPHONE АКТИВ', '/IPHONE NEW', '/SAMSUNG Б/У',
+                      '/IPHONE (Б/У)/Чехлы', '/Основные/IPHONE (Б/У)/Чехлы', '']:
             self.assertEqual(self.lexicon.propose('iPhone 16', 'PRODUCT', group)['candidate_category'], '')
         for key in [None, 'other-connection']:
             result = Lexicon(DATA, key).propose('iPhone 16', 'PRODUCT', '/IPHONE (Б/У)')

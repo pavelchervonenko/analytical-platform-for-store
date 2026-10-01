@@ -12,9 +12,12 @@ import com.storeanalytics.product.service.CatalogCompatibilityRecords.Action;
 import com.storeanalytics.product.service.CatalogCompatibilityRecords.Origin;
 import com.storeanalytics.product.service.CatalogCompatibilityRecords.Request;
 import jakarta.persistence.EntityManager;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -168,12 +171,16 @@ class CatalogSaleRoleSnapshotIntegrationTest {
         UUID sale = item(f, null, f.confirmedAt());
         String before = factRow(sale);
         capture(sale);
+        assertThat(snapshot(sale)).containsEntry("role", "ACCESSORY_APPLE_WATCH")
+                .containsEntry("outcome", "ASSIGNED").containsEntry("state", "CURRENT");
         compatibility.append(compatibility.observe(f.product(), false), 2,
                 new Request(Action.REVOKE, Coverage.UNDETERMINED, List.of(), "Synthetic revoke",
                         Origin.DIRECT_REVIEW, null, null), f.actor());
         UUID returned = item(f, sale, databaseNow());
         jdbc.update("UPDATE sales_document_items SET quantity = 0.5 WHERE id = :id", Map.of("id", returned));
         capture(returned);
+        assertThat(snapshot(returned)).containsEntry("role", "ACCESSORY_APPLE_WATCH")
+                .containsEntry("origin", "ORIGINAL_SALE").containsEntry("state", "CURRENT");
         for (boolean v4 : List.of(false, true)) {
             assertNumerator(f, v4, "CHARGER_CABLE", "0");
             assertNumerator(f, v4, "ACCESSORY_APPLE_WATCH", "0.5");
@@ -277,7 +284,8 @@ class CatalogSaleRoleSnapshotIntegrationTest {
                     """, Map.of("id", returned))).isEqualTo(1);
         assertNumerator(f, true, "CHARGER_CABLE", "0");
         assertThat(rate(f, true, "ACCESSORY_APPLE_WATCH").preliminary()).isTrue();
-        var qualities = transactions.execute(status -> new com.storeanalytics.metrics.repository.AttachAttributionQualityRepository(jdbc)
+        var qualities = transactions.execute(status ->
+                new com.storeanalytics.metrics.repository.AttachAttributionQualityRepository(jdbc)
                 .read(f.store(), java.time.LocalDate.of(2021, 1, 1), java.time.LocalDate.of(2100, 1, 1)));
         assertThat(qualities.stream().filter(q -> q.metricCode().equals("ACCESSORY_APPLE_WATCH"))
                 .findFirst().orElseThrow().preliminary()).isTrue();
@@ -285,7 +293,87 @@ class CatalogSaleRoleSnapshotIntegrationTest {
                 .findFirst().orElseThrow().preliminary()).isFalse();
     }
 
-    private com.storeanalytics.metrics.cases.CaseAttachViews.Case review(Fixture f, UUID sale) {
+    @Test
+    void boundedPendingRoleLookupPreservesRolesReviewsAndReturns() throws IOException {
+        String previous = migration("V86__apply_confirmed_catalog_attach_roles.sql");
+        int start = previous.indexOf("CREATE FUNCTION catalog_role_pending_issue(");
+        int end = previous.indexOf("CREATE FUNCTION catalog_attach_metric_uncertain(", start);
+        assertThat(start).isGreaterThanOrEqualTo(0);
+        assertThat(end).isGreaterThan(start);
+        String legacy = previous.substring(start, end).replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
+        String optimized = migration("V88__bound_catalog_pending_role_lookup.sql");
+
+        var f = fixture();
+        UUID sale = item(f, null, f.confirmedAt());
+        capture(sale);
+        UUID returned = item(f, sale, databaseNow());
+        jdbc.update("UPDATE sales_document_items SET quantity = 0.25 WHERE id = :id", Map.of("id", returned));
+        capture(returned);
+        UUID orphan = item(f, null, databaseNow());
+        jdbc.update("UPDATE sales_documents SET document_kind = 'RETURN' WHERE id = "
+                + "(SELECT sales_document_id FROM sales_document_items WHERE id = :id)", Map.of("id", orphan));
+        var film = fixture(Target.IPHONE, "Synthetic unresolved film", "PROTECTIVE_FILM");
+        item(film, null, film.confirmedAt().minusSeconds(2));
+        assertPendingRoleEquivalence(f, legacy, optimized);
+        assertPendingRoleEquivalence(film, legacy, optimized);
+
+        jdbc.update("UPDATE sales_document_items SET product_name_snapshot = 'Corrected role fact' "
+                + "WHERE id = :id", Map.of("id", sale));
+        assertPendingRoleEquivalence(f, legacy, optimized);
+        decide(f, sale, "ACCESSORY_APPLE_WATCH");
+        assertPendingRoleEquivalence(f, legacy, optimized);
+        decide(f, sale, "NO_ATTACH");
+        assertPendingRoleEquivalence(f, legacy, optimized);
+        decide(f, sale, "DEFER");
+        assertPendingRoleEquivalence(f, legacy, optimized);
+        jdbc.update("UPDATE sales_documents SET business_date = '2020-01-01' WHERE id = "
+                + "(SELECT sales_document_id FROM sales_document_items WHERE id = :id)", Map.of("id", sale));
+        assertPendingRoleEquivalence(f, legacy, optimized);
+        jdbc.update("UPDATE sales_document_items SET is_deleted = true WHERE id = :id", Map.of("id", returned));
+        assertPendingRoleEquivalence(f, legacy, optimized);
+    }
+
+    private String migration(String name) throws IOException {
+        try (var stream = getClass().getResourceAsStream("/db/migration/" + name)) {
+            if (stream == null) {
+                throw new IOException("Missing migration " + name);
+            }
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    private void assertPendingRoleEquivalence(Fixture f, String legacy, String optimized) {
+        transactions.executeWithoutResult(status -> {
+            jdbc.getJdbcTemplate().execute("SET LOCAL jit = off");
+            jdbc.getJdbcTemplate().execute(legacy);
+            var before = pendingRoleProjections(f);
+            jdbc.getJdbcTemplate().execute(optimized);
+            assertThat(pendingRoleProjections(f)).isEqualTo(before);
+            assertThat(jdbc.queryForObject("SELECT catalog_role_pending_issue(NULL::uuid)",
+                    Map.of(), String.class)).isNull();
+            status.setRollbackOnly();
+        });
+    }
+
+    private Map<String, List<String>> pendingRoleProjections(Fixture f) {
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        for (String view : List.of("case_attach_review_items", "catalog_pending_role_returns",
+                "attach_rate_item_facts_v3_catalog", "attach_rate_item_facts_v4_catalog")) {
+            result.put(view, jdbc.queryForList("SELECT to_jsonb(f)::text FROM " + view
+                    + " f WHERE f.store_id = :store ORDER BY to_jsonb(f)::text",
+                    Map.of("store", f.store()), String.class));
+        }
+        result.put("roles", jdbc.queryForList("""
+                SELECT jsonb_build_array(i.id, catalog_role_pending_issue(i.id))::text
+                FROM sales_document_items i JOIN sales_documents d ON d.id = i.sales_document_id
+                WHERE d.store_id = :store ORDER BY i.id
+                """, Map.of("store", f.store()), String.class));
+        return result;
+    }
+
+    private com.storeanalytics.metrics.cases.CaseAttachViews.Case review(
+            Fixture f, UUID sale
+    ) {
         return new com.storeanalytics.metrics.cases.CaseAttachRepository(jdbc).find(f.store(), sale);
     }
 
@@ -294,7 +382,8 @@ class CatalogSaleRoleSnapshotIntegrationTest {
             jdbc.getJdbcTemplate().execute("SET LOCAL jit = off");
             var repository = new com.storeanalytics.metrics.cases.CaseAttachRepository(jdbc);
             repository.save(repository.find(f.store(), sale),
-                    new com.storeanalytics.metrics.cases.CaseAttachDecisionRequest(target, "Synthetic reviewed evidence"),
+                    new com.storeanalytics.metrics.cases.CaseAttachDecisionRequest(
+                            target, "Synthetic reviewed evidence"),
                     f.actor(), f.store());
         });
     }
@@ -315,10 +404,13 @@ class CatalogSaleRoleSnapshotIntegrationTest {
     }
 
     private Instant databaseNow() {
-        // Testcontainers may use a Docker VM with a clock slightly ahead of the JVM.
-        // All synthetic event times and the injected Clock use one time source; no sleeps/tolerance.
-        return jdbc.queryForObject("SELECT clock_timestamp()", Map.of(),
+        // The Docker VM and JVM can be ahead of one another in either direction.
+        // Both confirmation timestamps and database document timestamps must be in the past
+        // of the synthetic capture clock, including return events after their original sale.
+        Instant database = jdbc.queryForObject("SELECT clock_timestamp()", Map.of(),
                 (row, index) -> row.getTimestamp(1).toInstant());
+        Instant process = Instant.now();
+        return database.isAfter(process) ? database : process;
     }
 
     private void capture(UUID itemId) {
@@ -384,7 +476,8 @@ class CatalogSaleRoleSnapshotIntegrationTest {
                 .addValue("connection", fixture.connection()).addValue("store", fixture.store())
                 .addValue("sync", fixture.sync()).addValue("originalDocument", originalDocument)
                 .addValue("kind", original == null ? "SALE" : "RETURN").addValue("at", Timestamp.from(occurred))
-                .addValue("name", fixture.name()).addValue("category", fixture.category()).addValue("item", item).addValue("original", original).addValue("product", fixture.product());
+                .addValue("name", fixture.name()).addValue("category", fixture.category())
+                .addValue("item", item).addValue("original", original).addValue("product", fixture.product());
         jdbc.update("""
                 INSERT INTO sales_documents(id,connection_id,external_id,store_id,original_document_id,
                     document_kind,source_document_type,occurred_at,business_date,net_amount,last_sync_run_id)
@@ -401,5 +494,8 @@ class CatalogSaleRoleSnapshotIntegrationTest {
         return item;
     }
 
-    private record Fixture(UUID connection, UUID store, UUID sync, UUID product, UUID actor, Instant confirmedAt, String name, String category) { }
+    private record Fixture(
+            UUID connection, UUID store, UUID sync, UUID product, UUID actor,
+            Instant confirmedAt, String name, String category
+    ) { }
 }

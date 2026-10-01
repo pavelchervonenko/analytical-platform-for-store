@@ -21,48 +21,17 @@ class FitnessWearableCategoryMigrationIntegrationTest {
             new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
-    void correctsApprovedWearablesIncludingUnassignedSaleAndReturn()
-            throws SQLException {
+    void preservesHistoricalRowsDuringProspectiveSchemaPreparation() throws SQLException {
         flyway("56").migrate();
         addFixtures();
-
-        flyway("57").migrate();
-
-        assertThat(query("""
-                SELECT version FROM flyway_schema_history
-                WHERE success ORDER BY installed_rank DESC LIMIT 1
-                """)).isEqualTo("57");
-        assertThat(query("""
-                SELECT category_kind || '|' || device_family || '|' ||
-                       counts_as_phone || '|' || counts_as_device || '|' ||
-                       counts_as_additional_revenue || '|' || payroll_category_code
-                FROM analytics_categories WHERE code = 'FITNESS_WEARABLE'
-                """)).isEqualTo("DEVICE|OTHER|false|true|false|TECH_TIER_2");
-        assertThat(assignmentCategory("5019")).isEqualTo("FITNESS_WEARABLE");
-        assertThat(assignmentCategory("5183")).isEqualTo("FITNESS_WEARABLE");
-        assertThat(itemCategory("5019", "SALE")).isEqualTo("FITNESS_WEARABLE");
-        assertThat(itemCategory("5183", "SALE")).isEqualTo("FITNESS_WEARABLE");
-        assertThat(itemCategory("5183", "RETURN")).isEqualTo("FITNESS_WEARABLE");
-        assertThat(itemCategory("9999", "SALE")).isEqualTo("PODS_WATCH_OTHER_DEVICE");
-        assertThat(query("""
-                SELECT sum(net_amount)::text || '|' || sum(cost_amount)::text
-                FROM sales_document_items
-                """)).isEqualTo("400.00|200.00");
-        assertThat(query("""
-                SELECT COALESCE(sum(net_quantity), 0)::numeric(19, 3)::text
-                FROM attach_rate_item_facts_v3
-                WHERE device_role = 'OTHER_DEVICE'
-                """)).isEqualTo("1.000");
-        assertThat(query("""
-                SELECT COALESCE(sum(net_quantity), 0)::numeric(19, 3)::text
-                FROM attach_rate_item_facts_v4
-                WHERE device_role = 'OTHER_DEVICE'
-                """)).isEqualTo("1.000");
-        assertThat(query("""
-                SELECT resolve_default_payroll_category(
-                    'FITNESS_WEARABLE', 'Браслет Whoop 5.0 Peak', 'TECH_TIER_2'
-                )
-                """)).isEqualTo("TECH_TIER_2");
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            var before = HistoricalCatalogRows.snapshot(connection);
+            flyway("57").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+            flyway("90").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+        }
     }
 
     private void addFixtures() throws SQLException {

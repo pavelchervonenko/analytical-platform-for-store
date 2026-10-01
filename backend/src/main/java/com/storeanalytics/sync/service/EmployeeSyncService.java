@@ -16,12 +16,7 @@ import com.storeanalytics.sync.repository.SyncRunRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -32,7 +27,7 @@ public class EmployeeSyncService {
     private final LiveSkladClient liveSkladClient;
     private final IntegrationConnectionRepository connectionRepository;
     private final StoreRepository storeRepository;
-    private final EmployeeSyncPersistence persistence;
+    private final EmployeeSyncBatchApplier applier;
     private final SyncRunRepository syncRunRepository;
     private final SyncRunErrorRepository errorRepository;
     private final Clock clock;
@@ -42,13 +37,13 @@ public class EmployeeSyncService {
             LiveSkladClient liveSkladClient,
             IntegrationConnectionRepository connectionRepository,
             StoreRepository storeRepository,
-            EmployeeSyncPersistence persistence,
+            EmployeeSyncBatchApplier applier,
             SyncRunLifecycle lifecycle
     ) {
         this.liveSkladClient = liveSkladClient;
         this.connectionRepository = connectionRepository;
         this.storeRepository = storeRepository;
-        this.persistence = persistence;
+        this.applier = applier;
         this.syncRunRepository = lifecycle.runs();
         this.errorRepository = lifecycle.errors();
         this.clock = lifecycle.clock();
@@ -94,52 +89,7 @@ public class EmployeeSyncService {
                 batches.add(new StoreEmployeeBatch(store, employees));
             }
 
-            int created = 0;
-            int updated = 0;
-            int skipped = 0;
-            Set<UUID> globallySeenEmployeeIds = new HashSet<>();
-            Map<UUID, Set<UUID>> seenByStore = new HashMap<>();
-            for (StoreEmployeeBatch batch : batches) {
-                Set<UUID> storeEmployeeIds = new HashSet<>();
-                for (LiveSkladEmployeePayload employee : batch.employees()) {
-                    EmployeeRecordWriteResult result = persistence.synchronize(
-                            syncRun.getId(),
-                            batch.store().getId(),
-                            employee
-                    );
-                    storeEmployeeIds.add(result.employeeId());
-                    globallySeenEmployeeIds.add(result.employeeId());
-                    switch (result.outcome()) {
-                        case CREATED -> created++;
-                        case UPDATED -> updated++;
-                        case SKIPPED -> skipped++;
-                        default -> throw new IllegalStateException(
-                                "Unsupported employee write result"
-                        );
-                    }
-                }
-                seenByStore.put(batch.store().getId(), Set.copyOf(storeEmployeeIds));
-            }
-
-            int assignmentsDeactivated = 0;
-            for (Store store : stores) {
-                assignmentsDeactivated += persistence.deactivateMissingAssignments(
-                        store.getId(),
-                        seenByStore.getOrDefault(store.getId(), Set.of())
-                );
-            }
-            int employeesDeactivated = persistence.deactivateMissingEmployees(
-                    connection.getId(),
-                    globallySeenEmployeeIds
-            );
-
-            syncRun.complete(fetched, created, updated, skipped, clock.instant());
-            SyncRun completedRun = syncRunRepository.save(syncRun);
-            return EmployeeSyncResult.from(
-                    completedRun,
-                    assignmentsDeactivated,
-                    employeesDeactivated
-            );
+            return applier.apply(connection.getId(), syncRun.getId(), context, batches);
         } catch (RuntimeException exception) {
             failSyncRun(syncRun, fetched, exception);
             throw new EmployeeSyncException(syncRun.getId(), exception);

@@ -21,48 +21,17 @@ class HairStylerCategoryMigrationIntegrationTest {
             new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
-    void correctsFourApprovedCardsAndHistoricalSalesOnly() throws SQLException {
+    void preservesHistoricalRowsDuringProspectiveSchemaPreparation() throws SQLException {
         flyway("60").migrate();
         addFixtures();
-
-        flyway("61").migrate();
-
-        assertThat(query("""
-                SELECT category_kind || '|' || device_family || '|' ||
-                       counts_as_device || '|' || payroll_category_code
-                FROM analytics_categories WHERE code = 'HAIR_STYLERS'
-                """)).isEqualTo("DEVICE|OTHER|true|TECH_TIER_1");
-        assertThat(query("""
-                SELECT resolve_default_payroll_category(
-                    'HAIR_STYLERS', 'Dyson HS08', 'TECH_TIER_1'
-                )
-                """)).isEqualTo("TECH_TIER_1");
-        assertThat(query("""
-                SELECT count(*)::text FROM attach_rate_ordinary_item_facts_v4
-                WHERE device_role = 'OTHER_DEVICE'
-                """)).isEqualTo("5");
-        for (String code : new String[]{"3105", "3183", "4282", "5201"}) {
-            assertThat(assignmentCategory(code)).isEqualTo("HAIR_STYLERS");
-            assertThat(itemCategory(code)).isEqualTo("HAIR_STYLERS");
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            var before = HistoricalCatalogRows.snapshot(connection);
+            flyway("61").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+            flyway("90").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
         }
-        assertThat(query("""
-                SELECT assignment.assignment_source || '|' || assignment.condition_type
-                FROM product_category_assignments assignment
-                JOIN products product ON product.id = assignment.product_id
-                WHERE product.code = '5201'
-                """)).isEqualTo("MANUAL|NEW");
-        assertThat(assignmentCategory("9999")).isEqualTo("PODS_WATCH_OTHER_DEVICE");
-        assertThat(itemCategory("9999")).isEqualTo("PODS_WATCH_OTHER_DEVICE");
-        assertThat(query("""
-                SELECT sum(net_amount)::text || '|' || sum(cost_amount)::text
-                FROM sales_document_items
-                """)).isEqualTo("500.00|250.00");
-        assertThat(query("""
-                SELECT count(*)::text
-                FROM sales_document_items item
-                JOIN analytics_categories category ON category.id = item.analytics_category_id
-                WHERE category.code = 'HAIR_STYLERS'
-                """)).isEqualTo("4");
     }
 
     private void addFixtures() throws SQLException {

@@ -98,6 +98,14 @@ public class ProductCategoryAssignment extends AbstractCreatedEntity {
         return changeReason;
     }
 
+    public void close(Instant end) {
+        requireNonNull(end, "validTo");
+        if (validTo != null || !end.isAfter(validFrom)) {
+            throw new IllegalArgumentException("Category assignment cannot be closed at this instant");
+        }
+        validTo = end;
+    }
+
     public boolean matches(Product candidateProduct, AnalyticsCategory candidateCategory) {
         return sameProduct(candidateProduct) && sameCategory(candidateCategory);
     }

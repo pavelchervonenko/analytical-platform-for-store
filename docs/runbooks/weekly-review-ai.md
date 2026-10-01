@@ -52,8 +52,10 @@ superseded_by: null
 
 **Текущий authorization status: NO-GO для платного canary.** В candidate реализован read-only
 preflight и exact approval contract, но они ещё не прошли release review, staging rehearsal и
-production deployment. До этого production pilot.32 остаётся с выключенными generation/planner/
-worker flags, а старый POST нельзя считать защищённым новым contract.
+production deployment. Перед любым canary проверить фактические generation/planner/worker
+flags по новой sanitized runtime-проверке и сверить её с
+[project-state](../current/project-state.md); старый POST нельзя считать защищённым
+новым contract.
 
 Статус остаётся `draft`: локальная статическая проверка не заменяет reusable staging rehearsal,
 production read-only evidence и отдельное разрешение exact canary с известной стоимостью.
@@ -81,6 +83,11 @@ ADMIN POST `/api/admin/seller-weekly-reviews/stores/{storeId}/generate`. Parent 
 - В seller mode exact snapshot имеет contract3/scope SELLERS и `CURRENT`; PREPARING/STALE/BLOCKED
   не дают разрешения на AI job. Дополнительно проверить continuous SUCCESS coverage
   SALES/RETURNS/ORDERS за обе недели и отсутствие незавершённых/не reconciled source writes.
+- После upgrade до V87 прежний seller checkpoint намеренно становится STALE: V86 изменила
+  attach-проекцию. Дождаться штатного seller planner либо через локально/операторски разрешённый
+  ADMIN generate получить новую проверенную snapshot; не запускать AI по старой revision и не
+  считать STALE подтверждением порчи данных. Если coverage неполный, сохранить ожидание и
+  восстановить источник вместо обхода gate.
 - Seller preflight возвращает prompt v26/input5, `PASS_SELLER_ONLY_SCHEMA`, без employee scope/raw
   input. Legacy v2 сохраняет prompt v25/input4 и прежний STORE verdict. Чужой cache не применяется.
 - Backend оставляет immutable provider receipt при stale-after-response, но не enrichment;

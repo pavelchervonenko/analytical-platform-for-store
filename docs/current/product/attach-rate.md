@@ -6,11 +6,12 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-09-29
+last_verified: 2026-09-30
 requirement_sources:
   - docs/archive/legacy-contracts/attach-rate-api.md
   - docs/archive/discoveries/analytics-business-rules-draft.md
 implementation_sources:
+  - backend/src/main/resources/db/migration/V88__bound_catalog_pending_role_lookup.sql
   - backend/src/main/resources/db/migration/V85__project_catalog_attach_details.sql
   - backend/src/main/resources/db/migration/V55__attach_warranty_attribution.sql
   - backend/src/main/resources/db/migration/V80__bound_warranty_fingerprint_context_to_document.sql
@@ -38,6 +39,9 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics/cases/CaseAttachService.java
   - backend/src/main/java/com/storeanalytics/performance/service/EmployeeRatingService.java
 verification_sources:
+  - backend/src/test/java/com/storeanalytics/common/database/CatalogChargerAdapterCutoverIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/common/database/CatalogChargerAdapterReturnIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/product/service/CatalogSaleRoleSnapshotIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/metrics/repository/CatalogAttachDetailsIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/metrics/cases/AccessorySaleReviewIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/common/database/WarrantyFingerprintContextMigrationIntegrationTest.java
@@ -79,6 +83,12 @@ superseded_by: null
 `app.attach.attribution-enabled` / `ATTACH_ATTRIBUTION_ENABLED`. Это контракт кода;
 наблюдаемое состояние среды указывается только в [project-state](../project-state.md).
 
+**Перспективный переход каталога:** описания V56–V70 и V74–V77 ниже
+содержат исторические формулировки о переносе сохранённых строк. В текущих
+неопубликованных черновиках эти DML-переносы удалены; старые продажи и их
+опубликованные числители/знаменатели остаются прежними. Новые категории
+появятся в расчётах только после точных назначений с датой включения.
+
 ```text
 N = положительные количества допродаж − количества связанных возвратов
 B = количества соответствующих устройств − количества возвратов устройств
@@ -115,9 +125,11 @@ AttachRate = max(0, N) / B × 100%, если B > 0; иначе null
 нет, смена аналитической категории может изменить зарплатный default. Его
 проверим отдельно при обновлении блока зарплат.
 
-V76 сохраняет в числителе `CHARGER_CABLE` зарядные адаптеры, но исключает
-обычные USB-хабы и переходники из v4-эвристики. Само упоминание USB, Type-C,
-Lightning или HDMI больше не означает зарядку; требуется явный зарядный признак.
+Для старых продаж v4 сохраняет прежнюю эвристику адаптеров, иначе миграция
+ретроактивно меняла бы опубликованный `CHARGER_CABLE`. С даты активации для
+`OTHER_ACCESSORY_PRODUCT` одного упоминания USB, Type-C, Lightning или HDMI
+недостаточно: нужен явный зарядный признак. У связанного возврата для выбора
+правила используется дата исходной продажи.
 Категории и числители ранее подтверждённых зарядных блоков не меняются.
 
 V77 относит подтверждённые коды 3480, 3481, 4013, 6108, 4350 и 71
@@ -341,6 +353,16 @@ STALE/REVIEW/неподдерживаемая версия требуют реш
 помечаются preliminary. Затем явное решение согласованно замещает оба пути.
 Предупреждение присутствует в периоде возврата, даже если продажа вне этого периода.
 Одна роль не создаёт второй денежный факт или второй quality-return.
+Проверка `catalog_role_pending_issue` читает очередь аксессуаров через коррелированный
+`LATERAL` только для текущей строки продажи или её точного оригинала. Барьер
+`OFFSET 0` сохраняет результат и не позволяет планировщику разворачивать проверку
+в повторный расчёт очереди для посторонних продаж. Приоритет ручного решения,
+`DEFER`, признаки STALE/REVIEW, NULL для отсутствующего оригинала, N/B и quality
+не меняются; строки, решения и снимки ролей миграция не переписывает.
+Регрессия сравнивает старую и новую функции, очередь и обе проекции на CURRENT/STALE,
+ручных назначениях/NO_ATTACH/DEFER, частичных и несвязанных возвратах, изменении
+периода и удалении возврата. Глобальные настройки PostgreSQL/JIT не меняются.
+
 Writer по умолчанию выключен и требует даты начала; история не заполняется автоматически.
 Подробнее — [контракт классификации](classification.md).
 

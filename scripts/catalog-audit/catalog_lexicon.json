@@ -50,6 +50,16 @@
       "example": "Samsung Galxy Z Fold 7"
     },
     {
+      "id": "poco_f8_ultra_phone",
+      "field": "family",
+      "value": "OTHER_PHONE",
+      "patterns": [
+        "^poco\\s+f8\\s+ultra\\b"
+      ],
+      "example": "POCO F8 Ultra 12/256Gb Black NEW",
+      "approval": "Owner approved PHONE_OTHER for standalone non-Apple/non-Samsung phones; this narrow observed model remains reviewable if source group conflicts."
+    },
+    {
       "id": "ipad",
       "field": "family",
       "value": "IPAD",
@@ -1304,11 +1314,25 @@
       "required_family": "IPHONE",
       "required_source_kind": "PRODUCT",
       "patterns": [
-        "^/?iphone(?: 2)? \\(б\\s*/\\s*у\\)/?$"
+        "^/?(?:основные/)?iphone(?: 2)? \\(б\\s*/\\s*у\\)/?$"
       ],
       "example": "/IPHONE (Б/У)",
       "scope": "livesklad-default",
       "approval": "Owner confirmed that iPhones in the used iPhone source groups are IPHONE_USED; only after sold-device identification. Explicit conflicting condition remains reviewable."
+    },
+    {
+      "id": "owner_samsung_used_group",
+      "field": "condition",
+      "value": "USED",
+      "input": "source_group",
+      "required_family": "SAMSUNG_PHONE",
+      "required_source_kind": "PRODUCT",
+      "patterns": [
+        "^/?(?:основные/)?samsung\\s+б\\s*/\\s*у/?$"
+      ],
+      "example": "/Основные/SAMSUNG Б/У",
+      "scope": "livesklad-default",
+      "approval": "Owner confirmed that the Samsung used source group establishes USED for actual Samsung phones, not accessories, watches or contradictory products."
     },
     {
       "id": "tablet_generic_target",

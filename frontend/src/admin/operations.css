@@ -74,3 +74,16 @@
 @media (max-width: 1100px) { .admin-view-tabs { grid-template-columns: repeat(2,1fr); } .category-import-layout { grid-template-columns: 1fr; } }
 @media (max-width: 720px) { .admin-job-actions { justify-content: flex-start; } .category-import-form .admin-form-grid { grid-template-columns: 1fr; } }
 @media (max-width: 480px) { .sync-job-details dl > div, .telegram-resend-facts div { grid-template-columns: 1fr; gap: 5px; } .admin-safety-note--blocking { align-items: stretch; flex-direction: column; } .admin-safety-note--blocking .button { width: 100%; } }
+
+.catalog-review-layout { grid-template-columns: minmax(0,1fr) minmax(330px,380px); }
+.catalog-review-editor, .catalog-review-form, .catalog-review-form .field { min-width: 0; }
+.catalog-review-form { display: grid; gap: 12px; }
+.catalog-review-form p { margin: 0; overflow-wrap: anywhere; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.catalog-review-form .field select, .catalog-review-form .field textarea { box-sizing: border-box; width: 100%; min-width: 0; min-height: 42px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.catalog-review-form .field textarea { min-height: 78px; }
+.catalog-review-form > .button { justify-self: start; max-width: 100%; }
+.catalog-review-list { display: grid; gap: 7px; }
+.catalog-review-list button { display: grid; gap: 4px; width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); text-align: left; cursor: pointer; }
+.catalog-review-list button[aria-current="true"] { border-color: var(--primary); }
+.catalog-review-list button strong, .catalog-review-list button small { display: block; overflow-wrap: anywhere; }
+@media (max-width: 1100px) { .catalog-review-layout { grid-template-columns: 1fr; } }

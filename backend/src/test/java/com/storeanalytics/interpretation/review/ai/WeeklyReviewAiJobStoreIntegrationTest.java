@@ -8,6 +8,7 @@ import com.storeanalytics.common.exception.PreconditionFailedException;
 import com.storeanalytics.interpretation.generation.LlmProviderPreflight;
 import com.storeanalytics.interpretation.generation.LlmProviderRequest;
 import com.storeanalytics.interpretation.generation.LlmProviderResponseReceipt;
+import com.storeanalytics.interpretation.review.SellerWeeklyReviewProperties;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,11 +24,14 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest
 @Transactional
@@ -45,6 +49,15 @@ class WeeklyReviewAiJobStoreIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private WeeklyReviewAiGenerationProperties properties;
 
     @DynamicPropertySource
     static void configurePostgres(DynamicPropertyRegistry registry) {
@@ -127,6 +140,71 @@ class WeeklyReviewAiJobStoreIntegrationTest {
         assertThat(store.findBySnapshot(seller)).isEmpty();
         assertThatThrownBy(() -> store.enqueueApproved(seller, "YANDEX", "synthetic-model",
                 2, NOW, Duration.ofHours(2))).isInstanceOf(PreconditionFailedException.class);
+    }
+
+    @Test
+    void automaticSellerAiIsOneJobPerStoreWeekAcrossRevisions() {
+        UUID storeId = addStore("AI seller weekly automatic limit");
+        UUID firstLegacy = addSnapshot(storeId, LocalDate.of(2026, 8, 17), 1);
+        UUID firstSeller = addSellerRevision(firstLegacy);
+        UUID correctedSeller = addSellerRevision(firstSeller);
+        WeeklyReviewAiJobStore sellerStore = sellerStore();
+
+        assertThatThrownBy(() -> sellerStore.enqueueAutomaticSellerWeek(firstSeller,
+                "YANDEX", "synthetic-model", 2, NOW, Duration.ofHours(2)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("exactly one provider attempt");
+        assertThat(automaticSellerEnqueue(sellerStore, firstSeller)).isTrue();
+        UUID firstJob = sellerStore.findBySnapshot(firstSeller).orElseThrow().id();
+        jdbcTemplate.update("UPDATE weekly_review_ai_jobs SET status = 'FAILED' WHERE id = ?", firstJob);
+        assertThat(automaticSellerEnqueue(sellerStore, correctedSeller)).isFalse();
+        assertThat(sellerStore.findBySnapshot(correctedSeller)).isEmpty();
+
+        UUID nextLegacy = addSnapshot(storeId, LocalDate.of(2026, 8, 24), 1);
+        UUID nextSeller = addSellerRevision(nextLegacy);
+        assertThat(automaticSellerEnqueue(sellerStore, nextSeller)).isTrue();
+
+        new TransactionTemplate(transactionManager).execute(status ->
+                sellerStore.enqueueApproved(correctedSeller, "YANDEX", "synthetic-model",
+                        1, NOW, Duration.ofHours(2)));
+        assertThat(sellerStore.findBySnapshot(correctedSeller)).isPresent();
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void concurrentAutomaticSellerAiAcrossRevisionsCreatesOneJob() throws Exception {
+        UUID storeId = addStore("AI seller weekly concurrent limit");
+        UUID legacy = addSnapshot(storeId, LocalDate.of(2026, 8, 17), 1);
+        // The concurrent test is committed; keep its legacy base out of later v2 planner cases.
+        UUID legacyJob = store.enqueue(legacy, "YANDEX", "synthetic-model",
+                1, NOW, Duration.ofHours(2)).id();
+        jdbcTemplate.update("UPDATE weekly_review_ai_jobs SET status = 'FAILED' WHERE id = ?", legacyJob);
+        UUID firstSeller = addSellerRevision(legacy);
+        UUID correctedSeller = addSellerRevision(firstSeller);
+        WeeklyReviewAiJobStore sellerStore = sellerStore();
+        CyclicBarrier start = new CyclicBarrier(2);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> {
+                start.await(20, TimeUnit.SECONDS);
+                return automaticSellerEnqueue(sellerStore, firstSeller);
+            });
+            var second = executor.submit(() -> {
+                start.await(20, TimeUnit.SECONDS);
+                return automaticSellerEnqueue(sellerStore, correctedSeller);
+            });
+            assertThat(java.util.List.of(first.get(20, TimeUnit.SECONDS),
+                    second.get(20, TimeUnit.SECONDS))).containsExactlyInAnyOrder(true, false);
+            Integer count = jdbcTemplate.queryForObject("""
+                    SELECT count(*) FROM weekly_review_ai_jobs job
+                    JOIN weekly_review_snapshots report ON report.id = job.snapshot_id
+                    WHERE report.store_id = ? AND report.period_start = ?
+                      AND report.report_contract_version = 3
+                    """, Integer.class, storeId, LocalDate.of(2026, 8, 17));
+            assertThat(count).isOne();
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     @Test
@@ -484,6 +562,40 @@ class WeeklyReviewAiJobStoreIntegrationTest {
             );
         }
         return WeeklyReviewAiTestFixtures.outcomeSelection();
+    }
+
+    private WeeklyReviewAiJobStore sellerStore() {
+        return new WeeklyReviewAiJobStore(jdbcTemplate, objectMapper, properties,
+                new SellerWeeklyReviewProperties(true));
+    }
+
+    private boolean automaticSellerEnqueue(WeeklyReviewAiJobStore sellerStore, UUID snapshotId) {
+        return Boolean.TRUE.equals(new TransactionTemplate(transactionManager).execute(status ->
+                sellerStore.enqueueAutomaticSellerWeek(snapshotId, "YANDEX", "synthetic-model",
+                        1, NOW, Duration.ofHours(2))));
+    }
+
+    private UUID addSellerRevision(UUID predecessor) {
+        UUID snapshotId = UUID.randomUUID();
+        String hash = "a".repeat(64);
+        jdbcTemplate.update("""
+                INSERT INTO weekly_review_snapshots (id, store_id, period_start, period_end, timezone, revision,
+                    supersedes_snapshot_id, report_contract_version, metrics_policy_version, snapshot_policy_version,
+                    quality_policy_version, report_state, report_payload, content_hash,
+                    report_scope, source_identity_hash)
+                SELECT ?, store_id, period_start, period_end, timezone, revision + 1, id, 3,
+                    metrics_policy_version, snapshot_policy_version, quality_policy_version, report_state,
+                    jsonb_set(report_payload, '{provenance}', (report_payload -> 'provenance')
+                        || jsonb_build_object('snapshotPublicId', ?::text, 'revision', revision + 1))
+                    || jsonb_build_object(
+                        'contractVersion', 3, 'scope', 'SELLERS', 'sourceIdentityHash', ?::text,
+                        'membership', jsonb_build_object('currentCohortHash', ?::text,
+                                                        'previousCohortHash', ?::text)),
+                    content_hash, 'SELLERS', ?
+                FROM weekly_review_snapshots
+                WHERE id = ?
+                """, snapshotId, snapshotId.toString(), hash, hash, hash, hash, predecessor);
+        return snapshotId;
     }
 
     private UUID addStore(String name) {

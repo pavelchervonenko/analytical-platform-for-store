@@ -48,9 +48,11 @@ LANGUAGE sql STABLE AS $$
                         AND rs.origin = 'ORIGINAL_SALE' AND rs.original_snapshot_item_id = s.item_id)))
         FROM catalog_sale_role_snapshot_states s
         JOIN sales_document_items i ON i.id = s.item_id
+        JOIN analytics_categories current_category ON current_category.id = i.analytics_category_id
         JOIN sales_documents d ON d.id = i.sales_document_id
         WHERE s.item_id = item_ AND s.state <> 'DELETED' AND d.document_kind = 'SALE'
-          AND catalog_attach_role_category(s.monetary_category)), false)
+          AND (catalog_attach_role_category(s.monetary_category)
+               OR catalog_attach_role_category(current_category.code))), false)
 $$;
 
 CREATE FUNCTION catalog_accessory_review_required(item_ uuid) RETURNS boolean
@@ -489,11 +491,19 @@ SELECT
 FROM classified_items classified;
 
 
+CREATE FUNCTION catalog_charger_adapter_metric(category_ text, name_ text, occurred_at_ timestamptz)
+RETURNS boolean LANGUAGE sql STABLE AS $$
+    SELECT category_ = 'OTHER_ACCESSORY_PRODUCT'
+       AND name_ ~ '(переходник|адаптер)'
+       AND name_ ~ '(usb|type.?c|lightning|заряд|питан|hdmi)'
+$$;
+
 CREATE OR REPLACE VIEW attach_rate_ordinary_item_facts_v4_catalog AS
 WITH source_items AS (
     SELECT
         document.store_id,
         document.business_date,
+        COALESCE(original_document.occurred_at, document.occurred_at) AS classification_occurred_at,
         CASE WHEN document.document_kind = 'SALE' THEN document.employee_id
              ELSE source_employee.id END AS employee_id,
         document.document_kind,
@@ -518,6 +528,16 @@ WITH source_items AS (
       ON source_employee.connection_id = document.connection_id
      AND source_employee.external_id = document.attach_source_employee_external_id
     JOIN sales_document_items item ON item.sales_document_id = document.id
+    LEFT JOIN sales_document_items original_item
+      ON document.document_kind = 'RETURN' AND original_item.id = item.original_item_id
+     AND original_item.product_id = item.product_id AND NOT original_item.is_deleted
+    LEFT JOIN sales_documents original_document
+      ON original_document.id = original_item.sales_document_id
+     AND original_document.id = document.original_document_id
+     AND original_document.document_kind = 'SALE' AND NOT original_document.is_deleted
+     AND original_document.store_id = document.store_id
+     AND original_document.connection_id = document.connection_id
+     AND document.occurred_at >= original_document.occurred_at
     JOIN analytics_categories category ON category.id = item.analytics_category_id
     LEFT JOIN catalog_sale_role_snapshot_states role_snapshot ON role_snapshot.item_id = item.id
     WHERE NOT document.is_deleted
@@ -607,9 +627,8 @@ WITH source_items AS (
                       OR source.role_outcome IN ('REVIEW_PRODUCT','REVIEW_SALE')) THEN NULL
             WHEN attach_is_care(source.normalized_product_name)
                 THEN 'PREMIUM_PROTECTION'
-            WHEN source.category_code = 'OTHER_ACCESSORY_PRODUCT'
-                 AND source.normalized_product_name ~ '(переходник|адаптер)'
-                 AND source.normalized_product_name ~ '(заряд|питан|power[[:space:]]+adapter|wall[[:space:]]+charger|сзу|азу|бзу)'
+            WHEN catalog_charger_adapter_metric(source.category_code,
+                    source.normalized_product_name, source.classification_occurred_at)
                 THEN 'CHARGER_CABLE'
             WHEN source.category_code = 'SETUP_SERVICE'
                  AND source.normalized_product_name !~ '(ремонт|repair|замена|заменить)'

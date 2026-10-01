@@ -1134,6 +1134,22 @@ export type LiveSkladReturnRecoveryView = {
     processedAt?: string;
 };
 
+export type CatalogProductReviewDecisionRequest = {
+    expectedProductVersion: number;
+    analyticsCategoryCode: string;
+    conditionType: 'NEW' | 'ASIS' | 'USED' | 'NOT_APPLICABLE' | 'UNKNOWN';
+    payrollCategoryCode: 'TECH_TIER_1' | 'TECH_TIER_2' | 'ACCESSORY' | 'SERVICE' | 'PLAYSTATION_SUBSCRIPTION' | 'PAID_REPAIR' | 'EXCLUDE' | 'UNMAPPED';
+    reason: string;
+};
+
+export type CatalogProductReviewDecisionResult = {
+    productId?: string;
+    analyticsCategoryCode?: string;
+    payrollCategoryCode?: string;
+    reclassifiedItems?: number;
+    affectedStoreIds?: Array<string>;
+};
+
 export type SystemStatusView = {
     application?: string;
     version?: string;
@@ -1951,26 +1967,26 @@ export type JsonNode = {
     null?: boolean;
     float?: boolean;
     container?: boolean;
-    number?: boolean;
-    missingNode?: boolean;
-    valueNode?: boolean;
-    nodeType?: 'ARRAY' | 'BINARY' | 'BOOLEAN' | 'MISSING' | 'NULL' | 'NUMBER' | 'OBJECT' | 'POJO' | 'STRING';
-    object?: boolean;
-    pojo?: boolean;
-    integralNumber?: boolean;
-    short?: boolean;
-    int?: boolean;
-    long?: boolean;
     double?: boolean;
-    bigDecimal?: boolean;
-    bigInteger?: boolean;
     /**
      * @deprecated
      */
     textual?: boolean;
+    number?: boolean;
+    short?: boolean;
+    pojo?: boolean;
+    object?: boolean;
+    int?: boolean;
+    long?: boolean;
     boolean?: boolean;
-    binary?: boolean;
+    missingNode?: boolean;
+    integralNumber?: boolean;
     floatingPointNumber?: boolean;
+    bigDecimal?: boolean;
+    bigInteger?: boolean;
+    binary?: boolean;
+    valueNode?: boolean;
+    nodeType?: 'ARRAY' | 'BINARY' | 'BOOLEAN' | 'MISSING' | 'NULL' | 'NUMBER' | 'OBJECT' | 'POJO' | 'STRING';
     embeddedValue?: boolean;
 };
 
@@ -2227,8 +2243,8 @@ export type ActiveSessionResponse = {
 };
 
 export type CsrfToken = {
-    token?: string;
     parameterName?: string;
+    token?: string;
     headerName?: string;
 };
 
@@ -2429,6 +2445,36 @@ export type LlmOperationsView = {
     configuration?: LlmOperationsConfigurationView;
     summary?: LlmOperationsSummaryView;
     incidents?: Array<LlmJobIncidentView>;
+};
+
+export type CatalogProductReviewQueue = {
+    activationFrom?: string;
+    items?: Array<CatalogProductReviewQueueItem>;
+    hasMore?: boolean;
+};
+
+export type CatalogProductReviewQueueItem = {
+    productId?: string;
+    productVersion?: number;
+    externalId?: string;
+    code?: string;
+    name?: string;
+    sourceKind?: string;
+    sourceGroupPath?: string;
+    firstSaleAt?: string;
+    firstSaleDate?: string;
+    saleItemCount?: number;
+    hasUnmappedSales?: boolean;
+    assignedAnalyticsCategoryCode?: string;
+    assignedConditionType?: string;
+    assignedPayrollCategoryCode?: string;
+    suggestedAnalyticsCategoryCode?: string;
+};
+
+export type CategoryOption = {
+    code?: string;
+    name?: string;
+    defaultPayrollCategoryCode?: string;
 };
 
 export type GetDayData = {
@@ -3328,6 +3374,22 @@ export type RequestResponses = {
 };
 
 export type RequestResponse = RequestResponses[keyof RequestResponses];
+
+export type Decide2Data = {
+    body: CatalogProductReviewDecisionRequest;
+    path?: never;
+    query?: never;
+    url: '/api/admin/catalog-product-reviews/{productId}/decision';
+};
+
+export type Decide2Responses = {
+    /**
+     * OK
+     */
+    200: CatalogProductReviewDecisionResult;
+};
+
+export type Decide2Response = Decide2Responses[keyof Decide2Responses];
 
 export type StatusData = {
     body?: never;
@@ -4370,6 +4432,40 @@ export type Get14Responses = {
 };
 
 export type Get14Response = Get14Responses[keyof Get14Responses];
+
+export type List4Data = {
+    body?: never;
+    path?: never;
+    query?: {
+        arg0?: number;
+    };
+    url: '/api/admin/catalog-product-reviews';
+};
+
+export type List4Responses = {
+    /**
+     * OK
+     */
+    200: CatalogProductReviewQueue;
+};
+
+export type List4Response = List4Responses[keyof List4Responses];
+
+export type List5Data = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/catalog-product-reviews/categories';
+};
+
+export type List5Responses = {
+    /**
+     * OK
+     */
+    200: Array<CategoryOption>;
+};
+
+export type List5Response = List5Responses[keyof List5Responses];
 
 export type RevokeSessionData = {
     body?: never;

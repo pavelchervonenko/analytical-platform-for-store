@@ -1,6 +1,7 @@
 package com.storeanalytics.product.service;
 
 import com.storeanalytics.product.model.Product;
+import com.storeanalytics.quality.model.DataQualityIssue;
 import com.storeanalytics.quality.model.DataQualityStatus;
 import com.storeanalytics.quality.repository.DataQualityIssueRepository;
 import com.storeanalytics.sales.model.SalesDocumentItem;
@@ -128,6 +129,9 @@ public class ProductClassificationReconciliationService {
             boolean assignmentsOnly
     ) {
         SalesDocumentItem originalItem = item.getOriginalItem();
+        if (item.getSalesDocument().isReturn() && originalItem == null) {
+            return Optional.empty();
+        }
         if (originalItem != null) {
             SalesItemClassification inherited = originalItem.classificationSnapshot();
             return "UNMAPPED".equals(inherited.analyticsCategory().getCode())
@@ -199,7 +203,9 @@ public class ProductClassificationReconciliationService {
                             DataQualityStatus.OPEN
                     );
             if (issue.isPresent()) {
-                issue.orElseThrow().resolve(null, resolvedAt);
+                DataQualityIssue open = issue.orElseThrow();
+                open.resolve(null, resolvedAt.isBefore(open.getDetectedAt())
+                        ? open.getDetectedAt() : resolvedAt);
                 resolved++;
             }
         }

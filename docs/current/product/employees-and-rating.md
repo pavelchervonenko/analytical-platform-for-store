@@ -6,13 +6,16 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-09-14
+last_verified: 2026-10-01
 requirement_sources:
   - docs/archive/legacy-contracts/employee-rating-api.md
   - docs/archive/discoveries/analytics-business-rules-draft.md
   - docs/current/product/periods.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics/repository/EmployeeKpiRepository.java
+  - backend/src/main/java/com/storeanalytics/metrics/repository/SellerMembershipHistoryWriter.java
+  - backend/src/main/java/com/storeanalytics/performance/service/EmployeeRatingSettingsService.java
+  - backend/src/main/resources/db/migration/V91__seller_membership_history.sql
   - backend/src/main/java/com/storeanalytics/performance/service/EmployeeRatingService.java
   - backend/src/main/java/com/storeanalytics/performance/service/EmployeeCardService.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewTeamEmployeeProjector.java
@@ -22,6 +25,8 @@ implementation_sources:
   - frontend/src/plan-schedule/forms.ts
 verification_sources:
   - backend/src/test/java/com/storeanalytics/metrics/repository/EmployeeKpiIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/metrics/repository/SellerMembershipHistoryWriterIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/performance/service/EmployeeRatingSettingsServiceTest.java
   - backend/src/test/java/com/storeanalytics/performance/repository/EmployeeRatingIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/performance/service/EmployeeRatingServiceTest.java
   - backend/src/test/java/com/storeanalytics/performance/service/EmployeeCardServiceTest.java
@@ -64,6 +69,16 @@ Overview roster не обязан сходиться со store total.
 смен и при создании персональных карточек Weekly Review. Уже сохранённая смена исключённого
 сотрудника не удаляется автоматически, а уже созданный weekly-review snapshot не фильтруется заново
 при чтении. Историческое представление меняется только новой immutable revision.
+
+### Подготовка исторического участия
+
+V91 содержит отдельные интервалы участия и per-store нижнюю границу достоверности.
+Миграция не копирует текущий флаг задним числом. Только после проверки состава оператор
+может явно установить baseline; до него исторический lookup возвращает `UNKNOWN`.
+После baseline ручной переключатель и полный employee sync записывают интервалы в одной
+транзакции с текущим состоянием. Повтор без изменения состава не создаёт новый интервал.
+Пока исторический fact reader не подключён, действующие Overview и Weekly Review всё ещё
+используют **текущий** roster для расчёта; наличие V91 не делает прошлые отчёты исторически точными.
 
 ### Вклад и эффективность в Weekly Review
 

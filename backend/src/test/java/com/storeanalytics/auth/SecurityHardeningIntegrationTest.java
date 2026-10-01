@@ -14,6 +14,7 @@ import com.storeanalytics.auth.repository.AppUserRepository;
 import com.storeanalytics.auth.service.LoginThrottleKeyHasher;
 import com.storeanalytics.sync.service.SyncJobStateMetrics;
 import jakarta.servlet.http.Cookie;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -124,6 +125,28 @@ class SecurityHardeningIntegrationTest {
     }
 
     @Test
+    void managerCanReviewGlobalCatalogButNotOtherAdminEndpoints() throws Exception {
+        createUser(UserRole.MANAGER);
+        MockHttpSession session = session(login(EMAIL, PASSWORD));
+        mockMvc.perform(get("/api/admin/catalog-product-reviews").session(session))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/admin/catalog-product-reviews/categories").session(session))
+                .andExpect(status().isOk());
+        Cookie csrf = csrfCookie();
+        mockMvc.perform(post("/api/admin/catalog-product-reviews/{productId}/decision", UUID.randomUUID())
+                        .session(session)
+                        .cookie(csrf)
+                        .header("X-XSRF-TOKEN", csrf.getValue())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/admin/catalog-product-reviews/other").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/admin/users").session(session))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void deniesAuthenticatedRequestsToUnlistedApiRoutes() throws Exception {
         createUser();
         MockHttpSession session = session(login(EMAIL, PASSWORD));
@@ -169,7 +192,7 @@ class SecurityHardeningIntegrationTest {
                 .andExpect(jsonPath("$.build.name").value("backend"))
                 .andExpect(jsonPath("$.build.version").value("0.1.0-SNAPSHOT"))
                 .andExpect(jsonPath("$.release.runtimeRole").value("COMBINED"))
-                .andExpect(jsonPath("$.release.schemaVersion").value("86"))
+                .andExpect(jsonPath("$.release.schemaVersion").value("90"))
                 .andExpect(jsonPath("$.git").doesNotExist());
     }
 

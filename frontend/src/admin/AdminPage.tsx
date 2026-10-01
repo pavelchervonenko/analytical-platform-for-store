@@ -1,7 +1,9 @@
 import { BellRing, BrainCircuit, Calculator, DatabaseZap, FileArchive, PackageOpen, PackageSearch, Users } from "lucide-react";
 import { useSearchParams } from "react-router";
+import { useEffect, useRef } from "react";
 import { useWorkspace } from "../stores/WorkspaceProvider";
 import { CategoryImportPanel } from "./CategoryImportPanel";
+import { CatalogProductReviewPanel } from "./CatalogProductReviewPanel";
 import { ClassificationPanel } from "./ClassificationPanel";
 import { LlmOperationsPanel } from "./LlmOperationsPanel";
 import { ReportOperationsPanel } from "./ReportOperationsPanel";
@@ -18,6 +20,7 @@ const views = [
   { id: "schemes", label: "Правила расчетов", icon: Calculator },
   { id: "classification", label: "Категории зарплаты", icon: PackageSearch },
   { id: "category-import", label: "Категории аналитики", icon: PackageOpen },
+  { id: "catalog-reviews", label: "Новые товары", icon: PackageSearch },
   { id: "llm", label: "ИИ-разбор", icon: BrainCircuit },
   { id: "telegram", label: "Telegram", icon: BellRing }
 ] as const;
@@ -25,16 +28,20 @@ type AdminView = typeof views[number]["id"];
 
 export function AdminPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const tabsRef = useRef<HTMLElement>(null);
   const { selectedStore, month } = useWorkspace();
   const requested = searchParams.get("adminView");
   const active: AdminView = views.some((view) => view.id === requested) ? requested as AdminView : "users";
-  const contextualView = active === "sync" || active === "reports" || active === "classification" || active === "category-import";
+  const contextualView = active === "sync" || active === "reports" || active === "classification" || active === "category-import" || active === "catalog-reviews";
   const viewKey = contextualView ? `${active}:${selectedStore.id}:${month}` : active;
+  useEffect(() => {
+    tabsRef.current?.querySelector("button.is-active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [active]);
   const select = (view: AdminView) => setSearchParams((current) => { const next = new URLSearchParams(current); next.set("adminView", view); return next; });
 
   return <div className="admin-page">
     <header className="page-heading"><h1>Настройки</h1></header>
-    <nav className="admin-view-tabs" aria-label="Разделы администрирования">{views.map(({ id, label, icon: Icon }) => <button className={active === id ? "is-active" : ""} type="button" key={id} onClick={() => select(id)} aria-current={active === id ? "page" : undefined}><Icon /><strong>{label}</strong></button>)}</nav>
-    <div className="admin-view" key={viewKey}>{active === "users" ? <UsersPanel /> : active === "sync" ? <SyncPanel /> : active === "reports" ? <ReportOperationsPanel /> : active === "schemes" ? <SchemesPanel /> : active === "classification" ? <ClassificationPanel /> : active === "category-import" ? <CategoryImportPanel /> : active === "llm" ? <LlmOperationsPanel /> : <TelegramDeliveryPanel />}</div>
+    <nav ref={tabsRef} className="admin-view-tabs" aria-label="Разделы администрирования">{views.map(({ id, label, icon: Icon }) => <button className={active === id ? "is-active" : ""} type="button" key={id} onClick={() => select(id)} aria-current={active === id ? "page" : undefined}><Icon /><strong>{label}</strong></button>)}</nav>
+    <div className="admin-view" key={viewKey}>{active === "users" ? <UsersPanel /> : active === "sync" ? <SyncPanel /> : active === "reports" ? <ReportOperationsPanel /> : active === "schemes" ? <SchemesPanel /> : active === "classification" ? <ClassificationPanel /> : active === "category-import" ? <CategoryImportPanel /> : active === "catalog-reviews" ? <CatalogProductReviewPanel /> : active === "llm" ? <LlmOperationsPanel /> : <TelegramDeliveryPanel />}</div>
   </div>;
 }

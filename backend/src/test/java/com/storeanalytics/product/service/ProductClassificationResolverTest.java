@@ -34,7 +34,8 @@ class ProductClassificationResolverTest {
         resolver = new ProductClassificationResolver(
                 assignmentRepository,
                 categoryRepository,
-                ruleEngine
+                ruleEngine,
+                new CatalogClassificationCutover("")
         );
     }
 

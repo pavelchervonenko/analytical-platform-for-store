@@ -13,7 +13,7 @@ class CatalogCategoryRegistryTest {
 
     @Test
     void coversAgreedCodesWithoutTurningRegistryMembershipIntoRollout() {
-        assertThat(registry.definitions()).hasSize(54);
+        assertThat(registry.definitions()).hasSize(55);
         assertThat(registry.require("REPAIR_SERVICE").scope())
                 .isEqualTo(CatalogCategoryRegistry.Scope.DEFERRED);
         assertThat(registry.require("DIAGNOSTICS_SERVICE").scope())
@@ -21,6 +21,11 @@ class CatalogCategoryRegistryTest {
         assertThat(registry.require("IPAD_MAC").scope())
                 .isEqualTo(CatalogCategoryRegistry.Scope.LEGACY);
         assertThat(registry.find("TABLET_APPLE")).isPresent();
+        assertThat(registry.require("PHONE_OTHER").countsAsPhone()).isTrue();
+        assertThat(registry.require("PHONE_OTHER").deviceFamily())
+                .isEqualTo(com.storeanalytics.product.model.DeviceFamily.OTHER);
+        assertThat(registry.proposalCategories("DEVICE"))
+                .containsEntry("OTHER_PHONE", "PHONE_OTHER");
         assertThat(registry.find("GLASS_OTHER")).isPresent();
         assertThat(registry.sha256()).matches("[a-f0-9]{64}");
     }

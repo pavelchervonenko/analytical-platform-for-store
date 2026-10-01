@@ -21,52 +21,17 @@ class CameraGlassCorrectionMigrationIntegrationTest {
             new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
-    void correctsTwoCameraGlassCardsAndOnlyMisclassifiedSales()
-            throws SQLException {
+    void preservesHistoricalRowsDuringProspectiveSchemaPreparation() throws SQLException {
         flyway("62").migrate();
         addFixtures();
-
-        assertThat(units("attach_rate_item_facts_v3", "GLASS_IPHONE")).isEqualTo("3");
-        assertThat(units("attach_rate_ordinary_item_facts_v4", "GLASS_IPHONE"))
-                .isEqualTo("3");
-
-        flyway("63").migrate();
-
-        assertThat(assignmentCategory("5716")).isEqualTo("GLASS_CAMERA_IPHONE");
-        assertThat(assignmentCategory("5162")).isEqualTo("GLASS_CAMERA_IPHONE");
-        assertThat(itemCategory("5716")).isEqualTo("GLASS_CAMERA_IPHONE");
-        assertThat(itemCategory("5162")).isEqualTo("GLASS_CAMERA_IPHONE");
-        assertThat(itemCategory("9001")).isEqualTo("GLASS_IPHONE");
-        assertThat(itemCategory("9002")).isEqualTo("GLASS_CAMERA_SAMSUNG");
-        assertThat(query("""
-                SELECT count(*)::text
-                FROM product_category_assignments assignment
-                JOIN products product ON product.id = assignment.product_id
-                WHERE product.code IN ('5716', '5162')
-                  AND assignment.condition_type = 'NOT_APPLICABLE'
-                """)).isEqualTo("2");
-        assertThat(query("""
-                SELECT classification_version
-                FROM sales_document_items item
-                JOIN products product ON product.id = item.product_id
-                WHERE product.code = '5162'
-                """)).isEqualTo("fixture-v1");
-        for (String view : new String[]{
-                "attach_rate_item_facts_v3", "attach_rate_ordinary_item_facts_v4"
-        }) {
-            assertThat(units(view, "GLASS_IPHONE")).isEqualTo("1");
-            assertThat(units(view, "GLASS_CAMERA_IPHONE")).isEqualTo("3");
-            assertThat(units(view, "GLASS_CAMERA_SAMSUNG")).isEqualTo("1");
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            var before = HistoricalCatalogRows.snapshot(connection);
+            flyway("63").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+            flyway("90").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
         }
-        assertThat(query("""
-                SELECT sum(net_amount)::text || '|' || sum(cost_amount)::text
-                FROM sales_document_items
-                """)).isEqualTo("500.00|250.00");
-        assertThat(query("""
-                SELECT string_agg(code || ':' || payroll_category_code, ',' ORDER BY code)
-                FROM analytics_categories
-                WHERE code IN ('GLASS_CAMERA_IPHONE', 'GLASS_IPHONE')
-                """)).isEqualTo("GLASS_CAMERA_IPHONE:ACCESSORY,GLASS_IPHONE:ACCESSORY");
     }
 
     private void addFixtures() throws SQLException {

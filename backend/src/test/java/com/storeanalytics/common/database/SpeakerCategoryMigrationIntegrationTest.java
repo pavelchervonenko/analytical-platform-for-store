@@ -21,46 +21,17 @@ class SpeakerCategoryMigrationIntegrationTest {
             new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
-    void movesOnlyApprovedSpeakersAndPreservesAmountsAndPayroll()
-            throws SQLException {
+    void preservesHistoricalRowsDuringProspectiveSchemaPreparation() throws SQLException {
         flyway("55").migrate();
         addFixtures();
-
-        flyway("56").migrate();
-
-        assertThat(query("""
-                SELECT version
-                FROM flyway_schema_history
-                WHERE success
-                ORDER BY installed_rank DESC
-                LIMIT 1
-                """)).isEqualTo("56");
-        assertThat(query("""
-                SELECT category_kind || '|' || device_family || '|' ||
-                       counts_as_phone || '|' || counts_as_device || '|' ||
-                       payroll_category_code
-                FROM analytics_categories
-                WHERE code = 'SPEAKERS'
-                """)).isEqualTo("DEVICE|OTHER|false|true|TECH_TIER_2");
-        assertThat(assignmentCategory("4300")).isEqualTo("SPEAKERS");
-        assertThat(itemCategory("4300", "SALE")).isEqualTo("SPEAKERS");
-        assertThat(itemCategory("4300", "RETURN")).isEqualTo("SPEAKERS");
-        assertThat(itemCategory("5312", "SALE")).isEqualTo("SPEAKERS");
-        assertThat(itemCategory("7000", "SALE"))
-                .isEqualTo("PODS_WATCH_OTHER_DEVICE");
-        assertThat(query("""
-                SELECT count(*)::text
-                FROM sales_document_items item
-                JOIN product_category_assignments assignment
-                  ON assignment.id = item.category_assignment_id
-                JOIN products product ON product.id = item.product_id
-                WHERE product.code = '4300'
-                  AND item.analytics_category_id = assignment.analytics_category_id
-                """)).isEqualTo("2");
-        assertThat(query("""
-                SELECT sum(net_amount)::text || '|' || sum(cost_amount)::text
-                FROM sales_document_items
-                """)).isEqualTo("400.00|200.00");
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            var before = HistoricalCatalogRows.snapshot(connection);
+            flyway("56").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+            flyway("90").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+        }
     }
 
     private void addFixtures() throws SQLException {

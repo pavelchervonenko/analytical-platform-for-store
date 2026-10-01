@@ -21,50 +21,17 @@ class RemainingKeephoneIphoneCaseMigrationIntegrationTest {
             new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
-    void correctsExactCardsInBothStoresAndPreservesExistingCorrectSale()
-            throws SQLException {
+    void preservesHistoricalRowsDuringProspectiveSchemaPreparation() throws SQLException {
         flyway("67").migrate();
         addFixtures();
-        assertThat(count("product_category_assignments", "CASE_APPLE_IPHONE"))
-                .isEqualTo("0");
-        assertThat(count("sales_document_items", "CASE_APPLE_IPHONE"))
-                .isEqualTo("1");
-
-        flyway("68").migrate();
-
-        assertThat(count("product_category_assignments", "CASE_APPLE_IPHONE"))
-                .isEqualTo("13");
-        assertThat(count("product_category_assignments", "OTHER_ACCESSORY_PRODUCT"))
-                .isEqualTo("2");
-        assertThat(count("sales_document_items", "CASE_APPLE_IPHONE"))
-                .isEqualTo("10");
-        assertThat(count("sales_document_items", "OTHER_ACCESSORY_PRODUCT"))
-                .isEqualTo("1");
-        assertThat(query("SELECT count(*)::text FROM sales_document_items "
-                + "WHERE classification_version = 'customer-approved-2026-09-26-"
-                + "keephone-model-cases-v1'"))
-                .isEqualTo("9");
-        assertThat(query("SELECT count(*)::text FROM product_category_assignments "
-                + "WHERE rule_version = 'customer-approved-2026-09-26-"
-                + "keephone-model-cases-v1'"))
-                .isEqualTo("13");
-        for (String view : new String[]{
-                "attach_rate_item_facts_v3", "attach_rate_ordinary_item_facts_v4"
-        }) {
-            assertThat(units(view, "CASE_APPLE_IPHONE")).isEqualTo("10");
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            var before = HistoricalCatalogRows.snapshot(connection);
+            flyway("68").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+            flyway("90").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
         }
-        assertThat(query("SELECT count(DISTINCT document.store_id)::text "
-                + "FROM sales_document_items item "
-                + "JOIN sales_documents document ON document.id = item.sales_document_id "
-                + "JOIN analytics_categories category ON category.id = item.analytics_category_id "
-                + "WHERE category.code = 'CASE_APPLE_IPHONE'"))
-                .isEqualTo("2");
-        assertThat(query("SELECT sum(net_amount)::text || '|' || "
-                + "sum(cost_amount)::text FROM sales_document_items"))
-                .isEqualTo("1100.00|550.00");
-        assertThat(query("SELECT payroll_category_code FROM analytics_categories "
-                + "WHERE code = 'CASE_APPLE_IPHONE'"))
-                .isEqualTo("ACCESSORY");
     }
 
     private void addFixtures() throws SQLException {

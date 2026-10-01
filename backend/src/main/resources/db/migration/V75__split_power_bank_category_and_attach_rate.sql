@@ -1,7 +1,6 @@
--- Customer-approved split of portable batteries from charging blocks and cables.
--- Thirty-seven exact LiveSklad codes from the 2026-09-24 product export, including
--- iPhone Air MagSafe Battery Pack (3527), with a name guard against reused codes.
--- Financial amounts, sale employees, and payroll assignments remain unchanged.
+-- Unpublished draft revised after owner confirmation on 2026-10-01.
+-- Schema/taxonomy only: no historical sale, analytical assignment or payroll assignment rewrite.
+-- Approved product decisions are applied separately with an explicit prospective boundary.
 
 INSERT INTO analytics_categories (
     code, name, description, category_kind, device_family,
@@ -14,101 +13,6 @@ INSERT INTO analytics_categories (
     'ACCESSORY', 'NONE', false, false, true, 'PHONE', true, 'ACCESSORY'
 );
 
-WITH approved_products AS (
-    SELECT product.id
-    FROM products product
-    JOIN integration_connections connection ON connection.id = product.connection_id
-    WHERE connection.connection_key = 'livesklad-default'
-      AND product.source_kind IN ('PRODUCT', 'UNKNOWN')
-      AND product.code IN (
-            '3527', '32532', '4543', '69', '1936', '4125', '4126',
-            '3603', '3605', '4971', '5282', '5280', '2893', '2894',
-            '3227', '3226', '2891', '2892', '680', '1634', '4776',
-            '4777', '4778', '1632', '2890', '2612', '2610', '591',
-            '2607', '2609', '2608', '4124', '4123', '3439', '3442',
-            '3443', '3441'
-      )
-      AND product.name ~* '(power[[:space:]]*bank|пауэрбанк|повербанк|magsafe[[:space:]]+battery[[:space:]]+pack|(портативн|внешн)[^[:space:]]*[[:space:]]+аккумулятор)'
-)
-UPDATE product_category_assignments assignment
-SET analytics_category_id = target_category.id,
-    condition_type = 'NOT_APPLICABLE',
-    rule_version = 'customer-approved-2026-09-27-power-bank-v1',
-    change_reason = 'Customer-approved portable battery category'
-FROM approved_products approved,
-     analytics_categories target_category
-WHERE assignment.product_id = approved.id
-  AND (assignment.analytics_category_id <> target_category.id
-       OR assignment.condition_type <> 'NOT_APPLICABLE')
-  AND target_category.code = 'POWER_BANK';
-
-WITH approved_products AS (
-    SELECT product.id
-    FROM products product
-    JOIN integration_connections connection ON connection.id = product.connection_id
-    WHERE connection.connection_key = 'livesklad-default'
-      AND product.source_kind IN ('PRODUCT', 'UNKNOWN')
-      AND product.code IN (
-            '3527', '32532', '4543', '69', '1936', '4125', '4126',
-            '3603', '3605', '4971', '5282', '5280', '2893', '2894',
-            '3227', '3226', '2891', '2892', '680', '1634', '4776',
-            '4777', '4778', '1632', '2890', '2612', '2610', '591',
-            '2607', '2609', '2608', '4124', '4123', '3439', '3442',
-            '3443', '3441'
-      )
-      AND product.name ~* '(power[[:space:]]*bank|пауэрбанк|повербанк|magsafe[[:space:]]+battery[[:space:]]+pack|(портативн|внешн)[^[:space:]]*[[:space:]]+аккумулятор)'
-)
-INSERT INTO product_category_assignments (
-    product_id, analytics_category_id, condition_type, assignment_source,
-    rule_version, valid_from, change_reason
-)
-SELECT product.id, target_category.id, 'NOT_APPLICABLE', 'MANUAL',
-       'customer-approved-2026-09-27-power-bank-v1',
-       LEAST(product.created_at, COALESCE((
-           SELECT MIN(document.occurred_at)
-           FROM sales_document_items item
-           JOIN sales_documents document ON document.id = item.sales_document_id
-           WHERE item.product_id = product.id
-       ), product.created_at)),
-       'Customer-approved portable battery category'
-FROM approved_products approved
-JOIN products product ON product.id = approved.id
-JOIN analytics_categories target_category ON target_category.code = 'POWER_BANK'
-WHERE NOT EXISTS (
-    SELECT 1 FROM product_category_assignments assignment
-    WHERE assignment.product_id = product.id
-);
-
-WITH approved_products AS (
-    SELECT product.id
-    FROM products product
-    JOIN integration_connections connection ON connection.id = product.connection_id
-    WHERE connection.connection_key = 'livesklad-default'
-      AND product.source_kind IN ('PRODUCT', 'UNKNOWN')
-      AND product.code IN (
-            '3527', '32532', '4543', '69', '1936', '4125', '4126',
-            '3603', '3605', '4971', '5282', '5280', '2893', '2894',
-            '3227', '3226', '2891', '2892', '680', '1634', '4776',
-            '4777', '4778', '1632', '2890', '2612', '2610', '591',
-            '2607', '2609', '2608', '4124', '4123', '3439', '3442',
-            '3443', '3441'
-      )
-      AND product.name ~* '(power[[:space:]]*bank|пауэрбанк|повербанк|magsafe[[:space:]]+battery[[:space:]]+pack|(портативн|внешн)[^[:space:]]*[[:space:]]+аккумулятор)'
-)
-UPDATE sales_document_items item
-SET analytics_category_id = target_category.id,
-    condition_type_snapshot = 'NOT_APPLICABLE',
-    classification_version = 'customer-approved-2026-09-27-power-bank-v1',
-    version = item.version + 1,
-    updated_at = clock_timestamp()
-FROM approved_products approved,
-     analytics_categories target_category
-WHERE item.product_id = approved.id
-  AND (item.analytics_category_id <> target_category.id
-       OR item.condition_type_snapshot <> 'NOT_APPLICABLE')
-  AND target_category.code = 'POWER_BANK';
-
--- Power banks have their own phone-based rate; chargers retain their own numerator.
 CREATE OR REPLACE VIEW attach_rate_metric_definitions_v3 AS
 SELECT *
 FROM (VALUES
@@ -129,8 +33,6 @@ FROM (VALUES
     (15, 'POWER_BANK',              'POWER_BANK',              'PHONE')
 ) definition(sort_order, metric_code, numerator_category_code, denominator_code);
 
--- Include the separate power-bank numerator in both ordinary and all-item
--- projections, while leaving the legacy charger-specific adapter fallback intact.
 CREATE OR REPLACE VIEW attach_rate_item_facts_v3 AS
 WITH source_items AS (
     SELECT

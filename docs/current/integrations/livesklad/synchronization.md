@@ -6,12 +6,14 @@ owner: integrations
 audience:
   - developer
   - operator
-last_verified: 2026-09-30
+last_verified: 2026-10-01
 requirement_sources:
   - docs/archive/legacy-contracts/synchronization-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/product/service/CatalogSaleRoleSnapshotWriter.java
   - backend/src/main/java/com/storeanalytics/sync
+  - backend/src/main/java/com/storeanalytics/sync/service/EmployeeSyncBatchApplier.java
+  - backend/src/main/java/com/storeanalytics/metrics/repository/SellerMembershipHistoryWriter.java
   - backend/src/main/java/com/storeanalytics/product/model/Product.java
   - backend/src/main/java/com/storeanalytics/product/model/ProductDetails.java
   - backend/src/main/resources/application.yml
@@ -23,6 +25,7 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/sync/service/SyncJobIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/SyncJobWorkerTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/StoreSyncIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/sync/service/EmployeeSyncMembershipHistoryIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/ReturnSyncIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/OrderSyncIntegrationTest.java
 runtime_evidence: []
@@ -51,6 +54,17 @@ STORES → EMPLOYEES → SALES → RETURNS → ORDERS → следующее о�
 
 Cursor и phase коммитятся после каждого шага. Child attempts связаны через `sync_job_id`, lease
 позволяет восстановиться после падения worker, а cancellation текущей фазы cooperative.
+
+## Employee roster publication
+
+Фаза EMPLOYEES сначала полностью считывает сотрудников всех активных магазинов. Затем
+`EmployeeSyncBatchApplier` в одной транзакции проверяет состав активных магазинов, run/attempt/
+lease, публикует нормализованные строки и отключение отсутствующих сотрудников, сверяет
+интервалы истории для магазинов с явно утверждённым baseline и переводит run в `SUCCESS`.
+Сбой или изменившийся во время чтения список магазинов откатывает весь batch; частичный
+fetch не считается пустым roster. До baseline current projection работает по прежним правилам,
+а история не угадывается задним числом. Ручной переключатель рейтинга сериализован тем же
+store guard. Эта подготовка не включает исторический расчёт Weekly Review.
 
 ## Defaults source-tree
 
@@ -112,7 +126,7 @@ source ID и версии.
 
 ## Coverage и API
 
-ADMIN API из OpenAPI v12 создаёт backfill, читает readiness/list/detail и запрашивает cancel.
+ADMIN API из OpenAPI v13 создаёт backfill, читает readiness/list/detail и запрашивает cancel.
 Backfill dates включительны в reporting zone; внутри хранятся instant-полуинтервалы. Создание
 требует effective classification на начало периода и ограничено 730 днями.
 

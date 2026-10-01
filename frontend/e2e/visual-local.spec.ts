@@ -22,6 +22,7 @@ const visualStoreId = "10000000-0000-4000-8000-000000000001";
 
 
 async function installFixtureApi(page: Page) {
+  let catalogReviewed = false;
   const json = async (route: Route, body: unknown) => {
     await route.fulfill({
       status: 200,
@@ -72,6 +73,29 @@ async function installFixtureApi(page: Page) {
     totalPages: 1,
     hasNext: false,
     hasPrevious: false
+  }));
+  await page.route("**/api/admin/catalog-product-reviews/*/decision", async (route) => {
+    catalogReviewed = true;
+    await json(route, { productId: "30000000-0000-4000-8000-000000000001",
+      analyticsCategoryCode: "HEADPHONES_APPLE", payrollCategoryCode: "TECH_TIER_2",
+      reclassifiedItems: 1, affectedStoreIds: [visualStoreId] });
+  });
+  await page.route("**/api/admin/catalog-product-reviews/categories", async (route) => json(route, [
+    { code: "HEADPHONES_APPLE", name: "Наушники Apple", defaultPayrollCategoryCode: "TECH_TIER_2" },
+    { code: "CHARGER_CABLE", name: "Зарядки и кабели", defaultPayrollCategoryCode: "ACCESSORY" }
+  ]));
+  await page.route("**/api/admin/catalog-product-reviews?*", async (route) => json(route, {
+    activationFrom: "2026-09-01T00:00:00Z", hasMore: false,
+    items: catalogReviewed ? [] : [{
+      productId: "30000000-0000-4000-8000-000000000001", productVersion: 0,
+      externalId: "synthetic-product-1", code: "9001", name: "AirPods Pro (тест)",
+      sourceKind: "PRODUCT", sourceGroupPath: "НАУШНИКИ",
+      firstSaleAt: "2026-09-10T09:00:00Z", firstSaleDate: "2026-09-10",
+      saleItemCount: 1, hasUnmappedSales: true,
+      assignedAnalyticsCategoryCode: null, assignedConditionType: null,
+      assignedPayrollCategoryCode: null,
+      suggestedAnalyticsCategoryCode: "HEADPHONES_APPLE"
+    }]
   }));
   await page.route("**/api/auth/sessions", async (route) => json(route, {
     sessions: [{
@@ -1589,7 +1613,25 @@ test.describe("local frontend visual review", () => {
         await expect(dayButton).toBeFocused();
       }
 
-      if (routePath === "/admin") {
+      if (routePath === "/admin" && routeUrl.searchParams.get("adminView") === "catalog-reviews") {
+        await expect(page.getByRole("heading", { name: "Новые товары на проверке" })).toBeVisible();
+        await expect(page.getByRole("combobox", { name: "Аналитическая категория" })).toBeVisible();
+        await expect(page.getByRole("combobox", { name: "Зарплатная категория" })).toBeVisible();
+        const confirm = page.getByRole("button", { name: "Подтвердить обе категории" });
+        await expect(confirm).toBeDisabled();
+        await page.getByRole("combobox", { name: "Аналитическая категория" }).selectOption("HEADPHONES_APPLE");
+        await page.getByRole("combobox", { name: "Зарплатная категория" }).selectOption("TECH_TIER_2");
+        await page.getByRole("combobox", { name: "Состояние товара" }).selectOption("NOT_APPLICABLE");
+        await page.getByRole("textbox", { name: "Основание решения" }).fill("Проверен тестовый товар");
+        await expect(confirm).toBeEnabled();
+        await confirm.click();
+        await expect(page.getByRole("status")).toContainText("Переклассифицировано позиций: 1");
+        await expect(page.getByText("Очередь пуста")).toBeVisible();
+        await page.screenshot({ path: resolve(screenshotDirectory, screenshotName(route) + "-saved.png"),
+          fullPage: true, animations: "disabled" });
+      }
+
+      if (routePath === "/admin" && routeUrl.searchParams.get("adminView") !== "catalog-reviews") {
         await expect(page.getByRole("heading", { name: "Пользователи", exact: true })).toBeVisible();
         const managerRow = page.locator(".admin-user-list article", {
           hasText: "Руководитель без зарплаты"

@@ -2,7 +2,6 @@ package com.storeanalytics.common.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -22,55 +21,17 @@ class SmartGlassesCategoryMigrationIntegrationTest {
             new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
-    void correctsAllRayBanGlassesAndUpdatesAttachDeviceTotals()
-            throws SQLException {
+    void preservesHistoricalRowsDuringProspectiveSchemaPreparation() throws SQLException {
         flyway("57").migrate();
         addFixtures();
-        String attachV3Before = attachDeviceUnits("attach_rate_item_facts_v3");
-        String attachV4Before = attachDeviceUnits("attach_rate_item_facts_v4");
-
-        flyway("58").migrate();
-
-        assertThat(query("""
-                SELECT version FROM flyway_schema_history
-                WHERE success ORDER BY installed_rank DESC LIMIT 1
-                """)).isEqualTo("58");
-        assertThat(query("""
-                SELECT category_kind || '|' || device_family || '|' ||
-                       counts_as_phone || '|' || counts_as_device || '|' ||
-                       counts_as_additional_revenue || '|' || payroll_category_code
-                FROM analytics_categories WHERE code = 'SMART_GLASSES'
-                """)).isEqualTo("DEVICE|OTHER|false|true|false|TECH_TIER_2");
-        assertThat(assignmentCategory("4308")).isEqualTo("SMART_GLASSES");
-        assertThat(assignmentCategory("5558")).isEqualTo("SMART_GLASSES");
-        assertThat(itemCategory("4308", "SALE")).isEqualTo("SMART_GLASSES");
-        assertThat(itemCategory("5558", "SALE")).isEqualTo("SMART_GLASSES");
-        assertThat(itemCategory("5558", "RETURN")).isEqualTo("SMART_GLASSES");
-        assertThat(assignmentCategory("7000")).isEqualTo("SMART_GLASSES");
-        assertThat(assignmentCategory("7002")).isEqualTo("SMART_GLASSES");
-        assertThat(query("""
-                SELECT assignment.condition_type
-                FROM product_category_assignments assignment
-                JOIN products product ON product.id = assignment.product_id
-                WHERE product.code = '7002'
-                """)).isEqualTo("USED");
-        assertThat(itemCategory("7000", "SALE")).isEqualTo("SMART_GLASSES");
-        assertThat(itemCategory("7001", "SALE")).isEqualTo("PODS_WATCH_OTHER_DEVICE");
-        assertThat(new BigDecimal(attachDeviceUnits("attach_rate_item_facts_v3"))
-                .subtract(new BigDecimal(attachV3Before)))
-                .isEqualByComparingTo("1");
-        assertThat(new BigDecimal(attachDeviceUnits("attach_rate_item_facts_v4"))
-                .subtract(new BigDecimal(attachV4Before)))
-                .isEqualByComparingTo("1");
-        assertThat(query("""
-                SELECT sum(net_amount)::text || '|' || sum(cost_amount)::text
-                FROM sales_document_items
-                """)).isEqualTo("500.00|250.00");
-        assertThat(query("""
-                SELECT resolve_default_payroll_category(
-                    'SMART_GLASSES', 'Ray Ban Meta Starfire', 'TECH_TIER_2'
-                )
-                """)).isEqualTo("TECH_TIER_2");
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            var before = HistoricalCatalogRows.snapshot(connection);
+            flyway("58").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+            flyway("90").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+        }
     }
 
     private String attachDeviceUnits(String view) throws SQLException {

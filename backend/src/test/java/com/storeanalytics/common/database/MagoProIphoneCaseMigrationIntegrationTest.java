@@ -21,38 +21,17 @@ class MagoProIphoneCaseMigrationIntegrationTest {
             new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
-    void correctsEightCasesAndTheirSalesAndReturnsWithoutChangingAmounts()
-            throws SQLException {
+    void preservesHistoricalRowsDuringProspectiveSchemaPreparation() throws SQLException {
         flyway("65").migrate();
         addFixtures();
-        assertThat(count("product_category_assignments", "CASE_APPLE_IPHONE"))
-                .isEqualTo("0");
-
-        flyway("66").migrate();
-
-        assertThat(count("product_category_assignments", "CASE_APPLE_IPHONE"))
-                .isEqualTo("8");
-        assertThat(count("sales_document_items", "CASE_APPLE_IPHONE"))
-                .isEqualTo("9");
-        assertThat(count("product_category_assignments", "OTHER_ACCESSORY_PRODUCT"))
-                .isEqualTo("2");
-        assertThat(count("sales_document_items", "OTHER_ACCESSORY_PRODUCT"))
-                .isEqualTo("2");
-        assertThat(query("SELECT count(*)::text FROM sales_document_items "
-                + "WHERE classification_version = 'customer-approved-2026-09-26-"
-                + "mago-pro-iphone-cases-v1'"))
-                .isEqualTo("9");
-        for (String view : new String[]{
-                "attach_rate_item_facts_v3", "attach_rate_ordinary_item_facts_v4"
-        }) {
-            assertThat(units(view, "CASE_APPLE_IPHONE")).isEqualTo("7");
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            var before = HistoricalCatalogRows.snapshot(connection);
+            flyway("66").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+            flyway("90").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
         }
-        assertThat(query("SELECT sum(net_amount)::text || '|' || "
-                + "sum(cost_amount)::text FROM sales_document_items"))
-                .isEqualTo("1100.00|550.00");
-        assertThat(query("SELECT payroll_category_code FROM analytics_categories "
-                + "WHERE code = 'CASE_APPLE_IPHONE'"))
-                .isEqualTo("ACCESSORY");
     }
 
     private void addFixtures() throws SQLException {

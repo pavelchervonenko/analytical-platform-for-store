@@ -72,9 +72,9 @@ public class WeeklyReviewAiPlanningService {
                     && review.report().aiEnhancement().state()
                         != com.storeanalytics.interpretation.review.WeeklyReviewResponse.AiState.READY) {
                 UUID snapshotId = UUID.fromString(review.report().provenance().snapshotPublicId());
-                if (jobStore.findBySnapshot(snapshotId).isEmpty()) {
-                    jobStore.enqueue(snapshotId, properties.providerCode(), yandexProperties.getModelUri(),
-                            properties.maxProviderCalls(), clock.instant(), properties.jobDeadline());
+                if (jobStore.enqueueAutomaticSellerWeek(snapshotId, properties.providerCode(),
+                        yandexProperties.getModelUri(), 1,
+                        clock.instant(), properties.jobDeadline())) {
                     created++;
                 }
             }

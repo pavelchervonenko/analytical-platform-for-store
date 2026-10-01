@@ -8,6 +8,7 @@ INSERT INTO analytics_categories (
     code, name, category_kind, device_family, counts_as_phone, counts_as_device,
     counts_as_additional_revenue, payroll_category_code, is_active
 ) VALUES
+    ('PHONE_OTHER', 'Телефоны других брендов', 'DEVICE', 'OTHER', true, true, false, 'TECH_TIER_1', false),
     ('TABLET_APPLE', 'Планшеты Apple', 'DEVICE', 'IPAD_MAC', false, true, false, 'TECH_TIER_2', false),
     ('TABLET_OTHER', 'Другие планшеты', 'DEVICE', 'OTHER', false, true, false, 'TECH_TIER_2', false),
     ('LAPTOP_APPLE', 'Ноутбуки Apple', 'DEVICE', 'IPAD_MAC', false, true, false, 'TECH_TIER_1', false),

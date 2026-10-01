@@ -72,7 +72,7 @@ def main():
         'source_sha256': {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path, _ in sources},
         'java_source_sha256': {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest() for path in java_sources},
         'category_registry_sha256': hashlib.sha256(
-            (root / 'backend/src/main/resources/catalog/category-registry-v1.tsv').read_bytes()).hexdigest(),
+            (root / 'backend/src/main/resources/catalog/category-registry-v2.tsv').read_bytes()).hexdigest(),
         'assignments_written': 0,
     }
     args.output.mkdir(parents=True)

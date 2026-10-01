@@ -324,10 +324,6 @@ WITH source_items AS (
         CASE
             WHEN attach_is_care(source.normalized_product_name)
                 THEN 'PREMIUM_PROTECTION'
-            WHEN source.category_code = 'OTHER_ACCESSORY_PRODUCT'
-                 AND source.normalized_product_name ~ '(переходник|адаптер)'
-                 AND source.normalized_product_name ~ '(заряд|питан|power[[:space:]]+adapter|wall[[:space:]]+charger|сзу|азу|бзу)'
-                THEN 'CHARGER_CABLE'
             WHEN source.category_code = 'SETUP_SERVICE'
                  AND source.normalized_product_name !~ '(ремонт|repair|замена|заменить)'
                  AND source.normalized_product_name ~

@@ -119,7 +119,7 @@ def main():
         'rule_version': re.search(r'RULE_VERSION = "([^"]+)"', engine.read_text()).group(1),
         'engine_sha256': hashlib.sha256(engine.read_bytes()).hexdigest(),
         'category_registry_sha256': hashlib.sha256(
-            (root / 'backend/src/main/resources/catalog/category-registry-v1.tsv').read_bytes()).hexdigest(),
+            (root / 'backend/src/main/resources/catalog/category-registry-v2.tsv').read_bytes()).hexdigest(),
         'sources': {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p, _ in sources},
         'historical_sources': {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in args.historical_assignments},
         'source_counts': dict(Counter(r['source_kind'] for r in records)),

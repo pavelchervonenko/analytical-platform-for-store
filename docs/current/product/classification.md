@@ -6,11 +6,16 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-09-30
+last_verified: 2026-10-01
 requirement_sources:
   - docs/archive/discoveries/analytics-business-rules-draft.md
   - docs/history/audits/2026/08/payroll-classification-review.md
 implementation_sources:
+  - backend/src/main/java/com/storeanalytics/common/database/CatalogActivationState.java
+  - backend/src/main/resources/db/migration/V89__store_catalog_activation_boundary.sql
+  - backend/src/main/java/com/storeanalytics/product/service/CatalogClassificationCutover.java
+  - backend/src/main/java/com/storeanalytics/product/service/LegacyProductClassificationRulesV9.java
+  - backend/src/main/java/com/storeanalytics/sync/service/SalesSyncPersistence.java
   - backend/src/main/java/com/storeanalytics/product/service/CatalogSaleRoleSnapshotWriter.java
   - backend/src/main/java/com/storeanalytics/product/service/CatalogLegacyCompatibilityEvidence.java
   - backend/src/main/resources/db/migration/V82__add_shadow_catalog_sale_role_snapshots.sql
@@ -23,7 +28,7 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/product/model/CatalogCompatibilityEvidence.java
   - backend/src/main/java/com/storeanalytics/product/service/CatalogAccessoryAttachPolicy.java
   - scripts/catalog-audit/probe_accessory_roles.py
-  - backend/src/main/resources/catalog/category-registry-v1.tsv
+  - backend/src/main/resources/catalog/category-registry-v2.tsv
   - backend/src/main/java/com/storeanalytics/product/service/CatalogCategoryRegistry.java
   - backend/src/main/java/com/storeanalytics/product/service/ProductAutoClassificationDecision.java
   - scripts/catalog-audit/catalog_registry.py
@@ -38,6 +43,9 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/product/service/ProductAutoClassificationRuleEngine.java
   - backend/src/main/java/com/storeanalytics/product/service/ProductCategoryImportService.java
   - backend/src/main/java/com/storeanalytics/product/service/ProductClassificationReconciliationService.java
+  - backend/src/main/java/com/storeanalytics/product/service/CatalogProductReviewQueueService.java
+  - backend/src/main/java/com/storeanalytics/product/service/CatalogProductReviewDecisionService.java
+  - frontend/src/admin/CatalogProductReviewPanel.tsx
   - backend/src/main/java/com/storeanalytics/product/service/ProductClassificationResolver.java
   - backend/src/main/resources/db/migration/V38__attach_rate_units_methodology.sql
   - backend/src/main/resources/db/migration/V5__add_payroll.sql
@@ -63,6 +71,8 @@ implementation_sources:
   - frontend/src/admin/CategoryImportPanel.tsx
   - frontend/src/admin/ClassificationPanel.tsx
 verification_sources:
+  - backend/src/test/java/com/storeanalytics/product/service/CatalogClassificationCutoverTest.java
+  - backend/src/test/java/com/storeanalytics/sync/service/CatalogRoleSyncIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/product/service/CatalogSaleRoleSnapshotIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/common/database/CatalogCategoryRegistryDatabaseIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/product/service/CatalogLegacyCompatibilityEvidenceTest.java
@@ -131,6 +141,79 @@ superseded_by: null
 
 Один товар участвует в трёх независимых проекциях.
 
+**Статус массовых исправлений:** после решения применять новую классификацию только
+с даты обновления SQL-черновики V56–V70 и V74–V77 больше не переписывают старые
+карточки, назначения, продажи или возвраты. Описания отдельных товарных блоков
+ниже фиксируют согласованную целевую категорию; прежние фразы о переносе
+«сохранённых продаж» относятся к историческому проекту изменений и не являются
+действием нынешней цепочки миграций. Для фактического применения нужны точные
+датированные назначения. Это предупреждение не распространяется на независимые
+решения по конкретным продажам в очереди проверок.
+
+## Перспективная граница обычной синхронизации — локальный этап
+
+`app.catalog-classification.activate-from` принимает явный ISO instant с timezone/offset.
+Дата без времени/offset недопустима; точность ограничена микросекундами БД.
+Время запуска приложения или загрузки не используется.
+Точное значение для выпуска ещё не выбрано. T должна приходиться на 00:00
+бизнес-зоны `Europe/Kaliningrad`: зарплатное назначение имеет точность одного дня,
+поэтому внутридневная T может затронуть продажи до обновления. Migration runner однократно
+фиксирует явную будущую дату в `catalog_classification_activation` после structural migration. Повтор с той же датой
+допустим, UPDATE/DELETE/TRUNCATE записи запрещены. Runtime только читает запись при старте:
+другая дата, пропавшая настройка при существующей записи или настройка без записи — ошибка.
+При включённом capture его дата должна совпадать с датой классификации.
+Без записи и без настройки сохраняется прежний development-режим рабочей копии;
+**это не безопасная настройка для prospective production rollout**. Production Compose передаёт
+одну явную дату мигратору, API и worker; preflight требует совпадающую дату захвата снимков
+и запас более часа до включения. До репетиции на восстановленной копии guard остаётся обязательным.
+Подробности — [контракт миграций](../architecture/migrations.md).
+
+При заданной границе T:
+
+- Для повторного обычного sync продажи с `occurredAt < T` и тем же product UUID сохраняются
+  записанные category, assignment, classification version и condition, включая UNMAPPED.
+  Имя/денежные поля CRM продолжают проходить обычный update; это не заморозка самой продажи.
+  Прямые команды ручной переклассификации не являются обычным sync и не разрешаются этим шагом.
+- Для впервые пришедшей старой позиции сначала ищется назначение, действующее на дату события.
+  Если его нет, применяется замороженный fallback `LegacyProductClassificationRulesV9`,
+  восстановленный из исходного кода прежнего выпуска, а не новый словарь.
+  Retired historical category разрешена для такого fallback; её код не заменяется новым автоматически.
+- На границе `occurredAt = T` и позже действуют обычные эффективные назначения и текущий
+  классификатор. Неактивные автоматические цели по-прежнему не назначаются.
+- Замена самого товара в CRM (другой product UUID) не наследует категорию чужой позиции:
+  применяется resolver по дате события. Это не основание переносить старое назначение на новый товар.
+- Связанный возврат наследует сохранённую классификацию исходной продажи через существующий
+  return sync. Если исходная позиция отсутствует, поздняя привязка/роль возврата требуют
+  отдельной проверки; данный этап не вводит нового предположения об исходной категории.
+
+После T товар, впервые созданный в локальном каталоге на T или позже, без явного назначения
+не получает категорию по словарю автоматически: продажа остаётся `UNMAPPED`, а алгоритм даёт
+только подсказку в очереди `Настройки → Новые товары`. Для подтверждения нужны обе независимые
+категории, состояние товара и причина. Операция ADMIN-only, с проверкой версии карточки и
+утверждённых/оплаченных ведомостей; аналитическое назначение, зарплатное назначение, аудит
+и повторная классификация активных `UNMAPPED`-продаж сохраняются одной транзакцией.
+Аналитическое назначение начинается в T, зарплатное — с бизнес-даты T, не с первой
+увиденной продажи: позднее загруженные продажи после T получают те же роли. Продажи
+до T сохраняют прежнюю аналитическую и зарплатную классификацию. Суммы продаж не меняются. Если старый неизменяемый снимок роли аксессуара стал неактуальным,
+соответствующая продажа попадает в уже существующую проверку attach-rate. Роль MANAGER пока
+не может назначать общую карточку, потенциально влияющую на оба магазина; правило полномочий
+для такой операции требует отдельного решения. Для уже существовавших до T карточек эта
+очередь не заменяет выпускной точный реестр назначений.
+
+Замороженный fallback нельзя «улучшать» вместе с новым словарём. Он воспроизводит прежние
+правила на доступном имени товара, но не восстанавливает неизвестное старое имя/группу CRM.
+
+Локально проверены 13 интеграционных сценариев реального sales/return sync на PostgreSQL:
+граница T, новые и старые товары, связанные возвраты, частично заполненные назначения
+и одна карточка в двух магазинах. Отдельно проверены API-контракт и локальный frontend.
+Это диагностический javac/JUnit, не полный Gradle release gate.
+
+**Ещё не закрыто:** точная дата T на выпуск, свежий реестр назначений для существующих
+карточек, полноценная репетиция на восстановленной копии БД с API/worker и новыми метриками,
+проверка всех orphan/relink-сценариев и полный Gradle gate. Передача даты T всем runtime-ролям
+локально подключена, но production не обновлён. Миграционный guard пока блокирует
+заполненную БД и не должен отключаться без этих ворот.
+
 ## Аналитическая категория
 
 Определяет участие в store/category/employee KPI, kind
@@ -177,18 +260,28 @@ superseded_by: null
 ### Общий реестр категорий: первый блок этапа 4.2
 
 Коды и согласованные свойства категорий описаны в одном артефакте
-`backend/src/main/resources/catalog/category-registry-v1.tsv`. Его читают Java
+`backend/src/main/resources/catalog/category-registry-v2.tsv` (v1 сохранён без изменений). Его читают Java
 (`CatalogCategoryRegistry`) и локальный Python-аудит (`catalog_registry.py`).
-В реестре 54 кода: целевые категории, сохраняемые legacy-коды и технические категории.
+В реестре 55 кодов: целевые категории, сохраняемые legacy-коды и технические категории.
 Реестр — контракт кодов и метаданных; он сам по себе не назначает товары и не включает
-новую категорию в расчёты. Добавочная миграция `V84` создаёт 17 ранее отсутствовавших кодов; после неё
-в БД представлены все 45 согласованных `STANDARD` кодов с их денежными
+новую категорию в расчёты. Добавочная миграция `V84` создаёт 18 ранее отсутствовавших кодов; после неё
+в БД представлены все 46 согласованных `STANDARD` кодов с их денежными
 признаками, включая `GLASS_OTHER`,
-`GLASS_PHONE_UNRESOLVED`, `PROTECTIVE_FILM` и `PACKAGING`. Новые 17 кодов создаются неактивными и не принимают импортные назначения
-до проверки эффективной зарплаты и показателей. Миграция не меняет назначения
-товаров, строки продаж и возвратов. Отложенные сервисные коды не создаются.
-Для PS5 назначение `GAME_CONSOLES` требует отдельной проверки эффективной зарплатной
-категории: прежний fallback по старому коду не переносился автоматически. Денежные флаги отражают согласованную цель; действующие
+`GLASS_PHONE_UNRESOLVED`, `PROTECTIVE_FILM`, `PACKAGING` и `PHONE_OTHER`. Новые 18 кодов создаются неактивными; последующая миграция активирует их для
+датированных назначений. Ни одна из этих миграций не меняет назначения товаров,
+строки продаж или возвратов. Отложенные сервисные коды не создаются.
+`PHONE_OTHER` предназначена для самостоятельных телефонов других брендов (например, POCO),
+имеет `counts_as_phone=true`, семейство `OTHER` и базовую зарплатную роль `TECH_TIER_1`.
+В общих телефонных показателях и attach-rate это `OTHER_PHONE`, но не Samsung/iPhone;
+упоминание бренда на чехле или зарядке не делает товар телефоном. В теневом словаре
+пока распознаётся только конкретная наблюдаемая модель POCO F8 Ultra; ошибочная исходная
+группа Samsung остаётся поводом для проверки. Для телефонов Samsung источник
+`/SAMSUNG Б/У` (также под `/Основные`) подтверждает USED только после распознавания
+самого телефона; явно противоречащее имени состояние отправляется на проверку.
+Это словарное предложение, а не безусловная запись назначения в БД.
+Для PS5 в `GAME_CONSOLES` SQL fallback сохраняет `TECH_TIER_1`; другая консоль
+остаётся `TECH_TIER_2`. Ручные зарплатные назначения имеют приоритет, а изменения
+ставок и формулы этим переходом не вводятся. Денежные флаги отражают согласованную цель; действующие
 SQL-расчёты продолжают использовать свой существующий источник.
 
 Формат — UTF-8 TSV с версией, фиксированными 13 колонками и `-` вместо пустого значения
@@ -532,15 +625,16 @@ USB-хабы 6057 и 3242, дорожные/сетевые переходник�
 а также аудиопереходник Lightning–3,5 мм 44 относятся к
 `OTHER_ACCESSORY_PRODUCT`. Для них не создаются отдельная аналитическая
 категория и отдельный attach-rate. Зарядный адаптер 20W, код 4775, относится
-к `CHARGER_CABLE`. Название и код проверяются вместе; V76 исправляет карточки
-и сохранённые продажи/возвраты в обоих магазинах без изменения сумм, сотрудников
-или явных зарплатных назначений.
+к `CHARGER_CABLE`. Название и код проверяются вместе; V76 только готовит
+правила, а назначения действуют перспективно. Сохранённые продажи/возвраты
+и явные зарплатные назначения не меняются.
 
 Правило v28 распознаёт новые USB-хабы и аудиопереходники до общего правила
 зарядок. Обычные названия со словом «переходник» или «адаптер» продолжают
 получать `OTHER_ACCESSORY_PRODUCT`; зарядные признаки направляют в
 `CHARGER_CABLE`. Наличие только USB, Type-C, Lightning или HDMI больше не
-считается доказательством зарядки для attach-rate v4.
+считается доказательством зарядки для новых продаж в attach-rate v4. Для
+продаж до даты обновления прежний опубликованный числитель сохраняется.
 
 ## Подтверждённые зарядки, станция 3-в-1 и метки Taggy
 
@@ -548,8 +642,9 @@ V77 относит к `CHARGER_CABLE` коды 3480, 3481, 4013 (зарядки 
 6108 (кабель USB-C–Lightning), 4350 (беспроводная зарядка iPhone/Apple Watch)
 и 71 (подтверждённая зарядная станция 3-в-1). Коды 3390 и 3391 —
 Bluetooth-метки Keephone Taggy, они остаются в `OTHER_ACCESSORY_PRODUCT`.
-Исправление ограничено одновременно кодом, названием и подключением LiveSklad;
-оно обновляет постоянные назначения и сохранённые продажи/возвраты обоих магазинов.
+Применение ограничивается проверенными кодом, названием и подключением LiveSklad
+и требует отдельного датированного назначения; старые строки обоих магазинов
+не переписываются.
 
 Автоправило v29 после нормализации названия распознаёт сокращение
 «зар. устройство» как зарядку, а «Станция 3 в 1 (Стоячая)» — только по
@@ -983,6 +1078,9 @@ Evidence содержит ID правила, совпавшую группу и 
 При явном NEW/ASIS в такой группе возникает конфликт; автоматическое предложение категории
 пустое до проверки. Правило не назначает NEW по отсутствию «Б/У» и не распространяется
 на группу активированных iPhone, Samsung, другие подключения или произвольные вложенные группы.
+Свежая выгрузка от 1 октября добавила корневой путь `/Основные` к тем же группам.
+По явному подтверждению владельца правило допускает только этот необязательный корень,
+но не допускает другие вложения или похожие названия групп.
 
 iPad, MacBook, Samsung, часы, аксессуары и работы даже внутри ошибочной iPhone-группы не
 получают `IPHONE_USED`. Ручные локальные подтверждения по-прежнему обрабатываются отдельным слоем.

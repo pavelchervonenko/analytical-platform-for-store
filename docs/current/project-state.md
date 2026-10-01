@@ -6,7 +6,7 @@ owner: project
 audience:
   - developer
   - operator
-last_verified: 2026-09-16
+last_verified: 2026-10-01
 requirement_sources:
   - docs/maintenance/documentation-policy.md
 implementation_sources:
@@ -14,12 +14,14 @@ implementation_sources:
   - deploy/env.production.example
   - backend/src/main/resources/application.yml
 verification_sources:
+  - docs/history/audits/2026/10/catalog-migration-readonly-preflight.md
   - docs/history/releases/2026/09/v0.1.0-pilot.35-production-verification.md
   - docs/history/releases/2026/09/v0.1.0-pilot.32-production-verification.md
   - docs/history/releases/2026/09/v0.1.0-pilot.30-production-verification.md
   - docs/history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-08_MAGAZIN.md
   - docs/history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-08_MOBISFERA.md
 runtime_evidence:
+  - docs/history/audits/2026/10/catalog-migration-readonly-preflight.md
   - docs/history/releases/2026/09/v0.1.0-pilot.35-production-verification.md
   - docs/history/releases/2026/09/v0.1.0-pilot.32-production-verification.md
   - docs/history/releases/2026/09/v0.1.0-pilot.30-production-verification.md
@@ -41,8 +43,9 @@ superseded_by: null
 # Current project state
 
 This is the only repository page allowed to summarize the currently verified production release.
-It records an observation, not a live dashboard. Dynamic values below were last observed on
-**2026-09-16** and must be refreshed from sanitized read-only production evidence after every
+It records an observation, not a live dashboard. Release, image, topology and health values below were last observed on
+**2026-09-16**; the Flyway schema alone was reverified on **2026-10-01**.
+These values must be refreshed from sanitized read-only production evidence after every
 deployment, schema change, relevant flag change or topology change.
 
 ## Verified production snapshot
@@ -51,7 +54,7 @@ deployment, schema change, relevant flag change or topology change.
 |---|---|
 | Release | `v0.1.0-pilot.35` |
 | Commit | `582fd48e6dc9af72d114706852501ba3be83b09a` |
-| Flyway schema | `51` |
+| Flyway schema | `51` — read-only reverified 2026-10-01 |
 | Topology | `web`, `backend-api`, `backend-worker` |
 | Service health | all three containers healthy at verification time |
 | Backend image | `sha256:42a25ceb3d2db4b54c0930f59501dba53ae991ebda3cec420c74a7416a05db3f` |
@@ -68,6 +71,18 @@ the August LiveSklad reconciliations for
 [МАГАЗИН](../history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-08_MAGAZIN.md)
 and
 [МобиСфера](../history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-08_MOBISFERA.md).
+
+## Catalog migration preflight — 2026-10-01
+
+The owner-run read-only export confirms schema `51` at 2026-09-30 21:27:04 UTC
+(2026-10-01 00:27:04 Europe/Moscow). All 52 applied SQL history entries are successful
+and match local Flyway checksums. The source tree has 37 later migration files, including
+all 19 guarded historical catalog rewrites. Sales items and both analytical/payroll
+assignments exist, so the prospective-rollout guard must remain active.
+
+See the [sanitized observation](../history/audits/2026/10/catalog-migration-readonly-preflight.md).
+This did not reverify images, release identity, flags or container health and did not perform
+a deployment. A safe prospective upgrade and restored-copy rehearsal remain outstanding.
 
 ## Weekly review
 

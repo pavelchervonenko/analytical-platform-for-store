@@ -6,9 +6,9 @@ import re
 from types import MappingProxyType
 
 
-VERSION = 'catalog-category-registry-v1'
+VERSION = 'catalog-category-registry-v2'
 REGISTRY_PATH = (Path(__file__).resolve().parents[2]
-                 / 'backend/src/main/resources/catalog/category-registry-v1.tsv')
+                 / 'backend/src/main/resources/catalog/category-registry-v2.tsv')
 HEADER = ('code', 'name', 'category_kind', 'device_family', 'counts_as_phone',
           'counts_as_device', 'counts_as_additional_revenue', 'scope', 'device_type',
           'device_brand_match', 'proposal_keys', 'confirmed_functions', 'confirmed_conditions')
@@ -75,7 +75,7 @@ class CatalogRegistry:
             if kind not in KINDS or family not in FAMILIES or scope not in SCOPES:
                 raise ValueError('Unknown registry enum: ' + code)
             phone, device, additional = map(_flag, (phone, device, additional))
-            if (device != (kind == 'DEVICE') or (phone and (not device or family not in {'IPHONE', 'SAMSUNG'}))
+            if (device != (kind == 'DEVICE') or (phone and (not device or family not in {'IPHONE', 'SAMSUNG'} and not (code == 'PHONE_OTHER' and family == 'OTHER')))
                     or additional != (kind in {'ACCESSORY', 'SERVICE', 'WARRANTY', 'PROTECTION'})
                     or (scope == 'DEFERRED' and kind != 'SERVICE')):
                 raise ValueError('Contradictory financial flags: ' + code)

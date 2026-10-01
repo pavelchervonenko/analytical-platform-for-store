@@ -59,7 +59,7 @@ class CatalogRegistryTest(unittest.TestCase):
         categories = matrix.split('## 2.', 1)[1].split('## 3.', 1)[0]
         codes = set(re.findall(r'^\| `([A-Z_]+)` \|', categories, re.M))
         self.assertEqual(codes, set(REGISTRY.definitions))
-        self.assertEqual(len(codes), 54)
+        self.assertEqual(len(codes), 55)
         self.assertEqual(REGISTRY.require('REPAIR_SERVICE').scope, 'DEFERRED')
         self.assertEqual(REGISTRY.require('DIAGNOSTICS_SERVICE').scope, 'DEFERRED')
         self.assertEqual(REGISTRY.require('IPAD_MAC').scope, 'LEGACY')
@@ -76,6 +76,7 @@ class CatalogRegistryTest(unittest.TestCase):
         self.assertTrue(REGISTRY.require('CHARGER_CABLE').counts_as_additional_revenue)
 
     def test_shared_proposal_maps_preserve_current_shadow_rules(self):
+        self.assertEqual(REGISTRY.proposal_categories('DEVICE')['OTHER_PHONE'], 'PHONE_OTHER')
         self.assertEqual(REGISTRY.proposal_categories('DEVICE')['IPAD'], 'TABLET_APPLE')
         self.assertEqual(REGISTRY.proposal_categories('SERVICE')['CLEANING'], 'SETUP_SERVICE')
         self.assertEqual(REGISTRY.proposal_categories('ITEM')['CHARGER'], 'CHARGER_CABLE')

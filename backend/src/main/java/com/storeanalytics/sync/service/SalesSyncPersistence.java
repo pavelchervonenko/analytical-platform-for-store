@@ -287,10 +287,12 @@ public class SalesSyncPersistence {
                     productCache,
                     result
             );
+            SalesDocumentItem existing = existingItems.get(sourceItem.externalId());
             Classification classification = classify(
                     product,
                     detail.occurredAt(),
-                    unmappedCategory
+                    unmappedCategory,
+                    existing
             );
             synchronizeIssue(
                     classification.category() == unmappedCategory,
@@ -346,7 +348,6 @@ public class SalesSyncPersistence {
                     classification.version(),
                     classification.conditionType()
             );
-            SalesDocumentItem existing = existingItems.get(sourceItem.externalId());
             if (existing == null) {
                 var createdItem = factRepositories.items().save(new SalesDocumentItem(
                         new SalesItemIdentity(
@@ -433,10 +434,11 @@ public class SalesSyncPersistence {
     private Classification classify(
             Product product,
             Instant occurredAt,
-            AnalyticsCategory unmappedCategory
+            AnalyticsCategory unmappedCategory,
+            SalesDocumentItem existing
     ) {
         var resolved = referenceRepositories.classificationResolver()
-                .resolve(product, occurredAt);
+                .resolveSaleForSync(product, occurredAt, existing);
         if (resolved.isEmpty()) {
             return new Classification(
                     unmappedCategory,

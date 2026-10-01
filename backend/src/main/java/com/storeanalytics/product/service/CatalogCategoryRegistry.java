@@ -26,8 +26,8 @@ import java.util.Set;
  */
 public final class CatalogCategoryRegistry {
 
-    public static final String VERSION = "catalog-category-registry-v1";
-    public static final String RESOURCE = "/catalog/category-registry-v1.tsv";
+    public static final String VERSION = "catalog-category-registry-v2";
+    public static final String RESOURCE = "/catalog/category-registry-v2.tsv";
     private static final String HEADER = "code\tname\tcategory_kind\tdevice_family"
             + "\tcounts_as_phone\tcounts_as_device\tcounts_as_additional_revenue"
             + "\tscope\tdevice_type\tdevice_brand_match\tproposal_keys"
@@ -190,7 +190,8 @@ public final class CatalogCategoryRegistry {
                 AnalyticsCategoryKind.SERVICE, AnalyticsCategoryKind.WARRANTY,
                 AnalyticsCategoryKind.PROTECTION).contains(kind);
         if (device != (kind == AnalyticsCategoryKind.DEVICE) || (phone && (!device
-                || !Set.of(DeviceFamily.IPHONE, DeviceFamily.SAMSUNG).contains(family)))
+                || !Set.of(DeviceFamily.IPHONE, DeviceFamily.SAMSUNG).contains(family)
+                && !(cells[0].equals("PHONE_OTHER") && family == DeviceFamily.OTHER)))
                 || additional != expectedAdditional
                 || (scope == Scope.DEFERRED && kind != AnalyticsCategoryKind.SERVICE)) {
             throw new IllegalArgumentException("Contradictory financial flags: " + cells[0]);

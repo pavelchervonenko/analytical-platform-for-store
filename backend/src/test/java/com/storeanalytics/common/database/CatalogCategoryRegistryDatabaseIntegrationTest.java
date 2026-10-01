@@ -17,7 +17,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 class CatalogCategoryRegistryDatabaseIntegrationTest {
 
     private static final Set<String> NEW_LEAVES = Set.of(
-            "TABLET_APPLE", "TABLET_OTHER", "LAPTOP_APPLE", "LAPTOP_OTHER",
+            "PHONE_OTHER", "TABLET_APPLE", "TABLET_OTHER", "LAPTOP_APPLE", "LAPTOP_OTHER",
             "WATCH_APPLE", "WATCH_SAMSUNG", "WATCH_OTHER", "GAME_CONSOLES",
             "MICROPHONES", "GAMING_ACCESSORIES", "ACCESSORY_AIRPODS",
             "ACCESSORY_APPLE_WATCH", "CASE_UNIVERSAL", "GLASS_OTHER",
@@ -35,25 +35,42 @@ class CatalogCategoryRegistryDatabaseIntegrationTest {
                 .locations("classpath:db/migration")
                 .load().migrate();
 
-        // Read-only diagnostic: no salary formula or category activation is changed here.
+        // Read-only diagnostic: catalog leaves are active and PS5 keeps its approved salary tier.
         try (var connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
              var statement = connection.createStatement();
              var risk = statement.executeQuery("""
                      SELECT code, is_active,
                          resolve_default_payroll_category(code, 'Sony PlayStation 5',
-                             payroll_category_code) AS effective_payroll
+                             payroll_category_code) AS effective_payroll,
+                         resolve_default_payroll_category(code, 'Sony PlayStation 4',
+                             payroll_category_code) AS other_payroll
                      FROM analytics_categories
                      WHERE code IN ('PODS_WATCH_OTHER_DEVICE', 'GAME_CONSOLES')
                      ORDER BY code
                      """)) {
             assertThat(risk.next()).isTrue();
             assertThat(risk.getString("code")).isEqualTo("GAME_CONSOLES");
-            assertThat(risk.getBoolean("is_active")).as("P0 blocks activation").isFalse();
-            assertThat(risk.getString("effective_payroll")).isEqualTo("TECH_TIER_2");
+            assertThat(risk.getBoolean("is_active")).as("approved prospective category is active").isTrue();
+            assertThat(risk.getString("effective_payroll")).isEqualTo("TECH_TIER_1");
+            assertThat(risk.getString("other_payroll")).isEqualTo("TECH_TIER_2");
             assertThat(risk.next()).isTrue();
             assertThat(risk.getString("code")).isEqualTo("PODS_WATCH_OTHER_DEVICE");
             assertThat(risk.getString("effective_payroll")).isEqualTo("TECH_TIER_1");
+        }
+
+        try (var connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+             var statement = connection.createStatement();
+             var phone = statement.executeQuery("""
+                     SELECT payroll_category_code, counts_as_phone, is_active
+                     FROM analytics_categories WHERE code = 'PHONE_OTHER'
+                     """)) {
+            assertThat(phone.next()).isTrue();
+            assertThat(phone.getString("payroll_category_code")).isEqualTo("TECH_TIER_1");
+            assertThat(phone.getBoolean("counts_as_phone")).isTrue();
+            assertThat(phone.getBoolean("is_active")).isTrue();
+            assertThat(phone.next()).isFalse();
         }
 
         var registry = CatalogCategoryRegistry.standard();
@@ -84,8 +101,8 @@ class CatalogCategoryRegistryDatabaseIntegrationTest {
                             .isEqualTo(definition.countsAsAdditionalRevenue());
                     if (NEW_LEAVES.contains(definition.code())) {
                         assertThat(actual.getBoolean("is_active"))
-                                .as("activation requires payroll/metric preflight: %s", definition.code())
-                                .isFalse();
+                                .as("approved catalog leaf is active: %s", definition.code())
+                                .isTrue();
                     }
                     assertThat(actual.next()).as("duplicate %s", definition.code()).isFalse();
                 }

@@ -21,38 +21,17 @@ class HeadphoneCategoryMigrationIntegrationTest {
             new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
-    void splitsApprovedHeadphonesWithoutChangingPayrollOrAttachRoles()
-            throws SQLException {
+    void preservesHistoricalRowsDuringProspectiveSchemaPreparation() throws SQLException {
         flyway("61").migrate();
         addFixtures();
-        String v3Before = roles("attach_rate_item_facts_v3");
-        String v4Before = roles("attach_rate_ordinary_item_facts_v4");
-
-        flyway("62").migrate();
-
-        assertThat(query("""
-                SELECT version FROM flyway_schema_history
-                WHERE success ORDER BY installed_rank DESC LIMIT 1
-                """)).isEqualTo("62");
-        assertCategory("1788", "HEADPHONES_APPLE");
-        assertCategory("5537", "HEADPHONES_APPLE");
-        assertCategory("3571", "HEADPHONES_SAMSUNG");
-        assertCategory("3636", "HEADPHONES_OTHER");
-        assertCategory("4256", "HEADPHONES_OTHER");
-        assertCategory("9988", "PODS_WATCH_OTHER_DEVICE");
-        assertCategory("9989", "ACCESSORY_PODS_WATCH");
-        assertThat(roles("attach_rate_item_facts_v3")).isEqualTo(v3Before);
-        assertThat(roles("attach_rate_ordinary_item_facts_v4")).isEqualTo(v4Before);
-        assertThat(query("""
-                SELECT string_agg(code || ':' || payroll_category_code, ',' ORDER BY code)
-                FROM analytics_categories WHERE code LIKE 'HEADPHONES_%'
-                """)).isEqualTo("HEADPHONES_APPLE:TECH_TIER_2,"
-                + "HEADPHONES_OTHER:TECH_TIER_2,"
-                + "HEADPHONES_SAMSUNG:TECH_TIER_2");
-        assertThat(query("""
-                SELECT sum(net_amount)::text || '|' || sum(cost_amount)::text
-                FROM sales_document_items
-                """)).isEqualTo("700.00|350.00");
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            var before = HistoricalCatalogRows.snapshot(connection);
+            flyway("62").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+            flyway("90").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+        }
     }
 
     private void assertCategory(String code, String expected) throws SQLException {

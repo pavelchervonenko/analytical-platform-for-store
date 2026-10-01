@@ -1,4 +1,4 @@
-import { BarChart3, CalendarDays, ChevronDown, CircleDollarSign, DatabaseZap, FileArchive, LogOut, Menu, Settings, Sparkles, Target, Users, X } from "lucide-react";
+import { BarChart3, CalendarDays, ChevronDown, CircleDollarSign, DatabaseZap, FileArchive, LogOut, Menu, PackageSearch, Settings, Sparkles, Target, Users, X } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { InitialStoreSetup } from "../admin/InitialStoreSetup";
@@ -22,7 +22,8 @@ const navigationGroups = [
       { to: "/plan", label: "План", icon: Target, visibility: "all", feature: "PLAN" },
       { to: "/shifts", label: "Смены", icon: CalendarDays, visibility: "all", feature: "SHIFTS" },
       { to: "/payroll", label: "Зарплата", icon: CircleDollarSign, visibility: "all", feature: "PAYROLL" },
-      { to: "/reports", label: "Отчеты", icon: FileArchive, visibility: "all" }
+      { to: "/reports", label: "Отчеты", icon: FileArchive, visibility: "all" },
+      { to: "/catalog-reviews", label: "Новые товары", icon: PackageSearch, visibility: "manager" }
     ]
   },
   {
@@ -45,6 +46,7 @@ export function navigationGroupsFor(
       ...group,
       items: group.items.filter((item) => {
         if (item.visibility === "admin") return role === "ADMIN";
+        if (item.visibility === "manager") return role === "MANAGER";
         if (!("feature" in item)) return true;
         return hasUserFeature({ role, features }, item.feature);
       })

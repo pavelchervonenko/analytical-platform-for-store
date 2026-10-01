@@ -43,7 +43,8 @@ public class SyncJobExecutionService {
         SyncExecutionContext context = new SyncExecutionContext(
                 trigger,
                 claim.jobId(),
-                requestedBy
+                requestedBy,
+                claim.attemptCount()
         );
         return switch (claim.phase()) {
             case STORES -> storeSyncService.synchronize(context).syncRunId();

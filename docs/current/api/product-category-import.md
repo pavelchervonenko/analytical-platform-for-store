@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - operator
-last_verified: 2026-09-10
+last_verified: 2026-10-01
 requirement_sources:
   - docs/archive/legacy-contracts/product-category-import-api.md
 implementation_sources:
@@ -16,6 +16,7 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/product/web/ProductCategoryImportController.java
   - contracts/openapi/current.json
 verification_sources:
+  - backend/src/test/java/com/storeanalytics/product/service/ProspectiveProductCategoryImportIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/product/service/ProductCategoryImportIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/product/service/ProductClassificationReconciliationServiceTest.java
   - backend/src/test/java/com/storeanalytics/product/web/ProductCategoryImportControllerTest.java
@@ -42,6 +43,17 @@ security configuration, хотя controller не содержит method-level `
 identity, name, category и condition. Backend валидирует connection ownership, category values,
 duplicates и effective-date invariants до атомарной записи. Ошибка одного элемента откатывает весь
 batch; partial import не является успешным результатом.
+
+После фиксации перспективной даты каталога API отклоняет `validFrom` раньше этой даты
+до чтения или создания товаров. Равная дата допустима. Исторические исправления
+оформляются отдельной контролируемой процедурой, а не через этот import endpoint.
+При существующей категории endpoint допускает датированную замену только с будущего
+`validFrom` после зафиксированной границы: прежний интервал закрывается ровно в этой
+точке, новый открывается, перекрытия и запланированная будущая история отклоняются.
+Повтор той же команды идемпотентен. Замена с уже наступившей датой отклоняется:
+этот импорт сверяет только `UNMAPPED`-строки и не умеет пересчитать уже
+классифицированные продажи. Для ручной коррекции после продажи нужен отдельный
+проверяемый процесс; наличие нового назначения само по себе не исправило бы KPI.
 
 В той же транзакции import повторно классифицирует активные sale items, которые всё ещё имеют
 analytics category `UNMAPPED`. Scope ограничен текущим integration connection и каноническими

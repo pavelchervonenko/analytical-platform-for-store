@@ -1,111 +1,7 @@
--- Customer-confirmed generic hubs and non-charging adapters stay in OTHER_ACCESSORY_PRODUCT.
--- The 20W power adapter (4775) is a charger. Exact codes and name guards bound
--- historical product and sale/return corrections to the approved LiveSklad export.
--- Amounts, employees, source kinds and explicit payroll assignments are untouched.
+-- Unpublished draft revised after owner confirmation on 2026-10-01.
+-- Schema/taxonomy only: no historical sale, analytical assignment or payroll assignment rewrite.
+-- Approved product decisions are applied separately with an explicit prospective boundary.
 
-WITH approved_products AS (
-    SELECT product.id, approved.target_code
-    FROM products product
-    JOIN integration_connections connection ON connection.id = product.connection_id
-    JOIN (VALUES
-        ('6057', '^адаптер[[:space:]]+vlp.*usb-c[[:space:]]+hub', 'OTHER_ACCESSORY_PRODUCT'),
-        ('3242', '^переходник[[:space:]]+baseus.*7-port[[:space:]]+hub', 'OTHER_ACCESSORY_PRODUCT'),
-        ('3301', '^евро-переходник$', 'OTHER_ACCESSORY_PRODUCT'),
-        ('4973', '^переходник[[:space:]]+keephone[[:space:]]+universal[[:space:]]+travel$', 'OTHER_ACCESSORY_PRODUCT'),
-        ('4779', '^сетевой[[:space:]]+переходник[[:space:]]+merkan$', 'OTHER_ACCESSORY_PRODUCT'),
-        ('44', '^lightning[[:space:]]+3.5[[:space:]]+aux[[:space:]]+audio$', 'OTHER_ACCESSORY_PRODUCT'),
-        ('4775', '^переходник[[:space:]]+сзу.*20w.*power[[:space:]]+adapter', 'CHARGER_CABLE')
-    ) approved(code, name_pattern, target_code)
-      ON approved.code = product.code
-     AND product.name ~* approved.name_pattern
-    WHERE connection.connection_key = 'livesklad-default'
-      AND product.source_kind IN ('PRODUCT', 'UNKNOWN')
-)
-UPDATE product_category_assignments assignment
-SET analytics_category_id = target_category.id,
-    condition_type = 'NOT_APPLICABLE',
-    rule_version = 'customer-approved-2026-09-27-adapters-v1',
-    change_reason = 'Customer-confirmed generic adapter or charging adapter'
-FROM approved_products approved,
-     analytics_categories target_category
-WHERE assignment.product_id = approved.id
-  AND target_category.code = approved.target_code
-  AND (assignment.analytics_category_id <> target_category.id
-       OR assignment.condition_type <> 'NOT_APPLICABLE');
-
-WITH approved_products AS (
-    SELECT product.id, approved.target_code
-    FROM products product
-    JOIN integration_connections connection ON connection.id = product.connection_id
-    JOIN (VALUES
-        ('6057', '^адаптер[[:space:]]+vlp.*usb-c[[:space:]]+hub', 'OTHER_ACCESSORY_PRODUCT'),
-        ('3242', '^переходник[[:space:]]+baseus.*7-port[[:space:]]+hub', 'OTHER_ACCESSORY_PRODUCT'),
-        ('3301', '^евро-переходник$', 'OTHER_ACCESSORY_PRODUCT'),
-        ('4973', '^переходник[[:space:]]+keephone[[:space:]]+universal[[:space:]]+travel$', 'OTHER_ACCESSORY_PRODUCT'),
-        ('4779', '^сетевой[[:space:]]+переходник[[:space:]]+merkan$', 'OTHER_ACCESSORY_PRODUCT'),
-        ('44', '^lightning[[:space:]]+3.5[[:space:]]+aux[[:space:]]+audio$', 'OTHER_ACCESSORY_PRODUCT'),
-        ('4775', '^переходник[[:space:]]+сзу.*20w.*power[[:space:]]+adapter', 'CHARGER_CABLE')
-    ) approved(code, name_pattern, target_code)
-      ON approved.code = product.code
-     AND product.name ~* approved.name_pattern
-    WHERE connection.connection_key = 'livesklad-default'
-      AND product.source_kind IN ('PRODUCT', 'UNKNOWN')
-)
-INSERT INTO product_category_assignments (
-    product_id, analytics_category_id, condition_type, assignment_source,
-    rule_version, valid_from, change_reason
-)
-SELECT product.id, target_category.id, 'NOT_APPLICABLE', 'MANUAL',
-       'customer-approved-2026-09-27-adapters-v1',
-       LEAST(product.created_at, COALESCE((
-           SELECT MIN(document.occurred_at)
-           FROM sales_document_items item
-           JOIN sales_documents document ON document.id = item.sales_document_id
-           WHERE item.product_id = product.id
-       ), product.created_at)),
-       'Customer-confirmed generic adapter or charging adapter'
-FROM approved_products approved
-JOIN products product ON product.id = approved.id
-JOIN analytics_categories target_category ON target_category.code = approved.target_code
-WHERE NOT EXISTS (
-    SELECT 1 FROM product_category_assignments assignment
-    WHERE assignment.product_id = product.id
-);
-
-WITH approved_products AS (
-    SELECT product.id, approved.target_code
-    FROM products product
-    JOIN integration_connections connection ON connection.id = product.connection_id
-    JOIN (VALUES
-        ('6057', '^адаптер[[:space:]]+vlp.*usb-c[[:space:]]+hub', 'OTHER_ACCESSORY_PRODUCT'),
-        ('3242', '^переходник[[:space:]]+baseus.*7-port[[:space:]]+hub', 'OTHER_ACCESSORY_PRODUCT'),
-        ('3301', '^евро-переходник$', 'OTHER_ACCESSORY_PRODUCT'),
-        ('4973', '^переходник[[:space:]]+keephone[[:space:]]+universal[[:space:]]+travel$', 'OTHER_ACCESSORY_PRODUCT'),
-        ('4779', '^сетевой[[:space:]]+переходник[[:space:]]+merkan$', 'OTHER_ACCESSORY_PRODUCT'),
-        ('44', '^lightning[[:space:]]+3.5[[:space:]]+aux[[:space:]]+audio$', 'OTHER_ACCESSORY_PRODUCT'),
-        ('4775', '^переходник[[:space:]]+сзу.*20w.*power[[:space:]]+adapter', 'CHARGER_CABLE')
-    ) approved(code, name_pattern, target_code)
-      ON approved.code = product.code
-     AND product.name ~* approved.name_pattern
-    WHERE connection.connection_key = 'livesklad-default'
-      AND product.source_kind IN ('PRODUCT', 'UNKNOWN')
-)
-UPDATE sales_document_items item
-SET analytics_category_id = target_category.id,
-    condition_type_snapshot = 'NOT_APPLICABLE',
-    classification_version = 'customer-approved-2026-09-27-adapters-v1',
-    version = item.version + 1,
-    updated_at = clock_timestamp()
-FROM approved_products approved,
-     analytics_categories target_category
-WHERE item.product_id = approved.id
-  AND target_category.code = approved.target_code
-  AND (item.analytics_category_id <> target_category.id
-       OR item.condition_type_snapshot <> 'NOT_APPLICABLE');
-
--- v4 previously counted any OTHER_ACCESSORY_PRODUCT adapter mentioning USB,
--- Type-C, Lightning or HDMI as a charger. Those are connectivity signals, not
--- charging evidence. Keep the fallback only for explicit charging language.
 CREATE OR REPLACE VIEW attach_rate_ordinary_item_facts_v4 AS
 WITH source_items AS (
     SELECT
@@ -187,7 +83,7 @@ WITH source_items AS (
                 THEN 'PREMIUM_PROTECTION'
             WHEN source.category_code = 'OTHER_ACCESSORY_PRODUCT'
                  AND source.normalized_product_name ~ '(переходник|адаптер)'
-                 AND source.normalized_product_name ~ '(заряд|питан|power[[:space:]]+adapter|wall[[:space:]]+charger|сзу|азу|бзу)'
+                 AND source.normalized_product_name ~ '(usb|type.?c|lightning|заряд|питан|hdmi)'
                 THEN 'CHARGER_CABLE'
             WHEN source.category_code = 'SETUP_SERVICE'
                  AND source.normalized_product_name !~ '(ремонт|repair|замена|заменить)'

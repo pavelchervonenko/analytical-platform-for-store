@@ -21,55 +21,17 @@ class SetupProductsMigrationIntegrationTest {
             new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
-    void correctsApprovedProductBackedServicesWithoutChangingWorkFlag()
-            throws SQLException {
+    void preservesHistoricalRowsDuringProspectiveSchemaPreparation() throws SQLException {
         flyway("59").migrate();
         addFixtures();
-
-        flyway("60").migrate();
-
-        assertThat(query("""
-                SELECT version FROM flyway_schema_history
-                WHERE success ORDER BY installed_rank DESC LIMIT 1
-                """)).isEqualTo("60");
-        for (String code : new String[]{"6278", "6151", "5348"}) {
-            assertThat(assignmentCategory(code)).isEqualTo("SETUP_SERVICE");
-            assertThat(itemCategory(code)).isEqualTo("SETUP_SERVICE");
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            var before = HistoricalCatalogRows.snapshot(connection);
+            flyway("60").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+            flyway("90").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
         }
-        assertThat(query("""
-                SELECT assignment.condition_type
-                FROM product_category_assignments assignment
-                JOIN products product ON product.id = assignment.product_id
-                WHERE product.code = '6278'
-                """)).isEqualTo("NOT_APPLICABLE");
-        assertThat(query("""
-                SELECT item.condition_type_snapshot || '|' || item.is_work || '|' ||
-                       product.source_kind
-                FROM sales_document_items item
-                JOIN products product ON product.id = item.product_id
-                WHERE product.code = '6278'
-                """)).isEqualTo("NOT_APPLICABLE|false|PRODUCT");
-        assertThat(itemCategory("7777")).isEqualTo("UNMAPPED");
-        assertThat(query("""
-                SELECT count(*)::text
-                FROM product_category_assignments assignment
-                JOIN products product ON product.id = assignment.product_id
-                WHERE product.code = '7777'
-                """)).isEqualTo("0");
-        assertThat(query("""
-                SELECT item.classification_version
-                FROM sales_document_items item
-                JOIN products product ON product.id = item.product_id
-                WHERE product.code = '6151'
-                """)).isEqualTo("setup-fixture-v1");
-        assertThat(query("""
-                SELECT sum(net_amount)::text || '|' || sum(cost_amount)::text
-                FROM sales_document_items
-                """)).isEqualTo("400.00|200.00");
-        assertThat(query("""
-                SELECT payroll_category_code
-                FROM analytics_categories WHERE code = 'SETUP_SERVICE'
-                """)).isEqualTo("SERVICE");
     }
 
     private void addFixtures() throws SQLException {

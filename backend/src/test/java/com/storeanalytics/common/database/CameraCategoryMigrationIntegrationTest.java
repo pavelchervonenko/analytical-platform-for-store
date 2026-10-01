@@ -2,7 +2,6 @@ package com.storeanalytics.common.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -22,46 +21,17 @@ class CameraCategoryMigrationIntegrationTest {
             new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
-    void correctsApprovedInstaxSaleAndReturnWithoutInventingMissingCard()
-            throws SQLException {
+    void preservesHistoricalRowsDuringProspectiveSchemaPreparation() throws SQLException {
         flyway("58").migrate();
         addFixtures();
-        String attachV3Before = attachOtherDeviceUnits("attach_rate_item_facts_v3");
-        String attachV4Before = attachOtherDeviceUnits("attach_rate_item_facts_v4");
-
-        flyway("59").migrate();
-
-        assertThat(query("""
-                SELECT version FROM flyway_schema_history
-                WHERE success ORDER BY installed_rank DESC LIMIT 1
-                """)).isEqualTo("59");
-        assertThat(query("""
-                SELECT category_kind || '|' || device_family || '|' ||
-                       counts_as_phone || '|' || counts_as_device || '|' ||
-                       counts_as_additional_revenue || '|' || payroll_category_code
-                FROM analytics_categories WHERE code = 'CAMERAS'
-                """)).isEqualTo("DEVICE|OTHER|false|true|false|UNMAPPED");
-        assertThat(assignmentCategory("6031")).isEqualTo("CAMERAS");
-        assertThat(itemCategory("6031", "SALE")).isEqualTo("CAMERAS");
-        assertThat(itemCategory("6031", "RETURN")).isEqualTo("CAMERAS");
-        assertThat(itemCategory("9999", "SALE")).isEqualTo("UNMAPPED");
-        assertThat(query("SELECT count(*)::text FROM products WHERE code = '6032'"))
-                .isEqualTo("0");
-        assertThat(query("""
-                SELECT sum(net_amount)::text || '|' || sum(cost_amount)::text
-                FROM sales_document_items
-                """)).isEqualTo("250.00|125.00");
-        assertThat(new BigDecimal(attachOtherDeviceUnits("attach_rate_item_facts_v3"))
-                .subtract(new BigDecimal(attachV3Before)))
-                .isEqualByComparingTo("0.5");
-        assertThat(new BigDecimal(attachOtherDeviceUnits("attach_rate_item_facts_v4"))
-                .subtract(new BigDecimal(attachV4Before)))
-                .isEqualByComparingTo("0.5");
-        assertThat(query("""
-                SELECT resolve_default_payroll_category(
-                    'CAMERAS', 'Instax Mini 13 Pink', 'UNMAPPED'
-                )
-                """)).isEqualTo("UNMAPPED");
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            var before = HistoricalCatalogRows.snapshot(connection);
+            flyway("59").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+            flyway("90").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+        }
     }
 
     private void addFixtures() throws SQLException {

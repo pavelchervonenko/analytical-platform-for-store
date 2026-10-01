@@ -5,6 +5,9 @@ import com.storeanalytics.common.config.ApplicationRoleResolver;
 import com.storeanalytics.common.config.ConditionalOnApplicationRole;
 import com.storeanalytics.common.config.MigrationSafetyProperties;
 import com.storeanalytics.common.database.ExpectedSchemaVersion;
+import com.storeanalytics.common.database.CatalogActivationState;
+import org.springframework.beans.factory.annotation.Value;
+import com.storeanalytics.common.database.CatalogMigrationPreflight;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.slf4j.Logger;
@@ -16,6 +19,7 @@ import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration;
 import org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration;
 import org.springframework.boot.flyway.autoconfigure.FlywayConfigurationCustomizer;
+import org.springframework.boot.flyway.autoconfigure.FlywayMigrationStrategy;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -60,6 +64,19 @@ final class MigrationApplication {
             return configuration -> configuration
                     .initSql(properties.connectionInitSql())
                     .lockRetryCount(properties.lockRetryCount());
+        }
+
+        @Bean
+        FlywayMigrationStrategy catalogSafeMigrationStrategy(
+                @Value("${app.catalog-classification.activate-from:}") String activateFrom
+        ) {
+            var boundary = CatalogActivationState.requireBusinessDayBoundary(
+                    CatalogActivationState.parse(activateFrom));
+            return flyway -> {
+                CatalogMigrationPreflight.verify(flyway);
+                flyway.migrate();
+                CatalogActivationState.register(flyway, boundary);
+            };
         }
 
         @Bean

@@ -21,67 +21,17 @@ class DeviceAccessorySplitMigrationIntegrationTest {
             new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
-    void splitsExplicitTargetsWithoutChangingAmountsOrPhoneCaseMetric()
-            throws SQLException {
+    void preservesHistoricalRowsDuringProspectiveSchemaPreparation() throws SQLException {
         flyway("64").migrate();
         addFixtures();
-        assertThat(units("attach_rate_item_facts_v3", "ACCESSORY_IPAD"))
-                .isEqualTo("3");
-
-        flyway("65").migrate();
-
-        assertCategory("2470", "ACCESSORY_IPAD");
-        assertCategory("5844", "ACCESSORY_IPAD");
-        assertCategory("6175", "ACCESSORY_IPAD");
-        assertCategory("2579", "ACCESSORY_IPAD");
-        assertCategory("3325", "ACCESSORY_IPAD");
-        assertCategory("3901", "ACCESSORY_IPAD");
-        assertCategory("3784", "ACCESSORY_IPAD");
-        assertCategory("2591", "ACCESSORY_MAC");
-        assertCategory("2972", "ACCESSORY_MAC");
-        assertCategory("2973", "ACCESSORY_MAC");
-        assertCategory("4972", "ACCESSORY_MAC");
-        assertCategory("5051", "CASE_OTHER_DEVICE");
-        assertCategory("3628", "OTHER_ACCESSORY_PRODUCT");
-        assertCategory("39", "OTHER_ACCESSORY_PRODUCT");
-        for (String view : new String[]{
-                "attach_rate_item_facts_v3", "attach_rate_ordinary_item_facts_v4"
-        }) {
-            assertThat(units(view, "ACCESSORY_IPAD")).isEqualTo("7");
-            assertThat(query("SELECT count(*)::text FROM " + view
-                    + " WHERE classification_issue_code = "
-                    + "'IPAD_ACCESSORY_TARGET_UNRESOLVED'"))
-                    .isEqualTo("0");
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            var before = HistoricalCatalogRows.snapshot(connection);
+            flyway("65").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+            flyway("90").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
         }
-        assertThat(query("SELECT count(*)::text FROM product_category_assignments "
-                + "WHERE rule_version = 'customer-approved-2026-09-26-ipad-mac-cases-v1'"))
-                .isEqualTo("13");
-        assertThat(query("SELECT payroll.payroll_category_code "
-                + "FROM product_payroll_category_assignments payroll "
-                + "JOIN products product ON product.id = payroll.product_id "
-                + "WHERE product.code = '6175'"))
-                .isEqualTo("TECH_TIER_2");
-        assertThat(query("SELECT count(*)::text "
-                + "FROM product_payroll_category_assignments payroll "
-                + "JOIN products product ON product.id = payroll.product_id "
-                + "WHERE product.code IN ('6175', '2579', '3325', '3901', "
-                + "'3784', '2591', '2972', '2973') "
-                + "AND payroll.payroll_category_code = 'TECH_TIER_2'"))
-                .isEqualTo("8");
-        assertThat(query("SELECT count(*)::text FROM sales_document_items item "
-                + "JOIN products product ON product.id = item.product_id "
-                + "WHERE product.code IN ('6175', '2579', '3325', '3901', "
-                + "'3784', '2591', '2972', '2973') "
-                + "AND item.condition_type_snapshot = 'NOT_APPLICABLE'"))
-                .isEqualTo("8");
-        assertThat(query("SELECT sum(net_amount)::text || '|' || "
-                + "sum(cost_amount)::text FROM sales_document_items"))
-                .isEqualTo("1400.00|700.00");
-        assertThat(query("SELECT string_agg(code || ':' || payroll_category_code, "
-                + "',' ORDER BY code) FROM analytics_categories WHERE code IN "
-                + "('ACCESSORY_IPAD', 'ACCESSORY_MAC', 'CASE_OTHER_DEVICE')"))
-                .isEqualTo("ACCESSORY_IPAD:ACCESSORY,ACCESSORY_MAC:ACCESSORY,"
-                        + "CASE_OTHER_DEVICE:ACCESSORY");
     }
 
     private void addFixtures() throws SQLException {

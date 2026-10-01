@@ -21,65 +21,17 @@ class ChargingProductsMigrationIntegrationTest {
             new PostgreSQLContainer("postgres:16-alpine");
 
     @Test
-    void correctsOnlyFifteenApprovedCodesAcrossSalesAndReturns() throws SQLException {
+    void preservesHistoricalRowsDuringProspectiveSchemaPreparation() throws SQLException {
         flyway("73").migrate();
         addFixtures();
-
-        flyway("75").migrate();
-
-        for (String code : new String[]{
-                "4767", "4768", "4769", "324", "1941",
-                "3241", "3494", "3493", "47", "48",
-                "64", "65", "66", "67", "690"
-        }) {
-            assertThat(category("product_category_assignments", code))
-                    .as("assignment for " + code).isEqualTo("CHARGER_CABLE");
-            assertThat(category("sales_document_items", code))
-                    .as("sale for " + code).isEqualTo("CHARGER_CABLE");
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            var before = HistoricalCatalogRows.snapshot(connection);
+            flyway("75").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
+            flyway("90").migrate();
+            assertThat(HistoricalCatalogRows.snapshot(connection)).isEqualTo(before);
         }
-        assertThat(category("product_category_assignments", "9000"))
-                .isEqualTo("SAMSUNG_NEW");
-        assertThat(category("sales_document_items", "9000"))
-                .isEqualTo("SAMSUNG_NEW");
-        assertThat(query("""
-                SELECT assignment.assignment_source || '|' || assignment.condition_type
-                FROM product_category_assignments assignment
-                JOIN products product ON product.id = assignment.product_id
-                WHERE product.code = '4769'
-                """)).isEqualTo("MANUAL|NOT_APPLICABLE");
-        assertThat(query("""
-                SELECT assignment.assignment_source || '|' || assignment.condition_type
-                FROM product_category_assignments assignment
-                JOIN products product ON product.id = assignment.product_id
-                WHERE product.code = '47'
-                """)).isEqualTo("MANUAL|NOT_APPLICABLE");
-        assertThat(query("""
-                SELECT count(*)::text
-                FROM sales_document_items item
-                WHERE item.classification_version =
-                      'customer-approved-2026-09-27-charger-cable-v1'
-                """)).isEqualTo("16");
-        assertThat(query("""
-                SELECT category.code || '|' || item.condition_type_snapshot
-                FROM sales_document_items item
-                JOIN products product ON product.id = item.product_id
-                JOIN sales_documents document ON document.id = item.sales_document_id
-                JOIN analytics_categories category ON category.id = item.analytics_category_id
-                WHERE product.code = '4769' AND document.document_kind = 'RETURN'
-                """)).isEqualTo("CHARGER_CABLE|NOT_APPLICABLE");
-        assertThat(query("""
-                SELECT count(DISTINCT document.store_id)::text
-                FROM sales_document_items item
-                JOIN sales_documents document ON document.id = item.sales_document_id
-                JOIN analytics_categories category ON category.id = item.analytics_category_id
-                WHERE category.code = 'CHARGER_CABLE'
-                """)).isEqualTo("2");
-        assertThat(query("""
-                SELECT sum(net_amount)::text || '|' || sum(cost_amount)::text
-                FROM sales_document_items
-                """)).isEqualTo("1700.00|850.00");
-        assertThat(query("SELECT count(*)::text FROM product_payroll_category_assignments"))
-                .isEqualTo("0");
     }
 
     private void addFixtures() throws SQLException {

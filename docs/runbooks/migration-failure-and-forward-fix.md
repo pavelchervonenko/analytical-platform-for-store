@@ -76,6 +76,23 @@ success и checksum. Проверить состояние API/worker и отк�
 5. Только после review выполнить `forward-fix.sh <exact-forward-fix-env>`.
 6. Подтвердить Flyway version, schema invariants, ACL, API/worker readiness и business reconciliation.
 
+## Отказ каталожного preflight
+
+`CATALOG_PROSPECTIVE_ROLLOUT_REQUIRED` означает, что известные pending-миграции могут
+переклассифицировать существующую историю вопреки выбору «с даты обновления».
+Migration entrypoint отказал до вызова Flyway migrate. Не удалять защиту, не применять
+исторические SQL вручную, не использовать repair/изменение checksum для обхода.
+
+Отказ не доказывает неизменность базы другим процессом. Проверить live Flyway history
+и сравнить с исходным checkpoint. Если запуск был через `deploy.sh`, writers уже остановлены,
+а marker уже равен `MIGRATION_IN_PROGRESS`: автоматическое восстановление marker или запуск
+старого runtime не разрешаются. Сохраняется описанный ниже пробел recovery.
+
+Следующий шаг — reviewed перспективный путь и репетиция на копии, не blind retry.
+Для предварительного анализа использовать read-only сведения о pending-цепочке и наличии
+данных; не запускать production deploy только ради получения этого отказа.
+Локальные тесты preflight не являются staging/production rehearsal этой recovery-процедуры.
+
 ## Повторный запуск и конкурентность
 
 Параллельные deploy/migration/recovery запрещены. После неизвестного обрыва новый запуск допускается

@@ -98,21 +98,9 @@ class AttachRateIntegrationTest {
         );
 
         UUID pods = addSale(graph, "pods", PERIOD_START.plusDays(4));
-        jdbcTemplate.update(
-                """
-                INSERT INTO analytics_categories (
-                    code, name, category_kind, device_family,
-                    counts_as_phone, counts_as_device
-                ) VALUES (
-                    'OTHER_PHONE_TEST', 'Other phone fixture', 'DEVICE', 'OTHER',
-                    true, true
-                )
-                ON CONFLICT (code) DO NOTHING
-                """
-        );
         UUID otherPhone = addSale(graph, "other-phone", PERIOD_START.plusDays(4));
         addItem(
-                graph, otherPhone, "Google Pixel 9", "OTHER_PHONE_TEST",
+                graph, otherPhone, "Google Pixel 9", "PHONE_OTHER",
                 "1.000", "NEW"
         );
         addItem(graph, pods, "AirPods Pro", "PODS_WATCH_OTHER_DEVICE", "2.000", "NEW");
