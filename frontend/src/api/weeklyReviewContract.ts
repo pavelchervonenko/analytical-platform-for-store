@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { SellerWeeklyReview, SellerWeeklyReviewView } from "./sellerWeeklyReviewContract";
 
 const effectSchema = z.enum(["POSITIVE", "NEGATIVE", "NEUTRAL", "UNKNOWN"]);
 const blockStateSchema = z.enum(["READY", "LIMITED", "INSUFFICIENT", "NOT_APPLICABLE"]);
@@ -67,7 +68,7 @@ const attachMetricSchema = z.object({
   comparison: weeklyReviewMetricSchema
 });
 
-const actionSchema = z.object({
+export const actionSchema = z.object({
   actionId: z.string().min(1),
   priority: z.enum(["HIGH", "MEDIUM", "LOW"]),
   actionType: z.enum([
@@ -140,7 +141,7 @@ const evidenceValueSchema = z.union([
   z.null()
 ]);
 
-const limitationSchema = z.object({
+export const limitationSchema = z.object({
   limitationId: z.string().min(1),
   code: z.string().min(1),
   severity: z.enum(["WARNING", "BLOCKING"]),
@@ -155,7 +156,7 @@ const limitationSchema = z.object({
   evidenceRefs: z.array(z.string())
 });
 
-const evidenceSchema = z.object({
+export const evidenceSchema = z.object({
   evidenceRef: z.string().min(1),
   scope: z.enum(["STORE", "TEAM", "EMPLOYEE"]),
   employeePublicId: z.string().nullable(),
@@ -176,7 +177,7 @@ const evidenceSchema = z.object({
   available: z.boolean()
 });
 
-export const weeklyReviewSchema = z.object({
+export const weeklyReviewBaseSchema = z.object({
   contractVersion: z.literal(2),
   versions: z.object({
     metricsPolicy: z.string().min(1),
@@ -313,7 +314,30 @@ export const weeklyReviewSchema = z.object({
     contentSchemaVersion: z.number().int().positive().nullable(),
     publishedAt: z.iso.datetime({ offset: true }).nullable()
   })
-}).superRefine((review, context) => {
+});
+
+type BaseReview = z.infer<typeof weeklyReviewBaseSchema>;
+type CommonAction = Omit<BaseReview["actions"][number], "actionType" | "scope"> & {
+  actionType: string;
+  scope: string;
+};
+export type CommonWeeklyReview = Omit<BaseReview,
+  "contractVersion" | "factors" | "employees" | "actions" | "evidence" | "limitations" | "sourceCoverage"> & {
+  contractVersion: number;
+  factors: Array<Omit<BaseReview["factors"][number], "kind"> & { kind: string }>;
+  employees: Array<Omit<BaseReview["employees"][number], "sortGroup" | "action"> & {
+    sortGroup: string;
+    action: CommonAction | null;
+  }>;
+  actions: CommonAction[];
+  evidence: Array<Omit<BaseReview["evidence"][number], "scope"> & { scope: string }>;
+  limitations: Array<Omit<BaseReview["limitations"][number], "scope"> & { scope: string }>;
+  sourceCoverage: Array<Omit<BaseReview["sourceCoverage"][number], "sourceCode"> & { sourceCode: string }>;
+};
+
+// Shared semantic checks do not relax either version's structural schema or scope allowlist.
+export function validateWeeklyReview(review: CommonWeeklyReview, context: z.RefinementCtx,
+  additionalMetrics: z.infer<typeof weeklyReviewMetricSchema>[] = []) {
   const addIssue = (message: string, path: PropertyKey[]) => context.addIssue({
     code: "custom",
     message,
@@ -416,6 +440,7 @@ export const weeklyReviewSchema = z.object({
     addIssue("BLOCKED review requires at least one blocker", ["qualitySummary", "blockingCount"]);
   }
   const blockedCoreMetrics = [
+    ...additionalMetrics,
     ...review.results,
     ...decomposition.map(([metric]) => metric),
     review.salesStructure.root.comparison,
@@ -528,6 +553,7 @@ export const weeklyReviewSchema = z.object({
   });
 
   const allMetrics = [
+    ...additionalMetrics,
     ...review.results,
     ...decomposition.map(([metric]) => metric),
     ...review.factors.map((factor) => factor.comparison),
@@ -694,11 +720,22 @@ export const weeklyReviewSchema = z.object({
   );
   unique(review.employees.map((employee) => employee.employeePublicId), "Employee IDs must be unique", ["employees"]);
   unique(structureNodes.map((node) => node.nodeId), "Structure node IDs must be unique", ["salesStructure"]);
-});
+}
 
-export type WeeklyReview = z.infer<typeof weeklyReviewSchema>;
+export const weeklyReviewSchema = weeklyReviewBaseSchema.superRefine(validateWeeklyReview);
+
+export type WeeklyReviewV2 = z.infer<typeof weeklyReviewSchema>;
+// Rendering model only: never serialized as a snapshot or passed back through a v2 codec.
+export type WeeklyReview = CommonWeeklyReview & {
+  sellerContext?: {
+    freshness: SellerWeeklyReviewView["freshness"];
+    membership: SellerWeeklyReview["membership"];
+    additionalSales: SellerWeeklyReview["additionalSales"];
+    teamDisplay: SellerWeeklyReview["teamDisplay"];
+  };
+};
 export type WeeklyReviewMetric = z.infer<typeof weeklyReviewMetricSchema>;
-export type WeeklyReviewAction = z.infer<typeof actionSchema>;
+export type WeeklyReviewAction = CommonAction;
 export type WeeklyReviewObservation = z.infer<typeof observationSchema>;
-export type WeeklyReviewEvidence = WeeklyReview["evidence"][number];
-export type WeeklyReviewEmployee = WeeklyReview["employees"][number];
+export type WeeklyReviewEvidence = CommonWeeklyReview["evidence"][number];
+export type WeeklyReviewEmployee = CommonWeeklyReview["employees"][number];

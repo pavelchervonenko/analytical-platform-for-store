@@ -320,15 +320,16 @@ export type PayrollVoidAdjustmentRequest = {
 export type EmployeeAttachRatingEntry = {
     metricCode?: string;
     numeratorCategoryCode?: string;
-    denominatorCode?: 'IPHONE' | 'SAMSUNG' | 'PHONE' | 'PODS_WATCH' | 'IPAD_MAC' | 'NEW_DEVICE' | 'USED_DEVICE' | 'MATCH_DEVICE_CONDITION';
+    denominatorCode?: 'IPHONE' | 'SAMSUNG' | 'PHONE' | 'PODS_WATCH' | 'AIRPODS' | 'APPLE_WATCH' | 'IPAD_MAC' | 'NEW_DEVICE' | 'USED_DEVICE' | 'MATCH_DEVICE_CONDITION';
     numeratorReceiptCount?: number;
     denominatorReceiptCount?: number;
     ratePercent?: number;
     storeRatePercent?: number;
     includedInScore?: boolean;
     score?: number;
-    numeratorQuantity?: number;
+    attributionIncomplete?: boolean;
     denominatorQuantity?: number;
+    numeratorQuantity?: number;
 };
 
 export type EmployeeRatingEntry = {
@@ -409,6 +410,136 @@ export type RatingScoreBreakdown = {
     attachWeightedPoints?: number;
     coveragePercent?: number;
     overallScore?: number;
+};
+
+export type Allocation = {
+    deviceItemId: string;
+    quantity: number;
+    fingerprint: string;
+};
+
+export type WarrantyDecisionRequest = {
+    action: 'ALLOCATE' | 'EXCLUDE' | 'DEFER';
+    reason: string;
+    originalWarrantyItemId?: string;
+    allocations: Array<Allocation>;
+};
+
+export type WarrantyAllocation = {
+    deviceItemId?: string;
+    deviceDocumentId?: string;
+    deviceType?: string;
+    businessDate?: string;
+    employeeId?: string;
+    quantity?: number;
+};
+
+export type WarrantyPreview = {
+    sourceItemId?: string;
+    action?: string;
+    allocations?: Array<WarrantyAllocation>;
+    affectedDates?: Array<string>;
+    warnings?: Array<string>;
+};
+
+export type WarrantyCase = {
+    id?: string;
+    documentId?: string;
+    documentExternalId?: string;
+    documentNumber?: string;
+    businessDate?: string;
+    documentKind?: string;
+    name?: string;
+    quantity?: number;
+    state?: string;
+    conflictCode?: string;
+    fingerprint?: string;
+    revision?: number;
+    originalWarrantyItemId?: string;
+    financialEmployeeName?: string;
+};
+
+export type WarrantyDetail = {
+    warranty?: WarrantyCase;
+    candidates?: Array<WarrantyDevice>;
+    allocations?: Array<WarrantyAllocation>;
+    history?: Array<WarrantyHistory>;
+    warnings?: Array<string>;
+};
+
+export type WarrantyDevice = {
+    id?: string;
+    documentId?: string;
+    documentExternalId?: string;
+    documentNumber?: string;
+    businessDate?: string;
+    employeeId?: string;
+    employeeName?: string;
+    name?: string;
+    deviceType?: string;
+    quantity?: number;
+    fingerprint?: string;
+    allocatedQuantity?: number;
+    returnedQuantity?: number;
+};
+
+export type WarrantyHistory = {
+    id?: string;
+    revision?: number;
+    action?: string;
+    actorId?: string;
+    actorName?: string;
+    reason?: string;
+    createdAt?: string;
+    allocations?: Array<WarrantyAllocation>;
+};
+
+export type CaseAttachDecisionRequest = {
+    targetCode: string;
+    reason: string;
+};
+
+export type Preview = {
+    previousTarget?: string;
+    nextTarget?: string;
+    netQuantity?: number;
+    affectedDates?: Array<string>;
+    warnings?: Array<string>;
+};
+
+export type Case = {
+    id?: string;
+    productId?: string;
+    productCode?: string;
+    name?: string;
+    documentId?: string;
+    documentNumber?: string;
+    businessDate?: string;
+    quantity?: number;
+    proposedTarget?: string;
+    hasIphone?: boolean;
+    hasSamsung?: boolean;
+    decisionTarget?: string;
+    decisionCurrent?: boolean;
+    revision?: number;
+    fingerprint?: string;
+    categoryCode?: string;
+    allowedTargets?: Array<string>;
+};
+
+export type Detail = {
+    item?: Case;
+    history?: Array<History>;
+    affectedDates?: Array<string>;
+};
+
+export type History = {
+    id?: string;
+    revision?: number;
+    targetCode?: string;
+    reason?: string;
+    actorId?: string;
+    createdAt?: string;
 };
 
 export type TelegramLinkCreatedView = {
@@ -507,6 +638,333 @@ export type CreateUserRequest = {
 
 export type ResetPasswordRequest = {
     temporaryPassword: string;
+};
+
+export type Action = {
+    actionId?: string;
+    priority?: string;
+    actionType?: string;
+    scope?: string;
+    employeePublicId?: string;
+    title?: string;
+    metricCode?: string;
+    target?: ActionTarget;
+    check?: string;
+    horizon?: string;
+    generatedBy?: 'DETERMINISTIC' | 'AI_ENHANCED';
+    evidenceRefs?: Array<string>;
+};
+
+export type ActionTarget = {
+    operator?: string;
+    value?: number;
+    unit?: 'RUB' | 'PERCENT' | 'PER_100' | 'COUNT' | 'HOURS' | 'STATUS';
+};
+
+export type AdditionalSales = {
+    revenue?: MetricComparison;
+    shareOfSellerRevenue?: MetricComparison;
+    accessoryRevenue?: number;
+    serviceRevenue?: number;
+    accessoryMixShare?: number;
+    serviceMixShare?: number;
+    integrityResidual?: number;
+    compositionChartSafe?: boolean;
+};
+
+export type AiEnhancement = {
+    state?: 'PREPARING' | 'READY' | 'DELAYED' | 'UNAVAILABLE' | 'DISABLED' | 'NOT_APPLICABLE';
+    promptVersion?: string;
+    contentSchemaVersion?: number;
+    publishedAt?: string;
+};
+
+export type AttachMetric = {
+    metricId?: string;
+    code?: string;
+    label?: string;
+    comparison?: MetricComparison;
+};
+
+export type BenchmarkPolicy = {
+    method?: string;
+    minimumEligibleCount?: number;
+    label?: string;
+};
+
+export type EmployeeCard = {
+    employeePublicId?: string;
+    displayName?: string;
+    participatesInBenchmark?: boolean;
+    sortGroup?: string;
+    metrics?: EmployeeMetricSet;
+    ownDynamics?: Array<Observation>;
+    peerComparison?: PeerComparison;
+    strength?: Observation;
+    attention?: Observation;
+    action?: Action;
+    limitations?: Array<string>;
+};
+
+export type EmployeeMetricSet = {
+    completedSales?: MetricComparison;
+    netRevenue?: MetricComparison;
+    additionalRevenue?: MetricComparison;
+    additionalShare?: MetricComparison;
+    shiftCount?: MetricComparison;
+    workedHours?: MetricComparison;
+    revenuePerHour?: MetricComparison;
+    attachMetrics?: Array<AttachMetric>;
+};
+
+export type Evidence = {
+    evidenceRef?: string;
+    scope?: string;
+    employeePublicId?: string;
+    metricCode?: string;
+    label?: string;
+    unit?: 'RUB' | 'PERCENT' | 'PER_100' | 'COUNT' | 'HOURS' | 'STATUS';
+    currentPeriod?: DateRange;
+    previousPeriod?: DateRange;
+    currentValue?: unknown;
+    previousValue?: unknown;
+    currentNumerator?: number;
+    currentDenominator?: number;
+    previousNumerator?: number;
+    previousDenominator?: number;
+    formulaVersion?: string;
+    sufficiency?: 'SUFFICIENT' | 'LIMITED' | 'INSUFFICIENT' | 'NOT_EVALUATED';
+    materiality?: 'MATERIAL' | 'NOT_MATERIAL' | 'NOT_EVALUATED';
+    available?: boolean;
+};
+
+export type Factor = {
+    factorId?: string;
+    kind?: string;
+    title?: string;
+    detail?: string;
+    comparison?: MetricComparison;
+    contributionAmount?: number;
+    effect?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'UNKNOWN';
+    evidenceRefs?: Array<string>;
+};
+
+export type Limitation = {
+    limitationId?: string;
+    code?: string;
+    severity?: string;
+    scope?: string;
+    employeePublicId?: string;
+    affectedBlockIds?: Array<string>;
+    affectedMetricCodes?: Array<string>;
+    period?: DateRange;
+    affectedCount?: number;
+    summary?: string;
+    resolution?: string;
+    evidenceRefs?: Array<string>;
+};
+
+export type Membership = {
+    basis?: string;
+    currentCohortHash?: string;
+    previousCohortHash?: string;
+    actionabilityRosterHash?: string;
+    actionabilityAsOf?: string;
+    selectedSellerCount?: number;
+};
+
+export type MetricComparison = {
+    metricId?: string;
+    code?: string;
+    label?: string;
+    unit?: 'RUB' | 'PERCENT' | 'PER_100' | 'COUNT' | 'HOURS' | 'STATUS';
+    current?: number;
+    previous?: number;
+    absoluteDelta?: number;
+    changePercent?: number;
+    comparisonKind?: 'PERCENT_AVAILABLE' | 'NO_BASE' | 'NON_POSITIVE_BASE' | 'UNAVAILABLE';
+    direction?: 'UP' | 'DOWN' | 'FLAT' | 'UNKNOWN';
+    effect?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'UNKNOWN';
+    metricState?: 'READY' | 'LIMITED' | 'UNAVAILABLE' | 'NOT_APPLICABLE';
+    sufficiency?: 'SUFFICIENT' | 'LIMITED' | 'INSUFFICIENT' | 'NOT_EVALUATED';
+    materiality?: 'MATERIAL' | 'NOT_MATERIAL' | 'NOT_EVALUATED';
+    currentSample?: Sample;
+    previousSample?: Sample;
+    evidenceRefs?: Array<string>;
+};
+
+export type NarrativeItem = {
+    itemId?: string;
+    text?: string;
+    effect?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'UNKNOWN';
+    evidenceRefs?: Array<string>;
+};
+
+export type Observation = {
+    observationId?: string;
+    title?: string;
+    detail?: string;
+    effect?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'UNKNOWN';
+    evidenceRefs?: Array<string>;
+};
+
+export type PeerComparison = {
+    metricCode?: string;
+    employeeValue?: number;
+    benchmarkValue?: number;
+    benchmarkMethod?: string;
+    eligibleCount?: number;
+    absoluteDelta?: number;
+    changePercent?: number;
+    effect?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'UNKNOWN';
+    evidenceRefs?: Array<string>;
+};
+
+export type PeriodContext = {
+    timezone?: string;
+    current?: DateRange;
+    previous?: DateRange;
+    currentLabel?: string;
+    previousLabel?: string;
+};
+
+export type Provenance = {
+    snapshotPublicId?: string;
+    revision?: number;
+    calculatedAt?: string;
+    sourceDataUpdatedAt?: string;
+    revisionChanged?: boolean;
+    previousRevisionPublishedAt?: string;
+};
+
+export type QualitySummary = {
+    blockingCount?: number;
+    warningCount?: number;
+    affectedBlockCount?: number;
+    message?: string;
+};
+
+export type RevenueDecomposition = {
+    salesRevenue?: MetricComparison;
+    returnRevenue?: MetricComparison;
+    netRevenue?: MetricComparison;
+    saleDocumentCount?: MetricComparison;
+    returnDocumentCount?: MetricComparison;
+    identityValid?: boolean;
+};
+
+export type RosterSummary = {
+    activeAssignedWithActivity?: number;
+    participatesInBenchmark?: number;
+    sufficientByAnyMetric?: number;
+    limitedOrInsufficient?: number;
+    excludedFromBenchmark?: number;
+};
+
+export type SalesStructureBlock = {
+    blockId?: string;
+    state?: 'READY' | 'LIMITED' | 'INSUFFICIENT' | 'NOT_APPLICABLE';
+    root?: StructureNode;
+    attachMetrics?: Array<AttachMetric>;
+    limitations?: Array<string>;
+};
+
+export type Sample = {
+    numerator?: number;
+    denominator?: number;
+    numeratorLabel?: string;
+    denominatorLabel?: string;
+};
+
+export type SellerWeeklyEmployeeCard = {
+    card?: EmployeeCard;
+    actionableNow?: boolean;
+};
+
+export type SellerWeeklyReviewView = {
+    freshness?: 'PREPARING' | 'CURRENT' | 'STALE';
+    report?: WeeklyReviewV3Response;
+};
+
+export type SellerWeeklySourceCoverage = {
+    sourceCode?: 'SALES' | 'RETURNS' | 'ORDERS' | 'CLASSIFICATION' | 'COST' | 'EMPLOYEE_ATTRIBUTION' | 'SHIFTS';
+    requiredForReport?: boolean;
+    affectedBlockIds?: Array<string>;
+    currentThroughDate?: string;
+    previousThroughDate?: string;
+    state?: 'COMPLETE' | 'PARTIAL' | 'MISSING' | 'NOT_REQUIRED';
+    message?: string;
+};
+
+export type StructureNode = {
+    nodeId?: string;
+    code?: string;
+    label?: string;
+    subtotal?: boolean;
+    childrenIncludedInValue?: boolean;
+    comparison?: MetricComparison;
+    shareComparison?: MetricComparison;
+    children?: Array<StructureNode>;
+};
+
+export type SummaryBlock = {
+    blockId?: string;
+    state?: 'READY' | 'LIMITED' | 'INSUFFICIENT' | 'NOT_APPLICABLE';
+    outcome?: NarrativeItem;
+    positive?: NarrativeItem;
+    risk?: NarrativeItem;
+    generatedBy?: 'DETERMINISTIC' | 'AI_ENHANCED';
+};
+
+export type TeamBlock = {
+    blockId?: string;
+    state?: 'READY' | 'LIMITED' | 'INSUFFICIENT' | 'NOT_APPLICABLE';
+    roster?: RosterSummary;
+    observations?: Array<Observation>;
+    attentionEmployeeCount?: number;
+    benchmarkPolicy?: BenchmarkPolicy;
+    limitations?: Array<string>;
+};
+
+export type TeamDisplay = {
+    totalCount?: number;
+    displayedCount?: number;
+    hiddenCurrentNetRevenue?: number;
+    hiddenPreviousNetRevenue?: number;
+    hiddenCurrentAdditionalRevenue?: number;
+    hiddenPreviousAdditionalRevenue?: number;
+};
+
+export type VersionSet = {
+    metricsPolicy?: string;
+    snapshotPolicy?: string;
+    qualityPolicy?: string;
+};
+
+export type WeeklyReviewV3Response = {
+    contractVersion?: number;
+    versions?: VersionSet;
+    period?: PeriodContext;
+    provenance?: Provenance;
+    reportState?: 'PREPARING' | 'READY' | 'PARTIAL' | 'BLOCKED';
+    qualitySummary?: QualitySummary;
+    sourceCoverage?: Array<SellerWeeklySourceCoverage>;
+    scope?: string;
+    membership?: Membership;
+    sourceIdentityHash?: string;
+    summary?: SummaryBlock;
+    results?: Array<MetricComparison>;
+    revenueDecomposition?: RevenueDecomposition;
+    additionalSales?: AdditionalSales;
+    factors?: Array<Factor>;
+    salesStructure?: SalesStructureBlock;
+    team?: TeamBlock;
+    teamDisplay?: TeamDisplay;
+    employees?: Array<SellerWeeklyEmployeeCard>;
+    actions?: Array<Action>;
+    limitations?: Array<Limitation>;
+    evidence?: Array<Evidence>;
+    aiEnhancement?: AiEnhancement;
 };
 
 export type ReportBackfillJobView = {
@@ -676,6 +1134,22 @@ export type LiveSkladReturnRecoveryView = {
     processedAt?: string;
 };
 
+export type CatalogProductReviewDecisionRequest = {
+    expectedProductVersion: number;
+    analyticsCategoryCode: string;
+    conditionType: 'NEW' | 'ASIS' | 'USED' | 'NOT_APPLICABLE' | 'UNKNOWN';
+    payrollCategoryCode: 'TECH_TIER_1' | 'TECH_TIER_2' | 'ACCESSORY' | 'SERVICE' | 'PLAYSTATION_SUBSCRIPTION' | 'PAID_REPAIR' | 'EXCLUDE' | 'UNMAPPED';
+    reason: string;
+};
+
+export type CatalogProductReviewDecisionResult = {
+    productId?: string;
+    analyticsCategoryCode?: string;
+    payrollCategoryCode?: string;
+    reclassifiedItems?: number;
+    affectedStoreIds?: Array<string>;
+};
+
 export type SystemStatusView = {
     application?: string;
     version?: string;
@@ -704,222 +1178,6 @@ export type StoreSummaryView = {
     active?: boolean;
 };
 
-export type Action = {
-    actionId?: string;
-    priority?: string;
-    actionType?: string;
-    scope?: string;
-    employeePublicId?: string;
-    title?: string;
-    metricCode?: string;
-    target?: ActionTarget;
-    check?: string;
-    horizon?: string;
-    generatedBy?: 'DETERMINISTIC' | 'AI_ENHANCED';
-    evidenceRefs?: Array<string>;
-};
-
-export type ActionTarget = {
-    operator?: string;
-    value?: number;
-    unit?: 'RUB' | 'PERCENT' | 'PER_100' | 'COUNT' | 'HOURS' | 'STATUS';
-};
-
-export type AiEnhancement = {
-    state?: 'PREPARING' | 'READY' | 'DELAYED' | 'UNAVAILABLE' | 'DISABLED' | 'NOT_APPLICABLE';
-    promptVersion?: string;
-    contentSchemaVersion?: number;
-    publishedAt?: string;
-};
-
-export type AttachMetric = {
-    metricId?: string;
-    code?: string;
-    label?: string;
-    comparison?: MetricComparison;
-};
-
-export type BenchmarkPolicy = {
-    method?: string;
-    minimumEligibleCount?: number;
-    label?: string;
-};
-
-export type EmployeeCard = {
-    employeePublicId?: string;
-    displayName?: string;
-    participatesInBenchmark?: boolean;
-    sortGroup?: string;
-    metrics?: EmployeeMetricSet;
-    ownDynamics?: Array<Observation>;
-    peerComparison?: PeerComparison;
-    strength?: Observation;
-    attention?: Observation;
-    action?: Action;
-    limitations?: Array<string>;
-};
-
-export type EmployeeMetricSet = {
-    completedSales?: MetricComparison;
-    netRevenue?: MetricComparison;
-    additionalRevenue?: MetricComparison;
-    additionalShare?: MetricComparison;
-    shiftCount?: MetricComparison;
-    workedHours?: MetricComparison;
-    revenuePerHour?: MetricComparison;
-    attachMetrics?: Array<AttachMetric>;
-};
-
-export type Evidence = {
-    evidenceRef?: string;
-    scope?: string;
-    employeePublicId?: string;
-    metricCode?: string;
-    label?: string;
-    unit?: 'RUB' | 'PERCENT' | 'PER_100' | 'COUNT' | 'HOURS' | 'STATUS';
-    currentPeriod?: DateRange;
-    previousPeriod?: DateRange;
-    currentValue?: unknown;
-    previousValue?: unknown;
-    currentNumerator?: number;
-    currentDenominator?: number;
-    previousNumerator?: number;
-    previousDenominator?: number;
-    formulaVersion?: string;
-    sufficiency?: 'SUFFICIENT' | 'LIMITED' | 'INSUFFICIENT' | 'NOT_EVALUATED';
-    materiality?: 'MATERIAL' | 'NOT_MATERIAL' | 'NOT_EVALUATED';
-    available?: boolean;
-};
-
-export type Factor = {
-    factorId?: string;
-    kind?: string;
-    title?: string;
-    detail?: string;
-    comparison?: MetricComparison;
-    contributionAmount?: number;
-    effect?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'UNKNOWN';
-    evidenceRefs?: Array<string>;
-};
-
-export type Limitation = {
-    limitationId?: string;
-    code?: string;
-    severity?: string;
-    scope?: string;
-    employeePublicId?: string;
-    affectedBlockIds?: Array<string>;
-    affectedMetricCodes?: Array<string>;
-    period?: DateRange;
-    affectedCount?: number;
-    summary?: string;
-    resolution?: string;
-    evidenceRefs?: Array<string>;
-};
-
-export type MetricComparison = {
-    metricId?: string;
-    code?: string;
-    label?: string;
-    unit?: 'RUB' | 'PERCENT' | 'PER_100' | 'COUNT' | 'HOURS' | 'STATUS';
-    current?: number;
-    previous?: number;
-    absoluteDelta?: number;
-    changePercent?: number;
-    comparisonKind?: 'PERCENT_AVAILABLE' | 'NO_BASE' | 'NON_POSITIVE_BASE' | 'UNAVAILABLE';
-    direction?: 'UP' | 'DOWN' | 'FLAT' | 'UNKNOWN';
-    effect?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'UNKNOWN';
-    metricState?: 'READY' | 'LIMITED' | 'UNAVAILABLE' | 'NOT_APPLICABLE';
-    sufficiency?: 'SUFFICIENT' | 'LIMITED' | 'INSUFFICIENT' | 'NOT_EVALUATED';
-    materiality?: 'MATERIAL' | 'NOT_MATERIAL' | 'NOT_EVALUATED';
-    currentSample?: Sample;
-    previousSample?: Sample;
-    evidenceRefs?: Array<string>;
-};
-
-export type NarrativeItem = {
-    itemId?: string;
-    text?: string;
-    effect?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'UNKNOWN';
-    evidenceRefs?: Array<string>;
-};
-
-export type Observation = {
-    observationId?: string;
-    title?: string;
-    detail?: string;
-    effect?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'UNKNOWN';
-    evidenceRefs?: Array<string>;
-};
-
-export type PeerComparison = {
-    metricCode?: string;
-    employeeValue?: number;
-    benchmarkValue?: number;
-    benchmarkMethod?: string;
-    eligibleCount?: number;
-    absoluteDelta?: number;
-    changePercent?: number;
-    effect?: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'UNKNOWN';
-    evidenceRefs?: Array<string>;
-};
-
-export type PeriodContext = {
-    timezone?: string;
-    current?: DateRange;
-    previous?: DateRange;
-    currentLabel?: string;
-    previousLabel?: string;
-};
-
-export type Provenance = {
-    snapshotPublicId?: string;
-    revision?: number;
-    calculatedAt?: string;
-    sourceDataUpdatedAt?: string;
-    revisionChanged?: boolean;
-    previousRevisionPublishedAt?: string;
-};
-
-export type QualitySummary = {
-    blockingCount?: number;
-    warningCount?: number;
-    affectedBlockCount?: number;
-    message?: string;
-};
-
-export type RevenueDecomposition = {
-    salesRevenue?: MetricComparison;
-    returnRevenue?: MetricComparison;
-    netRevenue?: MetricComparison;
-    saleDocumentCount?: MetricComparison;
-    returnDocumentCount?: MetricComparison;
-    identityValid?: boolean;
-};
-
-export type RosterSummary = {
-    activeAssignedWithActivity?: number;
-    participatesInBenchmark?: number;
-    sufficientByAnyMetric?: number;
-    limitedOrInsufficient?: number;
-    excludedFromBenchmark?: number;
-};
-
-export type SalesStructureBlock = {
-    blockId?: string;
-    state?: 'READY' | 'LIMITED' | 'INSUFFICIENT' | 'NOT_APPLICABLE';
-    root?: StructureNode;
-    attachMetrics?: Array<AttachMetric>;
-    limitations?: Array<string>;
-};
-
-export type Sample = {
-    numerator?: number;
-    denominator?: number;
-    numeratorLabel?: string;
-    denominatorLabel?: string;
-};
-
 export type SourceCoverage = {
     sourceCode?: 'SALES' | 'RETURNS' | 'CLASSIFICATION' | 'COST' | 'EMPLOYEE_ATTRIBUTION' | 'SHIFTS';
     requiredForReport?: boolean;
@@ -928,42 +1186,6 @@ export type SourceCoverage = {
     previousThroughDate?: string;
     state?: 'COMPLETE' | 'PARTIAL' | 'MISSING' | 'NOT_REQUIRED';
     message?: string;
-};
-
-export type StructureNode = {
-    nodeId?: string;
-    code?: string;
-    label?: string;
-    subtotal?: boolean;
-    childrenIncludedInValue?: boolean;
-    comparison?: MetricComparison;
-    shareComparison?: MetricComparison;
-    children?: Array<StructureNode>;
-};
-
-export type SummaryBlock = {
-    blockId?: string;
-    state?: 'READY' | 'LIMITED' | 'INSUFFICIENT' | 'NOT_APPLICABLE';
-    outcome?: NarrativeItem;
-    positive?: NarrativeItem;
-    risk?: NarrativeItem;
-    generatedBy?: 'DETERMINISTIC' | 'AI_ENHANCED';
-};
-
-export type TeamBlock = {
-    blockId?: string;
-    state?: 'READY' | 'LIMITED' | 'INSUFFICIENT' | 'NOT_APPLICABLE';
-    roster?: RosterSummary;
-    observations?: Array<Observation>;
-    attentionEmployeeCount?: number;
-    benchmarkPolicy?: BenchmarkPolicy;
-    limitations?: Array<string>;
-};
-
-export type VersionSet = {
-    metricsPolicy?: string;
-    snapshotPolicy?: string;
-    qualityPolicy?: string;
 };
 
 export type WeeklyReviewResponse = {
@@ -1027,8 +1249,8 @@ export type AnnualAttachRateTotals = {
     numeratorReceiptCount?: number;
     denominatorReceiptCount?: number;
     ratePerHundred?: number;
-    numeratorQuantity?: number;
     denominatorQuantity?: number;
+    numeratorQuantity?: number;
 };
 
 export type AnnualCategoryTotals = {
@@ -1083,17 +1305,19 @@ export type AttachRateDataQuality = {
     unmatchedNumeratorItemCount?: number;
     ambiguousWarrantyItemCount?: number;
     unknownDeviceConditionItemCount?: number;
+    unassignedReturnItemCount?: number;
 };
 
 export type AttachRateEntry = {
     metricCode?: string;
     numeratorCategoryCode?: string;
-    denominatorCode?: 'IPHONE' | 'SAMSUNG' | 'PHONE' | 'PODS_WATCH' | 'IPAD_MAC' | 'NEW_DEVICE' | 'USED_DEVICE' | 'MATCH_DEVICE_CONDITION';
+    denominatorCode?: 'IPHONE' | 'SAMSUNG' | 'PHONE' | 'PODS_WATCH' | 'AIRPODS' | 'APPLE_WATCH' | 'IPAD_MAC' | 'NEW_DEVICE' | 'USED_DEVICE' | 'MATCH_DEVICE_CONDITION';
     numeratorReceiptCount?: number;
     denominatorReceiptCount?: number;
     ratePerHundred?: number;
-    numeratorQuantity?: number;
+    preliminary?: boolean;
     denominatorQuantity?: number;
+    numeratorQuantity?: number;
 };
 
 export type AttachRateResult = {
@@ -1960,6 +2184,44 @@ export type StoreSyncActivityView = {
     nextAttemptAt?: string;
 };
 
+export type WarrantyQueue = {
+    items?: Array<WarrantyCase>;
+    total?: number;
+    documentCount?: number;
+    unallocatedQuantity?: number;
+    offset?: number;
+    limit?: number;
+    enabled?: boolean;
+};
+
+export type Queue = {
+    items?: Array<Case>;
+    total?: number;
+    openCount?: number;
+    conflictCount?: number;
+    openQuantity?: number;
+    offset?: number;
+    limit?: number;
+};
+
+export type Estimate = {
+    metricCode?: string;
+    confirmedQuantity?: number;
+    inferredQuantity?: number;
+    denominatorQuantity?: number;
+    confirmedRatePerHundred?: number;
+    indicativeRatePerHundred?: number;
+};
+
+export type EstimateResult = {
+    periodStart?: string;
+    periodEnd?: string;
+    rates?: Array<Estimate>;
+    conflictCount?: number;
+    unresolvedCount?: number;
+    unresolvedReturnCount?: number;
+};
+
 export type DataQualityOverviewView = {
     checkedAt?: string;
     storeCount?: number;
@@ -2183,6 +2445,36 @@ export type LlmOperationsView = {
     configuration?: LlmOperationsConfigurationView;
     summary?: LlmOperationsSummaryView;
     incidents?: Array<LlmJobIncidentView>;
+};
+
+export type CatalogProductReviewQueue = {
+    activationFrom?: string;
+    items?: Array<CatalogProductReviewQueueItem>;
+    hasMore?: boolean;
+};
+
+export type CatalogProductReviewQueueItem = {
+    productId?: string;
+    productVersion?: number;
+    externalId?: string;
+    code?: string;
+    name?: string;
+    sourceKind?: string;
+    sourceGroupPath?: string;
+    firstSaleAt?: string;
+    firstSaleDate?: string;
+    saleItemCount?: number;
+    hasUnmappedSales?: boolean;
+    assignedAnalyticsCategoryCode?: string;
+    assignedConditionType?: string;
+    assignedPayrollCategoryCode?: string;
+    suggestedAnalyticsCategoryCode?: string;
+};
+
+export type CategoryOption = {
+    code?: string;
+    name?: string;
+    defaultPayrollCategoryCode?: string;
 };
 
 export type GetDayData = {
@@ -2520,6 +2812,90 @@ export type FinalizeRatingResponses = {
 
 export type FinalizeRatingResponse = FinalizeRatingResponses[keyof FinalizeRatingResponses];
 
+export type PreviewData = {
+    body: WarrantyDecisionRequest;
+    path: {
+        storeId: string;
+        sourceId: string;
+    };
+    query?: never;
+    url: '/api/stores/{storeId}/attach-rate/warranties/{sourceId}/preview';
+};
+
+export type PreviewResponses = {
+    /**
+     * OK
+     */
+    200: WarrantyPreview;
+};
+
+export type PreviewResponse = PreviewResponses[keyof PreviewResponses];
+
+export type DecideData = {
+    body: WarrantyDecisionRequest;
+    headers: {
+        'If-Match'?: string;
+        'Idempotency-Key': string;
+    };
+    path: {
+        storeId: string;
+        sourceId: string;
+    };
+    query?: never;
+    url: '/api/stores/{storeId}/attach-rate/warranties/{sourceId}/decisions';
+};
+
+export type DecideResponses = {
+    /**
+     * OK
+     */
+    200: WarrantyDetail;
+};
+
+export type DecideResponse = DecideResponses[keyof DecideResponses];
+
+export type Preview1Data = {
+    body: CaseAttachDecisionRequest;
+    path: {
+        storeId: string;
+        sourceId: string;
+    };
+    query?: never;
+    url: '/api/stores/{storeId}/attach-rate/cases/{sourceId}/preview';
+};
+
+export type Preview1Responses = {
+    /**
+     * OK
+     */
+    200: Preview;
+};
+
+export type Preview1Response = Preview1Responses[keyof Preview1Responses];
+
+export type Decide1Data = {
+    body: CaseAttachDecisionRequest;
+    headers: {
+        'If-Match'?: string;
+        'Idempotency-Key': string;
+    };
+    path: {
+        storeId: string;
+        sourceId: string;
+    };
+    query?: never;
+    url: '/api/stores/{storeId}/attach-rate/cases/{sourceId}/decisions';
+};
+
+export type Decide1Responses = {
+    /**
+     * OK
+     */
+    200: Detail;
+};
+
+export type Decide1Response = Decide1Responses[keyof Decide1Responses];
+
 export type RevokeData = {
     body?: never;
     headers: {
@@ -2718,6 +3094,24 @@ export type ResetPasswordResponses = {
 };
 
 export type ResetPasswordResponse = ResetPasswordResponses[keyof ResetPasswordResponses];
+
+export type Generate2Data = {
+    body?: never;
+    path: {
+        storeId: string;
+    };
+    query?: never;
+    url: '/api/admin/seller-weekly-reviews/stores/{storeId}/generate';
+};
+
+export type Generate2Responses = {
+    /**
+     * OK
+     */
+    200: SellerWeeklyReviewView;
+};
+
+export type Generate2Response = Generate2Responses[keyof Generate2Responses];
 
 export type ListBackfillsData = {
     body?: never;
@@ -2981,6 +3375,24 @@ export type RequestResponses = {
 
 export type RequestResponse = RequestResponses[keyof RequestResponses];
 
+export type Decide2Data = {
+    body: CatalogProductReviewDecisionRequest;
+    path: {
+        productId: string;
+    };
+    query?: never;
+    url: '/api/admin/catalog-product-reviews/{productId}/decision';
+};
+
+export type Decide2Responses = {
+    /**
+     * OK
+     */
+    200: CatalogProductReviewDecisionResult;
+};
+
+export type Decide2Response = Decide2Responses[keyof Decide2Responses];
+
 export type StatusData = {
     body?: never;
     path?: never;
@@ -3094,17 +3506,35 @@ export type CurrentData = {
         storeId: string;
     };
     query?: never;
-    url: '/api/stores/{storeId}/weekly-reviews/current';
+    url: '/api/stores/{storeId}/weekly-reviews/seller-current';
 };
 
 export type CurrentResponses = {
     /**
      * OK
      */
-    200: WeeklyReviewResponse;
+    200: SellerWeeklyReviewView;
 };
 
 export type CurrentResponse = CurrentResponses[keyof CurrentResponses];
+
+export type Current1Data = {
+    body?: never;
+    path: {
+        storeId: string;
+    };
+    query?: never;
+    url: '/api/stores/{storeId}/weekly-reviews/current';
+};
+
+export type Current1Responses = {
+    /**
+     * OK
+     */
+    200: WeeklyReviewResponse;
+};
+
+export type Current1Response = Current1Responses[keyof Current1Responses];
 
 export type List1Data = {
     body?: never;
@@ -3247,7 +3677,7 @@ export type ReadinessResponses = {
 
 export type ReadinessResponse = ReadinessResponses[keyof ReadinessResponses];
 
-export type PreviewData = {
+export type Preview2Data = {
     body?: never;
     path: {
         storeId: string;
@@ -3257,14 +3687,14 @@ export type PreviewData = {
     url: '/api/stores/{storeId}/payroll/{month}/preview';
 };
 
-export type PreviewResponses = {
+export type Preview2Responses = {
     /**
      * OK
      */
     200: PayrollPreviewView;
 };
 
-export type PreviewResponse = PreviewResponses[keyof PreviewResponses];
+export type Preview2Response = Preview2Responses[keyof Preview2Responses];
 
 export type List2Data = {
     body?: never;
@@ -3535,7 +3965,7 @@ export type Latest1Responses = {
 
 export type Latest1Response = Latest1Responses[keyof Latest1Responses];
 
-export type Current1Data = {
+export type Current2Data = {
     body?: never;
     path: {
         storeId: string;
@@ -3544,14 +3974,14 @@ export type Current1Data = {
     url: '/api/stores/{storeId}/insights/weekly/current';
 };
 
-export type Current1Responses = {
+export type Current2Responses = {
     /**
      * OK
      */
     200: WeeklyInsightResponse;
 };
 
-export type Current1Response = Current1Responses[keyof Current1Responses];
+export type Current2Response = Current2Responses[keyof Current2Responses];
 
 export type DirectoryData = {
     body?: never;
@@ -3671,6 +4101,149 @@ export type Get10Responses = {
 };
 
 export type Get10Response = Get10Responses[keyof Get10Responses];
+
+export type QueueData = {
+    body?: never;
+    path: {
+        storeId: string;
+    };
+    query?: {
+        state?: string;
+        offset?: number;
+        limit?: number;
+    };
+    url: '/api/stores/{storeId}/attach-rate/warranties';
+};
+
+export type QueueResponses = {
+    /**
+     * OK
+     */
+    200: WarrantyQueue;
+};
+
+export type QueueResponse = QueueResponses[keyof QueueResponses];
+
+export type DetailData = {
+    body?: never;
+    path: {
+        storeId: string;
+        sourceId: string;
+    };
+    query?: never;
+    url: '/api/stores/{storeId}/attach-rate/warranties/{sourceId}';
+};
+
+export type DetailResponses = {
+    /**
+     * OK
+     */
+    200: WarrantyDetail;
+};
+
+export type DetailResponse = DetailResponses[keyof DetailResponses];
+
+export type OriginalsData = {
+    body?: never;
+    path: {
+        storeId: string;
+    };
+    query: {
+        query: string;
+    };
+    url: '/api/stores/{storeId}/attach-rate/warranties/originals';
+};
+
+export type OriginalsResponses = {
+    /**
+     * OK
+     */
+    200: Array<WarrantyCase>;
+};
+
+export type OriginalsResponse = OriginalsResponses[keyof OriginalsResponses];
+
+export type DevicesData = {
+    body?: never;
+    path: {
+        storeId: string;
+    };
+    query: {
+        query: string;
+    };
+    url: '/api/stores/{storeId}/attach-rate/warranties/devices';
+};
+
+export type DevicesResponses = {
+    /**
+     * OK
+     */
+    200: Array<WarrantyDevice>;
+};
+
+export type DevicesResponse = DevicesResponses[keyof DevicesResponses];
+
+export type Queue1Data = {
+    body?: never;
+    path: {
+        storeId: string;
+    };
+    query?: {
+        state?: string;
+        offset?: number;
+        limit?: number;
+    };
+    url: '/api/stores/{storeId}/attach-rate/cases';
+};
+
+export type Queue1Responses = {
+    /**
+     * OK
+     */
+    200: Queue;
+};
+
+export type Queue1Response = Queue1Responses[keyof Queue1Responses];
+
+export type Detail1Data = {
+    body?: never;
+    path: {
+        storeId: string;
+        sourceId: string;
+    };
+    query?: never;
+    url: '/api/stores/{storeId}/attach-rate/cases/{sourceId}';
+};
+
+export type Detail1Responses = {
+    /**
+     * OK
+     */
+    200: Detail;
+};
+
+export type Detail1Response = Detail1Responses[keyof Detail1Responses];
+
+export type EstimatesData = {
+    body?: never;
+    path: {
+        storeId: string;
+    };
+    query: {
+        periodStart: string;
+        periodEnd: string;
+    };
+    url: '/api/stores/{storeId}/attach-rate/cases/estimates';
+};
+
+export type EstimatesResponses = {
+    /**
+     * OK
+     */
+    200: EstimateResult;
+};
+
+export type EstimatesResponse = EstimatesResponses[keyof EstimatesResponses];
 
 export type Get11Data = {
     body?: never;
@@ -3861,6 +4434,40 @@ export type Get14Responses = {
 };
 
 export type Get14Response = Get14Responses[keyof Get14Responses];
+
+export type List4Data = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+    };
+    url: '/api/admin/catalog-product-reviews';
+};
+
+export type List4Responses = {
+    /**
+     * OK
+     */
+    200: CatalogProductReviewQueue;
+};
+
+export type List4Response = List4Responses[keyof List4Responses];
+
+export type List5Data = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/admin/catalog-product-reviews/categories';
+};
+
+export type List5Responses = {
+    /**
+     * OK
+     */
+    200: Array<CategoryOption>;
+};
+
+export type List5Response = List5Responses[keyof List5Responses];
 
 export type RevokeSessionData = {
     body?: never;

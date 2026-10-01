@@ -3,11 +3,13 @@
 # Sourced by release-safety.sh after its env helpers are defined.
 release_validate_weekly_review_ai_configuration() {
   local env_file="$1"
-  local read_enabled snapshot_planner enabled planner worker
+  local read_enabled seller_enabled snapshot_planner enabled planner worker
   local provider folder model max_calls
 
   read_enabled="$(release_env_value_or_default \
     "${env_file}" WEEKLY_REVIEW_ENABLED false)" || return 1
+  seller_enabled="$(release_env_value_or_default \
+    "${env_file}" SELLER_WEEKLY_REVIEW_ENABLED false)" || return 1
   snapshot_planner="$(release_env_value_or_default \
     "${env_file}" WEEKLY_REVIEW_SNAPSHOT_PLANNER_ENABLED false)" || return 1
   enabled="$(release_env_value_or_default \
@@ -21,6 +23,14 @@ release_validate_weekly_review_ai_configuration() {
     release_safety_fail 'WEEKLY_REVIEW_ENABLED must be boolean'
     return 1
   }
+  [[ "${seller_enabled}" == 'true' || "${seller_enabled}" == 'false' ]] || {
+    release_safety_fail 'SELLER_WEEKLY_REVIEW_ENABLED must be boolean'
+    return 1
+  }
+  if [[ "${seller_enabled}" == 'true' && "${read_enabled}" != 'true' ]]; then
+    release_safety_fail 'SELLER_WEEKLY_REVIEW_ENABLED requires WEEKLY_REVIEW_ENABLED=true'
+    return 1
+  fi
   [[ "${snapshot_planner}" == 'true' || "${snapshot_planner}" == 'false' ]] || {
     release_safety_fail \
       'WEEKLY_REVIEW_SNAPSHOT_PLANNER_ENABLED must be boolean'

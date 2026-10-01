@@ -13,6 +13,7 @@ import com.storeanalytics.interpretation.generation.LlmProviderRegistry;
 import com.storeanalytics.interpretation.generation.LlmProviderRequest;
 import com.storeanalytics.interpretation.generation.LlmProviderResponseReceipt;
 import com.storeanalytics.interpretation.review.PersistedWeeklyReviewSnapshot;
+import com.storeanalytics.interpretation.review.PersistedWeeklyReviewV3Snapshot;
 import com.storeanalytics.interpretation.review.WeeklyReviewSnapshotStore;
 import com.storeanalytics.interpretation.validation.LlmValidationOutcome;
 import com.storeanalytics.interpretation.validation.LlmValidationViolation;
@@ -217,6 +218,78 @@ class WeeklyReviewAiGenerationExecutionServiceTest {
                 NOW
         );
         verify(provider, never()).generate(any());
+    }
+
+    @Test
+    void sellerJobStopsBeforeProviderWhenSnapshotIsNotCurrent() {
+        WeeklyReviewAiJob sellerJob = sellerJob();
+        PersistedWeeklyReviewV3Snapshot sellerSnapshot = mock(PersistedWeeklyReviewV3Snapshot.class);
+        SellerWeeklyReviewAiFreshnessGuard guard = mock(SellerWeeklyReviewAiFreshnessGuard.class);
+        when(snapshotStore.findV3ById(sellerJob.snapshotId())).thenReturn(Optional.of(sellerSnapshot));
+        when(guard.isCurrent(sellerSnapshot)).thenReturn(false);
+
+        sellerService(guard).execute(sellerJob, OWNER);
+
+        verify(jobStore).failClaimed(sellerJob, OWNER, "SNAPSHOT_NOT_CURRENT",
+                "Seller source changed before provider execution", NOW);
+        verify(requestFactory, never()).prepare(any());
+        verify(provider, never()).generate(any());
+    }
+
+    @Test
+    void sellerJobPreservesBilledReceiptButDoesNotPublishAfterSourceChanges() {
+        WeeklyReviewAiJob sellerJob = sellerJob();
+        PersistedWeeklyReviewV3Snapshot sellerSnapshot = mock(PersistedWeeklyReviewV3Snapshot.class);
+        SellerWeeklyReviewAiFreshnessGuard guard = mock(SellerWeeklyReviewAiFreshnessGuard.class);
+        PreparedWeeklyReviewAiRequest sellerPrepared = prepared(sellerJob);
+        WeeklyReviewAiAttempt sellerAttempt = new WeeklyReviewAiAttempt(
+                UUID.randomUUID(), sellerJob.id(), 1, NOW);
+        LlmProviderResponseReceipt response = receipt(validResponse());
+        when(snapshotStore.findV3ById(sellerJob.snapshotId())).thenReturn(Optional.of(sellerSnapshot));
+        when(guard.isCurrent(sellerSnapshot)).thenReturn(true, true, false);
+        when(requestFactory.prepare(any())).thenReturn(sellerPrepared);
+        when(provider.preflight(sellerPrepared.request())).thenReturn(preflight);
+        when(jobStore.startAttempt(sellerJob, OWNER, sellerPrepared, preflight, NOW)).thenReturn(sellerAttempt);
+        when(provider.generate(sellerPrepared.request())).thenReturn(response);
+        when(validator.validate(sellerPrepared.input(), response.responseBody())).thenReturn(semanticValid());
+
+        sellerService(guard).execute(sellerJob, OWNER);
+
+        verify(provider).generate(sellerPrepared.request());
+        verify(jobStore).recordStaleResponse(sellerJob, sellerAttempt, OWNER, response, NOW);
+        verify(completionService, never()).complete(any(), any(), any(), any(), any(), any(), any());
+        verify(jobStore, never()).recordValidationFailure(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void sellerJobFailsClosedWhenFreshnessReadFails() {
+        WeeklyReviewAiJob sellerJob = sellerJob();
+        PersistedWeeklyReviewV3Snapshot sellerSnapshot = mock(PersistedWeeklyReviewV3Snapshot.class);
+        SellerWeeklyReviewAiFreshnessGuard guard = mock(SellerWeeklyReviewAiFreshnessGuard.class);
+        when(snapshotStore.findV3ById(sellerJob.snapshotId())).thenReturn(Optional.of(sellerSnapshot));
+        when(guard.isCurrent(sellerSnapshot)).thenThrow(new IllegalStateException("synthetic read failure"));
+
+        sellerService(guard).execute(sellerJob, OWNER);
+
+        verify(jobStore).failClaimed(sellerJob, OWNER, "SNAPSHOT_NOT_CURRENT",
+                "Seller source changed before provider execution", NOW);
+        verify(provider, never()).generate(any());
+    }
+
+    private WeeklyReviewAiGenerationExecutionService sellerService(SellerWeeklyReviewAiFreshnessGuard guard) {
+        return new WeeklyReviewAiGenerationExecutionService(jobStore, snapshotStore,
+                new WeeklyReviewAiGenerationSupport(requestFactory, validator, budgetGuard,
+                        completionService, registry, properties), Clock.fixed(NOW, ZoneOffset.UTC), guard);
+    }
+
+    private WeeklyReviewAiJob sellerJob() {
+        WeeklyReviewAiJob legacy = job();
+        return new WeeklyReviewAiJob(legacy.id(), legacy.snapshotId(),
+                SellerWeeklyReviewAiContract.PROMPT_VERSION, legacy.contentSchemaVersion(),
+                legacy.providerCode(), legacy.requestedModel(), legacy.status(), legacy.attemptCount(),
+                legacy.maxAttempts(), legacy.nextAttemptAt(), legacy.deadlineAt(), legacy.leaseOwner(),
+                legacy.leaseUntil(), legacy.lastErrorCode(), legacy.lastErrorMessage(),
+                legacy.lastValidationCodes(), legacy.createdAt(), legacy.updatedAt());
     }
 
     private WeeklyReviewAiJob job() {

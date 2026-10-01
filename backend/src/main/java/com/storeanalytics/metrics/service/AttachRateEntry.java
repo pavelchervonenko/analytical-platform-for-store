@@ -11,8 +11,15 @@ public record AttachRateEntry(
         AttachDenominatorCode denominatorCode,
         @JsonAlias("numeratorQuantity") BigDecimal numeratorReceiptCount,
         @JsonAlias("denominatorQuantity") BigDecimal denominatorReceiptCount,
-        BigDecimal ratePerHundred
+        BigDecimal ratePerHundred,
+        boolean preliminary
 ) {
+    public AttachRateEntry(String metricCode, String numeratorCategoryCode, AttachDenominatorCode denominatorCode,
+                           BigDecimal numeratorReceiptCount, BigDecimal denominatorReceiptCount,
+                           BigDecimal ratePerHundred) {
+        this(metricCode, numeratorCategoryCode, denominatorCode, numeratorReceiptCount, denominatorReceiptCount,
+                ratePerHundred, false);
+    }
 
     /**
      * Transitional JSON alias for consumers of attach-rate-v1.

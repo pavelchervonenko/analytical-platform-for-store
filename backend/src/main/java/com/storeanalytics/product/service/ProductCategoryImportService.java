@@ -8,7 +8,6 @@ import com.storeanalytics.common.exception.InvalidRequestException;
 import com.storeanalytics.product.exception.ProductClassificationConflictException;
 import com.storeanalytics.product.exception.ProductIdentityConflictException;
 import com.storeanalytics.auth.model.AppUser;
-import com.storeanalytics.auth.repository.AppUserRepository;
 import com.storeanalytics.integration.connection.model.IntegrationConnection;
 import com.storeanalytics.integration.connection.repository.IntegrationConnectionRepository;
 import com.storeanalytics.product.model.AnalyticsCategory;
@@ -44,26 +43,26 @@ public class ProductCategoryImportService {
     private final LiveSkladProductIdentityResolver identityResolver;
     private final ProductCategoryAssignmentRepository assignmentRepository;
     private final EntityManager entityManager;
-    private final AppUserRepository userRepository;
     private final AuditLogService auditLogService;
     private final ProductClassificationReconciliationService reconciliationService;
+    private final CatalogClassificationCutover cutover;
 
     public ProductCategoryImportService(
             IntegrationConnectionRepository connectionRepository,
             LiveSkladProductIdentityResolver identityResolver,
             ProductCategoryAssignmentRepository assignmentRepository,
             EntityManager entityManager,
-            AppUserRepository userRepository,
             AuditLogService auditLogService,
-            ProductClassificationReconciliationService reconciliationService
+            ProductClassificationReconciliationService reconciliationService,
+            CatalogClassificationCutover cutover
     ) {
         this.connectionRepository = connectionRepository;
         this.identityResolver = identityResolver;
         this.assignmentRepository = assignmentRepository;
         this.entityManager = entityManager;
-        this.userRepository = userRepository;
         this.auditLogService = auditLogService;
         this.reconciliationService = reconciliationService;
+        this.cutover = cutover;
     }
 
     @Transactional
@@ -71,8 +70,13 @@ public class ProductCategoryImportService {
             ProductCategoryImportCommand command,
             UUID actorId
     ) {
-        AppUser actor = userRepository.findById(actorId)
-                .orElseThrow(() -> new IllegalArgumentException("actor does not exist"));
+        if (cutover.isHistorical(command.validFrom())) {
+            throw new IllegalArgumentException("Catalog import cannot start before the immutable activation boundary");
+        }
+        AppUser actor = entityManager.find(AppUser.class, actorId);
+        if (actor == null) {
+            throw new IllegalArgumentException("actor does not exist");
+        }
         IntegrationConnection connection = findLiveSkladConnection(command.connectionKey());
         Map<String, AnalyticsCategory> categories = loadCategories(command.assignments());
         Map<String, String> productNames = new HashMap<>();
@@ -106,18 +110,43 @@ public class ProductCategoryImportService {
             );
             if (existing.isEmpty()) {
                 newAssignments.add(new ProductCategoryAssignment(product, category, details));
-            } else if (existing.size() == 1
-                    && existing.getFirst().matches(product, category, details)) {
+                continue;
+            }
+            ExistingAssignment atBoundary = existing.stream()
+                    .filter(assignment -> assignment.validFrom().equals(command.validFrom()))
+                    .findFirst().orElse(null);
+            if (atBoundary != null && atBoundary.matches(product, category, details)) {
                 unchanged++;
-            } else {
-                throw new ProductClassificationConflictException(
-                        "Product " + entry.externalProductId()
-                                + " already has a conflicting category history"
+                continue;
+            }
+            if (cutover.isConfigured() && atBoundary == null
+                    && !command.validFrom().isAfter(Instant.now())) {
+                throw new InvalidRequestException(
+                        "Existing category replacement after its effective date requires sale-scoped review"
                 );
             }
+            if (!cutover.isConfigured() || atBoundary != null || existing.stream()
+                    .anyMatch(assignment -> assignment.validFrom().isAfter(command.validFrom()))) {
+                throw conflictingHistory(entry);
+            }
+            ExistingAssignment open = existing.stream()
+                    .filter(assignment -> assignment.validTo() == null)
+                    .findFirst().orElse(null);
+            if (open != null) {
+                if (!command.validFrom().isAfter(open.validFrom())) {
+                    throw conflictingHistory(entry);
+                }
+                open.assignment().close(command.validFrom());
+            } else if (existing.stream().anyMatch(assignment ->
+                    assignment.validTo() != null
+                            && assignment.validTo().isAfter(command.validFrom()))) {
+                throw conflictingHistory(entry);
+            }
+            newAssignments.add(new ProductCategoryAssignment(product, category, details));
         }
 
         if (!newAssignments.isEmpty()) {
+            entityManager.flush();
             List<ProductCategoryAssignment> saved =
                     assignmentRepository.saveAllAndFlush(newAssignments);
             saved.forEach(assignment -> auditLogService.record(
@@ -143,6 +172,13 @@ public class ProductCategoryImportService {
                 newAssignments.size(),
                 unchanged,
                 reconciliation.affectedStoreIds()
+        );
+    }
+
+    private ProductClassificationConflictException conflictingHistory(ProductCategoryImportEntry entry) {
+        return new ProductClassificationConflictException(
+                "Product " + entry.externalProductId()
+                        + " already has a conflicting category history"
         );
     }
 

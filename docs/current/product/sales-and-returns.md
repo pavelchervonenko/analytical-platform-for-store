@@ -6,14 +6,16 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-09-04
+last_verified: 2026-09-30
 requirement_sources:
   - docs/history/audits/2026/08/CUSTOMER_KPI_FORMULA_AUDIT_2026-08-13.md
 implementation_sources:
+  - backend/src/main/java/com/storeanalytics/product/service/CatalogSaleRoleSnapshotWriter.java
   - backend/src/main/java/com/storeanalytics/sync/service/SalesSyncPersistence.java
   - backend/src/main/java/com/storeanalytics/sync/service/ReturnSyncPersistence.java
   - backend/src/main/resources/db/migration/V43__make_livesklad_webhook_inbox_processable.sql
 verification_sources:
+  - backend/src/test/java/com/storeanalytics/product/service/CatalogSaleRoleSnapshotIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/ReturnSyncIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/metrics/repository/StoreKpiIntegrationTest.java
 runtime_evidence: []
@@ -51,8 +53,30 @@ superseded_by: null
 
 `ReturnSyncIntegrationTest` использует двух разных разрешённых сотрудников и проверяет как
 приоритет исходного продавца, так и отсутствие fallback у orphan return. Store/category signed
-totals от атрибуции не меняются; employee KPI, rating и attach уменьшаются у продавца продажи.
+totals от атрибуции не меняются; денежные employee KPI и финансовые составляющие rating уменьшаются
+у продавца продажи. Attach v4 имеет отдельные правила ниже.
 Правило принято в [ADR-0001](../../decisions/ADR-0001-return-employee-attribution.md).
 
 Нулевая оплата не доказывает отсутствие возврата: авторитетны signed items. Missing cost возврата
 делает cost/GP/margin неполными; неожиданный ноль остаётся quality gap.
+
+## Аналитическое исключение: attach v4
+
+Гарантия и её возврат относятся к устройству и его исходному периоду/сотруднику. Возврат
+устройства корректирует исходную гарантийную базу. Для остальных attach-категорий возврат
+учитывается в своей дате у сотрудника строки LiveSklad, сохранённого отдельно от финансового
+employee_id. Raw retention не удаляет сохранённый ID. Подробности: [attach-rate](attach-rate.md).
+
+## Shadow-снимок аксессуарной роли: локальный этап каталога
+
+Для новых строк sync предусмотрен отдельный выключенный по умолчанию writer с явно заданной
+датой начала. Он не меняет категорию, деньги, зарплаты или действующие signed-показатели.
+Роль и свидетельство продажи фиксируются один раз. Новый связанный возврат копирует
+актуальный снимок исходной продажи, даже если позднее подтверждение товара отозвано.
+Без подходящего снимка сохраняется DEFER_TO_EXISTING, не нулевой вклад и не сегодняшняя
+роль товара. Повторный sync не создаёт снимки для ранее сохранённых строк и не заменяет
+первоначальный снимок. Поздний relink/существенная правка факта дают STALE.
+
+Официальные SQL-расчёты эти снимки ещё не используют. Очередь исправлений, контролируемые
+ревизии и подключение N/B — последующие блоки. Подробный контракт и ограничения:
+[снимки и перенос](classification.md#снимки-новых-фактов-и-проверяемый-перенос-четвёртый-блок-42).

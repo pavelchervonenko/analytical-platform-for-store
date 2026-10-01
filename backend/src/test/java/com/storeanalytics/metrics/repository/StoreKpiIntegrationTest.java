@@ -120,6 +120,10 @@ class StoreKpiIntegrationTest {
                 "SALE_PAYMENT_MISMATCH"
         );
         addOpenQualityIssue(
+                graph.storeId(), "SALE_DOCUMENT", scoped(graph, "sale-july"),
+                "SALE_ITEM_NET_MISMATCH"
+        );
+        addOpenQualityIssue(
                 graph.storeId(), "SALE_DOCUMENT", scoped(graph, "sale-august"),
                 "SALE_PAYMENT_MISMATCH"
         );
@@ -146,13 +150,135 @@ class StoreKpiIntegrationTest {
                 graph.storeId(), "RETURN_ITEM", scoped(graph, "return-item-without-origin"),
                 "RETURN_ORIGINAL_ITEM_MISSING"
         );
+        addOpenQualityIssue(
+                graph.storeId(), "RETURN_DOCUMENT", scoped(graph, "return-july-item-missing"),
+                "RETURN_PAYMENT_MISMATCH"
+        );
 
         assertThat(periodQualityIssueRepository.countOpenConsistencyIssues(
                 graph.storeId(), PERIOD_START, PERIOD_END
         )).isOne();
         assertThat(periodQualityIssueRepository.countOpenConsistencyIssues(
                 graph.storeId(), PERIOD_END.plusDays(1), PERIOD_END.plusMonths(1)
+        )).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM data_quality_issues
+                WHERE store_id = ?
+                  AND status = 'OPEN'
+                  AND issue_code IN ('SALE_PAYMENT_MISMATCH', 'RETURN_PAYMENT_MISMATCH')
+                """,
+                Long.class,
+                graph.storeId()
+        )).isEqualTo(3L);
+    }
+
+    @Test
+    void excludesReturnCashMismatchOnlyWithLatestParseableSourceEvidence() {
+        TestGraph graph = createGraph();
+        UUID saleId = addDocument(graph, document(
+                graph.storeId(), "sale-cash-evidence", "SALE", PERIOD_START,
+                "100.00", false, null
+        ));
+        UUID alignedReturnId = addDocument(graph, document(
+                graph.storeId(), "return-cash-aligned", "RETURN", PERIOD_START,
+                "100.00", false, saleId
+        ));
+        addPayment(alignedReturnId, "payment-cash-aligned", "100.00");
+        addReturnCashRaw(
+                graph,
+                "return-cash-aligned",
+                "10.00",
+                "0",
+                "0",
+                Instant.parse("2026-07-01T10:00:00Z")
+        );
+        addReturnCashRaw(
+                graph,
+                "return-cash-aligned",
+                "70.00",
+                "20.00",
+                "10.00",
+                Instant.parse("2026-07-01T11:00:00Z")
+        );
+        addOpenQualityIssue(
+                graph.storeId(), "RETURN_DOCUMENT", scoped(graph, "return-cash-aligned"),
+                "RETURN_CASH_TRANSACTION_MISMATCH"
+        );
+
+        assertThat(periodQualityIssueRepository.countOpenConsistencyIssues(
+                graph.storeId(), PERIOD_START, PERIOD_END
+        )).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM data_quality_issues
+                WHERE store_id = ?
+                  AND status = 'OPEN'
+                  AND issue_code = 'RETURN_CASH_TRANSACTION_MISMATCH'
+                """,
+                Long.class,
+                graph.storeId()
         )).isOne();
+    }
+
+    @Test
+    void keepsReturnCashMismatchActionableWithoutExactSourceEvidence() {
+        TestGraph graph = createGraph();
+        UUID saleId = addDocument(graph, document(
+                graph.storeId(), "sale-cash-guards", "SALE", PERIOD_START,
+                "300.00", false, null
+        ));
+
+        UUID mismatchedReturnId = addDocument(graph, document(
+                graph.storeId(), "return-cash-mismatched", "RETURN", PERIOD_START,
+                "100.00", false, saleId
+        ));
+        addPayment(mismatchedReturnId, "payment-cash-mismatched", "100.00");
+        addReturnCashRaw(
+                graph,
+                "return-cash-mismatched",
+                "99.00",
+                "0",
+                "0",
+                Instant.parse("2026-07-01T10:00:00Z")
+        );
+
+        UUID missingReturnId = addDocument(graph, document(
+                graph.storeId(), "return-cash-missing", "RETURN", PERIOD_START,
+                "100.00", false, saleId
+        ));
+        addPayment(missingReturnId, "payment-cash-missing", "100.00");
+
+        UUID malformedReturnId = addDocument(graph, document(
+                graph.storeId(), "return-cash-malformed", "RETURN", PERIOD_START,
+                "100.00", false, saleId
+        ));
+        addPayment(malformedReturnId, "payment-cash-malformed", "100.00");
+        addReturnCashRaw(
+                graph,
+                "return-cash-malformed",
+                "not-a-number",
+                "0",
+                "0",
+                Instant.parse("2026-07-01T10:00:00Z")
+        );
+
+        for (String externalId : java.util.List.of(
+                "return-cash-mismatched",
+                "return-cash-missing",
+                "return-cash-malformed"
+        )) {
+            addOpenQualityIssue(
+                    graph.storeId(), "RETURN_DOCUMENT", scoped(graph, externalId),
+                    "RETURN_CASH_TRANSACTION_MISMATCH"
+            );
+        }
+
+        assertThat(periodQualityIssueRepository.countOpenConsistencyIssues(
+                graph.storeId(), PERIOD_START, PERIOD_END
+        )).isEqualTo(3L);
     }
 
     @Test
@@ -253,6 +379,66 @@ class StoreKpiIntegrationTest {
                 Timestamp.from(occurredAt),
                 graph.syncRunId(),
                 graph.syncRunId()
+        );
+    }
+
+    private void addReturnCashRaw(
+            TestGraph graph,
+            String externalId,
+            String money,
+            String bank,
+            String invoice,
+            Instant firstSeenAt
+    ) {
+        String payload = """
+                {
+                  "cashTransactions": [],
+                  "detail": {
+                    "cash": {
+                      "money": "%s",
+                      "bank": "%s",
+                      "invoice": "%s"
+                    }
+                  }
+                }
+                """.formatted(money, bank, invoice);
+        jdbcTemplate.update(
+                """
+                INSERT INTO raw_record_versions (
+                    id, connection_id, store_id, source_system, entity_type, external_id,
+                    payload, payload_hash, source_updated_at, first_seen_at, last_seen_at,
+                    first_sync_run_id, last_sync_run_id, normalization_status, normalized_at
+                ) VALUES (
+                    ?, ?, ?, 'LIVESKLAD', 'RETURN_DOCUMENT', ?, ?::jsonb, ?, ?, ?, ?,
+                    ?, ?, 'NORMALIZED', ?
+                )
+                """,
+                UUID.randomUUID(),
+                graph.connectionId(),
+                graph.storeId(),
+                externalId,
+                payload,
+                UUID.randomUUID().toString().replace("-", "").repeat(2),
+                Timestamp.from(firstSeenAt),
+                Timestamp.from(firstSeenAt),
+                Timestamp.from(firstSeenAt),
+                graph.syncRunId(),
+                graph.syncRunId(),
+                Timestamp.from(firstSeenAt)
+        );
+    }
+
+    private void addPayment(UUID documentId, String externalId, String amount) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO sales_payments (
+                    id, sales_document_id, external_id, payment_method, amount
+                ) VALUES (?, ?, ?, 'CASH', ?)
+                """,
+                UUID.randomUUID(),
+                documentId,
+                externalId,
+                new BigDecimal(amount)
         );
     }
 

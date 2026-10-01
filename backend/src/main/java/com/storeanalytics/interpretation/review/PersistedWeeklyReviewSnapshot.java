@@ -14,7 +14,7 @@ public record PersistedWeeklyReviewSnapshot(
         WeeklyReviewResponse response,
         String contentHash,
         Instant createdAt
-) {
+) implements PersistedWeeklyReview {
 
     public PersistedWeeklyReviewSnapshot {
         requireNonNull(id, "id");

@@ -1,7 +1,10 @@
 package com.storeanalytics.metrics.repository;
 
+import static com.storeanalytics.metrics.repository.CatalogMetricTestCategories.expectedCodes;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.storeanalytics.metrics.service.CategoryKpiEntry;
+import com.storeanalytics.metrics.service.CategoryKpiService;
 import com.storeanalytics.metrics.service.EmployeeCategoryKpiEmployee;
 import com.storeanalytics.metrics.service.EmployeeCategoryKpiEntry;
 import com.storeanalytics.metrics.service.EmployeeCategoryKpiGroup;
@@ -15,6 +18,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +50,9 @@ class EmployeeCategoryKpiIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private CategoryKpiService categoryKpiService;
 
     @DynamicPropertySource
     static void configurePostgres(DynamicPropertyRegistry registry) {
@@ -107,7 +114,9 @@ class EmployeeCategoryKpiIntegrationTest {
 
         assertThat(result.employees()).hasSize(4);
         EmployeeCategoryKpiEmployee assigned = employee(result, assignedId);
-        assertThat(assigned.categories()).hasSize(21);
+        assertThat(assigned.categories())
+                .extracting(EmployeeCategoryKpiEntry::categoryCode)
+                .containsExactlyInAnyOrderElementsOf(expectedCodes());
         assertThat(assigned.netRevenue()).isEqualByComparingTo("110.00");
         assertThat(assigned.rankingEligible()).isTrue();
         assertThat(category(assigned, "IPHONE_NEW_ASIS").metrics().netRevenue())
@@ -126,7 +135,9 @@ class EmployeeCategoryKpiIntegrationTest {
         assertThat(assigned.dataQuality().completeCostData()).isFalse();
 
         EmployeeCategoryKpiEmployee zero = employee(result, zeroId);
-        assertThat(zero.categories()).hasSize(21);
+        assertThat(zero.categories())
+                .extracting(EmployeeCategoryKpiEntry::categoryCode)
+                .containsExactlyInAnyOrderElementsOf(expectedCodes());
         assertThat(zero.netRevenue()).isEqualByComparingTo("0.00");
         assertThat(zero.rankingEligible()).isTrue();
 
@@ -151,6 +162,80 @@ class EmployeeCategoryKpiIntegrationTest {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         assertThat(projectionRevenue).isEqualByComparingTo(employeeKpiRevenue);
         assertThat(projectionRevenue).isEqualByComparingTo("175.00");
+    }
+
+    @Test
+    void reconcilesEveryCatalogCategoryAcrossStoresSellersAndUnassignedReturns() {
+        TestGraph first = createGraph();
+        UUID secondStore = UUID.randomUUID();
+        jdbcTemplate.update("""
+                INSERT INTO stores (id, connection_id, source_system, external_id, name)
+                VALUES (?, ?, 'LIVESKLAD', 'second-category-store', 'Second category store')
+                """, secondStore, first.connectionId());
+        TestGraph second = new TestGraph(
+                first.connectionId(), secondStore, first.syncRunId(), first.productId());
+        UUID seller = addEmployee(first, "shared-seller", "Shared seller");
+        addAssignment(seller, first.storeId(), true, true);
+        addAssignment(seller, second.storeId(), true, true);
+        var stores = List.of(first, second);
+        for (int index = 0; index < stores.size(); index++) {
+            TestGraph graph = stores.get(index);
+            BigDecimal scale = BigDecimal.valueOf(index + 1L);
+            for (String code : expectedCodes()) {
+                String prefix = index + "-" + code;
+                UUID sale = addDocument(graph, seller, prefix + "-sale", "SALE",
+                        PERIOD_START, scale.multiply(new BigDecimal("100")).toPlainString(), null);
+                addItem(graph, new ItemFixture(sale, prefix + "-sold", code, "1.000",
+                        scale.multiply(new BigDecimal("100")).toPlainString(),
+                        scale.multiply(new BigDecimal("40")).toPlainString(), "KNOWN"));
+                addSaleWithItem(graph, null, prefix + "-unassigned", code,
+                        scale.multiply(new BigDecimal("60")).toPlainString(),
+                        scale.multiply(new BigDecimal("20")).toPlainString());
+                UUID returned = addDocument(graph, seller, prefix + "-return", "RETURN",
+                        PERIOD_END, scale.multiply(new BigDecimal("25")).toPlainString(), sale);
+                addItem(graph, new ItemFixture(returned, prefix + "-returned", code, "0.250",
+                        scale.multiply(new BigDecimal("25")).toPlainString(),
+                        scale.multiply(new BigDecimal("10")).toPlainString(), "KNOWN"));
+            }
+            addSaleWithItem(graph, seller, index + "-excluded", "EXCLUDE", "9999", "5000");
+        }
+
+        for (int index = 0; index < stores.size(); index++) {
+            UUID store = stores.get(index).storeId();
+            BigDecimal scale = BigDecimal.valueOf(index + 1L);
+            var categoryResult = categoryKpiService.calculate(store, period());
+            var sellers = employeeCategoryKpiService.calculate(store, period()).employees();
+            assertThat(sellers).hasSize(2);
+            assertThat(sellers.stream().filter(EmployeeCategoryKpiEmployee::unassigned)).hasSize(1);
+            assertThat(categoryResult.categories())
+                    .extracting(CategoryKpiEntry::categoryCode)
+                    .containsExactlyInAnyOrderElementsOf(expectedCodes());
+            for (var entry : categoryResult.categories()) {
+                var metrics = entry.metrics();
+                assertThat(metrics.netRevenue()).as(entry.categoryCode())
+                        .isEqualByComparingTo(scale.multiply(new BigDecimal("135")));
+                assertThat(metrics.netQuantity()).isEqualByComparingTo("1.750");
+                assertThat(metrics.costAmount())
+                        .isEqualByComparingTo(scale.multiply(new BigDecimal("50")));
+                assertThat(metrics.grossProfit())
+                        .isEqualByComparingTo(scale.multiply(new BigDecimal("85")));
+                assertThat(sellers.stream().map(s -> category(s, entry.categoryCode()).metrics().netRevenue())
+                        .reduce(BigDecimal.ZERO, BigDecimal::add))
+                        .isEqualByComparingTo(metrics.netRevenue());
+            }
+            for (var total : categoryResult.groups()) {
+                assertThat(sellers.stream().map(s -> group(s, total.groupCode()).metrics().netRevenue())
+                        .reduce(BigDecimal.ZERO, BigDecimal::add)).as(total.groupCode())
+                        .isEqualByComparingTo(total.metrics().netRevenue());
+            }
+            BigDecimal expectedRevenue = scale.multiply(new BigDecimal("135"))
+                    .multiply(BigDecimal.valueOf(expectedCodes().size()));
+            assertThat(sellers.stream().map(EmployeeCategoryKpiEmployee::netRevenue)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)).isEqualByComparingTo(expectedRevenue);
+            assertThat(employeeKpiService.calculate(store, period()).employees().stream()
+                    .map(entry -> entry.netRevenue()).reduce(BigDecimal.ZERO, BigDecimal::add))
+                    .isEqualByComparingTo(expectedRevenue);
+        }
     }
 
     private TestGraph createGraph() {

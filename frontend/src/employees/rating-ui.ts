@@ -5,20 +5,27 @@ export type EmployeeSort = "rank" | "score" | "revenue" | "improvement";
 
 export const attachRateLabels: Record<string, string> = {
   ACCESSORY_IPAD: "Аксессуары к iPad",
+  ACCESSORY_AIRPODS: "Аксессуары AirPods",
+  ACCESSORY_APPLE_WATCH: "Аксессуары Apple Watch",
   ACCESSORY_PODS_WATCH: "Аксессуары к Pods / Watch",
   CASE_APPLE_IPHONE: "Чехлы Apple / iPhone",
   CASE_SAMSUNG: "Чехлы Samsung",
   CHARGER_CABLE: "Зарядные устройства и кабели",
+  POWER_BANK: "Пауэрбанки",
   FILM_PHONE: "Защитные пленки",
   GLASS_IPHONE: "Защитное стекло iPhone",
   GLASS_CAMERA_IPHONE: "Защита камеры iPhone",
   GLASS_SAMSUNG: "Защитное стекло Samsung",
   GLASS_CAMERA_SAMSUNG: "Защита камеры Samsung",
-  PREMIUM_PROTECTION: "Протекция",
+  PREMIUM_PROTECTION: "Премиум-сервис / Протекция",
   SETUP_SERVICE: "Настройки и услуги",
   WARRANTY_GENERIC_NEW: "Гарантии — новые устройства",
   WARRANTY_GENERIC_USED: "Гарантии — устройства Б/У"
 };
+
+export function isAttachDetail(metricCode: string): boolean {
+  return metricCode === "ACCESSORY_AIRPODS" || metricCode === "ACCESSORY_APPLE_WATCH";
+}
 
 export const scoreLabels = {
   contributionScore: "Коммерческий вклад",

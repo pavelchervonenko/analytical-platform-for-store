@@ -19,8 +19,9 @@ import com.storeanalytics.integration.livesklad.dto.LiveSkladSaleSummaryPayload;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladStorePayload;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladException;
 import com.storeanalytics.integration.livesklad.exception.LiveSkladReturnChangedException;
-import com.storeanalytics.sync.exception.ReturnSyncException;
+import com.storeanalytics.quality.model.DataQualitySeverity;
 import com.storeanalytics.quality.model.DataQualityStatus;
+import com.storeanalytics.sync.exception.ReturnSyncException;
 import com.storeanalytics.sync.model.NormalizationStatus;
 import com.storeanalytics.sync.model.SyncStatus;
 import java.math.BigDecimal;
@@ -927,6 +928,40 @@ class ReturnSyncIntegrationTest {
     }
 
     @Test
+    void recordsUnexpectedReturnZeroCostAsInformation() {
+        bootstrapReferences();
+        SaleFixture sale = new SaleFixture(
+                "sale-return-zero-cost",
+                "sale-position-return-zero-cost",
+                "product-return-zero-cost",
+                Instant.parse("2026-07-01T10:00:00Z"),
+                "75.00",
+                "0.00"
+        );
+        seedSale(sale);
+        ReturnFixture source = new ReturnFixture(
+                "return-zero-cost",
+                sale,
+                Instant.parse("2026-07-01T13:00:00Z"),
+                Instant.parse("2026-07-01T13:01:00Z"),
+                "saleReturn"
+        );
+        configureReturn(source);
+
+        returnSyncService.synchronize(period());
+
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT severity
+                FROM data_quality_issues
+                WHERE issue_code = 'RETURN_ZERO_UNEXPECTED_COST'
+                  AND status = 'OPEN'
+                """,
+                String.class
+        )).isEqualTo(DataQualitySeverity.INFO.name());
+    }
+
+    @Test
     void validatedRecoveryRejectsMismatchAndIsIdempotent() {
         bootstrapReferences();
         SaleFixture sale = new SaleFixture(
@@ -1172,7 +1207,7 @@ class ReturnSyncIntegrationTest {
     }
 
     @Test
-    void skipsCashReturnWhoseReferencedSalePredatesTheTransactionWindow() {
+    void skipsSaleTypedReturnFeedEntryWithoutMutatingExistingSameStoreSale() {
         bootstrapReferences();
         SaleFixture sale = new SaleFixture(
                 "sale-reference",
@@ -1183,6 +1218,29 @@ class ReturnSyncIntegrationTest {
                 "20.00"
         );
         seedSale(sale);
+        SaleState saleBefore = saleState("sale-reference");
+        String connectionId = jdbcTemplate.queryForObject(
+                """
+                SELECT connection_id::text
+                FROM sales_documents
+                WHERE external_id = 'sale-reference'
+                """,
+                String.class
+        );
+        jdbcTemplate.update(
+                """
+                INSERT INTO data_quality_issues (
+                    store_id, entity_type, entity_id, issue_code,
+                    severity, status, message
+                )
+                SELECT store_id, 'RETURN_DOCUMENT', ?,
+                       'RETURN_ORIGINAL_DOCUMENT_MISSING',
+                       'ERROR', 'OPEN', 'Stale false-positive issue'
+                FROM sales_documents
+                WHERE external_id = 'sale-reference'
+                """,
+                connectionId + ":sale-reference"
+        );
         ReturnFixture source = new ReturnFixture(
                 "sale-reference",
                 sale,
@@ -1234,8 +1292,8 @@ class ReturnSyncIntegrationTest {
                 )
         );
 
-        assertThat(result.status()).isEqualTo(SyncStatus.PARTIAL_SUCCESS);
-        assertThat(result.unresolvedDocuments()).isEqualTo(1);
+        assertThat(result.status()).isEqualTo(SyncStatus.SUCCESS);
+        assertThat(result.unresolvedDocuments()).isZero();
         assertThat(jdbcTemplate.queryForObject(
                 """
                 SELECT normalization_status FROM raw_record_versions
@@ -1251,6 +1309,68 @@ class ReturnSyncIntegrationTest {
                 """,
                 String.class
         )).isEqualTo("SALE");
+        assertThat(saleState("sale-reference")).isEqualTo(saleBefore);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT count(*) FROM data_quality_issues
+                WHERE issue_code = 'RETURN_ORIGINAL_DOCUMENT_MISSING'
+                  AND status = 'RESOLVED'
+                """,
+                Integer.class
+        )).isEqualTo(1);
+    }
+
+    @Test
+    void keepsSaleTypedReturnFeedEntryUnresolvedWithoutSameStoreSale() {
+        bootstrapReferences();
+        SaleFixture missingSale = new SaleFixture(
+                "sale-reference-missing",
+                "sale-position-reference-missing",
+                "product-reference-missing",
+                Instant.parse("2026-07-01T10:00:00Z"),
+                "50.00",
+                "20.00"
+        );
+        ReturnFixture source = new ReturnFixture(
+                "sale-reference-missing",
+                missingSale,
+                Instant.parse("2026-07-01T12:00:00Z"),
+                Instant.parse("2026-07-01T12:02:00Z"),
+                "saleReturn"
+        );
+        LiveSkladReturnDetailPayload detail = new LiveSkladReturnDetailPayload(
+                source.externalId(),
+                "S-RETURN-MISSING",
+                missingSale.occurredAt(),
+                source.sourceUpdatedAt(),
+                "sale",
+                "store-1",
+                "return-processor",
+                null,
+                money("50.00"),
+                BigDecimal.ZERO.setScale(2),
+                BigDecimal.ZERO.setScale(2),
+                List.of(),
+                returnRaw(source.externalId(), source)
+        );
+        fakeClient.setReturns(
+                List.of(cashItem()),
+                Map.of("store-1", List.of(cashRegister())),
+                List.of(cashTransaction(source)),
+                Map.of(source.externalId(), detail)
+        );
+
+        ReturnSyncResult result = returnSyncService.synchronize(period());
+
+        assertThat(result.status()).isEqualTo(SyncStatus.PARTIAL_SUCCESS);
+        assertThat(result.unresolvedDocuments()).isOne();
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT count(*) FROM sales_documents
+                WHERE external_id = 'sale-reference-missing'
+                """,
+                Integer.class
+        )).isZero();
         assertThat(jdbcTemplate.queryForObject(
                 """
                 SELECT count(*) FROM data_quality_issues
@@ -1258,13 +1378,49 @@ class ReturnSyncIntegrationTest {
                   AND status = 'OPEN'
                 """,
                 Integer.class
-        )).isEqualTo(1);
+        )).isOne();
     }
 
 
     private void bootstrapReferences() {
         storeSyncService.synchronize();
         employeeSyncService.synchronize();
+    }
+
+    private SaleState saleState(String externalId) {
+        Map<String, Object> document = jdbcTemplate.queryForMap(
+                """
+                SELECT document_kind, net_amount, cost_amount, employee_id,
+                       source_updated_at, last_sync_run_id, version
+                FROM sales_documents
+                WHERE external_id = ?
+                """,
+                externalId
+        );
+        List<Map<String, Object>> items = jdbcTemplate.queryForList(
+                """
+                SELECT external_id, quantity, net_amount, cost_amount,
+                       original_item_id, is_deleted, version
+                FROM sales_document_items
+                WHERE sales_document_id = (
+                    SELECT id FROM sales_documents WHERE external_id = ?
+                )
+                ORDER BY external_id
+                """,
+                externalId
+        );
+        List<Map<String, Object>> payments = jdbcTemplate.queryForList(
+                """
+                SELECT external_id, payment_method, amount, is_deleted, version
+                FROM sales_payments
+                WHERE sales_document_id = (
+                    SELECT id FROM sales_documents WHERE external_id = ?
+                )
+                ORDER BY external_id
+                """,
+                externalId
+        );
+        return new SaleState(document, items, payments);
     }
 
     private void seedSale(SaleFixture fixture) {
@@ -1510,6 +1666,13 @@ class ReturnSyncIntegrationTest {
             Instant occurredAt,
             Instant sourceUpdatedAt,
             String sourceType
+    ) {
+    }
+
+    private record SaleState(
+            Map<String, Object> document,
+            List<Map<String, Object>> items,
+            List<Map<String, Object>> payments
     ) {
     }
 

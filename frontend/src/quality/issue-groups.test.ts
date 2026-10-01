@@ -54,6 +54,9 @@ describe("quality issue groups", () => {
     expect(qualityIssueGuidance("ZERO_UNEXPECTED_COST")).toContain(
       "Для услуг, гарантий и протекций"
     );
+    expect(qualityIssueGuidance("RETURN_ZERO_UNEXPECTED_COST")).toContain(
+      "только если значение действительно ошибочно"
+    );
     expect(qualityIssueGuidance("FUTURE_ISSUE")).toContain(
       "Проверьте исходный документ"
     );

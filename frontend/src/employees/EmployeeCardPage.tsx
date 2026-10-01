@@ -8,7 +8,7 @@ import { formatDate } from "../shared/date";
 import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
 import { QueryError, StaleDataNote } from "../shared/QueryState";
 import { useWorkspace, type AnalyticsPeriodMode } from "../stores/WorkspaceProvider";
-import { attachRateLabels, employeeRatingReason } from "./rating-ui";
+import { isAttachDetail, attachRateLabels, employeeRatingReason } from "./rating-ui";
 
 function signedNumber(value: number | null, suffix = ""): string {
   if (value == null) return "—";
@@ -164,7 +164,8 @@ export function EmployeeCardPage() {
                     (item) => item.metricCode === rate.metricCode
                   );
                   const denominator = rate.denominatorQuantity ?? rate.denominatorReceiptCount;
-                  const excludedReason = rate.storeRatePercent == null || rate.storeRatePercent <= 0
+                  const excludedReason = isAttachDetail(rate.metricCode) ? "Справочно, вне рейтинга"
+                    : rate.storeRatePercent == null || rate.storeRatePercent <= 0
                     ? "Нет среднего по магазину"
                     : denominator < card.formula.minimumAttachDenominator
                       ? "Недостаточно продаж"
@@ -189,7 +190,7 @@ export function EmployeeCardPage() {
                         change={dynamics?.change ?? null}
                       />
                       <i className={`employee-attach-status status ${rate.includedInScore ? "status--success" : ""}`}>
-                        {rate.includedInScore
+                        {rate.attributionIncomplete ? "Ожидает разбора" : rate.includedInScore
                           ? `В балле, ${formatNumber(rate.score)}`
                           : excludedReason}
                       </i>

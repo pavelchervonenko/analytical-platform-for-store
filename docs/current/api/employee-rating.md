@@ -6,18 +6,22 @@ owner: backend
 audience:
   - developer
   - manager
-last_verified: 2026-08-31
+last_verified: 2026-09-19
 requirement_sources:
   - docs/archive/legacy-contracts/employee-rating-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/performance/service/EmployeeRatingService.java
   - backend/src/main/java/com/storeanalytics/performance/service/EmployeeRatingFinalizationService.java
   - backend/src/main/java/com/storeanalytics/performance/web/EmployeeRatingController.java
+  - backend/src/main/java/com/storeanalytics/performance/web/EmployeeRatingSettingsController.java
+  - backend/src/main/java/com/storeanalytics/performance/service/EmployeeRatingSettingsService.java
   - contracts/openapi/current.json
 verification_sources:
   - backend/src/test/java/com/storeanalytics/performance/repository/EmployeeRatingIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/performance/service/EmployeeRatingServiceTest.java
   - backend/src/test/java/com/storeanalytics/performance/web/EmployeeRatingControllerTest.java
+  - backend/src/test/java/com/storeanalytics/performance/web/EmployeeRatingSettingsControllerTest.java
+  - backend/src/test/java/com/storeanalytics/store/web/StoreDataStatusSecurityIntegrationTest.java
 runtime_evidence: []
 required_reviewers:
   - backend-data
@@ -39,6 +43,10 @@ superseded_by: null
   finalization и immutable snapshot после неё.
 - `POST /api/stores/{storeId}/employee-ratings/finalize?...` создаёт snapshot только после конца
   периода в timezone магазина; повторный конкурентный запрос идемпотентно возвращает существующий.
+- `GET /api/stores/{storeId}/employee-rating-settings` читает store-scoped roster.
+- `PUT /api/stores/{storeId}/employee-rating-settings/{employeeId}` изменяет участие только при
+  одновременном доступе к магазину и функции `SHIFTS`; composite assignment не позволяет применить
+  идентификатор сотрудника к другому магазину.
 
 Кандидат рейтинга: active employee, active assignment, `participatesInRanking=true` и хотя бы одна
 смена. Это уже, чем полный employee KPI. Snapshot read проверяет payload hash и не вызывает live

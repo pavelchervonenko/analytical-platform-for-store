@@ -287,10 +287,12 @@ public class SalesSyncPersistence {
                     productCache,
                     result
             );
+            SalesDocumentItem existing = existingItems.get(sourceItem.externalId());
             Classification classification = classify(
                     product,
                     detail.occurredAt(),
-                    unmappedCategory
+                    unmappedCategory,
+                    existing
             );
             synchronizeIssue(
                     classification.category() == unmappedCategory,
@@ -318,7 +320,7 @@ public class SalesSyncPersistence {
                             "SALE_ITEM",
                             scopedId(syncRun, sourceItem.externalId()),
                             "ZERO_UNEXPECTED_COST",
-                            DataQualitySeverity.WARNING,
+                            DataQualitySeverity.INFO,
                             "Non-service sale item has zero cost"
                     ),
                     now,
@@ -346,9 +348,8 @@ public class SalesSyncPersistence {
                     classification.version(),
                     classification.conditionType()
             );
-            SalesDocumentItem existing = existingItems.get(sourceItem.externalId());
             if (existing == null) {
-                factRepositories.items().save(new SalesDocumentItem(
+                var createdItem = factRepositories.items().save(new SalesDocumentItem(
                         new SalesItemIdentity(
                                 document,
                                 sourceItem.externalId(),
@@ -360,6 +361,7 @@ public class SalesSyncPersistence {
                         costQuality,
                         sourceItem.work()
                 ));
+                referenceRepositories.roleSnapshots().captureNewItem(createdItem.getId());
                 result.itemsCreated++;
                 changed = true;
             } else if (existing.update(
@@ -432,10 +434,11 @@ public class SalesSyncPersistence {
     private Classification classify(
             Product product,
             Instant occurredAt,
-            AnalyticsCategory unmappedCategory
+            AnalyticsCategory unmappedCategory,
+            SalesDocumentItem existing
     ) {
         var resolved = referenceRepositories.classificationResolver()
-                .resolve(product, occurredAt);
+                .resolveSaleForSync(product, occurredAt, existing);
         if (resolved.isEmpty()) {
             return new Classification(
                     unmappedCategory,

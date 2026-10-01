@@ -6,13 +6,16 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-09-14
+last_verified: 2026-10-01
 requirement_sources:
   - docs/archive/legacy-contracts/employee-rating-api.md
   - docs/archive/discoveries/analytics-business-rules-draft.md
   - docs/current/product/periods.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics/repository/EmployeeKpiRepository.java
+  - backend/src/main/java/com/storeanalytics/metrics/repository/SellerMembershipHistoryWriter.java
+  - backend/src/main/java/com/storeanalytics/performance/service/EmployeeRatingSettingsService.java
+  - backend/src/main/resources/db/migration/V91__seller_membership_history.sql
   - backend/src/main/java/com/storeanalytics/performance/service/EmployeeRatingService.java
   - backend/src/main/java/com/storeanalytics/performance/service/EmployeeCardService.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewTeamEmployeeProjector.java
@@ -22,6 +25,8 @@ implementation_sources:
   - frontend/src/plan-schedule/forms.ts
 verification_sources:
   - backend/src/test/java/com/storeanalytics/metrics/repository/EmployeeKpiIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/metrics/repository/SellerMembershipHistoryWriterIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/performance/service/EmployeeRatingSettingsServiceTest.java
   - backend/src/test/java/com/storeanalytics/performance/repository/EmployeeRatingIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/performance/service/EmployeeRatingServiceTest.java
   - backend/src/test/java/com/storeanalytics/performance/service/EmployeeCardServiceTest.java
@@ -65,6 +70,16 @@ Overview roster не обязан сходиться со store total.
 сотрудника не удаляется автоматически, а уже созданный weekly-review snapshot не фильтруется заново
 при чтении. Историческое представление меняется только новой immutable revision.
 
+### Подготовка исторического участия
+
+V91 содержит отдельные интервалы участия и per-store нижнюю границу достоверности.
+Миграция не копирует текущий флаг задним числом. Только после проверки состава оператор
+может явно установить baseline; до него исторический lookup возвращает `UNKNOWN`.
+После baseline ручной переключатель и полный employee sync записывают интервалы в одной
+транзакции с текущим состоянием. Повтор без изменения состава не создаёт новый интервал.
+Пока исторический fact reader не подключён, действующие Overview и Weekly Review всё ещё
+используют **текущий** roster для расчёта; наличие V91 не делает прошлые отчёты исторически точными.
+
 ### Вклад и эффективность в Weekly Review
 
 Чистая выручка сотрудника в недельном разборе — это его вклад в результат магазина и собственная
@@ -103,6 +118,11 @@ Overall = sum(score * weight / 100) * 100 / available coverage
 отдельными направлениями Rating v1 и не добавляют баллы в `Overall`. Рейтинг использует выручку,
 выручку за час, структуру аксессуаров/услуг и attach-rate.
 
+Новые ACCESSORY_AIRPODS и ACCESSORY_APPLE_WATCH отображаются справочно:
+их includedInScore=false и score=null при любой базе. Существующая сводка
+ACCESSORY_PODS_WATCH сохраняет прежнее рейтинговое правило. Добавление дочерних
+строк не меняет балл или coverage и не создаёт тройного веса.
+
 Attach участвует при employee denominator `>=3` и положительном store benchmark. Место присваивается
 при coverage `>=75%`, ранжирование dense. Нет смены — не candidate; нулевые/отрицательные часы —
 efficiency `null`; малая attach-база — score `null`.
@@ -113,3 +133,15 @@ efficiency `null`; малая attach-база — score `null`.
 Возврат уменьшает показатели сотрудника исходной продажи. Сотрудник, который только оформил
 возврат, не получает этот финансовый факт. Orphan return без найденной продажи временно попадает в
 «Не назначен» и переатрибутируется после появления оригинала.
+
+## Атрибуция attach v4
+
+Для обычных гарантий сотрудник и дата следуют продаже устройства; для остальных attach-метрик
+возврат относится сотруднику строки LiveSklad в периоде возврата. Финансовые составляющие
+рейтинга сохраняют прежнюю атрибуцию. При конфликте затронутая гарантийная метрика исключена
+у всех сотрудников из сравнения со средним магазина, без нулевого штрафа. Неизвестный сотрудник
+обычного возврата исключает соответствующую метрику из employee-сравнения.
+`attributionIncomplete` отличает такое исключение от недостатка продаж. Неизвестный исходный
+период ограничивает обе гарантийные метрики магазина до решения. Остальные показатели и
+формулы весов доступны, поэтому общий балл/место не замораживаются. Версия formula получает
+суффикс `-attach-v4`; старые опубликованные рейтинги не переписываются.

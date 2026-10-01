@@ -15,10 +15,10 @@ import org.springframework.stereotype.Component;
 public final class WeeklyReviewAiRendererV25 {
 
     public WeeklyReviewAiContent render(
-            WeeklyReviewAiInput input,
+            WeeklyReviewAiEditorialInput input,
             WeeklyReviewAiSelection selection
     ) {
-        WeeklyReviewAiInput source = requireNonNull(input, "input");
+        WeeklyReviewAiEditorialInput source = requireNonNull(input, "input");
         WeeklyReviewAiSelection choices = requireNonNull(
                 selection, "selection"
         );
@@ -55,7 +55,7 @@ public final class WeeklyReviewAiRendererV25 {
     }
 
     private String summaryText(
-            WeeklyReviewAiInput input,
+            WeeklyReviewAiEditorialInput input,
             WeeklyReviewAiSelection.SummarySelection selection,
             Map<String, WeeklyReviewAiInput.FactorSource> factors
     ) {
@@ -183,7 +183,7 @@ public final class WeeklyReviewAiRendererV25 {
     }
 
     private List<String> summaryEvidence(
-            WeeklyReviewAiInput input,
+            WeeklyReviewAiEditorialInput input,
             WeeklyReviewAiSelection.SummarySelection selection,
             Map<String, WeeklyReviewAiInput.FactorSource> factors
     ) {

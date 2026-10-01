@@ -1,0 +1,57 @@
+# catalog-category-registry-v2
+code	name	category_kind	device_family	counts_as_phone	counts_as_device	counts_as_additional_revenue	scope	device_type	device_brand_match	proposal_keys	confirmed_functions	confirmed_conditions
+IPHONE_NEW_ASIS	iPhone новые и ASIS	DEVICE	IPHONE	true	true	false	STANDARD	-	-	-	IPHONE	ASIS|NEW
+IPHONE_USED	iPhone Б/У	DEVICE	IPHONE	true	true	false	STANDARD	-	-	-	IPHONE	USED
+SAMSUNG_NEW	Samsung новые	DEVICE	SAMSUNG	true	true	false	STANDARD	-	-	-	SAMSUNG_PHONE	NEW
+SAMSUNG_USED	Samsung Б/У	DEVICE	SAMSUNG	true	true	false	STANDARD	-	-	-	SAMSUNG_PHONE	USED
+PHONE_OTHER	Телефоны других брендов	DEVICE	OTHER	true	true	false	STANDARD	-	-	DEVICE:OTHER_PHONE	OTHER_PHONE	-
+TABLET_APPLE	Планшеты Apple	DEVICE	IPAD_MAC	false	true	false	STANDARD	TABLET	APPLE	DEVICE:IPAD	IPAD	-
+TABLET_OTHER	Другие планшеты	DEVICE	OTHER	false	true	false	STANDARD	TABLET	OTHER	DEVICE:OTHER_TABLET	OTHER_TABLET	-
+LAPTOP_APPLE	Ноутбуки Apple	DEVICE	IPAD_MAC	false	true	false	STANDARD	LAPTOP	APPLE	DEVICE:MACBOOK	MACBOOK	-
+LAPTOP_OTHER	Другие ноутбуки	DEVICE	OTHER	false	true	false	STANDARD	LAPTOP	OTHER	DEVICE:OTHER_LAPTOP	OTHER_LAPTOP	-
+WATCH_APPLE	Часы Apple	DEVICE	PODS_WATCH	false	true	false	STANDARD	WATCH	APPLE	DEVICE:APPLE_WATCH	APPLE_WATCH	-
+WATCH_SAMSUNG	Часы Samsung	DEVICE	OTHER	false	true	false	STANDARD	WATCH	SAMSUNG	DEVICE:SAMSUNG_WATCH	SAMSUNG_WATCH	-
+WATCH_OTHER	Другие умные часы	DEVICE	OTHER	false	true	false	STANDARD	WATCH	OTHER	DEVICE:OTHER_WATCH	OTHER_WATCH	-
+FITNESS_WEARABLE	Фитнес-браслеты	DEVICE	OTHER	false	true	false	STANDARD	-	-	DEVICE:FITNESS	FITNESS	-
+HEADPHONES_APPLE	Наушники Apple	DEVICE	PODS_WATCH	false	true	false	STANDARD	-	-	DEVICE:APPLE_HEADPHONES	APPLE_HEADPHONES	-
+HEADPHONES_SAMSUNG	Наушники Samsung	DEVICE	PODS_WATCH	false	true	false	STANDARD	-	-	DEVICE:SAMSUNG_HEADPHONES	SAMSUNG_HEADPHONES	-
+HEADPHONES_OTHER	Другие наушники	DEVICE	PODS_WATCH	false	true	false	STANDARD	-	-	DEVICE:OTHER_HEADPHONES	OTHER_HEADPHONES	-
+SPEAKERS	Колонки	DEVICE	OTHER	false	true	false	STANDARD	-	-	DEVICE:SPEAKER	SPEAKER	-
+MICROPHONES	Микрофоны	DEVICE	OTHER	false	true	false	STANDARD	-	-	DEVICE:MICROPHONE	MICROPHONE	-
+GAME_CONSOLES	Игровые консоли	DEVICE	OTHER	false	true	false	STANDARD	-	-	DEVICE:CONSOLE	CONSOLE	-
+GAMING_ACCESSORIES	Игровые аксессуары	ACCESSORY	OTHER	false	false	true	STANDARD	-	-	ITEM:GAMING_ACCESSORY	GAMING_ACCESSORY	-
+SMART_GLASSES	Умные очки	DEVICE	OTHER	false	true	false	STANDARD	-	-	DEVICE:SMART_GLASSES	SMART_GLASSES	-
+CAMERAS	Фотоаппараты	DEVICE	OTHER	false	true	false	STANDARD	-	-	DEVICE:CAMERA	CAMERA	-
+HAIR_STYLERS	Стайлеры	DEVICE	OTHER	false	true	false	STANDARD	-	-	DEVICE:HAIR_STYLER	HAIR_STYLER	-
+ACCESSORY_IPAD	Аксессуары iPad	ACCESSORY	IPAD_MAC	false	false	true	STANDARD	-	-	-	CASE|FILM|KEYBOARD|SCREEN_GLASS|STYLUS|STYLUS_TIPS	-
+ACCESSORY_MAC	Аксессуары Mac	ACCESSORY	IPAD_MAC	false	false	true	STANDARD	-	-	-	CASE|FILM|KEYBOARD|MOUSE|SCREEN_GLASS	-
+ACCESSORY_AIRPODS	Аксессуары AirPods	ACCESSORY	PODS_WATCH	false	false	true	STANDARD	-	-	-	CASE	-
+ACCESSORY_APPLE_WATCH	Аксессуары Apple Watch	ACCESSORY	PODS_WATCH	false	false	true	STANDARD	-	-	-	CASE|KEYCHAIN|SCREEN_GLASS|STRAP	-
+CHARGER_CABLE	Зарядки и кабели	ACCESSORY	NONE	false	false	true	STANDARD	-	-	ITEM:CHARGER	CHARGER	-
+POWER_BANK	Пауэрбанки	ACCESSORY	NONE	false	false	true	STANDARD	-	-	ITEM:POWER_BANK	POWER_BANK	-
+OTHER_ACCESSORY_PRODUCT	Прочие аксессуары	ACCESSORY	OTHER	false	false	true	STANDARD	-	-	ITEM:CARDHOLDER|ITEM:CONNECTIVITY|ITEM:HOLDER|ITEM:MIXED_BUNDLE|ITEM:TRACKER	CARDHOLDER|CONNECTIVITY|FILM|HOLDER|KEYCHAIN|MIXED_BUNDLE|TRACKER	-
+CASE_APPLE_IPHONE	Чехлы iPhone	ACCESSORY	IPHONE	false	false	true	STANDARD	-	-	-	CASE	-
+CASE_SAMSUNG	Чехлы Samsung	ACCESSORY	SAMSUNG	false	false	true	STANDARD	-	-	-	CASE	-
+CASE_OTHER_DEVICE	Чехлы других устройств	ACCESSORY	OTHER	false	false	true	STANDARD	-	-	-	CASE	-
+OTHER_CASE	Чехлы с неизвестной совместимостью	ACCESSORY	OTHER	false	false	true	STANDARD	-	-	-	CASE	-
+CASE_UNIVERSAL	Универсальные чехлы	ACCESSORY	NONE	false	false	true	STANDARD	-	-	-	CASE	-
+GLASS_IPHONE	Защита дисплея iPhone	ACCESSORY	IPHONE	false	false	true	STANDARD	-	-	-	SCREEN_GLASS	-
+GLASS_SAMSUNG	Защита дисплея Samsung	ACCESSORY	SAMSUNG	false	false	true	STANDARD	-	-	-	SCREEN_GLASS	-
+GLASS_OTHER	Защита дисплея других телефонов	ACCESSORY	OTHER	false	false	true	STANDARD	-	-	-	SCREEN_GLASS	-
+GLASS_PHONE_UNRESOLVED	Стёкла с неизвестной совместимостью	ACCESSORY	NONE	false	false	true	STANDARD	-	-	-	SCREEN_GLASS	-
+GLASS_CAMERA_IPHONE	Защита камеры iPhone	ACCESSORY	IPHONE	false	false	true	STANDARD	-	-	-	CAMERA_GLASS	-
+GLASS_CAMERA_SAMSUNG	Защита камеры Samsung	ACCESSORY	SAMSUNG	false	false	true	STANDARD	-	-	-	CAMERA_GLASS	-
+PROTECTIVE_FILM	Защитные плёнки	ACCESSORY	NONE	false	false	true	STANDARD	-	-	-	FILM	-
+SETUP_SERVICE	Сервис	SERVICE	NONE	false	false	true	STANDARD	-	-	SERVICE:CLEANING|SERVICE:SETUP	CLEANING|SETUP	-
+REPAIR_SERVICE	Ремонт — детализация отложена	SERVICE	NONE	false	false	true	DEFERRED	-	-	SERVICE:REPAIR	REPAIR	-
+DIAGNOSTICS_SERVICE	Диагностика — детализация отложена	SERVICE	NONE	false	false	true	DEFERRED	-	-	SERVICE:DIAGNOSTICS	DIAGNOSTICS	-
+WARRANTY_GENERIC	Гарантии	WARRANTY	NONE	false	false	true	STANDARD	-	-	-	WARRANTY_GENERIC	-
+PREMIUM_PROTECTION	Протекция	PROTECTION	NONE	false	false	true	STANDARD	-	-	-	PREMIUM_PROTECTION	-
+PACKAGING	Упаковка	OTHER	NONE	false	false	false	STANDARD	-	-	ITEM:PACKAGING	PACKAGING	-
+EXCLUDE	Исключено из аналитики	EXCLUDED	NONE	false	false	false	TECHNICAL	-	-	-	TEST_CARD	-
+IPAD_MAC	iPad и Mac — прежняя категория	DEVICE	IPAD_MAC	false	true	false	LEGACY	-	-	-	-	-
+PODS_WATCH_OTHER_DEVICE	Наушники часы и другая техника — прежняя категория	DEVICE	PODS_WATCH	false	true	false	LEGACY	-	-	-	-	-
+ACCESSORY_IPAD_MAC	Аксессуары iPad и Mac — прежняя категория	ACCESSORY	IPAD_MAC	false	false	true	LEGACY	-	-	-	CASE|FILM|KEYBOARD|MOUSE|SCREEN_GLASS|STYLUS|STYLUS_TIPS	-
+ACCESSORY_PODS_WATCH	Аксессуары AirPods и Watch — прежняя категория	ACCESSORY	PODS_WATCH	false	false	true	LEGACY	-	-	-	CASE|KEYCHAIN|SCREEN_GLASS|STRAP	-
+FILM_PHONE	Плёнки телефонов — прежняя категория	ACCESSORY	NONE	false	false	true	LEGACY	-	-	-	FILM	-
+UNMAPPED	Без аналитического назначения	OTHER	NONE	false	false	false	TECHNICAL	-	-	-	-	-

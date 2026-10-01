@@ -15,6 +15,7 @@ const PayrollPage = lazy(async () => { const module = await import("../payroll/P
 const QualityPage = lazy(async () => { const module = await import("../quality/QualityPage"); return { default: module.QualityPage }; });
 const ReportsPage = lazy(async () => { const module = await import("../reports/ReportsPage"); return { default: module.ReportsPage }; });
 const AdminPage = lazy(async () => { const module = await import("../admin/AdminPage"); return { default: module.AdminPage }; });
+const CatalogProductReviewPanel = lazy(async () => { const module = await import("../admin/CatalogProductReviewPanel"); return { default: module.CatalogProductReviewPanel }; });
 
 const ProfilePage = lazy(async () => { const module = await import("../auth/ProfilePage"); return { default: module.ProfilePage }; });
 const InsightsPreviewPage = lazy(async () => { const module = await import("../insights/InsightsPreviewPage"); return { default: module.InsightsPreviewPage }; });
@@ -41,6 +42,7 @@ export function App() {
         <Route path="/payroll" element={<PayrollPage />} />
       </Route>
       <Route path="/reports" element={<ReportsPage />} />
+      <Route path="/catalog-reviews" element={<CatalogProductReviewPanel />} />
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/insights" element={<InsightsPreviewPage />} />
       <Route element={<AdminGate />}>

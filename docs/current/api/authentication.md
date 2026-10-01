@@ -39,13 +39,13 @@ Browser-клиент использует server-side `JSESSIONID` и CSRF doubl
 после ротации authentication нужно заново получить `GET /api/auth/csrf`. Unsafe requests передают
 cookie и `X-XSRF-TOKEN`.
 
-OpenAPI v12 публикует:
+OpenAPI v14 публикует:
 
 - `GET /api/auth/csrf`, `POST /api/auth/login`, `GET /api/auth/me`;
 - `GET /api/auth/sessions`, удаление одной другой или всех других sessions;
 - `POST /api/auth/change-password`.
 
-`POST /api/auth/logout` обслуживается Spring Security, но отсутствует в OpenAPI v12 — это
+`POST /api/auth/logout` обслуживается Spring Security, но отсутствует в OpenAPI v14 — это
 зафиксированный transport gap, а не разрешение менять method/path в клиенте без contract update.
 
 ## Безопасность и состояния
@@ -83,6 +83,6 @@ OpenAPI v12 публикует:
 `CURRENT_SESSION_REQUIRES_LOGOUT`. Точный общий error shape —
 в [`../architecture/error-handling.md`](../architecture/error-handling.md).
 
-OpenAPI v12 не содержит полноценного security scheme и общих 401/403 responses. Фактическая
+OpenAPI v14 не содержит полноценного security scheme и общих 401/403 responses. Фактическая
 security semantics подтверждается security configuration и integration tests; baseline необходимо
 дополнить отдельно.

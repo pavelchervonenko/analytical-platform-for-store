@@ -67,13 +67,13 @@ public class WeeklyReviewAiEnrichmentStore {
     @Transactional
     public PersistedWeeklyReviewAiEnrichment persist(
             UUID snapshotId,
-            WeeklyReviewAiInput input,
+            WeeklyReviewAiEditorialInput input,
             WeeklyReviewAiValidationResult validation,
             Instant validatedAt,
             Instant publishedAt
     ) {
         UUID snapshot = requireNonNull(snapshotId, "snapshotId");
-        WeeklyReviewAiInput source = requireNonNull(input, "input");
+        WeeklyReviewAiEditorialInput source = requireNonNull(input, "input");
         WeeklyReviewAiValidationResult result = requireNonNull(
                 validation, "validation"
         );
@@ -91,10 +91,13 @@ public class WeeklyReviewAiEnrichmentStore {
         String contentHash = codec.hash(canonicalContent);
 
         lockSnapshot(snapshot);
+        Integer reportVersion = jdbcTemplate.queryForObject(
+                "SELECT report_contract_version FROM weekly_review_snapshots WHERE id = ?", Integer.class, snapshot);
+        require(reportVersion != null && reportVersion == (source instanceof SellerWeeklyReviewAiInput ? 3 : 2),
+                "AI input and persisted report contract must match");
         Optional<PersistedWeeklyReviewAiEnrichment> existing = findInternal(
                 snapshot,
-                WeeklyReviewAiContract.PROMPT_VERSION,
-                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
+                source.promptVersion(), source.contentSchemaVersion()
         );
         if (existing.isPresent()) {
             PersistedWeeklyReviewAiEnrichment value = existing.get();
@@ -112,8 +115,7 @@ public class WeeklyReviewAiEnrichmentStore {
                 INSERT_SQL,
                 id,
                 snapshot,
-                WeeklyReviewAiContract.PROMPT_VERSION,
-                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                source.promptVersion(), source.contentSchemaVersion(),
                 inputHash,
                 canonicalContent,
                 contentHash,
@@ -122,8 +124,7 @@ public class WeeklyReviewAiEnrichmentStore {
         );
         return findInternal(
                 snapshot,
-                WeeklyReviewAiContract.PROMPT_VERSION,
-                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
+                source.promptVersion(), source.contentSchemaVersion()
         ).orElseThrow(() -> new IllegalStateException(
                 "Created AI enrichment could not be read"
         ));
@@ -138,6 +139,19 @@ public class WeeklyReviewAiEnrichmentStore {
                 WeeklyReviewAiContract.PROMPT_VERSION,
                 WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
         );
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<PersistedWeeklyReviewAiEnrichment> findActiveSeller(UUID snapshotId) {
+        return findInternal(requireNonNull(snapshotId, "snapshotId"),
+                SellerWeeklyReviewAiContract.PROMPT_VERSION, WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<PersistedWeeklyReviewAiEnrichment> findPublishedSeller(UUID snapshotId, Instant asOf) {
+        return findPublishedInternal(requireNonNull(snapshotId, "snapshotId"),
+                SellerWeeklyReviewAiContract.PROMPT_VERSION, WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                requireNonNull(asOf, "asOf"));
     }
 
     @Transactional(readOnly = true)

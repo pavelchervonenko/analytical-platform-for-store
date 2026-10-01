@@ -14,7 +14,8 @@ public record EmployeeAttachRatingEntry(
         BigDecimal ratePercent,
         BigDecimal storeRatePercent,
         boolean includedInScore,
-        BigDecimal score
+        BigDecimal score,
+        boolean attributionIncomplete
 ) {
 
     /**

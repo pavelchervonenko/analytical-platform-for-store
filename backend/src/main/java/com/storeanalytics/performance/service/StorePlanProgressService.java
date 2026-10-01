@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -54,7 +55,7 @@ public class StorePlanProgressService {
         this.clock = clock;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public java.util.Optional<StorePlanProgressView> find(
             UUID storeId,
             YearMonth month,
@@ -63,7 +64,7 @@ public class StorePlanProgressService {
         return find(storeId, month, asOfDate, OverviewMetricScope.STORE);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public java.util.Optional<StorePlanProgressView> find(
             UUID storeId,
             YearMonth month,
@@ -76,7 +77,7 @@ public class StorePlanProgressService {
         return java.util.Optional.of(calculate(storeId, month, asOfDate, scope));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public StorePlanProgressView calculate(
             UUID storeId,
             YearMonth month,
@@ -85,7 +86,7 @@ public class StorePlanProgressService {
         return calculate(storeId, month, asOfDate, OverviewMetricScope.STORE);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public StorePlanProgressView calculate(
             UUID storeId,
             YearMonth month,

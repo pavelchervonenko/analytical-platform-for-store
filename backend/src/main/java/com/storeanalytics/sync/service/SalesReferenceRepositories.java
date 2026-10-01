@@ -5,12 +5,14 @@ import com.storeanalytics.product.repository.AnalyticsCategoryRepository;
 import com.storeanalytics.product.service.ProductClassificationResolver;
 import com.storeanalytics.store.repository.StoreRepository;
 import org.springframework.stereotype.Component;
+import com.storeanalytics.product.service.CatalogSaleRoleSnapshotWriter;
 
 @Component
 record SalesReferenceRepositories(
         StoreRepository stores,
         EmployeeRepository employees,
         AnalyticsCategoryRepository categories,
-        ProductClassificationResolver classificationResolver
+        ProductClassificationResolver classificationResolver,
+        CatalogSaleRoleSnapshotWriter roleSnapshots
 ) {
 }

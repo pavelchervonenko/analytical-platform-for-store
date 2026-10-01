@@ -4,7 +4,7 @@ import com.storeanalytics.common.exception.PreconditionFailedException;
 import com.storeanalytics.common.exception.PreconditionRequiredException;
 import com.storeanalytics.interpretation.generation.LlmProviderException;
 import com.storeanalytics.interpretation.generation.LlmProviderPreflight;
-import com.storeanalytics.interpretation.review.PersistedWeeklyReviewSnapshot;
+import com.storeanalytics.interpretation.review.PersistedWeeklyReview;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.ReportState;
 import com.storeanalytics.interpretation.review.WeeklyReviewSnapshotStore;
 import java.math.BigDecimal;
@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +26,7 @@ public class WeeklyReviewAiOperatorService {
     private final WeeklyReviewAiJobStore jobStore;
     private final WeeklyReviewAiOperatorSupport support;
     private final Clock clock;
+    private final SellerWeeklyReviewAiFreshnessGuard sellerGuard;
 
     public WeeklyReviewAiOperatorService(
             WeeklyReviewAiGenerationProperties properties,
@@ -33,11 +35,20 @@ public class WeeklyReviewAiOperatorService {
             WeeklyReviewAiOperatorSupport support,
             Clock clock
     ) {
+        this(properties, snapshotStore, jobStore, support, clock, null);
+    }
+
+    @Autowired
+    public WeeklyReviewAiOperatorService(WeeklyReviewAiGenerationProperties properties,
+                                        WeeklyReviewSnapshotStore snapshotStore, WeeklyReviewAiJobStore jobStore,
+                                        WeeklyReviewAiOperatorSupport support, Clock clock,
+                                        SellerWeeklyReviewAiFreshnessGuard sellerGuard) {
         this.properties = properties;
         this.snapshotStore = snapshotStore;
         this.jobStore = jobStore;
         this.support = support;
         this.clock = clock;
+        this.sellerGuard = sellerGuard;
     }
 
     public WeeklyReviewAiJobView findJob(UUID jobId) {
@@ -48,7 +59,7 @@ public class WeeklyReviewAiOperatorService {
 
     @Transactional(readOnly = true)
     public WeeklyReviewAiPreflightView preflight(UUID snapshotId) {
-        PersistedWeeklyReviewSnapshot snapshot = eligibleSnapshot(snapshotId);
+        PersistedWeeklyReview snapshot = eligibleSnapshot(snapshotId);
         Instant now = clock.instant();
         PreparedWeeklyReviewAiRequest prepared;
         LlmProviderPreflight estimate;
@@ -90,7 +101,9 @@ public class WeeklyReviewAiOperatorService {
                 snapshot.id()
         );
         Optional<PersistedWeeklyReviewAiEnrichment> existingEnrichment =
-                support.enrichmentStore().findActive(snapshot.id());
+                snapshot.response().contractVersion() == 3
+                        ? support.enrichmentStore().findActiveSeller(snapshot.id())
+                        : support.enrichmentStore().findActive(snapshot.id());
         return view(
                 snapshot,
                 prepared,
@@ -129,19 +142,22 @@ public class WeeklyReviewAiOperatorService {
         return WeeklyReviewAiJobView.from(job);
     }
 
-    private PersistedWeeklyReviewSnapshot eligibleSnapshot(UUID snapshotId) {
-        PersistedWeeklyReviewSnapshot snapshot = snapshotStore
-                .findById(snapshotId)
-                .orElseThrow(WeeklyReviewAiSnapshotNotFoundException::new);
+    private PersistedWeeklyReview eligibleSnapshot(UUID snapshotId) {
+        PersistedWeeklyReview snapshot = jobStore.activeReportContractVersion() == 3
+                ? snapshotStore.findV3ById(snapshotId).orElseThrow(WeeklyReviewAiSnapshotNotFoundException::new)
+                : snapshotStore.findById(snapshotId).orElseThrow(WeeklyReviewAiSnapshotNotFoundException::new);
         ReportState state = snapshot.response().reportState();
         if (state != ReportState.READY && state != ReportState.PARTIAL) {
+            throw new WeeklyReviewAiSnapshotNotEligibleException();
+        }
+        if (snapshot.response().contractVersion() == 3 && (sellerGuard == null || !sellerGuard.isCurrent(snapshot))) {
             throw new WeeklyReviewAiSnapshotNotEligibleException();
         }
         return snapshot;
     }
 
     private WeeklyReviewAiPreflightView view(
-            PersistedWeeklyReviewSnapshot snapshot,
+            PersistedWeeklyReview snapshot,
             PreparedWeeklyReviewAiRequest prepared,
             LlmProviderPreflight estimate,
             BigDecimal actualCostToday,
@@ -163,13 +179,16 @@ public class WeeklyReviewAiOperatorService {
                         snapshot.contentHash()
                 ),
                 new WeeklyReviewAiPreflightView.WeeklyReviewAiPreflightContract(
-                        WeeklyReviewAiContract.PROMPT_VERSION,
-                        WeeklyReviewAiContract.INPUT_SCHEMA_VERSION,
+                        prepared.input().promptVersion(),
+                        prepared.input().contractVersion(),
                         WeeklyReviewAiContract.SELECTION_SCHEMA_VERSION,
                         WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
                 ),
                 new WeeklyReviewAiPreflightView.WeeklyReviewAiPrivacySummary(
-                        "PASS_STORE_ONLY_SCHEMA", "STORE_ONLY", false, false
+                        prepared.input() instanceof SellerWeeklyReviewAiInput
+                                ? "PASS_SELLER_ONLY_SCHEMA" : "PASS_STORE_ONLY_SCHEMA",
+                        prepared.input() instanceof SellerWeeklyReviewAiInput
+                                ? "SELLER_AGGREGATES_ONLY" : "STORE_ONLY", false, false
                 ),
                 requestView(prepared, estimate),
                 new WeeklyReviewAiPreflightView.WeeklyReviewAiPreflightBudget(
@@ -203,7 +222,7 @@ public class WeeklyReviewAiOperatorService {
             PreparedWeeklyReviewAiRequest prepared,
             LlmProviderPreflight estimate
     ) {
-        WeeklyReviewAiInput input = prepared.input();
+        WeeklyReviewAiEditorialInput input = prepared.input();
         return new WeeklyReviewAiPreflightView.WeeklyReviewAiPreflightRequest(
                 properties.providerCode(),
                 modelVersion(support.yandexProperties().getModelUri()),

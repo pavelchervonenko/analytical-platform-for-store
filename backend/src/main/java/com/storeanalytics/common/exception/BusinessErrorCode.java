@@ -2,6 +2,23 @@ package com.storeanalytics.common.exception;
 
 public enum BusinessErrorCode {
 
+    WARRANTY_ORIGINAL_UNRESOLVED(
+            "WARRANTY_ORIGINAL_UNRESOLVED", BusinessErrorType.INVALID_REQUEST,
+            "Resolve the original warranty first"
+    ),
+    WARRANTY_RETURN_EXCEEDS_ALLOCATION(
+            "WARRANTY_RETURN_EXCEEDS_ALLOCATION", BusinessErrorType.INVALID_REQUEST,
+            "Return exceeds the available original allocation"
+    ),
+    WARRANTY_DEVICE_DATE_INVALID(
+            "WARRANTY_DEVICE_DATE_INVALID", BusinessErrorType.INVALID_REQUEST,
+            "Device sale must not be after the warranty"
+    ),
+    WARRANTY_CASE_NOT_FOUND(
+            "WARRANTY_CASE_NOT_FOUND", BusinessErrorType.NOT_FOUND,
+            "Warranty source was not found"
+    ),
+
     INVALID_ARGUMENT(
             "INVALID_ARGUMENT", BusinessErrorType.INVALID_REQUEST,
             "Request parameters are invalid"

@@ -45,16 +45,20 @@ public class WeeklyReviewService {
     public PersistedWeeklyReviewSnapshot generate(UUID storeId) {
         Store store = store(storeId);
         Instant now = clock.instant();
-        WeeklyReviewFacts facts = factsSource.load(
+        var source = factsSource.loadForGeneration(
                 store.getId(), now, store.getTimezone()
         );
-        return snapshotStore.persist(facts, now);
+        PersistedWeeklyReviewSnapshot snapshot = snapshotStore.persist(source.facts(), now);
+        snapshotStore.acknowledgeAttribution(storeId, snapshot.id(), source.attributionChange());
+        return snapshot;
     }
 
     public Optional<WeeklyReviewResponse> current(UUID storeId) {
         Store store = store(storeId);
         var period = policy.period(clock.instant(), store.getTimezone());
         return snapshotStore.findLatest(store.getId(), period.current())
+                .map(snapshot -> snapshotStore.attributionChangedSince(storeId, snapshot.id(),
+                        snapshot.response().provenance().calculatedAt()) ? generate(storeId) : snapshot)
                 .map(this::withPublishedAiEnrichment);
     }
 

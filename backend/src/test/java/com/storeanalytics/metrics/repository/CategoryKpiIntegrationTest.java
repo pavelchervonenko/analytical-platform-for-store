@@ -1,5 +1,6 @@
 package com.storeanalytics.metrics.repository;
 
+import static com.storeanalytics.metrics.repository.CatalogMetricTestCategories.expectedCodes;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.storeanalytics.metrics.service.CategoryKpiEntry;
@@ -103,9 +104,16 @@ class CategoryKpiIntegrationTest {
 
         CategoryKpiResult result = categoryKpiService.calculate(graph.storeId(), period());
 
-        assertThat(result.categories()).hasSize(21);
         assertThat(result.categories())
                 .extracting(CategoryKpiEntry::categoryCode)
+                .containsExactlyInAnyOrderElementsOf(expectedCodes());
+        assertThat(result.categories())
+                .extracting(CategoryKpiEntry::categoryCode)
+                .contains(
+                        "SPEAKERS", "FITNESS_WEARABLE", "SMART_GLASSES", "CAMERAS",
+                        "HAIR_STYLERS", "HEADPHONES_APPLE",
+                        "HEADPHONES_SAMSUNG", "HEADPHONES_OTHER"
+                )
                 .doesNotContain("EXCLUDE");
 
         CategoryKpiEntry iphone = category(result, "IPHONE_NEW_ASIS");

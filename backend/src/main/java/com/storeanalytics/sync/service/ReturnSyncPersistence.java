@@ -364,29 +364,16 @@ public class ReturnSyncPersistence {
                 source,
                 context.now()
         );
-        if (!source.deleted()
-                && "sale".equalsIgnoreCase(source.detail().sourceType())) {
-            synchronizeIssue(
-                    true,
-                    store,
-                    originalDocumentIssue(
-                            context.syncRun(), source.externalId()
-                    ),
-                    context.now(),
-                    context.result()
-            );
-            if (!rawVersion.isNormalized()) {
-                rawVersion.markSkipped();
-            }
-            context.result().documentsSkipped++;
-            context.result().unresolvedDocuments++;
-            return;
-        }
         Optional<SalesDocument> existing = factRepositories.documents()
                 .findByConnectionIdAndExternalId(
                         context.syncRun().getConnection().getId(),
                         source.externalId()
                 );
+        if (skipSaleTypedReturn(
+                context, store, source, rawVersion, existing
+        )) {
+            return;
+        }
         existing.ifPresent(document -> requireExistingReturn(store, document));
 
         if (source.deleted()) {
@@ -477,6 +464,7 @@ public class ReturnSyncPersistence {
         }
 
         if (sourceVersionAccepted) {
+            changed |= document.updateAttachSourceEmployee(detail.processingEmployeeExternalId());
             changed |= synchronizeItems(
                     context,
                     store,
@@ -501,6 +489,42 @@ public class ReturnSyncPersistence {
             context.result().documentsSkipped++;
         }
     }
+
+    private boolean skipSaleTypedReturn(
+            Context context,
+            Store store,
+            LiveSkladReturnSource source,
+            RawRecordVersion rawVersion,
+            Optional<SalesDocument> existing
+    ) {
+        if (source.deleted()
+                || !"sale".equalsIgnoreCase(source.detail().sourceType())) {
+            return false;
+        }
+        boolean existingSameStoreSale = existing
+                .filter(SalesDocument::isSale)
+                .filter(document -> sameStore(document.getStore(), store))
+                .filter(document -> !document.isDeleted())
+                .isPresent();
+        synchronizeIssue(
+                !existingSameStoreSale,
+                store,
+                originalDocumentIssue(
+                        context.syncRun(), source.externalId()
+                ),
+                context.now(),
+                context.result()
+        );
+        if (!rawVersion.isNormalized()) {
+            rawVersion.markSkipped();
+        }
+        context.result().documentsSkipped++;
+        if (!existingSameStoreSale) {
+            context.result().unresolvedDocuments++;
+        }
+        return true;
+    }
+
     private void synchronizeDeletedReturn(
             Context context,
             Store store,
@@ -686,7 +710,7 @@ public class ReturnSyncPersistence {
             );
             SalesDocumentItem existing = existingItems.get(source.externalId());
             if (existing == null) {
-                factRepositories.items().save(new SalesDocumentItem(
+                var createdItem = factRepositories.items().save(new SalesDocumentItem(
                         new SalesItemIdentity(
                                 returnDocument,
                                 source.externalId(),
@@ -698,6 +722,7 @@ public class ReturnSyncPersistence {
                         costQuality,
                         source.work()
                 ));
+                referenceRepositories.roleSnapshots().captureNewItem(createdItem.getId());
                 context.result().itemsCreated++;
                 changed = true;
             } else if (existing.update(
@@ -879,7 +904,7 @@ public class ReturnSyncPersistence {
                         "RETURN_ITEM",
                         scopedId(context.syncRun(), externalId),
                         "RETURN_ZERO_UNEXPECTED_COST",
-                        DataQualitySeverity.WARNING,
+                        DataQualitySeverity.INFO,
                         "Non-service return item has zero cost"
                 ),
                 context.now(),

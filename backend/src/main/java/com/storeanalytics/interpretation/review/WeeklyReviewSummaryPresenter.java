@@ -29,6 +29,15 @@ final class WeeklyReviewSummaryPresenter {
             List<MetricComparison> results,
             List<Factor> factors
     ) {
+        return present(reportState, results, factors, true);
+    }
+
+    SummaryBlock present(
+            ReportState reportState,
+            List<MetricComparison> results,
+            List<Factor> factors,
+            boolean returnAttributionComplete
+    ) {
         if (reportState == ReportState.BLOCKED) {
             return new SummaryBlock(
                     "summary",
@@ -42,7 +51,7 @@ final class WeeklyReviewSummaryPresenter {
 
         MetricComparison revenue = metric(results, "NET_REVENUE");
         Factor primaryFactor = primaryFactor(factors);
-        Outcome outcome = outcome(results);
+        Outcome outcome = returnAttributionComplete ? outcome(results) : Outcome.NEUTRAL;
         Set<String> evidence = new LinkedHashSet<>();
         results.stream()
                 .filter(metric -> metric.metricState() != MetricState.UNAVAILABLE)
@@ -73,7 +82,9 @@ final class WeeklyReviewSummaryPresenter {
                 state,
                 new NarrativeItem(
                         "summary:outcome",
-                        summaryText(outcome, primaryFactor),
+                        returnAttributionComplete ? summaryText(outcome, primaryFactor)
+                                : "Связь части возвратов с исходными продажами или их авторами не подтверждена; "
+                                        + "итог недели предварителен.",
                         outcome.effect(),
                         List.copyOf(evidence)
                 ),

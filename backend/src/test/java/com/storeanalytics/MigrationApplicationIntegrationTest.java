@@ -8,6 +8,8 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -34,7 +36,7 @@ class MigrationApplicationIntegrationTest {
             postgres.start();
 
             runMigration(postgres);
-            assertThat(currentVersion(postgres)).isEqualTo("51");
+            assertThat(currentVersion(postgres)).isEqualTo("93");
 
             resetSchema(postgres);
             Flyway.configure()
@@ -51,7 +53,7 @@ class MigrationApplicationIntegrationTest {
             addVersion29Report(postgres);
 
             runMigration(postgres);
-            assertThat(currentVersion(postgres)).isEqualTo("51");
+            assertThat(currentVersion(postgres)).isEqualTo("93");
             assertReportPayloadMigrated(postgres);
             assertFinalizedReportRemainsImmutable(postgres);
 
@@ -70,7 +72,7 @@ class MigrationApplicationIntegrationTest {
             addPreviousVersionRawWrite(postgres, LEGACY_RAW_ID, "legacy-before-v18");
 
             runMigration(postgres);
-            assertThat(currentVersion(postgres)).isEqualTo("51");
+            assertThat(currentVersion(postgres)).isEqualTo("93");
             assertThat(payloadPolicyVersion(postgres, LEGACY_RAW_ID)).isZero();
 
             addPreviousVersionRawWrite(postgres, ROLLBACK_RAW_ID, "rollback-after-v18");
@@ -78,13 +80,67 @@ class MigrationApplicationIntegrationTest {
         }
     }
 
+    @Test
+    void refusesHistoricalCatalogRewritesBeforeAnyPendingMigration() throws SQLException {
+        try (PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine")) {
+            postgres.start();
+            Flyway.configure().dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
+                    .locations("classpath:db/migration").target("51").load().migrate();
+            try (Connection connection = DriverManager.getConnection(
+                    postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+                 Statement statement = connection.createStatement()) {
+                statement.executeUpdate("""
+                        INSERT INTO products(id, connection_id, external_id, code, name)
+                        SELECT '00000000-0000-0000-0000-000000000193', id, 'synthetic-speaker', '4230',
+                               'Synthetic колонка JBL' FROM integration_connections
+                        WHERE connection_key = 'livesklad-default'
+                        """);
+                statement.executeUpdate("""
+                        INSERT INTO product_category_assignments(
+                            product_id, analytics_category_id, assignment_source, valid_from)
+                        SELECT '00000000-0000-0000-0000-000000000193', id, 'MANUAL', '2026-01-01Z'
+                        FROM analytics_categories WHERE code = 'PODS_WATCH_OTHER_DEVICE'
+                        """);
+            }
+
+            assertThatThrownBy(() -> runMigration(postgres))
+                    .hasStackTraceContaining("CATALOG_PROSPECTIVE_ROLLOUT_REQUIRED");
+            assertThat(currentVersion(postgres)).isEqualTo("51");
+            try (Connection connection = DriverManager.getConnection(
+                    postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+                 Statement statement = connection.createStatement();
+                 ResultSet rows = statement.executeQuery("""
+                         SELECT category.code, assignment.valid_to
+                         FROM product_category_assignments assignment
+                         JOIN analytics_categories category ON category.id = assignment.analytics_category_id
+                         WHERE assignment.product_id = '00000000-0000-0000-0000-000000000193'
+                         """)) {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getString(1)).isEqualTo("PODS_WATCH_OTHER_DEVICE");
+                assertThat(rows.getTimestamp(2)).isNull();
+                assertThat(rows.next()).isFalse();
+            }
+            String boundary = LocalDate.now(ZoneId.of("Europe/Kaliningrad")).plusDays(2)
+                    .atStartOfDay(ZoneId.of("Europe/Kaliningrad")).toInstant().toString();
+            runMigration(postgres, boundary);
+            assertThat(currentVersion(postgres)).isEqualTo("93");
+            // The exact immutable boundary also permits a no-op repeat of the migration role.
+            runMigration(postgres, boundary);
+        }
+    }
+
     private void runMigration(PostgreSQLContainer postgres) {
+        runMigration(postgres, "");
+    }
+
+    private void runMigration(PostgreSQLContainer postgres, String boundary) {
         String[] arguments = {
                 "--app.runtime.role=MIGRATION",
                 "--spring.datasource.url=" + postgres.getJdbcUrl(),
                 "--spring.datasource.username=" + postgres.getUsername(),
                 "--spring.datasource.password=" + postgres.getPassword(),
-                "--spring.flyway.locations=classpath:db/migration"
+                "--spring.flyway.locations=classpath:db/migration",
+                "--app.catalog-classification.activate-from=" + boundary
         };
         try (ConfigurableApplicationContext context =
                      MigrationApplication.run(arguments)) {

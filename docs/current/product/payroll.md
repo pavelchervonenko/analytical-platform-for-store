@@ -63,3 +63,7 @@ Payable = Earned - Advance - Penalty - Inventory - Tax
 `Payable` может быть отрицательным. `canCalculate` и `canApprove` — разные gates. Payroll form не
 исправляет analytics category. `ZERO_UNEXPECTED` и impact смены employee return attribution требуют
 отдельного продуктового решения/tests.
+
+Проект новой методики и открытые решения ведутся в
+[рабочем реестре переделки зарплаты](../../maintenance/payroll-redesign.md). Он не описывает
+действующий расчёт.

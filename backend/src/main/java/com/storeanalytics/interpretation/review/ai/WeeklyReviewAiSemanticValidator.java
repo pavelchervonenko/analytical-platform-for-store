@@ -57,10 +57,10 @@ public final class WeeklyReviewAiSemanticValidator {
     }
 
     public WeeklyReviewAiValidationResult validate(
-            WeeklyReviewAiInput input,
+            WeeklyReviewAiEditorialInput input,
             String responseBody
     ) {
-        WeeklyReviewAiInput source = requireNonNull(input, "input");
+        WeeklyReviewAiEditorialInput source = requireNonNull(input, "input");
         WeeklyReviewAiSelectionValidationResult structural =
                 selectionValidator.validate(responseBody);
         if (structural.outcome() != LlmValidationOutcome.VALID) {
@@ -98,7 +98,7 @@ public final class WeeklyReviewAiSemanticValidator {
     }
 
     private void validateSelection(
-            WeeklyReviewAiInput input,
+            WeeklyReviewAiEditorialInput input,
             WeeklyReviewAiSelection selection,
             List<LlmValidationViolation> violations
     ) {
@@ -133,7 +133,7 @@ public final class WeeklyReviewAiSemanticValidator {
     }
 
     private void validateSummarySelection(
-            WeeklyReviewAiInput input,
+            WeeklyReviewAiEditorialInput input,
             WeeklyReviewAiSelection.SummarySelection selection,
             Map<String, WeeklyReviewAiInput.FactorSource> factors,
             List<LlmValidationViolation> violations
@@ -175,7 +175,7 @@ public final class WeeklyReviewAiSemanticValidator {
     }
 
     private void validateFocusKnown(
-            WeeklyReviewAiInput input,
+            WeeklyReviewAiEditorialInput input,
             String factorId,
             String path,
             List<LlmValidationViolation> violations
@@ -229,7 +229,7 @@ public final class WeeklyReviewAiSemanticValidator {
     }
 
     private void validateRendered(
-            WeeklyReviewAiInput input,
+            WeeklyReviewAiEditorialInput input,
             WeeklyReviewAiContent content,
             List<LlmValidationViolation> violations
     ) {

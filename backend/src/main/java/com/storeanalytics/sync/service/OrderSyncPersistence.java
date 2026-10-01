@@ -359,7 +359,7 @@ public class OrderSyncPersistence {
                         "ORDER_ITEM",
                         itemEntityId,
                         "ZERO_UNEXPECTED_COST",
-                        DataQualitySeverity.WARNING,
+                        DataQualitySeverity.INFO,
                         "Non-service order item has zero cost"
                 ),
                 context

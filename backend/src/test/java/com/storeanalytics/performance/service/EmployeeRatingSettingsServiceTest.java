@@ -11,6 +11,7 @@ import com.storeanalytics.employee.model.Employee;
 import com.storeanalytics.employee.model.EmployeeStoreAssignment;
 import com.storeanalytics.employee.model.EmployeeStoreAssignmentId;
 import com.storeanalytics.employee.repository.EmployeeStoreAssignmentRepository;
+import com.storeanalytics.metrics.repository.SellerMembershipHistoryWriter;
 import com.storeanalytics.performance.exception.EmployeeAssignmentNotFoundException;
 import com.storeanalytics.performance.exception.EmployeeRatingConflictException;
 import com.storeanalytics.store.repository.StoreRepository;
@@ -31,10 +32,14 @@ class EmployeeRatingSettingsServiceTest {
     void setUp() {
         assignmentRepository = mock(EmployeeStoreAssignmentRepository.class);
         storeRepository = mock(StoreRepository.class);
+        SellerMembershipHistoryWriter history = mock(SellerMembershipHistoryWriter.class);
+        when(history.manualChangeAllowed(org.mockito.ArgumentMatchers.any(UUID.class),
+                org.mockito.ArgumentMatchers.any(UUID.class))).thenReturn(true);
         service = new EmployeeRatingSettingsService(
                 assignmentRepository,
                 storeRepository,
-                mock(com.storeanalytics.audit.service.AuditLogService.class)
+                mock(com.storeanalytics.audit.service.AuditLogService.class),
+                history
         );
     }
 
@@ -70,6 +75,46 @@ class EmployeeRatingSettingsServiceTest {
 
         verify(assignment).update(true, true);
         assertThat(result.employeeId()).isEqualTo(employeeId);
+    }
+
+    @Test
+    void recordsForwardOnlyManualMembershipAfterPersistingAssignment() {
+        UUID storeId = UUID.randomUUID();
+        UUID employeeId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        EmployeeStoreAssignment assignment = assignment(employeeId, "Synthetic employee", false, 4);
+        SellerMembershipHistoryWriter history = mock(SellerMembershipHistoryWriter.class);
+        when(history.manualChangeAllowed(storeId, employeeId)).thenReturn(true);
+        when(storeRepository.existsById(storeId)).thenReturn(true);
+        when(assignmentRepository.findById(new EmployeeStoreAssignmentId(employeeId, storeId)))
+                .thenReturn(Optional.of(assignment));
+        when(assignmentRepository.saveAndFlush(assignment)).thenReturn(assignment);
+        var withHistory = new EmployeeRatingSettingsService(assignmentRepository, storeRepository,
+                mock(com.storeanalytics.audit.service.AuditLogService.class), history);
+
+        withHistory.updateParticipation(storeId, employeeId, true, 4, actorId);
+
+        var order = org.mockito.Mockito.inOrder(history, assignmentRepository);
+        order.verify(history).lockStore(storeId);
+        order.verify(history).manualChangeAllowed(storeId, employeeId);
+        order.verify(assignmentRepository).saveAndFlush(assignment);
+        order.verify(history).reconcileStore(storeId,
+                SellerMembershipHistoryWriter.ChangeSource.MANUAL, actorId, null);
+    }
+
+    @Test
+    void rejectsManualChangeWhenPostBaselineAssignmentHasNoPublishedInterval() {
+        UUID storeId = UUID.randomUUID();
+        UUID employeeId = UUID.randomUUID();
+        SellerMembershipHistoryWriter history = mock(SellerMembershipHistoryWriter.class);
+        when(storeRepository.existsById(storeId)).thenReturn(true);
+        var withHistory = new EmployeeRatingSettingsService(assignmentRepository, storeRepository,
+                mock(com.storeanalytics.audit.service.AuditLogService.class), history);
+
+        assertThatThrownBy(() -> withHistory.updateParticipation(
+                storeId, employeeId, true, 0, UUID.randomUUID()))
+                .isInstanceOf(EmployeeRatingConflictException.class);
+        verify(assignmentRepository, never()).saveAndFlush(org.mockito.ArgumentMatchers.any());
     }
 
     @Test

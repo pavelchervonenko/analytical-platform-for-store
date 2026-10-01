@@ -46,8 +46,17 @@ describe("frontend consumer contract", () => {
       apiContractVersion: openApi.info.version,
       time: "2026-07-26T12:00:00Z"
     });
-    expect(status.apiContractVersion).toBe("12");
+    expect(status.apiContractVersion).toBe("14");
     expect(openApi.components.schemas.SystemStatusView?.properties?.apiContractVersion).toBeDefined();
+  });
+
+  it("publishes named catalog parameters for generated clients", () => {
+    const decision = openApi.paths["/api/admin/catalog-product-reviews/{productId}/decision"]?.post;
+    expect(decision).toMatchObject({ parameters: [{
+      name: "productId", in: "path", required: true, schema: { type: "string", format: "uuid" }
+    }] });
+    const queue = openApi.paths["/api/admin/catalog-product-reviews"]?.get;
+    expect(queue).toMatchObject({ parameters: [{ name: "limit", in: "query", required: false }] });
   });
 
   it("degrades future response enums without granting known semantics", () => {

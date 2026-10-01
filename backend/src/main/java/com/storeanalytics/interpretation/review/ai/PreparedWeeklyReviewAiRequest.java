@@ -8,7 +8,7 @@ import com.storeanalytics.interpretation.generation.LlmProviderRequest;
 public record PreparedWeeklyReviewAiRequest(
         LlmProviderRequest request,
         String requestHash,
-        WeeklyReviewAiInput input,
+        WeeklyReviewAiEditorialInput input,
         String inputHash
 ) {
 

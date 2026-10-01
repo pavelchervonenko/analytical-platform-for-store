@@ -9,6 +9,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(prefix = "app.interpretation.seller-weekly-review",
+        name = "enabled", havingValue = "false", matchIfMissing = true)
 @ConditionalOnApplicationRole({ApplicationRole.WORKER, ApplicationRole.COMBINED})
 @ConditionalOnProperty(
         prefix = "app.interpretation.weekly-review-snapshot-planner",

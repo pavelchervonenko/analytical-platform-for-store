@@ -11,12 +11,13 @@ import type {
   PlanDirection,
   PlanProgress
 } from "../api/contracts";
-import { attachRateLabels } from "../employees/rating-ui";
+import { attachRateLabels, isAttachDetail } from "../employees/rating-ui";
 import { formatCompactMoney, formatMoney, formatNumber, formatPercent } from "../shared/format";
 
 const attachMetricOrder = [
   "CASE_APPLE_IPHONE",
   "CHARGER_CABLE",
+  "POWER_BANK",
   "GLASS_IPHONE",
   "GLASS_CAMERA_IPHONE",
   "FILM_PHONE",
@@ -25,6 +26,8 @@ const attachMetricOrder = [
   "GLASS_SAMSUNG",
   "GLASS_CAMERA_SAMSUNG",
   "ACCESSORY_PODS_WATCH",
+  "ACCESSORY_AIRPODS",
+  "ACCESSORY_APPLE_WATCH",
   "ACCESSORY_IPAD",
   "WARRANTY_GENERIC_USED",
   "WARRANTY_GENERIC_NEW",
@@ -390,9 +393,10 @@ interface AttachCellValue {
   denominator: number;
   rate: number | null;
   includedInScore?: boolean;
+  attributionIncomplete?: boolean;
 }
 
-type AttachCellKind = "benchmark" | "employee" | "context";
+type AttachCellKind = "benchmark" | "employee" | "context" | "detail";
 type AttachCellTone = "benchmark" | "context" | "empty" | "insufficient" | "below" | "at-level" | "above";
 
 function storeAttachCell(attach: AttachRate, metricCode: string): AttachCellValue | null {
@@ -412,6 +416,7 @@ function employeeAttachCell(employee: EmployeeRatingEntry, metricCode: string): 
     numerator: rate.numeratorQuantity ?? rate.numeratorReceiptCount,
     denominator: rate.denominatorQuantity ?? rate.denominatorReceiptCount,
     rate: rate.ratePercent,
+    attributionIncomplete: rate.attributionIncomplete,
     includedInScore: rate.includedInScore
   };
 }
@@ -445,7 +450,7 @@ function comparisonTone(
 ): AttachCellTone {
   if (value == null || value.denominator <= 0 || value.rate == null) return "empty";
   if (kind === "benchmark") return "benchmark";
-  if (kind === "context") return "context";
+  if (kind === "context" || kind === "detail") return "context";
   if (benchmarkRate == null || benchmarkRate <= 0 || value.includedInScore === false) {
     return "insufficient";
   }
@@ -473,20 +478,23 @@ function AttachCell({
   const comparison = !noBase && kind === "employee" && benchmarkRate != null && benchmarkRate > 0
     ? formatPercent(value!.rate! * 100 / benchmarkRate) + " от среднего по магазину"
     : null;
-  const suffix = kind === "benchmark"
+  const suffix = kind === "detail" ? "; справочный показатель, не участвует в рейтинге"
+    : kind === "benchmark"
     ? "; средний показатель по всем документам магазина"
     : kind === "context"
       ? "; остаток между магазином и участниками рейтинга"
       : tone === "insufficient"
         ? benchmarkRate == null || benchmarkRate <= 0
           ? "; средний показатель по магазину недоступен"
-          : "; недостаточно продаж для рейтинга"
+          : value?.attributionIncomplete ? "; ожидается разбор атрибуции, показатель не оценивается" : "; недостаточно продаж для рейтинга"
         : comparison == null ? "" : "; " + comparison;
   const title = noBase
     ? owner + ": нет релевантных продаж техники"
     : owner + ": " + formatNumber(value!.numerator) + " / " + formatNumber(value!.denominator)
       + " = " + formatPercent(value!.rate) + suffix;
-  const detail = noBase
+  const detail = kind === "detail" && value != null
+    ? formatNumber(value.numerator) + " / " + formatNumber(value.denominator)
+    : noBase
     ? null
     : tone === "insufficient"
       ? null
@@ -494,6 +502,8 @@ function AttachCell({
   return (
     <td className="attach-map__cell" data-tone={tone} title={title}>
       <strong>{noBase ? "—" : formatPercent(value!.rate)}</strong>
+      {kind === "benchmark" && value?.rate != null && value.rate > 100 &&
+        <small title="Количество допродаж превышает количество устройств; проверьте распределение">Выше 100%</small>}
       {detail && <small>{detail}</small>}
       <span className="sr-only">{metric}, {title}</span>
     </td>
@@ -514,11 +524,18 @@ export function AttachRateMatrix({
   const visibleMetricCodes = attachMetricOrder.filter((metricCode) => {
     const store = storeAttachCell(attach, metricCode);
     if (store != null && store.denominator > 0 && store.rate != null) return true;
+    if (isAttachDetail(metricCode) && store != null
+      && (store.numerator !== 0 || store.denominator !== 0)) return true;
     return employees.some((employee) => {
       const value = employeeAttachCell(employee, metricCode);
       return value != null && value.denominator > 0 && value.rate != null;
     });
   });
+  const common = storeAttachCell(attach, "ACCESSORY_PODS_WATCH");
+  const airpods = storeAttachCell(attach, "ACCESSORY_AIRPODS");
+  const watch = storeAttachCell(attach, "ACCESSORY_APPLE_WATCH");
+  const legacyNumerator = common && airpods && watch ? common.numerator - airpods.numerator - watch.numerator : 0;
+  const legacyBase = common && airpods && watch ? common.denominator - airpods.denominator - watch.denominator : 0;
   const showOutsideRating = visibleMetricCodes.some((metricCode) => {
     const outside = outsideRatingAttachCell(
       storeAttachCell(attach, metricCode),
@@ -539,6 +556,17 @@ export function AttachRateMatrix({
         </span>
       </summary>
       <div className="attach-map__content">
+        {(Math.abs(legacyNumerator) > 0.000001 || Math.abs(legacyBase) > 0.000001) && (
+          <p className="overview-data-note">
+            Общая сводка AirPods / Watch дополнительно включает {formatNumber(legacyNumerator)} аксессуаров
+            и {formatNumber(legacyBase)} устройств из прежней классификации, которые не входят в детальную разбивку.
+            Сводный процент рассчитан по суммарным количествам.
+          </p>
+        )}
+        {(attach.dataQuality.unassignedReturnItemCount ?? 0) > 0 && <p className="overview-data-note">
+          У {attach.dataQuality.unassignedReturnItemCount} строк возврата не определён сотрудник отчёта LiveSklad.
+          Затронутые показатели временно исключены из сравнения сотрудников; итоги магазина учитывают эти возвраты.
+        </p>}
         {visibleMetricCodes.length === 0 ? <div className="panel-empty attach-map__empty"><TrendingUp /><strong>Нет данных для расчета допродаж</strong><p>За выбранный период не было релевантных продаж техники.</p></div> : <>
         <p className="attach-map__scroll-hint">Прокрутите таблицу по горизонтали, чтобы увидеть всех продавцов.</p>
         <div className="table-scroll attach-map-wrap">
@@ -575,13 +603,13 @@ export function AttachRateMatrix({
                 const benchmarkRate = storeValue?.rate ?? null;
                 return (
                   <tr key={metricCode}>
-                    <th scope="row">{metricLabel}</th>
+                    <th scope="row">{metricLabel}{attach.rates.find((rate) => rate.metricCode === metricCode)?.preliminary && <small title={metricCode.startsWith("WARRANTY_GENERIC_") ? "Конфликтные гарантии не учтены; показатель временно исключён из рейтинга" : "Совместимость части аксессуаров или связь возврата требуют проверки"}>Предварительно</small>}{isAttachDetail(metricCode) && <small>Справочно, вне рейтинга</small>}</th>
                     <AttachCell
                       value={storeValue}
                       owner={storeName}
                       metric={metricLabel}
                       benchmarkRate={benchmarkRate}
-                      kind="benchmark"
+                      kind={isAttachDetail(metricCode) ? "detail" : "benchmark"}
                     />
                     {showOutsideRating && (
                       <AttachCell
@@ -595,6 +623,7 @@ export function AttachRateMatrix({
                     {employees.map((employee) => (
                       <AttachCell
                         key={employee.employeeId}
+                        kind={isAttachDetail(metricCode) ? "detail" : "employee"}
                         value={employeeAttachCell(employee, metricCode)}
                         owner={employee.displayName}
                         metric={metricLabel}

@@ -15,6 +15,13 @@ vi.mock("./SchedulePanel", () => ({
   SchedulePanel: () => <div>Содержимое смен</div>
 }));
 
+vi.mock("../stores/WorkspaceProvider", () => ({
+  useWorkspace: () => ({
+    selectedStore: { id: "store-1" },
+    month: "2026-09"
+  })
+}));
+
 function renderRoutes(entry: string) {
   render(
     <MemoryRouter initialEntries={[entry]}>

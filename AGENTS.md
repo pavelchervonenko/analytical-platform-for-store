@@ -31,3 +31,16 @@
   `python3 scripts/check-documentation.py --strict` for documentation changes and before release.
 - Never place secrets, full environment dumps, provider payloads, personal data or business-data
   screenshots in documentation or evidence.
+
+## Payroll redesign context
+
+- For changes to payroll formulas, personal targets, store extra-sales targets, daily allocation,
+  payroll returns or the payroll UI, start with `docs/maintenance/payroll-redesign.md`. Follow its
+  links to the requirement matrix, customer examples, architecture draft, technical design and
+  implementation plan, then read the current payroll contracts. Track implementation progress in
+  the implementation plan; keep product approvals in the decision register.
+- The new customer PDF has priority over the earlier customer text where they conflict. Keep open
+  questions open until the user or customer explicitly resolves them; existing code describes current
+  behavior, not an answer to an unresolved new requirement.
+- Record confirmed answers in the payroll decision register with source and affected requirement IDs.
+  Update the relevant current contracts only when implementation changes their behavior.

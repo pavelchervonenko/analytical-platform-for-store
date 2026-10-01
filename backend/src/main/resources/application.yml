@@ -123,6 +123,8 @@ springdoc:
     path: /swagger-ui.html
 
 app:
+  attach:
+    attribution-enabled: ${ATTACH_ATTRIBUTION_ENABLED:false}
   runtime:
     role: ${APP_RUNTIME_ROLE:COMBINED}
   interpretation:
@@ -162,6 +164,8 @@ app:
       max-estimated-cost-rub: ${INTERPRETATION_GENERATION_MAX_ESTIMATED_COST_RUB:50.00}
     weekly-review:
       enabled: ${WEEKLY_REVIEW_ENABLED:false}
+    seller-weekly-review:
+      enabled: ${SELLER_WEEKLY_REVIEW_ENABLED:false}
     weekly-review-snapshot-planner:
       enabled: ${WEEKLY_REVIEW_SNAPSHOT_PLANNER_ENABLED:false}
       scan-delay: ${WEEKLY_REVIEW_SNAPSHOT_PLANNER_SCAN_DELAY:5m}

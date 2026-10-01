@@ -1,9 +1,12 @@
 package com.storeanalytics.interpretation.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.BlockState;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Materiality;
+import com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricState;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.SalesStructureBlock;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.StructureNode;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Sufficiency;
@@ -17,6 +20,8 @@ import com.storeanalytics.metrics.service.CategoryKpiMetrics;
 import com.storeanalytics.metrics.service.CategoryKpiResult;
 import com.storeanalytics.metrics.service.StoreKpiDataQuality;
 import com.storeanalytics.metrics.service.StoreKpiResult;
+import com.storeanalytics.metrics.service.SellerPeriodFacts;
+import com.storeanalytics.metrics.service.SellerPeriodMetrics;
 import com.storeanalytics.product.model.AnalyticsCategoryKind;
 import com.storeanalytics.product.model.AttachDenominatorCode;
 import com.storeanalytics.product.model.DeviceFamily;
@@ -133,6 +138,62 @@ class WeeklyReviewStructureProjectorTest {
                 .anyMatch(message -> message.contains("пересекаются"));
     }
 
+    @Test
+    void sellerStructureKeepsSellerAmountsAndSellerEvidenceOnly() {
+        CategoryKpiResult selected = categories("600.00", "400.00", "100.00", "200.00",
+                List.of(category("CASE", AnalyticsCategoryKind.ACCESSORY,
+                        false, false, true, "100.00")));
+        SalesStructureBlock result = projector.projectSellers(
+                seller("1000.00", 0, selected, attach("5", "10", 0)),
+                seller("900.00", 0, selected, attach("4", "10", 0)));
+
+        assertThat(result.state()).isEqualTo(BlockState.READY);
+        assertThat(result.root().comparison().current()).isEqualByComparingTo("1000.00");
+        assertThat(result.root().comparison().evidenceRefs())
+                .containsExactly("SELLERS.STRUCTURE.NET_REVENUE.REVENUE");
+        assertThat(result.attachMetrics()).singleElement().satisfies(metric ->
+                assertThat(metric.comparison().evidenceRefs())
+                        .containsExactly("SELLERS.ATTACH.CASE_TO_PHONE"));
+    }
+
+    @Test
+    void preliminarySellerAttachCannotBecomeReadyOrGenerateMateriality() {
+        CategoryKpiResult selected = emptyCategories();
+        SalesStructureBlock result = projector.projectSellers(
+                seller("1000.00", 0, selected, preliminaryAttach("5", "10")),
+                seller("900.00", 0, selected, attach("4", "10", 0)));
+
+        assertThat(result.attachMetrics()).singleElement().satisfies(metric -> {
+            assertThat(metric.comparison().metricState()).isEqualTo(MetricState.LIMITED);
+            assertThat(metric.comparison().materiality()).isEqualTo(Materiality.NOT_EVALUATED);
+        });
+    }
+
+    @Test
+    void blockedSellerStructureDoesNotExposeStoreEvidenceOrFigures() {
+        SalesStructureBlock result = projector.unavailableSellers();
+
+        assertThat(result.state()).isEqualTo(BlockState.INSUFFICIENT);
+        assertThat(result.root().comparison().current()).isNull();
+        assertThat(result.root().comparison().evidenceRefs())
+                .containsExactly("SELLERS.STRUCTURE.NET_REVENUE.REVENUE");
+    }
+
+    private SellerPeriodFacts seller(
+            String revenue, long unmapped, CategoryKpiResult categories, AttachRateResult attach
+    ) {
+        SellerPeriodFacts facts = mock(SellerPeriodFacts.class);
+        SellerPeriodMetrics metrics = mock(SellerPeriodMetrics.class);
+        CategoryKpiMetrics totals = mock(CategoryKpiMetrics.class);
+        when(facts.metrics()).thenReturn(metrics);
+        when(facts.projectedAttachRates()).thenReturn(attach);
+        when(metrics.totals()).thenReturn(totals);
+        when(metrics.categories()).thenReturn(categories);
+        when(metrics.unmappedItemCount()).thenReturn(unmapped);
+        when(totals.netRevenue()).thenReturn(new BigDecimal(revenue));
+        return facts;
+    }
+
     private StructureNode node(SalesStructureBlock block, String code) {
         return block.root().children().stream()
                 .filter(node -> code.equals(node.code()))
@@ -244,5 +305,14 @@ class WeeklyReviewStructureProjectorTest {
                         rate
                 ))
         );
+    }
+
+    private AttachRateResult preliminaryAttach(String numerator, String denominator) {
+        AttachRateResult regular = attach(numerator, denominator, 0);
+        AttachRateEntry entry = regular.rates().getFirst();
+        return new AttachRateResult(STORE_ID, START, END, "attach-rate-v4", regular.dataQuality(),
+                List.of(new AttachRateEntry(entry.metricCode(), entry.numeratorCategoryCode(),
+                        entry.denominatorCode(), entry.numeratorReceiptCount(), entry.denominatorReceiptCount(),
+                        entry.ratePerHundred(), true)));
     }
 }

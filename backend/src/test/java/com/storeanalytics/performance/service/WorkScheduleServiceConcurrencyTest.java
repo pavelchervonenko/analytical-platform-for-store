@@ -1,6 +1,8 @@
 package com.storeanalytics.performance.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,8 +20,48 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 class WorkScheduleServiceConcurrencyTest {
+
+    @Test
+    void locksStoreForReadBeforeLoadingDayRevisionAndShifts() {
+        EmployeeWorkShiftRepository shiftRepository = mock(
+                EmployeeWorkShiftRepository.class
+        );
+        WorkScheduleDayRevisionRepository revisionRepository = mock(
+                WorkScheduleDayRevisionRepository.class
+        );
+        StoreRepository storeRepository = mock(StoreRepository.class);
+        Store store = mock(Store.class);
+        UUID storeId = UUID.randomUUID();
+        LocalDate workDate = LocalDate.of(2026, 7, 1);
+
+        when(store.getId()).thenReturn(storeId);
+        when(storeRepository.findByIdForRead(storeId)).thenReturn(Optional.of(store));
+        when(revisionRepository.findByStoreIdAndWorkDate(storeId, workDate))
+                .thenReturn(Optional.empty());
+        when(shiftRepository.findAllByStoreIdAndWorkDate(storeId, workDate))
+                .thenReturn(List.of());
+
+        WorkScheduleService service = new WorkScheduleService(
+                shiftRepository,
+                revisionRepository,
+                mock(EmployeeStoreAssignmentRepository.class),
+                storeRepository,
+                mock(AppUserRepository.class),
+                mock(com.storeanalytics.audit.service.AuditLogService.class)
+        );
+
+        WorkScheduleDayView day = service.getDay(storeId, workDate);
+
+        InOrder reads = inOrder(storeRepository, revisionRepository, shiftRepository);
+        reads.verify(storeRepository).findByIdForRead(storeId);
+        reads.verify(revisionRepository).findByStoreIdAndWorkDate(storeId, workDate);
+        reads.verify(shiftRepository).findAllByStoreIdAndWorkDate(storeId, workDate);
+        assertThat(day.revision()).isZero();
+        assertThat(day.shifts()).isEmpty();
+    }
 
     @Test
     void locksStoreBeforeCreatingFirstDayRevision() {

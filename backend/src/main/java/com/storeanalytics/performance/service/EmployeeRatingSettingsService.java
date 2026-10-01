@@ -10,6 +10,8 @@ import com.storeanalytics.employee.model.EmployeeStoreAssignment;
 import com.storeanalytics.employee.model.EmployeeStoreAssignmentId;
 import com.storeanalytics.employee.repository.EmployeeStoreAssignmentRepository;
 import com.storeanalytics.metrics.exception.StoreNotFoundException;
+import com.storeanalytics.metrics.repository.SellerMembershipHistoryWriter;
+import com.storeanalytics.metrics.repository.SellerMembershipHistoryWriter.ChangeSource;
 import com.storeanalytics.performance.exception.EmployeeAssignmentNotFoundException;
 import com.storeanalytics.performance.exception.EmployeeRatingConflictException;
 import com.storeanalytics.common.exception.InvalidRequestException;
@@ -27,15 +29,18 @@ public class EmployeeRatingSettingsService {
     private final EmployeeStoreAssignmentRepository assignmentRepository;
     private final StoreRepository storeRepository;
     private final AuditLogService auditLogService;
+    private final SellerMembershipHistoryWriter membershipHistory;
 
     public EmployeeRatingSettingsService(
             EmployeeStoreAssignmentRepository assignmentRepository,
             StoreRepository storeRepository,
-            AuditLogService auditLogService
+            AuditLogService auditLogService,
+            SellerMembershipHistoryWriter membershipHistory
     ) {
         this.assignmentRepository = assignmentRepository;
         this.storeRepository = storeRepository;
         this.auditLogService = auditLogService;
+        this.membershipHistory = membershipHistory;
     }
 
     @Transactional(readOnly = true)
@@ -63,6 +68,11 @@ public class EmployeeRatingSettingsService {
         if (expectedVersion < 0) {
             throw new InvalidRequestException("version must not be negative");
         }
+        membershipHistory.lockStore(validatedStoreId);
+        if (!membershipHistory.manualChangeAllowed(validatedStoreId, validatedEmployeeId)) {
+            throw new EmployeeRatingConflictException(
+                    "Employee membership history is not yet published for this assignment");
+        }
         EmployeeStoreAssignment assignment = assignmentRepository.findById(
                 new EmployeeStoreAssignmentId(validatedEmployeeId, validatedStoreId)
         ).orElseThrow(() -> new EmployeeAssignmentNotFoundException(
@@ -74,6 +84,7 @@ public class EmployeeRatingSettingsService {
         Map<String, Object> before = participationSummary(assignment);
         assignment.update(assignment.isActive(), participatesInRanking);
         EmployeeStoreAssignment saved = assignmentRepository.saveAndFlush(assignment);
+        membershipHistory.reconcileStore(validatedStoreId, ChangeSource.MANUAL, actorId, null);
         auditLogService.record(
                 actorId,
                 validatedStoreId,

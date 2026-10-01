@@ -70,6 +70,7 @@ import {
 } from "./contracts";
 import { weeklyInsightSchema, type WeeklyInsight } from "./weeklyInsightContract";
 import { weeklyReviewSchema, type WeeklyReview } from "./weeklyReviewContract";
+import { sellerWeeklyReviewViewSchema, type SellerWeeklyReviewView } from "./sellerWeeklyReviewContract";
 import { ApiClientError, apiClient, isApiClientError, type EtaggedResource } from "./client";
 
 export const queryKeys = {
@@ -81,6 +82,7 @@ export const queryKeys = {
   storeStatus: (storeId: string) => ["stores", storeId, "data-status"] as const,
   weeklyInsight: (storeId: string) => ["stores", storeId, "insights", "weekly", "current"] as const,
   weeklyReview: (storeId: string) => ["stores", storeId, "weekly-reviews", "current"] as const,
+  sellerWeeklyReview: (storeId: string) => ["stores", storeId, "weekly-reviews", "v3", "SELLERS", "current"] as const,
   storeKpi: (storeId: string, start: string, end: string) => ["stores", storeId, "kpi", start, end] as const,
   employeeKpi: (storeId: string, start: string, end: string) => ["stores", storeId, "kpi", "employees", start, end] as const,
   categories: (storeId: string, start: string, end: string) => ["stores", storeId, "categories", start, end] as const,
@@ -245,6 +247,18 @@ export async function getWeeklyReview(storeId: string): Promise<WeeklyReview | n
       schema: weeklyReviewSchema
     });
   } catch (error) {
+    if (isApiClientError(error) && error.status === 404) return null;
+    throw error;
+  }
+}
+
+export async function getSellerWeeklyReview(storeId: string): Promise<SellerWeeklyReviewView | null> {
+  try {
+    return await apiClient.request(`${storePath(storeId)}/weekly-reviews/seller-current`, {
+      schema: sellerWeeklyReviewViewSchema
+    });
+  } catch (error) {
+    // Only an unavailable endpoint permits legacy fallback; validation/network/auth errors do not.
     if (isApiClientError(error) && error.status === 404) return null;
     throw error;
   }

@@ -10,7 +10,8 @@ describe("application navigation", () => {
       ["/plan", "План"],
       ["/shifts", "Смены"],
       ["/payroll", "Зарплата"],
-      ["/reports", "Отчеты"]
+      ["/reports", "Отчеты"],
+      ["/catalog-reviews", "Новые товары"]
     ]);
   });
 
@@ -18,7 +19,7 @@ describe("application navigation", () => {
     const management = navigationGroupsFor("MANAGER", ["SHIFTS"])
       .find((group) => group.label === "Управление");
 
-    expect(management?.items.map((item) => item.label)).toEqual(["Смены", "Отчеты"]);
+    expect(management?.items.map((item) => item.label)).toEqual(["Смены", "Отчеты", "Новые товары"]);
   });
 
   it("shows the System group only to administrators", () => {

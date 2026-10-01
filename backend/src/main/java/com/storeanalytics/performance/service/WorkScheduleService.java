@@ -100,9 +100,9 @@ public class WorkScheduleService {
                 .toList();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public WorkScheduleDayView getDay(UUID storeId, LocalDate workDate) {
-        UUID validatedStoreId = requireStore(storeId);
+        UUID validatedStoreId = requireStoreForRead(storeId);
         LocalDate date = requireNonNull(workDate, "workDate");
         long revision = revisionRepository.findByStoreIdAndWorkDate(validatedStoreId, date)
                 .map(WorkScheduleDayRevision::getRevision)
@@ -145,6 +145,11 @@ public class WorkScheduleService {
             EmployeeStoreAssignment assignment = assignments.get(employeeId);
             if (!assignment.isActive() || !assignment.getEmployee().isActive()) {
                 throw new InvalidRequestException("employees in a shift must be active");
+            }
+            if (!assignment.participatesInRanking()) {
+                throw new InvalidRequestException(
+                        "employees in a shift must participate in ranking"
+                );
             }
         }
 
@@ -286,6 +291,13 @@ public class WorkScheduleService {
     private Store requireStoreForUpdate(UUID storeId) {
         UUID validated = requireNonNull(storeId, "storeId");
         return storeRepository.findByIdForUpdate(validated)
+                .orElseThrow(() -> new StoreNotFoundException(validated));
+    }
+
+    private UUID requireStoreForRead(UUID storeId) {
+        UUID validated = requireNonNull(storeId, "storeId");
+        return storeRepository.findByIdForRead(validated)
+                .map(Store::getId)
                 .orElseThrow(() -> new StoreNotFoundException(validated));
     }
 

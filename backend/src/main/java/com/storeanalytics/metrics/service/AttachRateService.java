@@ -44,23 +44,39 @@ public class AttachRateService {
                 validatedPeriod.start(),
                 validatedPeriod.end()
         );
-        List<AttachRateEntry> rates = aggregates.stream()
-                .map(this::toEntry)
+        return project(validatedStoreId, validatedPeriod,
+                attachRateRepository.attributionEnabled() ? "attach-rate-v4" : FORMULA_VERSION,
+                aggregates);
+    }
+
+    /** Applies one established rate/clamp/rounding formula to store or selected-seller aggregates. */
+    public static AttachRateResult project(
+            UUID storeId,
+            StoreKpiPeriod period,
+            String formulaVersion,
+            List<AttachRateAggregate> aggregates
+    ) {
+        requireNonNull(storeId, "storeId");
+        requireNonNull(period, "period");
+        requireNonNull(formulaVersion, "formulaVersion");
+        List<AttachRateAggregate> values = List.copyOf(requireNonNull(aggregates, "aggregates"));
+        List<AttachRateEntry> rates = values.stream()
+                .map(AttachRateService::toEntry)
                 .toList();
-        AttachRateDataQuality dataQuality = aggregates.isEmpty()
+        AttachRateDataQuality dataQuality = values.isEmpty()
                 ? new AttachRateDataQuality(0, 0, 0)
-                : quality(aggregates.getFirst());
+                : quality(values.getFirst());
         return new AttachRateResult(
-                validatedStoreId,
-                validatedPeriod.start(),
-                validatedPeriod.end(),
-                FORMULA_VERSION,
+                storeId,
+                period.start(),
+                period.end(),
+                formulaVersion,
                 dataQuality,
                 rates
         );
     }
 
-    private AttachRateEntry toEntry(AttachRateAggregate aggregate) {
+    private static AttachRateEntry toEntry(AttachRateAggregate aggregate) {
         BigDecimal numerator = quantity(aggregate.numeratorReceiptCount());
         BigDecimal denominator = quantity(aggregate.denominatorReceiptCount());
         BigDecimal rate = denominator.signum() <= 0
@@ -74,19 +90,21 @@ public class AttachRateService {
                 aggregate.denominatorCode(),
                 numerator,
                 denominator,
-                rate
+                rate,
+                aggregate.preliminary()
         );
     }
 
-    private AttachRateDataQuality quality(AttachRateAggregate aggregate) {
+    private static AttachRateDataQuality quality(AttachRateAggregate aggregate) {
         return new AttachRateDataQuality(
                 aggregate.unmatchedNumeratorItemCount(),
                 aggregate.ambiguousWarrantyItemCount(),
-                aggregate.unknownDeviceConditionItemCount()
+                aggregate.unknownDeviceConditionItemCount(),
+                aggregate.unassignedReturnItemCount()
         );
     }
 
-    private BigDecimal quantity(BigDecimal value) {
+    private static BigDecimal quantity(BigDecimal value) {
         return value.setScale(QUANTITY_SCALE, RoundingMode.UNNECESSARY);
     }
 }

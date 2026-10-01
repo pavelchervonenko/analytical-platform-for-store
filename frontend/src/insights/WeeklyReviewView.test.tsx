@@ -4,14 +4,17 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getWeeklyReview } from "../api/queries";
+import { getSellerWeeklyReview, getWeeklyReview } from "../api/queries";
 import type { WeeklyReview } from "../api/weeklyReviewContract";
 import { makeWeeklyReview } from "../test/weeklyReviewFixture";
+import { makeSellerWeeklyReviewView } from "../test/sellerWeeklyReviewFixture";
 import { WeeklyReviewView } from "./WeeklyReviewView";
 
 vi.mock("../api/queries", () => ({
+  getSellerWeeklyReview: vi.fn(),
   getWeeklyReview: vi.fn(),
   queryKeys: {
+    sellerWeeklyReview: (storeId: string) => ["stores", storeId, "weekly-reviews", "v3", "SELLERS", "current"],
     weeklyReview: (storeId: string) => ["stores", storeId, "weekly-reviews", "current"]
   }
 }));
@@ -118,6 +121,86 @@ function addAttentionEmployees(review: WeeklyReview, count: number) {
 describe("WeeklyReviewView", () => {
   beforeEach(() => {
     getWeeklyReviewMock.mockReset();
+    vi.mocked(getSellerWeeklyReview).mockReset().mockResolvedValue(null);
+  });
+
+  it("shows seller scope and additional sales instead of cached STORE data", async () => {
+    vi.mocked(getSellerWeeklyReview).mockResolvedValue(makeSellerWeeklyReviewView());
+    renderView(undefined, makeWeeklyReview());
+    expect(await screen.findByText(/Только продавцы рейтинга/u)).toBeInTheDocument();
+    expect(screen.getByText("Доля допов в выручке продавцов")).toBeInTheDocument();
+    expect(screen.queryByText(/результаты всего магазина/u)).not.toBeInTheDocument();
+    expect(getWeeklyReviewMock).not.toHaveBeenCalled();
+    const user = userEvent.setup();
+    await user.click(screen.getByText("Из чего складываются допы"));
+    expect(screen.getByText(/Общая доля рассчитана от чистой выручки продавцов/u)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Результаты продавца: Synthetic" }));
+    expect(screen.getByRole("dialog", { name: "Synthetic" })).toBeVisible();
+    expect(screen.queryByText("Почему сотрудник в списке")).not.toBeInTheDocument();
+  });
+
+  it("shows a sales-based seller action without shifts and hides it when stale", async () => {
+    const view = makeSellerWeeklyReviewView();
+    const card = view.report!.employees[0]!.card;
+    card.attention = {
+      observationId: `employee:${card.employeePublicId}:additional-revenue`,
+      title: "Дополнительная выручка снизилась",
+      detail: "Сравнение двух завершённых недель на достаточной выборке продаж.",
+      effect: "NEGATIVE",
+      evidenceRefs: card.metrics.additionalRevenue.evidenceRefs
+    };
+    card.action = {
+      actionId: `employee:${card.employeePublicId}:review-additional`,
+      priority: "HIGH",
+      actionType: "REVIEW_SELLER_METRIC",
+      scope: "EMPLOYEE",
+      employeePublicId: card.employeePublicId,
+      title: "Проверить снижение дополнительной выручки",
+      metricCode: "ADDITIONAL_REVENUE",
+      target: { operator: "AT_LEAST", value: 20, unit: "RUB" },
+      check: "Сверить результат следующей полной недели.",
+      horizon: "NEXT_FULL_WEEK",
+      generatedBy: "DETERMINISTIC",
+      evidenceRefs: card.metrics.additionalRevenue.evidenceRefs
+    };
+    vi.mocked(getSellerWeeklyReview).mockResolvedValue(view);
+    const rendered = renderView();
+    expect(await screen.findByText("Проверить: Дополнительная выручка снизилась")).toBeVisible();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Результаты продавца: Synthetic" }));
+    expect(within(screen.getByRole("dialog", { name: "Synthetic" }))
+      .getByText("Проверить снижение дополнительной выручки")).toBeVisible();
+
+    rendered.unmount();
+    vi.mocked(getSellerWeeklyReview).mockResolvedValue({ ...view, freshness: "STALE" });
+    renderView();
+    expect(await screen.findByText(/Данные изменились/u)).toBeVisible();
+    expect(screen.queryByText("Проверить: Дополнительная выручка снизилась")).not.toBeInTheDocument();
+  });
+
+  it("keeps seller preparing separate from a cached legacy report", async () => {
+    vi.mocked(getSellerWeeklyReview).mockResolvedValue({ freshness: "PREPARING", report: null });
+    renderView(<div>Legacy content</div>, makeWeeklyReview());
+    expect(await screen.findByText("Разбор ещё не сформирован")).toBeInTheDocument();
+    expect(screen.queryByText("Legacy content")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Результаты недели" })).not.toBeInTheDocument();
+    expect(getWeeklyReviewMock).not.toHaveBeenCalled();
+  });
+
+  it("does not silently switch to STORE after a seller API error", async () => {
+    vi.mocked(getSellerWeeklyReview).mockRejectedValue(new Error("Seller contract unavailable"));
+    renderView(<div>Legacy content</div>, makeWeeklyReview());
+    await waitFor(() => expect(screen.getByRole("button", { name: /Повторить|Попробовать/u })).toBeInTheDocument());
+    expect(screen.queryByText("Legacy content")).not.toBeInTheDocument();
+    expect(getWeeklyReviewMock).not.toHaveBeenCalled();
+  });
+
+  it("marks stale seller snapshots without reusing legacy data", async () => {
+    const view = makeSellerWeeklyReviewView();
+    view.freshness = "STALE";
+    vi.mocked(getSellerWeeklyReview).mockResolvedValue(view);
+    renderView();
+    expect(await screen.findByText(/действия скрыты до обновления разбора/u)).toBeInTheDocument();
+    expect(getWeeklyReviewMock).not.toHaveBeenCalled();
   });
 
   it("puts the managerial conclusion, one action and four KPIs on the first level", async () => {

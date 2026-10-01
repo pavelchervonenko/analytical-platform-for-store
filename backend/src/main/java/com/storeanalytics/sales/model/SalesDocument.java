@@ -49,6 +49,9 @@ public class SalesDocument extends AbstractMutableEntity {
     @JoinColumn(name = "employee_id")
     private Employee employee;
 
+    @Column(name = "attach_source_employee_external_id")
+    private String attachSourceEmployeeExternalId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "original_document_id")
     private SalesDocument originalDocument;
@@ -260,6 +263,14 @@ public class SalesDocument extends AbstractMutableEntity {
 
     public Employee getEmployee() {
         return employee;
+    }
+
+    public boolean updateAttachSourceEmployee(String externalEmployeeId) {
+        String normalized = externalEmployeeId == null || externalEmployeeId.isBlank()
+                ? null : externalEmployeeId.trim();
+        boolean changed = !Objects.equals(attachSourceEmployeeExternalId, normalized);
+        attachSourceEmployeeExternalId = normalized;
+        return changed;
     }
 
     public SalesDocument getOriginalDocument() {

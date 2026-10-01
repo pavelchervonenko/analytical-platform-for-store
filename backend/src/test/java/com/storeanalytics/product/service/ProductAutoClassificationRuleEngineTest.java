@@ -17,8 +17,15 @@ class ProductAutoClassificationRuleEngineTest {
 
     @ParameterizedTest
     @MethodSource({
-        "yandexStationCases",
+        "speakerCases",
+        "smartGlassesCases",
+        "fitnessWearableCases",
+        "cameraCases",
         "productionDryRunCases",
+        "approvedChargingCases",
+        "powerBankCases",
+        "adapterCases",
+        "confirmedAmbiguousChargingCases",
         "septemberMobiSphereCases",
         "legacyUnmappedRegressionCases",
         "customerMethodologyCases"
@@ -37,6 +44,45 @@ class ProductAutoClassificationRuleEngineTest {
                 .isEqualTo(expectedCondition);
     }
 
+    @ParameterizedTest
+    @MethodSource("autoInstallationGlassCases")
+    void distinguishesGlassApplicatorsFromInstallationWorks(
+            String name, String expectedCategory
+    ) {
+        for (var sourceKind : new ProductSourceKind[] {
+                ProductSourceKind.PRODUCT, ProductSourceKind.UNKNOWN
+        }) {
+            assertThat(engine.classify(name, sourceKind).orElseThrow().categoryCode())
+                    .as("%s: %s", sourceKind, name).isEqualTo(expectedCategory);
+        }
+        assertThat(engine.classify(name, ProductSourceKind.SERVICE)
+                .orElseThrow().categoryCode()).isEqualTo("SETUP_SERVICE");
+    }
+
+    private static Stream<Arguments> autoInstallationGlassCases() {
+        return Stream.of(
+                Arguments.of(
+                        "Защитное стекло Глазурь Автоустановка Глянец iPhone 17 Pro / 18 Pro",
+                        "GLASS_IPHONE"),
+                Arguments.of("Защитное стекло Samsung S25 автоустановка", "GLASS_SAMSUNG"),
+                Arguments.of("Защитное стекло iPhone с автоустановкой", "GLASS_IPHONE"),
+                Arguments.of("Установка защитного стекла iPhone", "SETUP_SERVICE"),
+                Arguments.of("Переустановка ПО iPhone", "SETUP_SERVICE"),
+                Arguments.of("Автоустановка программ iPhone", "SETUP_SERVICE"),
+                Arguments.of(
+                        "Защитное стекло iPhone Автоустановка + установка",
+                        "SETUP_SERVICE"),
+                Arguments.of(
+                        "Защитное стекло iPhone Автоустановка + переустановка ПО",
+                        "SETUP_SERVICE"),
+                Arguments.of(
+                        "Защитное стекло iPhone + автоустановка программ",
+                        "SETUP_SERVICE"),
+                Arguments.of("Набор стекол iPhone Автоустановка", "SETUP_SERVICE"),
+                Arguments.of("Ремонт стекла iPhone Автоустановка", "SETUP_SERVICE")
+        );
+    }
+
     @Test
     void leavesUnknownProductUnmapped() {
         assertThat(engine.classify(
@@ -47,6 +93,65 @@ class ProductAutoClassificationRuleEngineTest {
                 "Phone 15 stand",
                 ProductSourceKind.PRODUCT
         )).isEmpty();
+        assertThat(engine.classify(
+                "Instax Mini 13 film",
+                ProductSourceKind.PRODUCT
+        )).isEmpty();
+        assertThat(engine.classify(
+                "Плёнка Instax Mini 13",
+                ProductSourceKind.PRODUCT
+        )).isEmpty();
+        assertThat(engine.classify(
+                "iPhone 15 Pro пароль восстановлен",
+                ProductSourceKind.PRODUCT
+        ).orElseThrow().categoryCode()).isEqualTo("IPHONE_NEW_ASIS");
+    }
+
+    @Test
+    void keepsChargingRulesAwayFromPhonesAndNonChargingAdapters() {
+        assertThat(engine.classify(
+                "Samsung Galaxy S25 256GB",
+                ProductSourceKind.PRODUCT
+        ).orElseThrow().categoryCode()).isEqualTo("SAMSUNG_NEW");
+        assertThat(engine.classify(
+                "Адаптер VLP Infinity USB-C Hub 5 в 1 Графит",
+                ProductSourceKind.PRODUCT
+        ).orElseThrow().categoryCode()).isEqualTo("OTHER_ACCESSORY_PRODUCT");
+        assertThat(engine.classify(
+                "No Box Apple HDMI Cable",
+                ProductSourceKind.PRODUCT
+        )).isEmpty();
+    }
+
+    @Test
+    void keepsRayBanAccessoryAndWorkOutOfSmartGlasses() {
+        assertThat(engine.classify(
+                "Чехол Ray Ban Meta",
+                ProductSourceKind.PRODUCT
+        ).orElseThrow().categoryCode()).isEqualTo("OTHER_ACCESSORY_PRODUCT");
+        assertThat(engine.classify(
+                "Настройка Ray Ban Meta",
+                ProductSourceKind.SERVICE
+        ).orElseThrow().categoryCode()).isEqualTo("SETUP_SERVICE");
+    }
+
+    @Test
+    void classifiesPasswordRecoverySoldAsProductAsSetupService() {
+        var decision = engine.classify(
+                "Восстановления паролей",
+                ProductSourceKind.PRODUCT
+        ).orElseThrow();
+        assertThat(decision.categoryCode()).isEqualTo("SETUP_SERVICE");
+        assertThat(decision.conditionType()).isEqualTo(ProductConditionType.NOT_APPLICABLE);
+        assertThat(decision.ruleId()).isEqualTo("password-recovery-service");
+    }
+
+    @Test
+    void keepsInstaxCaseOutOfCameras() {
+        assertThat(engine.classify(
+                "Чехол для Instax Mini 13",
+                ProductSourceKind.PRODUCT
+        ).orElseThrow().categoryCode()).isEqualTo("OTHER_ACCESSORY_PRODUCT");
     }
 
     @ParameterizedTest
@@ -81,7 +186,7 @@ class ProductAutoClassificationRuleEngineTest {
     }
 
     @Test
-    void classifiesWiredAppleEarPodsAsAnAppleDeviceAccessory() {
+    void classifiesWiredAppleEarPodsAsAppleHeadphones() {
         var decision = engine.classify(
                 "Apple EarPods (Lightning) A1748",
                 ProductSourceKind.PRODUCT
@@ -89,9 +194,33 @@ class ProductAutoClassificationRuleEngineTest {
 
         assertThat(decision).isPresent();
         assertThat(decision.orElseThrow().categoryCode())
-                .isEqualTo("PODS_WATCH_OTHER_DEVICE");
+                .isEqualTo("HEADPHONES_APPLE");
         assertThat(decision.orElseThrow().conditionType())
                 .isEqualTo(ProductConditionType.NEW);
+    }
+
+    @Test
+    void treatsSpeakerRepairAsService() {
+        var decision = engine.classify(
+                "Ремонт колонки JBL",
+                ProductSourceKind.PRODUCT
+        );
+
+        assertThat(decision).isPresent();
+        assertThat(decision.orElseThrow().categoryCode())
+                .isEqualTo("SETUP_SERVICE");
+    }
+
+    @Test
+    void keepsHeadphonesOutOfSpeakerCategory() {
+        var decision = engine.classify(
+                "Наушники JBL Tune 770NC Black",
+                ProductSourceKind.PRODUCT
+        );
+
+        assertThat(decision).isPresent();
+        assertThat(decision.orElseThrow().categoryCode())
+                .isEqualTo("HEADPHONES_OTHER");
     }
 
     private static Stream<Arguments> sourceKindServiceCases() {
@@ -101,21 +230,89 @@ class ProductAutoClassificationRuleEngineTest {
                 Arguments.of("Замена стекла дисплея"),
                 Arguments.of("Замена стекла на камеру"),
                 Arguments.of("Чистка тач-пада и клавиатуры с разборкой"),
-                Arguments.of("ЗАМЕНА ДИСПЛЕЯ 13 АЙФОНА")
+                Arguments.of("ЗАМЕНА ДИСПЛЕЯ 13 АЙФОНА"),
+                Arguments.of("Диагностика колонки JBL")
         );
     }
 
-    private static Stream<Arguments> yandexStationCases() {
+    private static Stream<Arguments> speakerCases() {
         return Stream.of(
                 arguments(
                         "Яндекс Станция Макс бежевый",
-                        "PODS_WATCH_OTHER_DEVICE",
+                        "SPEAKERS",
                         ProductConditionType.NEW
                 ),
                 arguments(
                         "Yandex Station Max б/у",
-                        "PODS_WATCH_OTHER_DEVICE",
+                        "SPEAKERS",
                         ProductConditionType.USED
+                ),
+                arguments("Колонка JBL Charge 6 Black", "SPEAKERS", ProductConditionType.NEW),
+                arguments("JBL Flip 7 Blue New", "SPEAKERS", ProductConditionType.NEW),
+                arguments("Harman Kardon Onyx Studio 9 Black New", "SPEAKERS", ProductConditionType.NEW),
+                arguments("Bluetooth speaker used", "SPEAKERS", ProductConditionType.USED)
+        );
+    }
+
+    private static Stream<Arguments> smartGlassesCases() {
+        return Stream.of(
+                arguments(
+                        "Ray Ban Meta Starfire Kylie Black/Clear to Grey Transition",
+                        "SMART_GLASSES",
+                        ProductConditionType.NEW
+                ),
+                arguments(
+                        "Ray-Ban Meta Wayfarer Shiny Black",
+                        "SMART_GLASSES",
+                        ProductConditionType.NEW
+                ),
+                arguments(
+                        "Meta Ray Ban Wayfarer Black Б/У",
+                        "SMART_GLASSES",
+                        ProductConditionType.USED
+                ),
+                arguments(
+                        "Ray Ban Wayfarer Matte Black Transitions Grey (M) NEW",
+                        "SMART_GLASSES",
+                        ProductConditionType.NEW
+                ),
+                arguments(
+                        "Ray-Ban Wayfarer Shiny Black",
+                        "SMART_GLASSES",
+                        ProductConditionType.NEW
+                ),
+                arguments(
+                        "Rayban Wayfarer Black Б/У",
+                        "SMART_GLASSES",
+                        ProductConditionType.USED
+                )
+        );
+    }
+
+    private static Stream<Arguments> cameraCases() {
+        return Stream.of(
+                arguments("Instax Mini 13 Pink", "CAMERAS", ProductConditionType.NEW),
+                arguments("Instax Mini 13 White", "CAMERAS", ProductConditionType.NEW),
+                arguments("Instax Mini 13 Black Б/У", "CAMERAS", ProductConditionType.USED)
+        );
+    }
+
+    private static Stream<Arguments> fitnessWearableCases() {
+        return Stream.of(
+                arguments("Garmin Forerunner 165 Music Whitestone", "FITNESS_WEARABLE", ProductConditionType.NEW),
+                arguments("Garmin Vivoactive 6 Slate with Black Band", "FITNESS_WEARABLE", ProductConditionType.NEW),
+                arguments("Браслет Google Fitbit Air Berry", "FITNESS_WEARABLE", ProductConditionType.NEW),
+                arguments("Браслет Google Fitbit Air Lavender", "FITNESS_WEARABLE", ProductConditionType.NEW),
+                arguments("Браслет Google Fitbit Air Obsidian", "FITNESS_WEARABLE", ProductConditionType.NEW),
+                arguments("Браслет Whoop 5.0 Life", "FITNESS_WEARABLE", ProductConditionType.NEW),
+                arguments("Браслет Whoop 5.0 One", "FITNESS_WEARABLE", ProductConditionType.NEW),
+                arguments("Браслет Whoop 5.0 Peak", "FITNESS_WEARABLE", ProductConditionType.NEW),
+                arguments("Браслет Whoop Life 5.0", "FITNESS_WEARABLE", ProductConditionType.NEW),
+                arguments("Ремешок Whoop 5.0", "OTHER_ACCESSORY_PRODUCT", ProductConditionType.NOT_APPLICABLE),
+                arguments(
+                        "Google Fitbit Air Active Band",
+                        "OTHER_ACCESSORY_PRODUCT",
+                        ProductConditionType.NOT_APPLICABLE
                 )
         );
     }
@@ -214,28 +411,28 @@ class ProductAutoClassificationRuleEngineTest {
                 ),
                 arguments(
                         "Apple Pencil Pro NEW",
-                        "IPAD_MAC",
-                        ProductConditionType.NEW
+                        "ACCESSORY_IPAD",
+                        ProductConditionType.NOT_APPLICABLE
                 ),
                 arguments(
                         "Стилус Apple Pencil Pro NEW",
-                        "IPAD_MAC",
-                        ProductConditionType.NEW
+                        "ACCESSORY_IPAD",
+                        ProductConditionType.NOT_APPLICABLE
                 ),
                 arguments(
                         "Apple Magic Mouse USB-C Black",
-                        "IPAD_MAC",
-                        ProductConditionType.NEW
+                        "ACCESSORY_MAC",
+                        ProductConditionType.NOT_APPLICABLE
                 ),
                 arguments(
                         "Magic Keyboard iPad Pro Black",
-                        "IPAD_MAC",
-                        ProductConditionType.NEW
+                        "ACCESSORY_IPAD",
+                        ProductConditionType.NOT_APPLICABLE
                 ),
                 arguments(
                         "Клавиатура Magic Keyboard iPad Pro Black",
-                        "IPAD_MAC",
-                        ProductConditionType.NEW
+                        "ACCESSORY_IPAD",
+                        ProductConditionType.NOT_APPLICABLE
                 ),
                 arguments(
                         "PlayStation 5 Dualsense Midnight Black",
@@ -244,12 +441,12 @@ class ProductAutoClassificationRuleEngineTest {
                 ),
                 arguments(
                         "iPhone Air Magsafe Battery Pack",
-                        "CHARGER_CABLE",
+                        "POWER_BANK",
                         ProductConditionType.NOT_APPLICABLE
                 ),
                 arguments(
                         "Наконечники Elago Metal Tips для Apple Pencil 1/2/Pro/USB-C (2шт.)",
-                        "ACCESSORY_IPAD_MAC",
+                        "ACCESSORY_IPAD",
                         ProductConditionType.NOT_APPLICABLE
                 ),
                 arguments(
@@ -282,6 +479,98 @@ class ProductAutoClassificationRuleEngineTest {
                         "OTHER_ACCESSORY_PRODUCT",
                         ProductConditionType.NOT_APPLICABLE
                 )
+        );
+    }
+
+    private static Stream<Arguments> approvedChargingCases() {
+        return Stream.of(
+                arguments("Apple Power Adapter 30W Original", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("No Box Apple Cable USB-C to USB-C 60W", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Samsung Power Adapter 25W Original", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Блок Baseus 30w Speed Mini Белый", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Блок Baseus 30w Speed Mini Черный", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Блок Baseus 45w EnerCore CJ11 Черный", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Блок Baseus 65W Fast Charger", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Блок Baseus GAN 67W Fast Charger", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Блок Baseus Type-c 20W Speed Mini белый", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Блок Baseus Type-c 20W Speed Mini Черный", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Комплект Baseus 20w  Белый Lightning", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Комплект Baseus 20w  Белый Type-c", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Комплект Baseus 20w  Черный Lightning", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Комплект Baseus 20w  Черный Type-c", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Комплект Baseus Gan5 30w Type-c (с кабелем) White", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE)
+        );
+    }
+
+    private static Stream<Arguments> powerBankCases() {
+        return Stream.of(
+                arguments("Powerbank HOCO Q 34 10K MAH", "POWER_BANK",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Повербанк Magsafe Hoco 10k Mah J117A", "POWER_BANK",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Внешний аккумулятор VLP Solid Energy 5000mAh Qi2 20w белый",
+                        "POWER_BANK", ProductConditionType.NOT_APPLICABLE),
+                arguments("Портативный аккумулятор Keephone Magcube MagSafe 10K MAH",
+                        "POWER_BANK", ProductConditionType.NOT_APPLICABLE),
+                arguments("iPhone Air Magsafe Battery Pack", "POWER_BANK",
+                        ProductConditionType.NOT_APPLICABLE)
+        );
+    }
+
+    private static Stream<Arguments> adapterCases() {
+        return Stream.of(
+                arguments("Адаптер VLP Infinity USB-C Hub 5 в 1 Графит",
+                        "OTHER_ACCESSORY_PRODUCT", ProductConditionType.NOT_APPLICABLE),
+                arguments("Переходник Baseus UltraJoy 7-Port HUB",
+                        "OTHER_ACCESSORY_PRODUCT", ProductConditionType.NOT_APPLICABLE),
+                arguments("Евро-переходник",
+                        "OTHER_ACCESSORY_PRODUCT", ProductConditionType.NOT_APPLICABLE),
+                arguments("Переходник Keephone UNIVERSAL TRAVEL",
+                        "OTHER_ACCESSORY_PRODUCT", ProductConditionType.NOT_APPLICABLE),
+                arguments("Сетевой переходник Merkan",
+                        "OTHER_ACCESSORY_PRODUCT", ProductConditionType.NOT_APPLICABLE),
+                arguments("Lightning 3.5 AUX AUDIO",
+                        "OTHER_ACCESSORY_PRODUCT", ProductConditionType.NOT_APPLICABLE),
+                arguments("Кабель Lightning 3.5 AUX AUDIO",
+                        "OTHER_ACCESSORY_PRODUCT", ProductConditionType.NOT_APPLICABLE),
+                arguments("Переходник СЗУ на Type-c 20W PD POWER ADAPTER ORIG MODEL A2347",
+                        "CHARGER_CABLE", ProductConditionType.NOT_APPLICABLE)
+        );
+    }
+
+    private static Stream<Arguments> confirmedAmbiguousChargingCases() {
+        return Stream.of(
+                arguments("CЗУ Ugreen X512 Type-C 20W белый", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("CЗУ Ugreen X512 Type-C 20W черный", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("CЗУ Ugreen X513 Type-C 30W  белый", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("USB-C - Lightning No Box", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Беспроводное зар. устройство VLP Lite Power Snap Qi2 Apple Watch",
+                        "CHARGER_CABLE", ProductConditionType.NOT_APPLICABLE),
+                arguments("Станция 3 в 1 (Стоячая)", "CHARGER_CABLE",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Taggy Keephone белый", "OTHER_ACCESSORY_PRODUCT",
+                        ProductConditionType.NOT_APPLICABLE),
+                arguments("Taggy Keephone черный", "OTHER_ACCESSORY_PRODUCT",
+                        ProductConditionType.NOT_APPLICABLE)
         );
     }
 
@@ -334,12 +623,12 @@ class ProductAutoClassificationRuleEngineTest {
                 ),
                 arguments(
                         "Пауэрбанк MagSafe 10000 mAh",
-                        "CHARGER_CABLE",
+                        "POWER_BANK",
                         ProductConditionType.NOT_APPLICABLE
                 ),
                 arguments(
                         "Портативный аккумулятор Baseus 20000 mAh",
-                        "CHARGER_CABLE",
+                        "POWER_BANK",
                         ProductConditionType.NOT_APPLICABLE
                 ),
                 arguments(

@@ -133,6 +133,39 @@ class EmployeeRatingServiceTest {
         assertThat(entry.rank()).isNull();
     }
 
+    @Test
+    void airpodsAndWatchDetailsNeverAddRatingWeight() {
+        UUID store = UUID.randomUUID();
+        UUID employeeId = UUID.randomUUID();
+        prepareStore(store);
+        when(performanceRepository.aggregate(store, PERIOD_START, PERIOD_END))
+                .thenReturn(List.of(employee(employeeId, "Employee", "600.00", "24.00", "18.00", 2, "22.00")));
+        var standardEmployee = employeeAttachRate(employeeId, "1.000", "5.000");
+        when(storeAttachRateRepository.aggregate(store, PERIOD_START, PERIOD_END))
+                .thenReturn(List.of(storeAttachRate()));
+        when(employeeAttachRateRepository.aggregate(store, PERIOD_START, PERIOD_END))
+                .thenReturn(List.of(standardEmployee));
+        var before = service.calculate(store, period()).employees().getFirst().scores();
+        var storeRates = new java.util.ArrayList<AttachRateAggregate>(List.of(storeAttachRate()));
+        var employeeRates = new java.util.ArrayList<EmployeeAttachRateAggregate>(List.of(standardEmployee));
+        for (String code : List.of("ACCESSORY_AIRPODS", "ACCESSORY_APPLE_WATCH")) {
+            storeRates.add(new AttachRateAggregate(code, code, AttachDenominatorCode.PODS_WATCH,
+                    new BigDecimal("2.000"), new BigDecimal("10.000"), 0, 0, 0, false, 0, 0));
+            employeeRates.add(new EmployeeAttachRateAggregate(employeeId, code, code, AttachDenominatorCode.PODS_WATCH,
+                    new BigDecimal("30.000"), new BigDecimal("10.000")));
+        }
+        when(storeAttachRateRepository.aggregate(store, PERIOD_START, PERIOD_END)).thenReturn(storeRates);
+        when(employeeAttachRateRepository.aggregate(store, PERIOD_START, PERIOD_END)).thenReturn(employeeRates);
+        var after = service.calculate(store, period()).employees().getFirst();
+        assertThat(after.scores()).isEqualTo(before);
+        assertThat(after.attachRates().stream().filter(rate -> rate.metricCode().startsWith("ACCESSORY_")))
+                .allSatisfy(rate -> {
+                    assertThat(rate.ratePercent()).isEqualByComparingTo("300.00");
+                    assertThat(rate.includedInScore()).isFalse();
+                    assertThat(rate.score()).isNull();
+                });
+    }
+
     private void prepareStore(UUID storeId) {
         when(storeRepository.existsById(storeId)).thenReturn(true);
         when(storeKpiRepository.aggregate(storeId, PERIOD_START, PERIOD_END))
@@ -195,8 +228,8 @@ class EmployeeRatingServiceTest {
                 new BigDecimal("10.000"),
                 0,
                 0,
-                0
-        );
+                0, false, 0, 0
+                );
     }
 
     private EmployeeAttachRateAggregate employeeAttachRate(

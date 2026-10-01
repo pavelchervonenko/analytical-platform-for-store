@@ -41,23 +41,29 @@ public class EmployeeKpiService {
             throw new StoreNotFoundException(validatedStoreId);
         }
 
-        List<EmployeeKpiEntry> employees = employeeKpiRepository.aggregate(
+        return project(validatedStoreId, validatedPeriod, employeeKpiRepository.aggregate(
                         validatedStoreId,
                         validatedPeriod.start(),
                         validatedPeriod.end()
-                ).stream()
-                .map(this::toEntry)
+                ));
+    }
+
+    static EmployeeKpiResult project(
+            UUID storeId, StoreKpiPeriod period, List<EmployeeKpiAggregate> rows
+    ) {
+        List<EmployeeKpiEntry> employees = rows.stream()
+                .map(EmployeeKpiService::toEntry)
                 .toList();
         return new EmployeeKpiResult(
-                validatedStoreId,
-                validatedPeriod.start(),
-                validatedPeriod.end(),
+                storeId,
+                period.start(),
+                period.end(),
                 StoreKpiService.FORMULA_VERSION,
                 employees
         );
     }
 
-    private EmployeeKpiEntry toEntry(EmployeeKpiAggregate aggregate) {
+    private static EmployeeKpiEntry toEntry(EmployeeKpiAggregate aggregate) {
         BigDecimal netRevenue = money(aggregate.netRevenue());
         BigDecimal netQuantity = quantity(aggregate.netQuantity());
         boolean completeCostData = aggregate.missingCostItemCount() == 0;
@@ -100,11 +106,11 @@ public class EmployeeKpiService {
         );
     }
 
-    private BigDecimal money(BigDecimal value) {
+    private static BigDecimal money(BigDecimal value) {
         return value.setScale(MONEY_SCALE, RoundingMode.UNNECESSARY);
     }
 
-    private BigDecimal quantity(BigDecimal value) {
+    private static BigDecimal quantity(BigDecimal value) {
         return value.setScale(QUANTITY_SCALE, RoundingMode.UNNECESSARY);
     }
 }

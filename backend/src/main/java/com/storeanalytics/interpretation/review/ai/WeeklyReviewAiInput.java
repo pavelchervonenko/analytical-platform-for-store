@@ -19,7 +19,7 @@ public record WeeklyReviewAiInput(
         List<FactorSource> factors,
         List<ActionSource> actions,
         List<EvidenceSource> evidence
-) {
+) implements WeeklyReviewAiEditorialInput {
 
     public WeeklyReviewAiInput {
         require(contractVersion == WeeklyReviewAiContract.INPUT_SCHEMA_VERSION,

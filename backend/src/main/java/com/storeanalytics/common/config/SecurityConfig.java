@@ -83,6 +83,10 @@ public class SecurityConfig {
                 AuthorityAuthorizationManager.hasRole("ADMIN"),
                 components.passwordChanged()
         );
+        AuthorizationManager<RequestAuthorizationContext> catalogReviewAccess = AuthorizationManagers.allOf(
+                AuthorityAuthorizationManager.hasAnyRole("ADMIN", "MANAGER"),
+                components.passwordChanged()
+        );
 
         http
                 .cors(cors -> { })
@@ -105,6 +109,13 @@ public class SecurityConfig {
                                 "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**",
                                 "/actuator/metrics/**"
                         ).access(adminAccess)
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/admin/catalog-product-reviews",
+                                "/api/admin/catalog-product-reviews/categories"
+                        ).access(catalogReviewAccess)
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/admin/catalog-product-reviews/*/decision"
+                        ).access(catalogReviewAccess)
                         .requestMatchers(
                                 "/api/admin/**", "/api/sync/**", "/api/data-quality/**",
                                 "/api/stores/*/data-quality",

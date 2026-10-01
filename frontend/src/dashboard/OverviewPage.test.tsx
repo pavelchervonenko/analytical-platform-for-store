@@ -381,6 +381,23 @@ describe("management overview", () => {
     expect(screen.queryByText(/Вложенные строки уже входят в итог/u)).not.toBeInTheDocument();
   });
 
+  it("keeps detailed device groups nested and preserves return-only and legacy rows", () => {
+    render(<SalesStructure groups={[
+      group("DEVICES", 900, 2),
+      group("PHONES", 1000, 3),
+      { ...group("DEVICE_CATEGORY:SPEAKERS", -100, -1), groupName: "Колонки" },
+      { ...group("DEVICE_CATEGORY:IPAD_MAC", 0, 0), groupName: "iPad и Mac — вид устройства не уточнён" }
+    ]} />);
+    const branch = screen.getByLabelText("Техника и ее состав");
+    const details = within(branch).getByText("Остальная техника по видам").closest("details");
+    expect(details).not.toHaveAttribute("open");
+    fireEvent.click(within(branch).getByText("Остальная техника по видам"));
+    expect(within(branch).getByText("Колонки").closest("article")).toHaveClass("group-row--child");
+    expect(within(branch).getByText("iPad и Mac — вид устройства не уточнён")).toBeInTheDocument();
+    expect(screen.getAllByText("Колонки")).toHaveLength(1);
+    expect(within(branch).getByText("-100 ₽")).toBeInTheDocument();
+  });
+
   it("shows only active rating participants and joins their gross profit", () => {
     render(
       <MemoryRouter>
@@ -418,6 +435,29 @@ describe("management overview", () => {
     expect(attention).not.toBeNull();
     expect(attention).toHaveTextContent("Нет");
     expect(attention).toHaveTextContent("Все продавцы на уровне плана");
+  });
+
+  it("shows separate informational attach rates and an explicit legacy remainder even without a child base", () => {
+    const detailRate = (metricCode: string, numerator: number, denominator: number) => ({
+      metricCode, numeratorCategoryCode: metricCode, denominatorCode: "PODS_WATCH",
+      numeratorReceiptCount: numerator, denominatorReceiptCount: denominator,
+      numeratorQuantity: numerator, denominatorQuantity: denominator,
+      ratePerHundred: denominator > 0 ? numerator * 100 / denominator : null,
+      preliminary: metricCode !== "ACCESSORY_PODS_WATCH"
+    });
+    render(<MemoryRouter><AttachRateMatrix
+      attach={{ ...attach, rates: [
+        detailRate("ACCESSORY_PODS_WATCH", 4.25, 2),
+        detailRate("ACCESSORY_AIRPODS", 1, 2),
+        detailRate("ACCESSORY_APPLE_WATCH", 2, 0)
+      ] }} rating={{ ...rating, employees: [] }} storeName="Магазин"
+    /></MemoryRouter>);
+    expect(screen.getByText(/дополнительно включает 1,25 аксессуаров/u)).toBeInTheDocument();
+    expect(screen.getAllByText("Справочно, вне рейтинга")).toHaveLength(2);
+    const watch = screen.getByText("Аксессуары Apple Watch").closest("tr")!;
+    expect(within(watch).getByText("2 / 0")).toBeInTheDocument();
+    expect(within(watch).getByText("Предварительно")).toHaveAttribute("title",
+      "Совместимость части аксессуаров или связь возврата требуют проверки");
   });
 
   it("renders the all-store attach benchmark, residual scope and relative colors", () => {
@@ -465,6 +505,33 @@ describe("management overview", () => {
     expect(screen.getByText("На уровне магазина")).toBeInTheDocument();
     expect(screen.getByText("Выше магазина")).toBeInTheDocument();
     expect(screen.queryByText("Скрытый сотрудник")).not.toBeInTheDocument();
+  });
+
+  it("shows a separate power-bank attach rate next to chargers", () => {
+    const withPowerBank: AttachRate = {
+      ...attach,
+      rates: [...attach.rates, {
+        ...attach.rates[1]!,
+        metricCode: "POWER_BANK",
+        numeratorCategoryCode: "POWER_BANK",
+        numeratorReceiptCount: 2,
+        denominatorReceiptCount: 10,
+        numeratorQuantity: 2,
+        denominatorQuantity: 10,
+        ratePerHundred: 20
+      }]
+    };
+
+    render(<MemoryRouter><AttachRateMatrix attach={withPowerBank}
+      rating={rating} storeName="Магазин" /></MemoryRouter>);
+
+    const row = screen.getByText("Пауэрбанки").closest("tr");
+    expect(row).not.toBeNull();
+    const storeCell = within(row!).getByTitle(
+      "Магазин: 2 / 10 = 20%; средний показатель по всем документам магазина");
+    expect(storeCell).toHaveTextContent("20%");
+    expect(storeCell).toHaveTextContent("2 / 10");
+    expect(screen.queryByText("Зарядные устройства и кабели")).not.toBeInTheDocument();
   });
 
   it("does not expose technical attach diagnostics to the manager", () => {

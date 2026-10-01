@@ -35,6 +35,8 @@ import java.util.UUID;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class WorkScheduleServiceTest {
 
@@ -155,6 +157,7 @@ class WorkScheduleServiceTest {
         when(employee.isActive()).thenReturn(true);
         when(assignment.getEmployee()).thenReturn(employee);
         when(assignment.isActive()).thenReturn(true);
+        when(assignment.participatesInRanking()).thenReturn(true);
         when(existing.getEmployee()).thenReturn(employee);
         when(existing.isActive()).thenReturn(true);
         when(existing.getWorkedHours()).thenReturn(hours);
@@ -212,8 +215,10 @@ class WorkScheduleServiceTest {
         when(replacementEmployee.isActive()).thenReturn(true);
         when(originalAssignment.getEmployee()).thenReturn(originalEmployee);
         when(originalAssignment.isActive()).thenReturn(true);
+        when(originalAssignment.participatesInRanking()).thenReturn(true);
         when(replacementAssignment.getEmployee()).thenReturn(replacementEmployee);
         when(replacementAssignment.isActive()).thenReturn(true);
+        when(replacementAssignment.participatesInRanking()).thenReturn(true);
         when(storeRepository.findByIdForUpdate(storeId)).thenReturn(Optional.of(store));
         when(userRepository.findById(secondActorId)).thenReturn(Optional.of(secondActor));
         when(assignmentRepository.findAllByStoreId(storeId))
@@ -314,5 +319,110 @@ class WorkScheduleServiceTest {
         ))
                 .isInstanceOf(InvalidRequestException.class)
                 .hasMessageContaining("twice");
+    }
+
+    @Test
+    void rejectsEmployeeOutsideRatingRoster() {
+        UUID storeId = UUID.randomUUID();
+        UUID employeeId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        LocalDate workDate = LocalDate.of(2026, 7, 21);
+        Store store = mock(Store.class);
+        Employee employee = mock(Employee.class);
+        EmployeeStoreAssignment assignment = mock(EmployeeStoreAssignment.class);
+        AppUser actor = mock(AppUser.class);
+
+        when(store.getId()).thenReturn(storeId);
+        when(employee.getId()).thenReturn(employeeId);
+        when(employee.isActive()).thenReturn(true);
+        when(assignment.getEmployee()).thenReturn(employee);
+        when(assignment.isActive()).thenReturn(true);
+        when(assignment.participatesInRanking()).thenReturn(false);
+        when(storeRepository.findByIdForUpdate(storeId)).thenReturn(Optional.of(store));
+        when(revisionRepository.findByStoreIdAndWorkDate(storeId, workDate))
+                .thenReturn(Optional.empty());
+        when(userRepository.findById(actorId)).thenReturn(Optional.of(actor));
+        when(assignmentRepository.findAllByStoreId(storeId)).thenReturn(List.of(assignment));
+
+        assertThatThrownBy(() -> service.replaceDay(
+                storeId,
+                workDate,
+                List.of(new WorkShiftInput(employeeId, new BigDecimal("8.00"))),
+                WorkScheduleService.etag(storeId, workDate, 0),
+                actorId
+        ))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessageContaining("participate in ranking");
+
+        verifyNoInteractions(shiftRepository);
+    }
+
+    @Test
+    void rejectsEmployeeWithoutAssignmentInTheTargetStore() {
+        UUID storeId = UUID.randomUUID();
+        UUID employeeId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        LocalDate workDate = LocalDate.of(2026, 7, 21);
+        Store store = mock(Store.class);
+        AppUser actor = mock(AppUser.class);
+
+        when(store.getId()).thenReturn(storeId);
+        when(storeRepository.findByIdForUpdate(storeId)).thenReturn(Optional.of(store));
+        when(revisionRepository.findByStoreIdAndWorkDate(storeId, workDate))
+                .thenReturn(Optional.empty());
+        when(userRepository.findById(actorId)).thenReturn(Optional.of(actor));
+        when(assignmentRepository.findAllByStoreId(storeId)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.replaceDay(
+                storeId,
+                workDate,
+                List.of(new WorkShiftInput(employeeId, new BigDecimal("8.00"))),
+                WorkScheduleService.etag(storeId, workDate, 0),
+                actorId
+        ))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessageContaining("assigned to the store");
+
+        verifyNoInteractions(shiftRepository);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false,true", "true,false"})
+    void rejectsInactiveEmployeeOrAssignment(
+            boolean assignmentActive,
+            boolean employeeActive
+    ) {
+        UUID storeId = UUID.randomUUID();
+        UUID employeeId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        LocalDate workDate = LocalDate.of(2026, 7, 21);
+        Store store = mock(Store.class);
+        Employee employee = mock(Employee.class);
+        EmployeeStoreAssignment assignment = mock(EmployeeStoreAssignment.class);
+        AppUser actor = mock(AppUser.class);
+
+        when(store.getId()).thenReturn(storeId);
+        when(employee.getId()).thenReturn(employeeId);
+        when(employee.isActive()).thenReturn(employeeActive);
+        when(assignment.getEmployee()).thenReturn(employee);
+        when(assignment.isActive()).thenReturn(assignmentActive);
+        when(assignment.participatesInRanking()).thenReturn(true);
+        when(storeRepository.findByIdForUpdate(storeId)).thenReturn(Optional.of(store));
+        when(revisionRepository.findByStoreIdAndWorkDate(storeId, workDate))
+                .thenReturn(Optional.empty());
+        when(userRepository.findById(actorId)).thenReturn(Optional.of(actor));
+        when(assignmentRepository.findAllByStoreId(storeId)).thenReturn(List.of(assignment));
+
+        assertThatThrownBy(() -> service.replaceDay(
+                storeId,
+                workDate,
+                List.of(new WorkShiftInput(employeeId, new BigDecimal("8.00"))),
+                WorkScheduleService.etag(storeId, workDate, 0),
+                actorId
+        ))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessageContaining("must be active");
+
+        verifyNoInteractions(shiftRepository);
     }
 }

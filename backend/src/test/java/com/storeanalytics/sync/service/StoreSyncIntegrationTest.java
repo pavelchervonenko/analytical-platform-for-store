@@ -184,7 +184,7 @@ class StoreSyncIntegrationTest {
                 Integer.class
         );
 
-        assertThat(tableCount).isEqualTo(65);
+        assertThat(tableCount).isEqualTo(108);
         assertThat(entityManagerFactory.getMetamodel().getEntities()).hasSize(40);
         assertThat(applicationContext.getBeanNamesForType(JpaRepository.class)).hasSize(40);
         assertThat(jdbcTemplate.queryForObject(
@@ -234,9 +234,52 @@ class StoreSyncIntegrationTest {
                       'attach_rate_item_facts_v3',
                       'attach_rate_metric_definitions_v3',
                       'weekly_review_snapshots',
+                      'weekly_review_generation_state',
+                      'store_analytics_source_state',
+                      'store_analytics_source_events',
                       'weekly_review_ai_enrichments',
                       'weekly_review_ai_jobs',
-                      'weekly_review_ai_attempts'
+                      'weekly_review_ai_attempts',
+                      'attach_attribution_changes',
+                      'attach_rate_item_facts_v3_with_cases',
+                      'attach_rate_item_facts_v4',
+                      'attach_rate_item_facts_v4_with_cases',
+                      'attach_rate_ordinary_item_facts_v4',
+                      'attach_rate_ordinary_item_facts_v4_with_reviews',
+                      'attach_snapshot_checks',
+                      'case_attach_confirmed_facts',
+                      'case_attach_confirmed_facts_v3',
+                      'case_attach_current_decisions',
+                      'case_attach_decisions',
+                      'case_attach_review_items',
+                      'catalog_compatibility_decisions',
+                      'catalog_compatibility_history',
+                      'catalog_sale_role_snapshots',
+                      'catalog_sale_role_snapshot_states',
+                      'catalog_classification_activation',
+                      'catalog_pending_role_returns',
+                      'store_seller_membership_state',
+                      'seller_membership_history',
+                      'attach_rate_metric_definitions_catalog',
+                      'attach_rate_automatic_item_facts_v3_catalog',
+                      'attach_rate_item_facts_v3_catalog',
+                      'attach_rate_item_facts_v4_catalog',
+                      'attach_rate_ordinary_item_facts_v4_catalog',
+                      'attach_rate_ordinary_item_facts_v4_catalog_with_reviews',
+                      'case_attach_confirmed_facts_catalog',
+                      'case_attach_confirmed_facts_v3_catalog',
+                      'warranty_attach_allocations',
+                      'warranty_attach_cases',
+                      'warranty_attach_coverage',
+                      'warranty_attach_decisions',
+                      'warranty_attach_document_context',
+                      'warranty_attach_effective_allocations',
+                      'warranty_attach_items',
+                      'warranty_attach_latest_decisions',
+                      'warranty_attach_return_allocations',
+                      'warranty_attach_sale_allocations',
+                      'warranty_attach_sources',
+                      'warranty_attach_warning_sources'
                   )
                 ORDER BY table_name, ordinal_position
                 """,
@@ -745,6 +788,28 @@ class StoreSyncIntegrationTest {
     }
 
     @Test
+    void employeeNormalizationFailureRollsBackEntireFetchedBatch() {
+        storeSyncService.synchronize();
+        fakeClient.setEmployees(Map.of(
+                "store-fixture-1", List.of(
+                        employeePayload("employee-valid", "Synthetic employee"),
+                        new LiveSkladEmployeePayload("employee-invalid", "Synthetic invalid", null)),
+                "store-fixture-2", List.of()
+        ));
+
+        assertThatThrownBy(employeeSyncService::synchronize)
+                .isInstanceOf(EmployeeSyncException.class);
+        assertThat(employeeRepository.count()).isZero();
+        assertThat(assignmentRepository.count()).isZero();
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM raw_record_versions WHERE entity_type = 'EMPLOYEE'
+                """, Integer.class)).isZero();
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT status FROM sync_runs WHERE sync_scope = 'EMPLOYEES'
+                """, String.class)).isEqualTo("FAILED");
+    }
+
+    @Test
     void employeeSourceFailureCreatesSanitizedFailedRunWithoutPartialWrites() {
         storeSyncService.synchronize();
         fakeClient.failEmployeesForStore(
@@ -958,6 +1023,47 @@ class StoreSyncIntegrationTest {
                 """,
                 Integer.class
         )).isEqualTo(1);
+    }
+
+    @Test
+    void recordsUnexpectedSaleZeroCostAsInformation() {
+        storeSyncService.synchronize();
+        employeeSyncService.synchronize();
+        Instant occurredAt = Instant.parse("2026-07-01T12:00:00Z");
+        LiveSkladSaleSummaryPayload summary = saleSummary(
+                "sale-zero-cost", "S-ZERO", occurredAt,
+                "100.00", "100.00", "0.00"
+        );
+        LiveSkladSalePositionPayload position = salePosition(
+                "position-zero-cost", "product-zero-cost", "Zero cost product",
+                "1.000", "100.00", "100.00", "0.00"
+        );
+        LiveSkladSaleDetailPayload detail = saleDetail(
+                "sale-zero-cost", "S-ZERO", occurredAt,
+                occurredAt.plusSeconds(60),
+                new SaleParties("store-fixture-1", "employee-north"),
+                new PaymentAmounts("100.00", "0.00", "0.00"),
+                List.of(position)
+        );
+        fakeClient.setSales(
+                Map.of("store-fixture-1", List.of(summary)),
+                Map.of("sale-zero-cost", detail)
+        );
+
+        salesSyncService.synchronize(new SalesSyncPeriod(
+                Instant.parse("2026-07-01T00:00:00Z"),
+                Instant.parse("2026-07-02T00:00:00Z")
+        ));
+
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT severity
+                FROM data_quality_issues
+                WHERE issue_code = 'ZERO_UNEXPECTED_COST'
+                  AND status = 'OPEN'
+                """,
+                String.class
+        )).isEqualTo(DataQualitySeverity.INFO.name());
     }
 
     @Test

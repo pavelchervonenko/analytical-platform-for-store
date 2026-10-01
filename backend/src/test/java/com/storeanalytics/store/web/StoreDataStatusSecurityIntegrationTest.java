@@ -43,6 +43,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -279,6 +280,103 @@ class StoreDataStatusSecurityIntegrationTest {
     }
 
     @Test
+    void managerWithEveryFeatureCannotReadAnyProjectionOfUnassignedStore()
+            throws Exception {
+        Store assignedStore = createStore("matrix-assigned-store");
+        Store deniedStore = createStore("matrix-denied-store");
+        AppUser administrator = createUser("admin-matrix@example.com", UserRole.ADMIN);
+        AppUser manager = createUser("manager-matrix@example.com", UserRole.MANAGER);
+        accessRepository.saveAndFlush(
+                new UserStoreAccess(manager, assignedStore, administrator)
+        );
+        featureAccessRepository.saveAllAndFlush(List.of(
+                new UserFeatureAccess(manager, UserFeature.PLAN, administrator),
+                new UserFeatureAccess(manager, UserFeature.SHIFTS, administrator),
+                new UserFeatureAccess(manager, UserFeature.PAYROLL, administrator)
+        ));
+        MockHttpSession session = login("manager-matrix@example.com");
+        String deniedPrefix = "/api/stores/" + deniedStore.getId();
+
+        mockMvc.perform(get("/api/stores").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(assignedStore.getId().toString()));
+
+        for (String path : List.of(
+                "/kpi",
+                "/kpi/categories",
+                "/kpi/averages",
+                "/kpi/employees",
+                "/kpi/employees/categories",
+                "/kpi/attach-rates",
+                "/overview-metrics",
+                "/employees",
+                "/employee-ratings"
+        )) {
+            mockMvc.perform(get(deniedPrefix + path)
+                            .queryParam("periodStart", "2026-07-01")
+                            .queryParam("periodEnd", "2026-07-31")
+                            .session(session))
+                    .andExpect(status().isForbidden());
+        }
+
+        mockMvc.perform(get(deniedPrefix + "/performance-plans/2026-07")
+                        .session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/performance-plans/2026-07/progress")
+                        .queryParam("asOf", "2026-07-20")
+                        .session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/work-schedule")
+                        .queryParam("periodStart", "2026-07-01")
+                        .queryParam("periodEnd", "2026-07-31")
+                        .session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/work-schedule/2026-07-20")
+                        .session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/employee-rating-settings")
+                        .session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/employees/" + UUID.randomUUID())
+                        .queryParam("periodStart", "2026-07-01")
+                        .queryParam("periodEnd", "2026-07-31")
+                        .session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/reports").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/reports/years").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/reports/" + UUID.randomUUID())
+                        .session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/payroll/2026-07").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/payroll/2026-07/readiness").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/payroll/2026-07/preview").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/payroll-runs").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/payroll-runs/" + UUID.randomUUID())
+                        .session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/insights/weekly/current").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/weekly-reviews/current").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/interpretations/weekly").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/interpretations/weekly/latest").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/interpretations/weekly/" + UUID.randomUUID())
+                        .session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(deniedPrefix + "/data-status").session(session))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void functionalPermissionsGuardOperationalApisWhileReportsRemainAvailable()
             throws Exception {
         Store store = createStore("feature-security-store");
@@ -463,6 +561,12 @@ class StoreDataStatusSecurityIntegrationTest {
         featureAccessRepository.saveAndFlush(
                 new UserFeatureAccess(noStore, UserFeature.SHIFTS, administrator)
         );
+        Employee employee = employeeRepository.saveAndFlush(Employee.manual(
+                "guarded-shift-employee", "Guarded Shift Employee"
+        ));
+        EmployeeStoreAssignment assignment = assignmentRepository.saveAndFlush(
+                new EmployeeStoreAssignment(employee, store, true)
+        );
         LocalDate date = LocalDate.of(2026, 9, 14);
 
         MockHttpSession noFeatureSession = login("shift-no-feature@example.com");
@@ -478,6 +582,17 @@ class StoreDataStatusSecurityIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"shifts\":[]}"))
                 .andExpect(status().isForbidden());
+        mockMvc.perform(put(
+                        "/api/stores/{storeId}/employee-rating-settings/{employeeId}",
+                        store.getId(),
+                        employee.getId()
+                ).session(noFeatureSession)
+                .cookie(noFeatureCsrf)
+                .header("X-XSRF-TOKEN", noFeatureCsrf.getValue())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"participatesInRanking\":false,\"version\":"
+                        + assignment.getVersion() + "}"))
+                .andExpect(status().isForbidden());
 
         MockHttpSession noStoreSession = login("shift-no-store@example.com");
         Cookie noStoreCsrf = csrfCookie(noStoreSession);
@@ -491,6 +606,17 @@ class StoreDataStatusSecurityIntegrationTest {
                 .header(HttpHeaders.IF_MATCH, "\"ignored\"")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"shifts\":[]}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put(
+                        "/api/stores/{storeId}/employee-rating-settings/{employeeId}",
+                        store.getId(),
+                        employee.getId()
+                ).session(noStoreSession)
+                .cookie(noStoreCsrf)
+                .header("X-XSRF-TOKEN", noStoreCsrf.getValue())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"participatesInRanking\":false,\"version\":"
+                        + assignment.getVersion() + "}"))
                 .andExpect(status().isForbidden());
     }
 

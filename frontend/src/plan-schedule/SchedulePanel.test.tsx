@@ -53,6 +53,8 @@ function renderEditor(onSaved = vi.fn()) {
     <QueryClientProvider client={client}>
       <MemoryRouter>
         <ShiftDayEditor
+          storeId="store-1"
+          month="2026-09"
           workDate="2026-09-15"
           dayShifts={[{
             id: "shift-1",
@@ -119,7 +121,7 @@ describe("shift editor shared ownership", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("reloads a stale day and clears the latest composition with one action", async () => {
+  it("reloads a stale day and requires confirmation before clearing the latest composition", async () => {
     replaceWorkScheduleDayMock
       .mockRejectedValueOnce(new ApiClientError("stale", {
         status: 412,
@@ -155,6 +157,23 @@ describe("shift editor shared ownership", () => {
             version: 1
           }]
         }
+      })
+      .mockResolvedValueOnce({
+        etag: '"schedule-v3"',
+        value: {
+          storeId: "store-1",
+          workDate: "2026-09-15",
+          revision: 3,
+          shifts: [{
+            id: "shift-2",
+            employeeId: "employee-2",
+            employeeName: "Борис",
+            workDate: "2026-09-15",
+            workedHours: 5,
+            active: true,
+            version: 1
+          }]
+        }
       });
     const onSaved = vi.fn();
     renderEditor(onSaved);
@@ -162,10 +181,63 @@ describe("shift editor shared ownership", () => {
     fireEvent.click(screen.getByRole("button", { name: "Очистить день" }));
     fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
 
-    await waitFor(() => expect(replaceWorkScheduleDayMock).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/подтвердите очистку ещё раз/u);
+    expect(replaceWorkScheduleDayMock).toHaveBeenCalledTimes(1);
     expect(replaceWorkScheduleDayMock).toHaveBeenNthCalledWith(1, "store-1", "2026-09-15", '"schedule-v2"', []);
+    const borisButtons = within(screen.getByText("Борис").closest("article")!)
+      .getAllByRole("button");
+    expect(borisButtons.find((button) => button.hasAttribute("aria-pressed")))
+      .toHaveAttribute("aria-pressed", "true");
+    expect(onSaved).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Очистить день" }));
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
+
+    await waitFor(() => expect(replaceWorkScheduleDayMock).toHaveBeenCalledTimes(2));
     expect(replaceWorkScheduleDayMock).toHaveBeenNthCalledWith(2, "store-1", "2026-09-15", '"schedule-v3"', []);
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith("2026-09-15"));
+  });
+
+  it("treats a clear conflict as complete when the latest day is already empty", async () => {
+    replaceWorkScheduleDayMock.mockRejectedValueOnce(new ApiClientError("stale", {
+      status: 412,
+      code: "PRECONDITION_FAILED"
+    }));
+    getWorkScheduleDayMock
+      .mockResolvedValueOnce({
+        etag: '"schedule-v2"',
+        value: {
+          storeId: "store-1",
+          workDate: "2026-09-15",
+          revision: 2,
+          shifts: [{
+            id: "shift-1",
+            employeeId: "employee-1",
+            employeeName: "Анна",
+            workDate: "2026-09-15",
+            workedHours: 11,
+            active: true,
+            version: 1
+          }]
+        }
+      })
+      .mockResolvedValueOnce({
+        etag: '"schedule-v3"',
+        value: {
+          storeId: "store-1",
+          workDate: "2026-09-15",
+          revision: 3,
+          shifts: []
+        }
+      });
+    const onSaved = vi.fn();
+    renderEditor(onSaved);
+
+    fireEvent.click(screen.getByRole("button", { name: "Очистить день" }));
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith("2026-09-15"));
+    expect(replaceWorkScheduleDayMock).toHaveBeenCalledTimes(1);
   });
 
   it("bounds simultaneous retries and retains the manager draft", async () => {

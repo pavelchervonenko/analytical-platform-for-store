@@ -90,6 +90,11 @@ export function WeeklyReviewContent({
       <ActiveDetailKeyContext.Provider value={detail === null ? null : detailContextKey(detail)}>
         <div className="weekly-review-screen" aria-hidden={detail !== null ? true : undefined}>
           <ReviewHeader review={review} />
+          {review.sellerContext?.freshness === "STALE" && (
+            <p className="weekly-review-legacy__note" role="status">
+              Данные изменились. Показан предыдущий расчёт продавцов; действия скрыты до обновления разбора.
+            </p>
+          )}
           {review.reportState === "BLOCKED" && (
             <BlockedReview
               review={review}
@@ -163,6 +168,9 @@ function ReviewHeader({ review }: { review: WeeklyReview }) {
         <span>Последняя завершённая неделя</span>
         <strong>{review.period.currentLabel}</strong>
         <small>Сравнение: {review.period.previousLabel}</small>
+        {review.sellerContext && <small>
+          Только продавцы рейтинга · один состав для обеих недель на момент расчёта
+        </small>}
       </div>
       <div className="weekly-review-header__meta">
         {aiEnhanced && (
@@ -363,8 +371,36 @@ function ResultsSection({
         context={{ kind: "revenue", title: "Расчёт чистой выручки" }}
         openDetail={openDetail}
       />
+      {review.sellerContext && <AdditionalSalesSummary review={review} openDetail={openDetail} />}
     </section>
   );
+}
+
+function AdditionalSalesSummary({ review, openDetail }: { review: WeeklyReview; openDetail: OpenDetail }) {
+  const additional = review.sellerContext!.additionalSales;
+  return <div className="weekly-review-additional" aria-label="Дополнительные продажи продавцов">
+    <div className="weekly-review-additional__headline">
+      <div><span>Доля допов в выручке продавцов</span>
+        <strong>{formatValue(additional.shareOfSellerRevenue.current, "PERCENT")}</strong>
+        <small>{metricComparisonText(additional.shareOfSellerRevenue)}</small>
+      </div>
+      <div><span>Выручка от допов</span><strong>{formatValue(additional.revenue.current, "RUB")}</strong></div>
+    </div>
+    <details>
+      <summary>Из чего складываются допы <ChevronDown aria-hidden="true" /></summary>
+      <dl className="weekly-review-additional__composition">
+        <div><dt>Аксессуары</dt><dd>{formatValue(additional.accessoryRevenue, "RUB")}</dd>
+          <small>{formatValue(additional.accessoryMixShare, "PERCENT")} выручки от допов</small></div>
+        <div><dt>Услуги</dt><dd>{formatValue(additional.serviceRevenue, "RUB")}</dd>
+          <small>{formatValue(additional.serviceMixShare, "PERCENT")} выручки от допов</small></div>
+      </dl>
+      <p>Допы = аксессуары + услуги. Общая доля рассчитана от чистой выручки продавцов, структура — от выручки допов.</p>
+      {!additional.compositionChartSafe && <p>Структура показана суммами: значения могут быть нулевыми, отрицательными или ограниченными.</p>}
+    </details>
+    <DetailButton label="Основание показателей допов" context={{ kind: "evidence", title: "Дополнительные продажи",
+      evidenceRefs: [...additional.revenue.evidenceRefs, ...additional.shareOfSellerRevenue.evidenceRefs] }}
+      openDetail={openDetail} compact />
+  </div>;
 }
 
 function MetricCard({
@@ -575,6 +611,7 @@ function TeamExceptionsSection({
 }) {
   const location = useLocation();
   const [showAllEmployees, setShowAllEmployees] = useState(false);
+  if (review.sellerContext) return <SellerTeamSection review={review} openDetail={openDetail} />;
   const attentionCount = review.team.attentionEmployeeCount;
   const employeeCount = review.team.roster.activeAssignedWithActivity;
   const attentionMeta = `${attentionCount} из ${employeeCount} ${
@@ -648,6 +685,40 @@ function TeamExceptionsSection({
       </div>
     </section>
   );
+}
+
+function SellerTeamSection({ review, openDetail }: { review: WeeklyReview; openDetail: OpenDetail }) {
+  const [expanded, setExpanded] = useState(false);
+  const display = review.sellerContext!.teamDisplay;
+  const visible = expanded ? review.employees : review.employees.slice(0, 3);
+  return <section className="weekly-review-section weekly-review-team" aria-labelledby="weekly-review-team-title">
+    <SectionHeading id="weekly-review-team-title" title="Команда"
+      meta={`${russianCount(display.totalCount, ["продавец", "продавца", "продавцов"])} рейтинга`} />
+    <p className="weekly-review-calm-copy">{display.totalCount === 0
+      ? "В рейтинге нет продавцов. Проверьте состав команды и участие в рейтинге; настройки изменяет администратор."
+      : "Финансовые результаты доступны без заполненных смен. Оценка по часам и сравнение эффективности не выполняются, пока полнота смен не подтверждена."}</p>
+    <div className="weekly-review-seller-list" id="weekly-review-sellers-list">
+      {visible.map((employee) => <article className="weekly-review-seller-row" key={employee.employeePublicId}>
+        <div className="weekly-review-seller-row__identity">
+          <h3>{employee.displayName}</h3>
+          {employee.action && employee.attention && <p className="weekly-review-seller-row__attention">
+            Проверить: {employee.attention.title}
+          </p>}
+        </div>
+        <dl><div><dt>Выручка</dt><dd>{formatValue(employee.metrics.netRevenue.current, "RUB")}</dd></div>
+          <div><dt>Допы</dt><dd>{formatValue(employee.metrics.additionalShare.current, "PERCENT")}</dd></div></dl>
+        <DetailButton label="Подробнее" ariaLabel={`Результаты продавца: ${employee.displayName}`}
+          context={{ kind: "employee", title: employee.displayName, employee }} openDetail={openDetail} compact />
+      </article>)}
+    </div>
+    {review.employees.length > 3 && <ProgressiveListToggle controls="weekly-review-sellers-list" expanded={expanded}
+      collapsedLabel={`Ещё ${review.employees.length - 3} продавцов`} expandedLabel="Свернуть список"
+      onToggle={() => setExpanded((current) => !current)} />}
+    {display.totalCount > display.displayedCount && <p>
+      Показано {display.displayedCount} из {display.totalCount}. Все продавцы учтены в итогах.
+      Выручка остальных: {formatValue(display.hiddenCurrentNetRevenue, "RUB")}.
+    </p>}
+  </section>;
 }
 
 function EmployeeException({

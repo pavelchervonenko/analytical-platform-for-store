@@ -1,0 +1,1356 @@
+{
+  "format_version": 1,
+  "policy_version": "catalog-lexicon-draft-v5",
+  "mode": "SHADOW_ONLY",
+  "description": "Observed catalog feature vocabulary, not effective product assignments. Rules collect evidence; resolver composes context, never first-match category.",
+  "normalization_aliases": [
+    {
+      "id": "mixed_case_word",
+      "pattern": "чeхол",
+      "replacement": "чехол"
+    },
+    {
+      "id": "strap_typo",
+      "pattern": "ремешоу",
+      "replacement": "ремешок"
+    },
+    {
+      "id": "mixed_camera_word",
+      "pattern": "kaмер",
+      "replacement": "камер"
+    }
+  ],
+  "rules": [
+    {
+      "id": "iphone",
+      "field": "family",
+      "value": "IPHONE",
+      "patterns": [
+        "\\b(?:iphone|айфон)\\s*\\d*"
+      ],
+      "example": "iPhone 15 Pro"
+    },
+    {
+      "id": "phone_alias",
+      "field": "family",
+      "value": "IPHONE",
+      "patterns": [
+        "^phone\\s*1[1-9](?:\\s|pro|plus|mini|e|\\d{2,3}gb)"
+      ],
+      "example": "Phone12 128GB Б/У",
+      "review": "MODEL_ALIAS"
+    },
+    {
+      "id": "samsung_phone",
+      "field": "family",
+      "value": "SAMSUNG_PHONE",
+      "patterns": [
+        "\\b(?:samsung|самсунг|galaxy|galxy)\\s*(?:galaxy\\s*|galxy\\s*)?(?:[asа]\\s*\\d{2}(?:fe)?|z\\s*(?:fold|flip)\\s*\\d)(?![a-zа-я0-9])"
+      ],
+      "example": "Samsung Galxy Z Fold 7"
+    },
+    {
+      "id": "poco_f8_ultra_phone",
+      "field": "family",
+      "value": "OTHER_PHONE",
+      "patterns": [
+        "^poco\\s+f8\\s+ultra\\b"
+      ],
+      "example": "POCO F8 Ultra 12/256Gb Black NEW",
+      "approval": "Owner approved PHONE_OTHER for standalone non-Apple/non-Samsung phones; this narrow observed model remains reviewable if source group conflicts."
+    },
+    {
+      "id": "ipad",
+      "field": "family",
+      "value": "IPAD",
+      "patterns": [
+        "\\b(?:ipad|айпад)\\b"
+      ],
+      "example": "iPad Air"
+    },
+    {
+      "id": "macbook",
+      "field": "family",
+      "value": "MACBOOK",
+      "patterns": [
+        "\\b(?:macbook|макбук)\\b"
+      ],
+      "example": "MacBook Air"
+    },
+    {
+      "id": "other_tablet",
+      "field": "family",
+      "value": "OTHER_TABLET",
+      "patterns": [
+        "\\b(?:galaxy tab|xiaomi pad|redmi pad|планшет\\w*|tablet)\\b"
+      ],
+      "example": "Samsung Galaxy Tab S10",
+      "exclude": [
+        "\\b(?:ipad|айпад)\\b"
+      ]
+    },
+    {
+      "id": "other_laptop",
+      "field": "family",
+      "value": "OTHER_LAPTOP",
+      "patterns": [
+        "\\b(?:ноутбук|laptop|notebook|thinkpad|ideapad|vivobook|zenbook|matebook|magicbook|galaxy book)\\b"
+      ],
+      "example": "Lenovo ThinkPad",
+      "exclude": [
+        "\\b(?:macbook|макбук)\\b"
+      ]
+    },
+    {
+      "id": "apple_watch",
+      "field": "family",
+      "value": "APPLE_WATCH",
+      "patterns": [
+        "\\b(?:apple watch|iwatch)\\b"
+      ],
+      "example": "Apple Watch Ultra"
+    },
+    {
+      "id": "samsung_watch",
+      "field": "family",
+      "value": "SAMSUNG_WATCH",
+      "patterns": [
+        "\\b(?:samsung|galaxy)\\s+watch\\b"
+      ],
+      "example": "Samsung Galaxy Watch 8"
+    },
+    {
+      "id": "other_watch",
+      "field": "family",
+      "value": "OTHER_WATCH",
+      "patterns": [
+        "\\b(?:amazfit|huawei|honor|xiaomi)\\b.*\\b(?:watch|часы)\\b"
+      ],
+      "example": "Huawei Watch New"
+    },
+    {
+      "id": "apple_headphones",
+      "field": "family",
+      "value": "APPLE_HEADPHONES",
+      "patterns": [
+        "\\b(?:airpods|earpods)\\b"
+      ],
+      "example": "Apple EarPods USB C"
+    },
+    {
+      "id": "samsung_headphones",
+      "field": "family",
+      "value": "SAMSUNG_HEADPHONES",
+      "patterns": [
+        "\\b(?:galaxy\\s+buds|samsung\\s+buds|buds\\s*[34])"
+      ],
+      "example": "Galaxy Buds 3"
+    },
+    {
+      "id": "other_headphones",
+      "field": "family",
+      "value": "OTHER_HEADPHONES",
+      "patterns": [
+        "\\b(?:marshall major|sony w[fh]\\s*1000\\w*|наушник\\w*|headphones?|earphones?|яндекс дропс)\\b"
+      ],
+      "example": "Marshall Major 5",
+      "exclude": [
+        "\\b(?:airpods|earpods|galaxy\\s+buds|samsung\\s+buds|buds\\s*[34])\\b"
+      ]
+    },
+    {
+      "id": "garmin_reviewed_watch",
+      "field": "family",
+      "value": "OTHER_WATCH",
+      "patterns": [
+        "\\bgarmin\\s+(?:forerunner\\s+165\\s+music|v[ií]voactive\\s+6)\\b"
+      ],
+      "example": "Garmin Forerunner 165 Music"
+    },
+    {
+      "id": "fitness",
+      "field": "family",
+      "value": "FITNESS",
+      "patterns": [
+        "\\b(?:garmin|fitbit|whoop)\\b"
+      ],
+      "example": "Garmin Forerunner",
+      "exclude": [
+        "\\bgarmin\\s+(?:forerunner\\s+165\\s+music|v[ií]voactive\\s+6)\\b"
+      ]
+    },
+    {
+      "id": "speakers",
+      "field": "family",
+      "value": "SPEAKER",
+      "patterns": [
+        "\\b(?:колонк\\w*|яндекс станци\\w*|yandex station|jbl flip|jbl charge|harman kardon onyx|(?:bluetooth|wireless) speaker)\\b"
+      ],
+      "example": "Колонка JBL Flip"
+    },
+    {
+      "id": "smart_glasses",
+      "field": "family",
+      "value": "SMART_GLASSES",
+      "patterns": [
+        "\\b(?:ray\\s*ban|rayban|meta wayfarer)\\b"
+      ],
+      "example": "Ray Ban Meta",
+      "scope": "livesklad-default",
+      "review": "STORE_SPECIFIC_RULE"
+    },
+    {
+      "id": "instax",
+      "field": "family",
+      "value": "CAMERA",
+      "patterns": [
+        "\\b(?:instax|фотоаппарат)\\b"
+      ],
+      "example": "Instax Mini 13",
+      "exclude": [
+        "\\b(?:пленк\\w*|film|картридж)\\b"
+      ]
+    },
+    {
+      "id": "styler",
+      "field": "family",
+      "value": "HAIR_STYLER",
+      "patterns": [
+        "\\b(?:стайлер|dyson\\s+(?:hs\\d+|airwrap)|airwrap)\\b"
+      ],
+      "example": "Dyson HS08"
+    },
+    {
+      "id": "microphone",
+      "field": "family",
+      "value": "MICROPHONE",
+      "patterns": [
+        "\\b(?:микрофон\\w*|dji mic|microphone)\\b"
+      ],
+      "example": "Микрофон DJI Mic 2 Charging Case",
+      "exclude": [
+        "^(?:чистк\\w*|ремонт|замена)\\b"
+      ]
+    },
+    {
+      "id": "console",
+      "field": "family",
+      "value": "CONSOLE",
+      "patterns": [
+        "\\b(?:play\\s*station\\s*5|sony\\s+ps\\s*5|ps5)\\b"
+      ],
+      "example": "Sony PlayStation 5 Slim",
+      "exclude": [
+        "\\b(?:dualsense|dual sense|disc\\s*drive|дисковод|док\\s*станц\\w*|charging\\s*station|chargingstation|геймпад|контроллер)\\b"
+      ]
+    },
+    {
+      "id": "gaming_accessory",
+      "field": "item",
+      "value": "GAMING_ACCESSORY",
+      "patterns": [
+        "\\b(?:dualsense|dual sense|disc\\s*drive|дисковод|геймпад|контроллер)\\b"
+      ],
+      "example": "Sony DualSense"
+    },
+    {
+      "id": "case",
+      "field": "item",
+      "value": "CASE",
+      "patterns": [
+        "\\b(?:чехол|чехлол|чехлы|чехл\\w*|case|cover|бампер)\\b"
+      ],
+      "example": "Чехол iPhone",
+      "exclude": [
+        "\\b(?:dji mic|микрофон\\w*|microphone)\\b.*\\bcharging case\\b"
+      ]
+    },
+    {
+      "id": "keephone_case_line",
+      "field": "item",
+      "value": "CASE",
+      "patterns": [
+        "^(?:keephone\\s+x\\s*crystal|mago pro)\\b"
+      ],
+      "example": "Keephone X Crystal Samsung",
+      "review": "MODEL_ALIAS"
+    },
+    {
+      "id": "screen_glass",
+      "field": "item",
+      "value": "SCREEN_GLASS",
+      "patterns": [
+        "\\b(?:стекл\\w*|стекол)\\b"
+      ],
+      "example": "Защитное стекло",
+      "exclude": [
+        "\\b(?:камер\\w*|линз\\w*)\\b",
+        "\\bcamera\\s+(?:film|lens)\\b"
+      ]
+    },
+    {
+      "id": "camera_glass",
+      "field": "item",
+      "value": "CAMERA_GLASS",
+      "patterns": [
+        "\\b(?:(?:защит\\w*|стекл\\w*)\\s+(?:на\\s+|для\\s+)?(?:камер\\w*|линз\\w*)|camera\\s+(?:film|lens)|линзы\\s+на\\s+камер\\w*)\\b"
+      ],
+      "example": "Защита камер Keephone iPhone"
+    },
+    {
+      "id": "film",
+      "field": "item",
+      "value": "FILM",
+      "patterns": [
+        "\\b(?:пленк\\w*|film)\\b"
+      ],
+      "example": "Пленка гидрогелевая",
+      "exclude": [
+        "\\b(?:camera|instax)\\b"
+      ]
+    },
+    {
+      "id": "strap",
+      "field": "item",
+      "value": "STRAP",
+      "patterns": [
+        "\\b(?:ремеш\\w*|strap|band)\\b"
+      ],
+      "example": "Ремешок Watch",
+      "exclude": [
+        "^apple watch\\s+(?:ultra(?:\\s+\\d+)?|series\\s+\\d+|se(?:\\s+\\d+)?|\\d+)\\b.*\\b\\d{2}\\s*mm\\b.*\\bband\\b",
+        "^(?:fitbit|whoop)\\b.*\\bwith\\b.*\\bband\\b",
+        "^garmin\\s+v[ií]voactive\\s+6\\b.*\\bwith\\s+black\\s+band\\b"
+      ]
+    },
+    {
+      "id": "cardholder",
+      "field": "item",
+      "value": "CARDHOLDER",
+      "patterns": [
+        "\\b(?:кардхолдер|картхолдер|cardholder)\\b"
+      ],
+      "example": "Кардхолдер Baseus"
+    },
+    {
+      "id": "tracker",
+      "field": "item",
+      "value": "TRACKER",
+      "patterns": [
+        "\\b(?:taggy|airtag)\\b"
+      ],
+      "example": "Taggy Keephone"
+    },
+    {
+      "id": "stand",
+      "field": "item",
+      "value": "HOLDER",
+      "patterns": [
+        "\\b(?:монопод|трипод|selfie stick)\\b"
+      ],
+      "example": "Монопод трипод Xiaomi"
+    },
+    {
+      "id": "pencil",
+      "field": "item",
+      "value": "STYLUS",
+      "patterns": [
+        "\\b(?:apple pencil|стилус)\\b"
+      ],
+      "example": "Apple Pencil Pro",
+      "exclude": [
+        "\\bнаконечник\\w*\\b"
+      ]
+    },
+    {
+      "id": "pencil_tips",
+      "field": "item",
+      "value": "STYLUS_TIPS",
+      "patterns": [
+        "\\b(?:наконечник\\w*|tips)\\b.*\\b(?:pencil|стилус)\\b"
+      ],
+      "example": "Наконечники для Apple Pencil"
+    },
+    {
+      "id": "keyboard",
+      "field": "item",
+      "value": "KEYBOARD",
+      "patterns": [
+        "\\b(?:magic keyboard|клавиатур\\w*|keyboard)\\b"
+      ],
+      "example": "Magic Keyboard iPad",
+      "exclude": [
+        "^(?:гравировк\\w*|чистк\\w*|ремонт|замена)\\b"
+      ]
+    },
+    {
+      "id": "mouse",
+      "field": "item",
+      "value": "MOUSE",
+      "patterns": [
+        "\\b(?:magic mouse|мышь|mouse)\\b"
+      ],
+      "example": "Magic Mouse"
+    },
+    {
+      "id": "power_bank",
+      "field": "item",
+      "value": "POWER_BANK",
+      "patterns": [
+        "\\b(?:power\\s*bank|powerbank|battery\\s+pack|пауэрбанк\\w*|повербанк\\w*|(?:внешн\\w*|портативн\\w*)\\s+(?:аккумулятор|батаре\\w*))\\b"
+      ],
+      "example": "Внешний аккумулятор Baseus"
+    },
+    {
+      "id": "charging",
+      "field": "item",
+      "value": "CHARGER",
+      "patterns": [
+        "\\b(?:[cс]зу|азу|бзу|заряд\\w*|зар[.]?\\s*устройство|блок\\s+(?:питания|baseus)|power adapter|fast charger|wall charger|wireless charger)\\b"
+      ],
+      "example": "СЗУ Samsung 25W",
+      "exclude": [
+        "\\b(?:power\\s*bank|powerbank|battery\\s+pack|пауэрбанк\\w*|повербанк\\w*|(?:внешн\\w*|портативн\\w*)\\s+(?:аккумулятор|батаре\\w*))\\b",
+        "\\b(?:dualsense|dual sense)\\b"
+      ]
+    },
+    {
+      "id": "charging_cable",
+      "field": "item",
+      "value": "CHARGER",
+      "patterns": [
+        "\\b(?:кабел\\w*|cable|провод)\\b"
+      ],
+      "example": "Кабель USB C",
+      "exclude": [
+        "\\b(?:power\\s*bank|powerbank|battery\\s+pack|пауэрбанк\\w*|повербанк\\w*|(?:внешн\\w*|портативн\\w*)\\s+(?:аккумулятор|батаре\\w*))\\b",
+        "\\b(?:hdmi|aux|audio)\\b"
+      ]
+    },
+    {
+      "id": "bare_connector_cable",
+      "field": "item",
+      "value": "CHARGER",
+      "patterns": [
+        "^(?:usb\\s*c|type\\s*c)\\s*(?:to\\s+)?lightning\\b"
+      ],
+      "example": "USB C Lightning No Box"
+    },
+    {
+      "id": "charging_bundle",
+      "field": "item",
+      "value": "CHARGER",
+      "patterns": [
+        "^комплект\\s+(?:baseus\\b.*\\b\\d{2,3}\\s*w\\b|vlp\\b.*\\bneo\\b)"
+      ],
+      "example": "Комплект VLP NEO 4in1",
+      "scope": "livesklad-default",
+      "review": "BUNDLE_POLICY"
+    },
+    {
+      "id": "standing_charger",
+      "field": "item",
+      "value": "CHARGER",
+      "patterns": [
+        "^станция\\s+3\\s+в\\s+1\\s*\\(стоячая\\)$"
+      ],
+      "example": "Станция 3 в 1 (Стоячая)",
+      "scope": "livesklad-default"
+    },
+    {
+      "id": "connectivity",
+      "field": "item",
+      "value": "CONNECTIVITY",
+      "patterns": [
+        "\\b(?:hub|хаб|переходник|адаптер|евро\\s*переходник|aux|hdmi)\\b"
+      ],
+      "example": "Переходник USB C HDMI",
+      "exclude": [
+        "\\b(?:[cс]зу|азу|бзу|заряд\\w*|питания|power adapter)\\b",
+        "\\b(?:power\\s*bank|powerbank|battery\\s+pack|пауэрбанк\\w*|повербанк\\w*|(?:внешн\\w*|портативн\\w*)\\s+(?:аккумулятор|батаре\\w*))\\b"
+      ]
+    },
+    {
+      "id": "packaging",
+      "field": "item",
+      "value": "PACKAGING",
+      "patterns": [
+        "\\b(?:фирменн\\w*\\s+пакет|упаковочн\\w*\\s+пакет)\\b"
+      ],
+      "example": "Фирменный пакет магазина"
+    },
+    {
+      "id": "mixed_case_bundle",
+      "field": "item",
+      "value": "MIXED_BUNDLE",
+      "patterns": [
+        "\\b(?:комплект|набор)\\b.*(?:чехол\\s*\\+\\s*стекло|чехол\\s+и\\s+стекло)"
+      ],
+      "example": "Комплект чехол+стекло 13 Mini",
+      "review": "BUNDLE_POLICY"
+    },
+    {
+      "id": "screen_model_iphone",
+      "field": "compatibility",
+      "value": "IPHONE",
+      "patterns": [
+        "(?<!\\d)1[1-9]\\s*(?:pro(?:\\s*max)?|plus|mini|air|e)\\b"
+      ],
+      "example": "Чехол 17 Pro",
+      "exclude": [
+        "\\b(?:ipad|macbook|samsung|galaxy|самсунг|планшет|ноутбук)\\b"
+      ],
+      "review": "MODEL_ALIAS"
+    },
+    {
+      "id": "screen_model_samsung",
+      "field": "compatibility",
+      "value": "SAMSUNG_PHONE",
+      "patterns": [
+        "\\b(?:s\\s*2[0-9](?:\\s*fe)?|[aа]\\s*(?:3[0-9]|5[0-9]))\\b"
+      ],
+      "example": "Стекло А35 S25FE",
+      "exclude": [
+        "\\b(?:ipad|iphone|айфон)\\b"
+      ]
+    },
+    {
+      "id": "camera_film_scope",
+      "field": "compatibility",
+      "value": "IPHONE",
+      "patterns": [
+        "\\bcamera film\\b"
+      ],
+      "example": "Camera Film",
+      "scope": "livesklad-default",
+      "review": "STORE_SPECIFIC_RULE"
+    },
+    {
+      "id": "generic_samsung_target",
+      "field": "compatibility",
+      "value": "SAMSUNG_PHONE",
+      "patterns": [
+        "\\b(?:samsung|самсунг)\\b"
+      ],
+      "example": "Чехол Samsung",
+      "exclude": [
+        "\\b(?:watch|buds|tab|galaxy book)\\b"
+      ]
+    },
+    {
+      "id": "generic_watch_target",
+      "field": "compatibility",
+      "value": "APPLE_WATCH",
+      "patterns": [
+        "\\b(?:watch|iwatch)\\b",
+        "\\b(?:38|41|42|45)\\s*(?:mm|мм)?\\s*[/ ]\\s*(?:41|45|49)(?:mm|мм)?\\b"
+      ],
+      "example": "Ремешок Watch Nike",
+      "scope": "livesklad-default",
+      "exclude": [
+        "\\b(?:samsung|galaxy|garmin|huawei|xiaomi)\\b"
+      ],
+      "review": "TARGET_MODEL_REVIEW"
+    },
+    {
+      "id": "generic_laptop_target",
+      "field": "compatibility",
+      "value": "LAPTOP_GENERIC",
+      "patterns": [
+        "\\b(?:ноутбук|ноутбука|ноутбуков|laptop|macbook)\\b"
+      ],
+      "example": "Чехол для ноутбука",
+      "exclude": [
+        "\\bmacbook\\b"
+      ]
+    },
+    {
+      "id": "service_repair",
+      "field": "service",
+      "value": "REPAIR",
+      "patterns": [
+        "\\b(?:ремонт|repair|замена|подклейк\\w*|восстановление платы|перепрошивк\\w*|прошивк\\w*)\\b"
+      ],
+      "example": "Замена дисплея"
+    },
+    {
+      "id": "service_diagnostics",
+      "field": "service",
+      "value": "DIAGNOSTICS",
+      "patterns": [
+        "\\bдиагностик\\w*\\b"
+      ],
+      "example": "Диагностика устройства"
+    },
+    {
+      "id": "service_cleaning",
+      "field": "service",
+      "value": "CLEANING",
+      "patterns": [
+        "\\b(?:чистк\\w*|чистка|очистк\\w*)\\b"
+      ],
+      "example": "Чистка устройства"
+    },
+    {
+      "id": "service_setup",
+      "field": "service",
+      "value": "SETUP",
+      "patterns": [
+        "\\b(?:настройк\\w*|активац\\w*|установк\\w*|создание учетн\\w*|перенос\\s+(?:данных|контактов)|обновление программ\\w*|восстановление программ\\w*|сброс|восстановлен\\w*\\s+парол\\w*|перезагрузк\\w*|подзарядк\\w*|гравировк\\w*)\\b"
+      ],
+      "example": "Настройка устройства"
+    },
+    {
+      "id": "office_setup",
+      "field": "service",
+      "value": "SETUP",
+      "patterns": [
+        "^(?:установка\\s+)?microsoft office$"
+      ],
+      "example": "Microsoft Office",
+      "scope": "livesklad-default"
+    },
+    {
+      "id": "warranty",
+      "field": "commercial",
+      "value": "WARRANTY_GENERIC",
+      "patterns": [
+        "^(?:(?:future store|моби\\s*сфера)\\s+)?(?:check(?:\\s*(?:discount|diskount))?(?:\\s*\\+)*|(?:elite|privilege)\\s+care)\\b"
+      ],
+      "example": "FUTURE STORE ELITE CARE",
+      "exclude": [
+        "\\bpremium\\b"
+      ],
+      "scope": "livesklad-default"
+    },
+    {
+      "id": "protection",
+      "field": "commercial",
+      "value": "PREMIUM_PROTECTION",
+      "patterns": [
+        "^(?:(?:future store|моби\\s*сфера)\\s+)?(?:check\\s+premium|ultimate\\s+care)\\b"
+      ],
+      "example": "Моби Сфера Ultimate Care",
+      "scope": "livesklad-default"
+    },
+    {
+      "id": "used",
+      "field": "condition",
+      "value": "USED",
+      "patterns": [
+        "(?<!\\w)(?:б\\s*[/ ]\\s*у|used)(?!\\w)"
+      ],
+      "example": "iPhone Б/У"
+    },
+    {
+      "id": "new",
+      "field": "condition",
+      "value": "NEW",
+      "patterns": [
+        "\\b(?:new|новый|новая|новое)\\b"
+      ],
+      "example": "iPad New"
+    },
+    {
+      "id": "asis",
+      "field": "condition",
+      "value": "ASIS",
+      "patterns": [
+        "\\b(?:asis|as\\s+is)\\b"
+      ],
+      "example": "iPhone ASIS"
+    },
+    {
+      "id": "repair_annotation",
+      "field": "annotation",
+      "value": "REPAIR_OR_DEFECT",
+      "patterns": [
+        "\\b(?:ремонт|repair|брак|дефект)\\b"
+      ],
+      "example": "iPhone Б/У ремонт"
+    },
+    {
+      "id": "activated",
+      "field": "annotation",
+      "value": "ACTIVATED",
+      "patterns": [
+        "\\bактив\\b"
+      ],
+      "example": "iPhone АКТИВ",
+      "exclude": [
+        "\\bне\\s+актив\\b"
+      ]
+    },
+    {
+      "id": "not_activated",
+      "field": "annotation",
+      "value": "NOT_ACTIVATED",
+      "patterns": [
+        "\\bне\\s+актив\\b"
+      ],
+      "example": "iPhone НЕ АКТИВ"
+    },
+    {
+      "id": "warranty_annotation",
+      "field": "annotation",
+      "value": "WARRANTY_NOTE",
+      "patterns": [
+        "\\bгаранти\\w*\\b"
+      ],
+      "example": "MacBook брак по гарантии"
+    },
+    {
+      "id": "wireless",
+      "field": "subtype",
+      "value": "WIRELESS_CHARGER",
+      "patterns": [
+        "\\b(?:бзу|без?проводн\\w*|wireless|qi2?)\\b"
+      ],
+      "example": "БЗУ Qi2"
+    },
+    {
+      "id": "car",
+      "field": "subtype",
+      "value": "CAR_CHARGER",
+      "patterns": [
+        "\\b(?:азу|car charger|для авто)\\b"
+      ],
+      "example": "АЗУ Baseus"
+    },
+    {
+      "id": "wall",
+      "field": "subtype",
+      "value": "WALL_CHARGER",
+      "patterns": [
+        "\\b(?:[cс]зу|блок питания|power adapter|wall charger)\\b"
+      ],
+      "example": "СЗУ Apple"
+    },
+    {
+      "id": "cable",
+      "field": "subtype",
+      "value": "CABLE",
+      "patterns": [
+        "\\b(?:кабел\\w*|cable|провод)\\b"
+      ],
+      "example": "Кабель Lightning"
+    },
+    {
+      "id": "bundle",
+      "field": "annotation",
+      "value": "BUNDLE",
+      "patterns": [
+        "\\b(?:комплект|набор|set)\\b"
+      ],
+      "example": "Комплект зарядки"
+    },
+    {
+      "id": "maker_apple",
+      "field": "manufacturer",
+      "value": "APPLE",
+      "patterns": [
+        "\\bapple\\b"
+      ],
+      "example": "Apple"
+    },
+    {
+      "id": "maker_samsung",
+      "field": "manufacturer",
+      "value": "SAMSUNG",
+      "patterns": [
+        "\\bsamsung\\b"
+      ],
+      "example": "Samsung"
+    },
+    {
+      "id": "maker_lenovo",
+      "field": "manufacturer",
+      "value": "LENOVO",
+      "patterns": [
+        "\\blenovo\\b"
+      ],
+      "example": "Lenovo"
+    },
+    {
+      "id": "maker_asus",
+      "field": "manufacturer",
+      "value": "ASUS",
+      "patterns": [
+        "\\basus\\b"
+      ],
+      "example": "ASUS"
+    },
+    {
+      "id": "maker_acer",
+      "field": "manufacturer",
+      "value": "ACER",
+      "patterns": [
+        "\\bacer\\b"
+      ],
+      "example": "Acer"
+    },
+    {
+      "id": "maker_dell",
+      "field": "manufacturer",
+      "value": "DELL",
+      "patterns": [
+        "\\bdell\\b"
+      ],
+      "example": "Dell"
+    },
+    {
+      "id": "maker_hp",
+      "field": "manufacturer",
+      "value": "HP",
+      "patterns": [
+        "\\bhp\\b"
+      ],
+      "example": "HP"
+    },
+    {
+      "id": "maker_huawei",
+      "field": "manufacturer",
+      "value": "HUAWEI",
+      "patterns": [
+        "\\bhuawei\\b"
+      ],
+      "example": "Huawei"
+    },
+    {
+      "id": "maker_honor",
+      "field": "manufacturer",
+      "value": "HONOR",
+      "patterns": [
+        "\\bhonor\\b"
+      ],
+      "example": "Honor"
+    },
+    {
+      "id": "maker_xiaomi",
+      "field": "manufacturer",
+      "value": "XIAOMI",
+      "patterns": [
+        "\\bxiaomi\\b"
+      ],
+      "example": "Xiaomi"
+    },
+    {
+      "id": "maker_redmi",
+      "field": "manufacturer",
+      "value": "REDMI",
+      "patterns": [
+        "\\bredmi\\b"
+      ],
+      "example": "Redmi"
+    },
+    {
+      "id": "maker_amazfit",
+      "field": "manufacturer",
+      "value": "AMAZFIT",
+      "patterns": [
+        "\\bamazfit\\b"
+      ],
+      "example": "Amazfit"
+    },
+    {
+      "id": "maker_garmin",
+      "field": "manufacturer",
+      "value": "GARMIN",
+      "patterns": [
+        "\\bgarmin\\b"
+      ],
+      "example": "Garmin"
+    },
+    {
+      "id": "maker_sony",
+      "field": "manufacturer",
+      "value": "SONY",
+      "patterns": [
+        "\\bsony\\b"
+      ],
+      "example": "Sony"
+    },
+    {
+      "id": "maker_marshall",
+      "field": "manufacturer",
+      "value": "MARSHALL",
+      "patterns": [
+        "\\bmarshall\\b"
+      ],
+      "example": "Marshall"
+    },
+    {
+      "id": "maker_dji",
+      "field": "manufacturer",
+      "value": "DJI",
+      "patterns": [
+        "\\bdji\\b"
+      ],
+      "example": "DJI"
+    },
+    {
+      "id": "maker_dyson",
+      "field": "manufacturer",
+      "value": "DYSON",
+      "patterns": [
+        "\\bdyson\\b"
+      ],
+      "example": "Dyson"
+    },
+    {
+      "id": "maker_keephone",
+      "field": "manufacturer",
+      "value": "KEEPHONE",
+      "patterns": [
+        "\\bkeephone\\b"
+      ],
+      "example": "Keephone"
+    },
+    {
+      "id": "maker_kzdoo",
+      "field": "manufacturer",
+      "value": "KZDOO",
+      "patterns": [
+        "\\bkzdoo\\b"
+      ],
+      "example": "KZDOO"
+    },
+    {
+      "id": "maker_k_doo",
+      "field": "manufacturer",
+      "value": "K_DOO",
+      "patterns": [
+        "\\bk doo\\b"
+      ],
+      "example": "K DOO"
+    },
+    {
+      "id": "maker_vlp",
+      "field": "manufacturer",
+      "value": "VLP",
+      "patterns": [
+        "\\bvlp\\b"
+      ],
+      "example": "VLP"
+    },
+    {
+      "id": "maker_baseus",
+      "field": "manufacturer",
+      "value": "BASEUS",
+      "patterns": [
+        "\\bbaseus\\b"
+      ],
+      "example": "Baseus"
+    },
+    {
+      "id": "maker_ugreen",
+      "field": "manufacturer",
+      "value": "UGREEN",
+      "patterns": [
+        "\\bugreen\\b"
+      ],
+      "example": "Ugreen"
+    },
+    {
+      "id": "maker_hoco",
+      "field": "manufacturer",
+      "value": "HOCO",
+      "patterns": [
+        "\\bhoco\\b"
+      ],
+      "example": "Hoco"
+    },
+    {
+      "id": "maker_borofone",
+      "field": "manufacturer",
+      "value": "BOROFONE",
+      "patterns": [
+        "\\bborofone\\b"
+      ],
+      "example": "Borofone"
+    },
+    {
+      "id": "maker_acefast",
+      "field": "manufacturer",
+      "value": "ACEFAST",
+      "patterns": [
+        "\\bacefast\\b"
+      ],
+      "example": "Acefast"
+    },
+    {
+      "id": "maker_ubear",
+      "field": "manufacturer",
+      "value": "UBEAR",
+      "patterns": [
+        "\\bubear\\b"
+      ],
+      "example": "Ubear"
+    },
+    {
+      "id": "maker_energea",
+      "field": "manufacturer",
+      "value": "ENERGEA",
+      "patterns": [
+        "\\benergea\\b"
+      ],
+      "example": "Energea"
+    },
+    {
+      "id": "maker_satechi",
+      "field": "manufacturer",
+      "value": "SATECHI",
+      "patterns": [
+        "\\bsatechi\\b"
+      ],
+      "example": "Satechi"
+    },
+    {
+      "id": "maker_magssory",
+      "field": "manufacturer",
+      "value": "MAGSSORY",
+      "patterns": [
+        "\\bmagssory\\b"
+      ],
+      "example": "Magssory"
+    },
+    {
+      "id": "maker_uniq",
+      "field": "manufacturer",
+      "value": "UNIQ",
+      "patterns": [
+        "\\buniq\\b"
+      ],
+      "example": "Uniq"
+    },
+    {
+      "id": "maker_airity",
+      "field": "manufacturer",
+      "value": "AIRITY",
+      "patterns": [
+        "\\bairity\\b"
+      ],
+      "example": "Airity"
+    },
+    {
+      "id": "maker_elago",
+      "field": "manufacturer",
+      "value": "ELAGO",
+      "patterns": [
+        "\\belago\\b"
+      ],
+      "example": "Elago"
+    },
+    {
+      "id": "maker_anmac",
+      "field": "manufacturer",
+      "value": "ANMAC",
+      "patterns": [
+        "\\banmac\\b"
+      ],
+      "example": "Anmac"
+    },
+    {
+      "id": "maker_remax",
+      "field": "manufacturer",
+      "value": "REMAX",
+      "patterns": [
+        "\\bremax\\b"
+      ],
+      "example": "Remax"
+    },
+    {
+      "id": "maker_supglass",
+      "field": "manufacturer",
+      "value": "SUPGLASS",
+      "patterns": [
+        "\\bsupglass\\b"
+      ],
+      "example": "SupGlass"
+    },
+    {
+      "id": "maker_mietubl",
+      "field": "manufacturer",
+      "value": "MIETUBL",
+      "patterns": [
+        "\\bmietubl\\b"
+      ],
+      "example": "Mietubl"
+    },
+    {
+      "id": "maker_taggy",
+      "field": "model_line",
+      "value": "TAGGY",
+      "patterns": [
+        "\\btaggy\\b"
+      ],
+      "example": "Taggy"
+    },
+    {
+      "id": "maker_whoop",
+      "field": "manufacturer",
+      "value": "WHOOP",
+      "patterns": [
+        "\\bwhoop\\b"
+      ],
+      "example": "Whoop"
+    },
+    {
+      "id": "maker_fitbit",
+      "field": "manufacturer",
+      "value": "FITBIT",
+      "patterns": [
+        "\\bfitbit\\b"
+      ],
+      "example": "Fitbit"
+    },
+    {
+      "id": "maker_яндекс",
+      "field": "manufacturer",
+      "value": "ЯНДЕКС",
+      "patterns": [
+        "\\bяндекс\\b"
+      ],
+      "example": "Яндекс"
+    },
+    {
+      "id": "maker_merkan",
+      "field": "manufacturer",
+      "value": "MERKAN",
+      "patterns": [
+        "\\bmerkan\\b"
+      ],
+      "example": "Merkan"
+    },
+    {
+      "id": "maker_utryee",
+      "field": "manufacturer",
+      "value": "UTRYEE",
+      "patterns": [
+        "\\butryee\\b"
+      ],
+      "example": "UTRYEE"
+    },
+    {
+      "id": "maker_uzay",
+      "field": "manufacturer",
+      "value": "UZAY",
+      "patterns": [
+        "\\buzay\\b"
+      ],
+      "example": "Uzay"
+    },
+    {
+      "id": "maker_ray_ban",
+      "field": "manufacturer",
+      "value": "RAY_BAN",
+      "patterns": [
+        "\\bray ban\\b"
+      ],
+      "example": "Ray Ban"
+    },
+    {
+      "id": "keychain_accessory",
+      "field": "item",
+      "value": "KEYCHAIN",
+      "patterns": [
+        "\\bбрелок\\b"
+      ],
+      "example": "Keephone iWatch брелок",
+      "review": "ACCESSORY_FUNCTION_UNKNOWN"
+    },
+    {
+      "id": "iphone_xr_target",
+      "field": "compatibility",
+      "value": "IPHONE",
+      "patterns": [
+        "\\b(?:11\\s*/\\s*xr|iphone\\s*xr)\\b"
+      ],
+      "example": "Стекло 11/XR",
+      "review": "MODEL_ALIAS"
+    },
+    {
+      "id": "keephone_numbered_target",
+      "field": "compatibility",
+      "value": "IPHONE",
+      "patterns": [
+        "\\bkeephone\\s+(?:x\\s*crystal|hybrid\\s+pro)\\s+1[5-7]\\b"
+      ],
+      "example": "Чехол Keephone X Crystal 17 Clear",
+      "scope": "livesklad-default",
+      "review": "MODEL_ALIAS"
+    },
+    {
+      "id": "complex_cleaning",
+      "field": "service",
+      "value": "CLEANING",
+      "patterns": [
+        "^комплексная\\s+чистка\\b"
+      ],
+      "example": "Комплексная чистка устройства"
+    },
+    {
+      "id": "bundle_repair_service",
+      "field": "service",
+      "value": "REPAIR",
+      "patterns": [
+        "^чистка\\s+разъема\\s+и\\s+замена\\s+контакта$"
+      ],
+      "example": "Чистка разъема и замена контакта",
+      "review": "BUNDLE_POLICY"
+    },
+    {
+      "id": "maker_wiwu",
+      "field": "manufacturer",
+      "value": "WIWU",
+      "patterns": [
+        "\\bwiwu\\b"
+      ],
+      "example": "WIWU"
+    },
+    {
+      "id": "maker_pitaka",
+      "field": "manufacturer",
+      "value": "PITAKA",
+      "patterns": [
+        "\\bpitaka\\b"
+      ],
+      "example": "PITAKA"
+    },
+    {
+      "id": "maker_rybitak",
+      "field": "manufacturer",
+      "value": "RYBITAK",
+      "patterns": [
+        "\\brybitak\\b"
+      ],
+      "example": "RYBITAK"
+    },
+    {
+      "id": "maker_jbl",
+      "field": "manufacturer",
+      "value": "JBL",
+      "patterns": [
+        "\\bjbl\\b"
+      ],
+      "example": "JBL"
+    },
+    {
+      "id": "maker_harman",
+      "field": "manufacturer",
+      "value": "HARMAN_KARDON",
+      "patterns": [
+        "\\bharman\\s+kardon\\b"
+      ],
+      "example": "HARMAN KARDON"
+    },
+    {
+      "id": "replacement_part",
+      "field": "item",
+      "value": "REPLACEMENT_PART",
+      "patterns": [
+        "\\b(?:запчаст\\w*|аккумулятор\\s+для|дисплей\\s+для|корпус\\s+для|муляж)\\b"
+      ],
+      "example": "Дисплей для iPhone 16",
+      "review": "PART_CATEGORY_UNRESOLVED"
+    },
+    {
+      "id": "generic_watch",
+      "field": "family",
+      "value": "OTHER_WATCH",
+      "patterns": [
+        "\\b(?:смарт\\s*часы|smartwatch)\\b"
+      ],
+      "exclude": [
+        "\\b(?:apple|samsung|galaxy|iwatch|garmin|whoop|fitbit)\\b"
+      ],
+      "example": "Смарт-часы Huawei"
+    },
+    {
+      "id": "grade_annotation",
+      "field": "annotation",
+      "value": "COSMETIC_GRADE",
+      "patterns": [
+        "\\([abc]\\)"
+      ],
+      "example": "iPhone 15 (A)",
+      "review": "GRADE_NOT_CONDITION"
+    },
+    {
+      "id": "discount_annotation",
+      "field": "annotation",
+      "value": "DISCOUNTED",
+      "patterns": [
+        "\\bуценк\\w*\\b"
+      ],
+      "example": "iPhone 15 Уценка",
+      "review": "DISCOUNT_NOT_CONDITION"
+    },
+    {
+      "id": "data_cable",
+      "field": "item",
+      "value": "CONNECTIVITY",
+      "patterns": [
+        "\\b(?:hdmi|aux|audio)\\b"
+      ],
+      "example": "Кабель HDMI"
+    },
+    {
+      "id": "device_accessory_bundle",
+      "field": "annotation",
+      "value": "DEVICE_ACCESSORY_BUNDLE",
+      "patterns": [
+        "^(?:apple\\s+)?(?:iphone|ipad|macbook|samsung\\s+galaxy)\\b.*(?:\\+\\s*(?:чехол|стекло|кабел\\w*)|с\\s+кабелем|в\\s+комплекте)",
+        "^(?:sony\\s+)?(?:ps5|play\\s*station\\s*5)\\b.*\\b(?:slim|pro|\\d+\\s*tb)\\b.*\\b(?:dualsense|dual sense)\\b"
+      ],
+      "example": "iPhone 16 New + чехол",
+      "review": "DEVICE_ACCESSORY_BUNDLE"
+    },
+    {
+      "id": "owner_iphone_used_group",
+      "field": "condition",
+      "value": "USED",
+      "input": "source_group",
+      "required_family": "IPHONE",
+      "required_source_kind": "PRODUCT",
+      "patterns": [
+        "^/?(?:основные/)?iphone(?: 2)? \\(б\\s*/\\s*у\\)/?$"
+      ],
+      "example": "/IPHONE (Б/У)",
+      "scope": "livesklad-default",
+      "approval": "Owner confirmed that iPhones in the used iPhone source groups are IPHONE_USED; only after sold-device identification. Explicit conflicting condition remains reviewable."
+    },
+    {
+      "id": "owner_samsung_used_group",
+      "field": "condition",
+      "value": "USED",
+      "input": "source_group",
+      "required_family": "SAMSUNG_PHONE",
+      "required_source_kind": "PRODUCT",
+      "patterns": [
+        "^/?(?:основные/)?samsung\\s+б\\s*/\\s*у/?$"
+      ],
+      "example": "/Основные/SAMSUNG Б/У",
+      "scope": "livesklad-default",
+      "approval": "Owner confirmed that the Samsung used source group establishes USED for actual Samsung phones, not accessories, watches or contradictory products."
+    },
+    {
+      "id": "tablet_generic_target",
+      "field": "compatibility",
+      "value": "TABLET_GENERIC",
+      "patterns": [
+        "\\b(?:планшет\\w*|tablet)\\b"
+      ],
+      "exclude": [
+        "\\b(?:ipad|айпад|galaxy\\s+tab|xiaomi\\s+pad|redmi\\s+pad)\\b"
+      ],
+      "example": "Защитная пленка для планшета"
+    }
+  ],
+  "approved_category_splits": {
+    "ACCESSORY_PODS_WATCH": [
+      "ACCESSORY_APPLE_WATCH",
+      "ACCESSORY_AIRPODS"
+    ]
+  }
+}

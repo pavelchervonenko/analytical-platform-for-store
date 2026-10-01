@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - operator
-last_verified: 2026-09-09
+last_verified: 2026-09-20
 requirement_sources:
   - docs/archive/legacy-contracts/data-quality-api.md
 implementation_sources:
@@ -42,6 +42,10 @@ superseded_by: null
 Сводка соединяет производный freshness/sync signal и persisted open
 `data_quality_issues`. Итоговый health имеет приоритет `ERROR > WARNING > OK`; INFO сам по себе не
 ухудшает `OK`.
+
+`ZERO_UNEXPECTED_COST` и `RETURN_ZERO_UNEXPECTED_COST` возвращаются как открытые `INFO`, входят в
+`openIssueCount` и `infoCount`, но не в `warningCount`. Они не скрываются из detail: оператор видит
+их как диагностические особенности себестоимости без ложного блокирующего статуса.
 
 Detail возвращает safe issue code, source, severity, entity type, timestamp и
 `recommendedAction`. Raw payload, internal metadata и upstream identifiers наружу не выдаются.

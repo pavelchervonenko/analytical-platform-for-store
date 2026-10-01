@@ -118,14 +118,16 @@ public class Product extends AbstractMutableEntity {
             return reactivated;
         }
 
+        SourceProductGroup candidateGroup = details.sourceGroupObserved()
+                ? details.sourceGroup() : sourceGroup;
         boolean changed = reactivated
-                || !sameEntity(sourceGroup, details.sourceGroup())
+                || !sameEntity(sourceGroup, candidateGroup)
                 || !Objects.equals(code, details.code())
                 || !Objects.equals(sku, details.sku())
                 || !Objects.equals(name, details.name())
                 || sourceKind != details.sourceKind()
                 || !Objects.equals(sourceUpdatedAt, candidateUpdatedAt);
-        sourceGroup = details.sourceGroup();
+        sourceGroup = candidateGroup;
         code = details.code();
         sku = details.sku();
         name = details.name();
@@ -171,6 +173,10 @@ public class Product extends AbstractMutableEntity {
 
     public String getName() {
         return name;
+    }
+
+    public SourceProductGroup getSourceGroup() {
+        return sourceGroup;
     }
 
     public ProductSourceKind getSourceKind() {

@@ -6,16 +6,21 @@ owner: security
 audience:
   - developer
   - operator
-last_verified: 2026-08-31
+last_verified: 2026-09-30
 requirement_sources:
   - docs/archive/legacy-contracts/data-retention.md
 implementation_sources:
+  - backend/src/main/java/com/storeanalytics/product/service/CatalogSaleRoleSnapshotWriter.java
+  - backend/src/main/java/com/storeanalytics/product/service/CatalogCompatibilityService.java
+  - backend/src/main/resources/db/migration/V81__store_catalog_compatibility_confirmations.sql
   - backend/src/main/java/com/storeanalytics/common/config/DataRetentionProperties.java
   - backend/src/main/java/com/storeanalytics/maintenance
   - backend/src/main/java/com/storeanalytics/audit/service/AuditRetentionPolicy.java
   - backend/src/main/resources/db/migration/V12__add_data_retention.sql
   - backend/src/main/resources/application.yml
 verification_sources:
+  - backend/src/test/java/com/storeanalytics/product/service/CatalogSaleRoleSnapshotIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/product/service/CatalogCompatibilityPersistenceIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/common/config/DataRetentionPropertiesTest.java
   - backend/src/test/java/com/storeanalytics/maintenance
   - backend/src/test/java/com/storeanalytics/audit/service/AuditRetentionPolicyTest.java
@@ -77,3 +82,35 @@ batches, holds и dry-run. Production deletion остаётся draft-проце
 
 Новая таблица с payload/PII, изменение сроков, backfill horizon, deletion target, hold semantics,
 backup или legal requirement требует совместного backend/security review.
+
+## История атрибуции гарантий
+
+`warranty_attach_decisions` и `warranty_attach_allocations` неизменяемы: исправление добавляет
+ревизию. Автоматическое удаление не включено; срок хранения ограничен необходимостью
+воспроизведения аналитики и требует отдельного утверждённого retention-процесса, а не удаления
+вместе с raw. Событие WARRANTY_ATTACH_DECIDED отнесено к FINANCIAL audit retention без
+автоматического удаления. `attach_source_employee_external_id` переживает raw retention и не
+содержит имён/контактов. `attach_snapshot_checks` — производная отметка проверки, удаляемая
+с соответствующим snapshot; `attach_attribution_changes` — один служебный маркер на магазин.
+
+## История подтверждений совместимости каталога
+
+`catalog_compatibility_decisions` хранит ревизии, исходную идентичность/наблюдение карточки,
+автора, основание и при переносе — ссылку на старое свидетельство. Обычные UPDATE/DELETE
+запрещены; REVOKE закрывает действие решения, но не удаляет доказательства. Событие
+CATALOG_COMPATIBILITY_DECIDED относится к FINANCIAL audit retention, без автоматического purge.
+Таблица не включена в очистку технических raw-данных. Для этих данных нужен отдельно
+согласованный срок и процесс хранения/удаления, позволяющий воспроизвести аналитику;
+неизменяемость не является юридическим разрешением хранить персональные данные бессрочно.
+В свободное основание нельзя помещать контакты, секреты или полные provider payloads.
+Локальные тесты не подтверждают развёртывание или перенос реальных решений в production.
+
+## Первоначальные shadow-снимки ролей продаж
+
+`catalog_sale_role_snapshots` сохраняет классифицирующие поля факта, роль, версии и ссылки
+на подтверждение/оригинал. Обычные UPDATE/DELETE запрещены; изменение факта выявляется
+представлением CURRENT/STALE/DELETED, а не удалением свидетельства. Запись не включена
+в технический purge и не является raw payload. Срок хранения/контролируемые ревизии
+требуют отдельного согласованного процесса до подключения к официальным расчётам.
+Soft-delete исходной строки исключает её, но не стирает снимок. Физическое удаление факта
+с таким снимком блокируется FK; будущие purge-процедуры должны учитывать эту зависимость.
