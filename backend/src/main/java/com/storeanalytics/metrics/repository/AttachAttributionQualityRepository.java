@@ -14,19 +14,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class AttachAttributionQualityRepository {
 
     private static final String QUERY = """
-            WITH pending_roles AS MATERIALIZED (
-                SELECT fact.classification_issue_code
+            WITH unassigned_facts AS MATERIALIZED (
+                SELECT fact.classification_issue_code, fact.numerator_metric_code,
+                       fact.numerator_metric_codes, fact.denominator_metric_codes
                 FROM attach_rate_ordinary_item_facts_v4_catalog_with_reviews fact
                 WHERE fact.store_id = :storeId AND fact.business_date BETWEEN :periodStart AND :periodEnd
                   AND fact.net_quantity < 0 AND fact.employee_id IS NULL
-                  AND fact.classification_issue_code LIKE 'CATALOG_ROLE_REVIEW_%'
+            ), pending_roles AS (
+                SELECT classification_issue_code FROM unassigned_facts
+                WHERE classification_issue_code LIKE 'CATALOG_ROLE_REVIEW_%'
             ), unassigned_returns AS MATERIALIZED (
-                SELECT fact.numerator_metric_code, fact.numerator_metric_codes, fact.denominator_metric_codes
-                FROM attach_rate_ordinary_item_facts_v4_catalog_with_reviews fact
-                WHERE fact.store_id = :storeId
-                  AND fact.business_date BETWEEN :periodStart AND :periodEnd
-                  AND fact.net_quantity < 0 AND fact.employee_id IS NULL
-                  AND (fact.numerator_metric_code IS NOT NULL OR cardinality(fact.denominator_metric_codes) > 0)
+                SELECT numerator_metric_code, numerator_metric_codes, denominator_metric_codes
+                FROM unassigned_facts
+                WHERE numerator_metric_code IS NOT NULL OR cardinality(denominator_metric_codes) > 0
             ), pending_warranties AS (
                 SELECT count(*) AS item_count FROM warranty_attach_cases warranty
                 WHERE warranty.store_id = :storeId AND warranty.state IN ('CONFLICT', 'DEFERRED')

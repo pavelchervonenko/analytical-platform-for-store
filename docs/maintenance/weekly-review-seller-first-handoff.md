@@ -89,6 +89,26 @@ quality-query, после чего настройки восстанавлива
 сохранности исторических строк на промежуточном шаге оставлена; перед runtime assertions
 fixture теперь обновляется до packaged schema и повторно проверяет неизменность строк.
 Результат этого исправления ожидается в отдельном повторе после полного прогона.
+Полный прогон также воспроизвёл 30-second writer latch failure в concurrent bulk test.
+Просмотр уже собранной `pg_stat_statements` (такие SELECT явно исключены из test counter)
+показал существенную стоимость quality reader, где два CTE повторно читали одну
+ordinary-returns проекцию с одинаковыми базовыми фильтрами. В локальном исправлении
+общий `unassigned_facts` materialized один раз, затем применяются прежние разные условия
+pending roles / metric counters. SQL timeout, writer latch и method timeout не увеличены.
+Точечный повтор на этом исправлении: 8 tests, 0 failures, 0 skipped, build 5m42s;
+Checkstyle main/test PASS. Проверены эквивалентность quality counters, четыре old/new
+catalog predicates, исправленная case migration fixture и оба прежде падавших load-сценария.
+Большая выборка: 130 sellers, 6400 documents, 19200 items, SQL 24/24, warm read 11170 ms,
+first planner 9546 ms. Concurrent bulk commit: один revision increment, stale candidate
+отклонён, один свежий snapshot опубликован. Это targeted run; прежние 54482 ms получены
+в полном наборе fixtures, поэтому отношение времени не считается сравнительным benchmark.
+Владелец сообщил о трёх зелёных CI checks для PR #8; Git head подтверждён как `5c78fe5`.
+Оставшаяся часть полного локального check остановлена после этого сообщения: она дублирует
+CI и не считается PASS. Последняя SQL-оптимизация требует CI на новом commit после push.
+Локальный replay существующего проверенного snapshot также PASS: 24357 sale items,
+4984 опубликованные aggregate rows для каждой v3/v4 проекции; документы, позиции,
+аналитические/зарплатные назначения и category flags после миграций не изменились.
+Это проверка сохранности каталожных фактов, а не backup/restore и runtime rehearsal релиза.
 SQL timeout 30 s и test method budget 3 min сохранены. Общий CI job budget расширен до 60 min:
 один полный локальный test уже занял почти прежние 30 min без оставшихся стадий check.
 Это бюджет всей сборки, не увеличение времени отдельных SQL/нагрузочных сценариев.

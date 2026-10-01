@@ -256,7 +256,11 @@ quality-only проекцию: pending warranties, общее число unassig
 магазинным расчётом; одна строка, участвующая и в numerator, и в denominator одной метрики,
 считается один раз. Классификация unassigned returns выполняется один раз за запрос, без
 вычисления количественных итогов всего магазина. Seller numerators/denominators и собственные
-classification counters не подменяются store-wide значениями. Из-за стоимости JIT-компиляции
+classification counters не подменяются store-wide значениями. Pending catalog roles и
+unassigned metric counters используют общий materialized набор `unassigned_facts`:
+одинаковый store/period/negative-quantity/unknown-employee фильтр не запускает тяжёлую
+проекцию повторно. Условия отбора pending roles и учитываемых metric rows остаются раздельными.
+Из-за стоимости JIT-компиляции
 вложенных warranty/catalog views quality-проекция и следующий seller aggregate выполняются
 в одной транзакционной области `SET LOCAL jit = off`, без дополнительных SQL round-trips.
 `readWith` возвращает исходную настройку только после обоих запросов; caller setting
