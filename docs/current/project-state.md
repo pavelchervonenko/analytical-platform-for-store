@@ -6,7 +6,7 @@ owner: project
 audience:
   - developer
   - operator
-last_verified: 2026-10-01
+last_verified: 2026-10-02
 requirement_sources:
   - docs/maintenance/documentation-policy.md
 implementation_sources:
@@ -14,6 +14,7 @@ implementation_sources:
   - deploy/env.production.example
   - backend/src/main/resources/application.yml
 verification_sources:
+  - docs/history/audits/2026/10/sync-first-attempt-regression.md
   - docs/history/audits/2026/10/catalog-migration-readonly-preflight.md
   - docs/history/releases/2026/09/v0.1.0-pilot.35-production-verification.md
   - docs/history/releases/2026/09/v0.1.0-pilot.32-production-verification.md
@@ -43,8 +44,9 @@ superseded_by: null
 # Current project state
 
 This is the only repository page allowed to summarize the currently verified production release.
-It records an observation, not a live dashboard. Release, image, topology and health values below were last observed on
-**2026-09-16**; the Flyway schema alone was reverified on **2026-10-01**.
+It records an observation, not a live dashboard. The release/image identity, Flyway schema and
+container health below were reverified in owner-run read-only evidence received on **2026-10-02**.
+The export has no precise capture timestamp. Older observations below retain their historical scope.
 These values must be refreshed from sanitized read-only production evidence after every
 deployment, schema change, relevant flag change or topology change.
 
@@ -52,21 +54,27 @@ deployment, schema change, relevant flag change or topology change.
 
 | Item | Last verified value |
 |---|---|
-| Release | `v0.1.0-pilot.35` |
-| Commit | `582fd48e6dc9af72d114706852501ba3be83b09a` |
-| Flyway schema | `51` — read-only reverified 2026-10-01 |
+| Release | `v0.1.0-pilot.36` |
+| Commit | `c6b20406a6bbf093af75011bc7a140d014a83622` |
+| Flyway schema | `93` — read-only evidence received 2026-10-02 |
 | Topology | `web`, `backend-api`, `backend-worker` |
 | Service health | all three containers healthy at verification time |
-| Backend image | `sha256:42a25ceb3d2db4b54c0930f59501dba53ae991ebda3cec420c74a7416a05db3f` |
-| Web image | `sha256:bb77da8245b1945f2b04eb8d6a932070498794a6d94d459b0cdbf4408681dac7` |
+| Backend image | `sha256:1857fb545b2949ddb668da163c66efb398d65ad79d03b774529b5603f86547df` |
+| Web image | `sha256:93671088f5300acd28bb1a537adcb08173be08f7e075e489b1a962b4879037d2` |
 
-The current deployment provenance, schema-51 backup/restore rehearsal, transient outer-wrapper
+The [October 2 synchronization incident evidence](../history/audits/2026/10/sync-first-attempt-regression.md)
+confirms this identity and the missing October 1 coverage. A reproduced zero-counter defect blocks
+the first phase of new jobs. Its local fix has **not** been deployed. Healthy containers do not
+prove successful ingestion or financial reconciliation. Feature flags were not reverified in this audit.
+Application-only rollback to the previous schema-51 runtime is not a supported recovery path.
+
+The previous deployment provenance, schema-51 backup/restore rehearsal, transient outer-wrapper
 false negative, independent post-deploy PASS and authenticated shared-shift acceptance are
 preserved in the
 [pilot.35 production verification record](../history/releases/2026/09/v0.1.0-pilot.35-production-verification.md).
 The original V48-to-V51 migration boundary remains preserved in the
 [pilot.32 production verification record](../history/releases/2026/09/v0.1.0-pilot.32-production-verification.md).
-The current runtime identity and sanitized read-only business-data verification are preserved in
+Earlier runtime identity and sanitized read-only business-data verification are preserved in
 the August LiveSklad reconciliations for
 [МАГАЗИН](../history/audits/2026/09/LIVESKLAD_PRODUCTION_RECONCILIATION_2026-08_MAGAZIN.md)
 and

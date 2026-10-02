@@ -21,8 +21,10 @@ public record SyncExecutionContext(
                     "manual executions must not belong to a sync job"
             );
         }
-        if (jobAttempt != null && jobAttempt < 1) {
-            throw new IllegalArgumentException("jobAttempt must be positive");
+        // This is the persisted failure counter, not a one-based attempt number.
+        // First execution and every successfully advanced phase are fenced by zero.
+        if (jobAttempt != null && jobAttempt < 0) {
+            throw new IllegalArgumentException("jobAttempt must not be negative");
         }
     }
 
