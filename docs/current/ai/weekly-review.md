@@ -158,7 +158,8 @@ Legacy явно подписан как результат всего магаз
 Optional seller AI использует отдельный prompt `weekly-interpretation-v26` и input schema5,
 с неизменными selector schema1/content schema4. Allowlist содержит только seller-агрегаты, без
 employee IDs/имён/карточек и raw rows. V2 сохраняет v25/input4. Job store фильтрует report version
-до выбора latest snapshot; разные prompt/cache пары не смешиваются. Seller planning/preflight/
+до выбора latest snapshot и сверяет конфигурацией активный prompt при начале каждой provider
+attempt; разные prompt/cache пары не смешиваются. Seller planning/preflight/
 worker требуют exact CURRENT snapshot. После ответа worker повторяет freshness gate; stale ответ
 не публикуется, receipt сохраняется с terminal `SNAPSHOT_NOT_CURRENT`. Read-time enrichment
 проверяет точный input/content hash и оставляет все backend-owned факты, состав и действия
