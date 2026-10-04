@@ -11,7 +11,7 @@ import java.util.UUID;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-/** Resolves temporal seller membership once per document, before item joins. */
+/** Resolves analytical seller membership per document, independently of payroll attribution. */
 @Repository
 public class SellerHistoricalDocumentSelectionRepository {
 
@@ -19,31 +19,29 @@ public class SellerHistoricalDocumentSelectionRepository {
             WITH documents AS (
                 SELECT document.id, document.business_date, document.document_kind,
                        document.employee_id, document.occurred_at,
-                       original.id AS original_id,
-                       original.employee_id AS original_employee_id,
-                       original.occurred_at AS original_occurred_at
+                       document.attach_source_employee_external_id AS return_employee_external_id,
+                       return_employee.id AS return_employee_id
                 FROM sales_documents document
-                LEFT JOIN sales_documents original
-                  ON original.id = document.original_document_id
-                 AND original.store_id = document.store_id
-                 AND original.connection_id IS NOT DISTINCT FROM document.connection_id
-                 AND original.document_kind = 'SALE'
+                LEFT JOIN employees return_employee
+                  ON return_employee.connection_id = document.connection_id
+                 AND return_employee.source_system = 'LIVESKLAD'
+                 AND return_employee.external_id = document.attach_source_employee_external_id
                 WHERE document.store_id = :storeId
                   AND document.business_date BETWEEN :periodStart AND :periodEnd
                   AND NOT document.is_deleted
             ), attributed AS (
-                SELECT id, business_date, document_kind, original_id,
+                SELECT id, business_date, document_kind, return_employee_external_id,
                        CASE WHEN document_kind = 'SALE' THEN employee_id
-                            ELSE original_employee_id END AS effective_employee_id,
-                       CASE WHEN document_kind = 'SALE' THEN occurred_at
-                            ELSE original_occurred_at END AS membership_at
+                            ELSE return_employee_id END AS effective_employee_id,
+                       occurred_at AS membership_at
                 FROM documents
             )
             SELECT attributed.id, attributed.business_date,
                    attributed.effective_employee_id, attributed.membership_at,
                    CASE
-                       WHEN attributed.document_kind = 'RETURN' AND attributed.original_id IS NULL
-                           THEN 'ORPHAN_RETURN'
+                       WHEN attributed.document_kind = 'RETURN'
+                         AND attributed.effective_employee_id IS NULL
+                           THEN 'UNKNOWN_EMPLOYEE_ATTRIBUTION'
                        WHEN attributed.effective_employee_id IS NULL
                            THEN 'KNOWN_OUTSIDE_SELLER_COHORT'
                        WHEN state.store_id IS NULL
@@ -54,12 +52,15 @@ public class SellerHistoricalDocumentSelectionRepository {
                        ELSE 'KNOWN_OUTSIDE_SELLER_COHORT'
                    END AS bucket,
                    CASE
-                       WHEN attributed.document_kind = 'RETURN' AND attributed.original_id IS NULL
-                           THEN 'MISSING_OR_INVALID_ORIGINAL'
+                       WHEN attributed.document_kind = 'RETURN'
+                         AND attributed.effective_employee_id IS NULL
+                         AND attributed.return_employee_external_id IS NULL
+                           THEN 'UNATTRIBUTED_RETURN'
+                       WHEN attributed.document_kind = 'RETURN'
+                         AND attributed.effective_employee_id IS NULL
+                           THEN 'UNRESOLVED_RETURN_EMPLOYEE'
                        WHEN attributed.effective_employee_id IS NULL
                          AND attributed.document_kind = 'SALE' THEN 'UNATTRIBUTED_SALE'
-                       WHEN attributed.effective_employee_id IS NULL
-                           THEN 'LINKED_TO_UNATTRIBUTED_ORIGINAL'
                        WHEN state.store_id IS NULL
                          OR attributed.membership_at < state.authoritative_from
                          OR interval.id IS NULL THEN 'HISTORY_UNKNOWN'

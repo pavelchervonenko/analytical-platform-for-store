@@ -60,3 +60,8 @@ superseded_by: null
 конфигурации с запретом UNKNOWN retry. Period backlog и temporal aggregates ещё требуются;
 полный release gate не завершён. Baseline не объявляется активированным этим документом.
 Проверки перечислены в [плане](../maintenance/weekly-ai-production-automation-plan.md).
+
+Уточнение от 5 октября: [ADR-0006](ADR-0006-livesklad-return-employee-analytics.md) меняет
+аналитического автора возврата и его membership timestamp. Условие пункта 2 о более ранней
+исходной продаже сохраняется для проекций, которым действительно нужен оригинал, например
+гарантийных правил; аналитический автор возврата не наследуется из оригинала.

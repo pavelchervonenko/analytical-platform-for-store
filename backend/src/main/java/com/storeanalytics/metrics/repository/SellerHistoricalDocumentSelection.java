@@ -17,6 +17,7 @@ public record SellerHistoricalDocumentSelection(
         SELLER_ELIGIBLE,
         KNOWN_OUTSIDE_SELLER_COHORT,
         UNKNOWN_MEMBERSHIP_HISTORY,
+        UNKNOWN_EMPLOYEE_ATTRIBUTION,
         ORPHAN_RETURN
     }
 
@@ -24,6 +25,8 @@ public record SellerHistoricalDocumentSelection(
         NONE,
         EXPLICITLY_INELIGIBLE_EMPLOYEE,
         UNATTRIBUTED_SALE,
+        UNATTRIBUTED_RETURN,
+        UNRESOLVED_RETURN_EMPLOYEE,
         LINKED_TO_UNATTRIBUTED_ORIGINAL,
         MISSING_OR_INVALID_ORIGINAL,
         HISTORY_UNKNOWN

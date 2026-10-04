@@ -7,15 +7,17 @@ audience:
   - developer
   - operations
 decision_date: 2026-10-05
-implementation_status: planned
+implementation_status: partial
 decision_sources:
   - user-instruction:conversation-2026-10-05-return-employee-from-livesklad
+  - docs/maintenance/payroll-redesign.md
   - docs/maintenance/weekly-ai-production-automation-plan.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/sync/service/ReturnSyncPersistence.java
   - backend/src/main/java/com/storeanalytics/metrics/repository/SellerHistoricalDocumentSelectionRepository.java
 verification_sources:
   - backend/src/test/java/com/storeanalytics/sync/service/ReturnSyncIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/metrics/repository/SellerHistoricalDocumentSelectionRepositoryIntegrationTest.java
 required_reviewers:
   - product
   - integrations
@@ -32,6 +34,8 @@ superseded_by: null
 Владелец явно выбрал «Сотрудник возврата из LiveSklad» в ответ на вопрос, кому должны
 принадлежать показатели продавцов. Это заменяет целевое аналитическое правило ADR-0001,
 но не является утверждением, что изменение уже реализовано или применено к сохранённым фактам.
+Подтверждение согласуется с уже принятым D-006 в [зарплатном реестре](../maintenance/payroll-redesign.md):
+аналитическая и зарплатная проекции возврата независимы.
 Время решения записано по дате среды рабочего чата; исходная неделя ещё закрывается по timezone
 каждого магазина, а не по дате чата.
 
@@ -56,9 +60,15 @@ superseded_by: null
 
 ## Реализация и безопасный переход
 
-В текущем проверяемом коде `ReturnSyncPersistence` всё ещё выбирает сотрудника оригинала,
-а экспериментальная historical projection наследует и его membership timestamp. Это известное
-расхождение с новым решением, а не подтверждённая работа нового правила.
+В текущем проверяемом коде `ReturnSyncPersistence` всё ещё выбирает сотрудника оригинала.
+Локальная экспериментальная historical projection теперь читает сотрудника возврата по
+сохранённому `attach_source_employee_external_id`, с точным connection/source scope и собственным
+timestamp возврата. Она не меняет общий `employee_id`, payroll или гарантийные allocations.
+Отсутствующий/неразрешённый сотрудник остаётся UNKNOWN, без fallback на оригинал. Поздняя
+привязка или удаление оригинала не меняют аналитического автора.
+
+Projection ещё не подключена к финансовым/структурным/attach агрегатам. Это известное
+расхождение с новым решением, а не подтверждённая работа нового правила в пользовательских KPI.
 
 Перед реализацией проверить, где общий `employee_id` используется зарплатой, гарантией,
 рейтингом, weekly и reconciliation. Если общий факт менять небезопасно, аналитическая
