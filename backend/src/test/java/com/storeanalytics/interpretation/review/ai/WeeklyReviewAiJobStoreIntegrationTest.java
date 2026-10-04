@@ -9,7 +9,9 @@ import com.storeanalytics.interpretation.generation.LlmProviderPreflight;
 import com.storeanalytics.interpretation.generation.LlmProviderRequest;
 import com.storeanalytics.interpretation.generation.LlmProviderResponseReceipt;
 import com.storeanalytics.interpretation.review.SellerWeeklyReviewProperties;
+import com.storeanalytics.interpretation.review.SellerWeeklyV3AssemblerTest;
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -168,6 +170,35 @@ class WeeklyReviewAiJobStoreIntegrationTest {
                 sellerStore.enqueueApproved(correctedSeller, "YANDEX", "synthetic-model",
                         1, NOW, Duration.ofHours(2)));
         assertThat(sellerStore.findBySnapshot(correctedSeller)).isPresent();
+    }
+
+    @Test
+    void startsExactlyOneProviderAttemptForActiveSellerV26Job() {
+        UUID storeId = addStore("AI seller v26 attempt");
+        UUID legacySnapshot = addSnapshot(storeId, LocalDate.of(2026, 8, 17), 1);
+        UUID sellerSnapshot = addSellerRevision(legacySnapshot);
+        WeeklyReviewAiJobStore sellerStore = sellerStore();
+        WeeklyReviewAiJob pending = sellerStore.enqueueApproved(
+                sellerSnapshot, "YANDEX", "synthetic-model", 1,
+                NOW, Duration.ofHours(2));
+        jdbcTemplate.update("""
+                UPDATE weekly_review_ai_jobs
+                SET status = 'RUNNING', lease_owner = 'seller-worker', lease_until = ?
+                WHERE id = ?
+                """, Timestamp.from(NOW.plus(Duration.ofMinutes(4))), pending.id());
+        WeeklyReviewAiJob claimed = sellerStore.findById(pending.id()).orElseThrow();
+        assertThat(claimed.id()).isEqualTo(pending.id());
+
+        SellerWeeklyReviewAiInput input = new SellerWeeklyReviewAiInputCompactor()
+                .compact(SellerWeeklyV3AssemblerTest.syntheticResponse());
+        WeeklyReviewAiAttempt attempt = sellerStore.startAttempt(
+                claimed, "seller-worker", prepared(claimed, input), preflight(), NOW);
+
+        assertThat(attempt.attemptNumber()).isOne();
+        assertThat(sellerStore.findById(pending.id()).orElseThrow().attemptCount()).isOne();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM weekly_review_ai_attempts WHERE job_id = ?",
+                Integer.class, pending.id())).isOne();
     }
 
     @Test
@@ -516,9 +547,9 @@ class WeeklyReviewAiJobStoreIntegrationTest {
 
     private PreparedWeeklyReviewAiRequest prepared(
             WeeklyReviewAiJob job,
-            WeeklyReviewAiInput input
+            WeeklyReviewAiEditorialInput input
     ) {
-        String inputJson = "{\"contractVersion\":2}";
+        String inputJson = new WeeklyReviewAiContentCodec().canonical(input);
         LlmProviderRequest request = new LlmProviderRequest(
                 job.id(), job.providerCode(), job.requestedModel(), "system",
                 inputJson, "{}", new BigDecimal("0.1"), 1400,

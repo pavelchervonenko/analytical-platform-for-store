@@ -443,8 +443,8 @@ public class WeeklyReviewAiJobStore {
             Instant now
     ) {
         WeeklyReviewAiJob claimed = requireNonNull(job, "job");
-        require(WeeklyReviewAiContract.isActive(
-                        claimed.promptVersion(), claimed.contentSchemaVersion()),
+        require(promptVersion.equals(claimed.promptVersion())
+                        && claimed.contentSchemaVersion() == WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
                 "Weekly review AI job contract is not active");
         String leaseOwner = requireText(owner, "owner");
         PreparedWeeklyReviewAiRequest request = requireNonNull(
