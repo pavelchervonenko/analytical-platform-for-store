@@ -1,7 +1,7 @@
 ---
 doc_schema: 1
 doc_type: decision
-status: accepted
+status: superseded
 owner: product
 audience:
   - developer
@@ -20,10 +20,14 @@ required_reviewers:
   - integrations
   - backend
 supersedes: []
-superseded_by: null
+superseded_by: docs/decisions/ADR-0006-livesklad-return-employee-analytics.md
 ---
 
 # ADR-0001: Атрибуция возврата сотруднику исходной продажи
+
+Решение заменено для аналитических показателей [ADR-0006](ADR-0006-livesklad-return-employee-analytics.md).
+Текст ниже сохраняет прежнее решение и реализованное поведение; новое правило пока требует
+отдельной реализации и проверки перехода, а не считается уже применённым к production.
 
 ## Контекст
 

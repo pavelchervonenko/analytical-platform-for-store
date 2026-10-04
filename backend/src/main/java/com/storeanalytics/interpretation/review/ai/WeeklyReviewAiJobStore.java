@@ -5,6 +5,7 @@ import static com.storeanalytics.common.validation.ModelValidation.requireNonNul
 import static com.storeanalytics.common.validation.ModelValidation.requireText;
 
 import com.storeanalytics.interpretation.generation.LlmProviderException;
+import com.storeanalytics.interpretation.generation.LlmProviderOutcome;
 import com.storeanalytics.interpretation.generation.LlmProviderPreflight;
 import com.storeanalytics.interpretation.generation.LlmProviderResponseReceipt;
 import com.storeanalytics.common.exception.PreconditionFailedException;
@@ -152,7 +153,8 @@ public class WeeklyReviewAiJobStore {
         if (reportContractVersion != 3) {
             throw new IllegalStateException("Automatic seller AI requires the seller contract");
         }
-        require(maxAttempts == 1, "Automatic seller AI allows exactly one provider attempt");
+        require(maxAttempts >= 1 && maxAttempts <= 2,
+                "Automatic seller AI allows at most two bounded provider attempts");
         if (!TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("Automatic seller AI requires one writable transaction");
         }
@@ -518,7 +520,8 @@ public class WeeklyReviewAiJobStore {
         transitionAfterFailure(new FailureTransition(
                 job,
                 owner,
-                problem.isRetryable(),
+                problem.isRetryable()
+                        && problem.outcome() != LlmProviderOutcome.UNKNOWN,
                 "PROVIDER_" + problem.failureCode(),
                 problem.getMessage(),
                 List.of(),
@@ -835,7 +838,7 @@ public class WeeklyReviewAiJobStore {
         jdbcTemplate.update("""
                 UPDATE weekly_review_ai_jobs
                 SET status = CASE
-                        WHEN attempt_count >= max_attempts OR deadline_at <= ?
+                        WHEN attempt_count > 0 OR deadline_at <= ?
                             THEN 'FAILED'
                         ELSE 'RETRY_WAIT'
                     END,

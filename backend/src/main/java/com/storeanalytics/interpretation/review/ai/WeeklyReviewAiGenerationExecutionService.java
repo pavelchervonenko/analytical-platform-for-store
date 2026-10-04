@@ -66,11 +66,12 @@ public class WeeklyReviewAiGenerationExecutionService {
         LlmProviderClient provider;
         LlmProviderPreflight preflight;
         try {
-            if (seller && !sellerCurrent(snapshot)) {
+            if (seller && !sellerPreparedCurrent(snapshot)) {
                 jobStore.failClaimed(job, owner, "SNAPSHOT_NOT_CURRENT",
                         "Seller source changed before provider execution", clock.instant());
                 return;
             }
+            now = clock.instant();
             prepared = support.requestFactory().prepare(
                     new WeeklyReviewAiProviderRequestCommand(
                             job.id(),
@@ -181,6 +182,17 @@ public class WeeklyReviewAiGenerationExecutionService {
             return sellerGuard != null && sellerGuard.isCurrent(snapshot);
         } catch (RuntimeException unavailableSource) {
             // A failed freshness read must not lose an already billed provider receipt.
+            return false;
+        }
+    }
+
+    private boolean sellerPreparedCurrent(PersistedWeeklyReview snapshot) {
+        if (sellerCurrent(snapshot)) {
+            return true;
+        }
+        try {
+            return sellerGuard != null && sellerGuard.refreshIfSameSnapshot(snapshot, clock.instant());
+        } catch (RuntimeException unavailableSource) {
             return false;
         }
     }

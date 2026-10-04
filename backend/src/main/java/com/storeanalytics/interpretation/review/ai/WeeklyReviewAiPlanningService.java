@@ -9,9 +9,13 @@ import java.time.Clock;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class WeeklyReviewAiPlanningService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(WeeklyReviewAiPlanningService.class);
 
     private final WeeklyReviewAiJobStore jobStore;
     private final WeeklyReviewAiGenerationProperties properties;
@@ -65,22 +69,32 @@ public class WeeklyReviewAiPlanningService {
         int created = 0;
         UUID next = cursor;
         for (var target : page) {
-            var review = sellerReviews.current(target.storeId());
-            if (review.freshness() == SellerWeeklyReviewView.Freshness.CURRENT
-                    && (review.report().reportState() == ReportState.READY
-                        || review.report().reportState() == ReportState.PARTIAL)
-                    && review.report().aiEnhancement().state()
-                        != com.storeanalytics.interpretation.review.WeeklyReviewResponse.AiState.READY) {
-                UUID snapshotId = UUID.fromString(review.report().provenance().snapshotPublicId());
-                if (jobStore.enqueueAutomaticSellerWeek(snapshotId, properties.providerCode(),
-                        yandexProperties.getModelUri(), 1,
-                        clock.instant(), properties.jobDeadline())) {
-                    created++;
-                }
+            try {
+                created += planSeller(target.storeId());
+            } catch (RuntimeException failure) {
+                LOGGER.error("Seller AI planning deferred store; store_id={} failure_type={}",
+                        target.storeId(), failure.getClass().getSimpleName());
             }
             next = target.storeId();
         }
         cursor = page.size() < properties.batchSize() ? null : next;
         return created;
+    }
+
+    private int planSeller(UUID storeId) {
+        var review = sellerReviews.current(storeId);
+        if (review.freshness() == SellerWeeklyReviewView.Freshness.CURRENT
+                && (review.report().reportState() == ReportState.READY
+                    || review.report().reportState() == ReportState.PARTIAL)
+                && review.report().aiEnhancement().state()
+                    != com.storeanalytics.interpretation.review.WeeklyReviewResponse.AiState.READY) {
+            UUID snapshotId = UUID.fromString(review.report().provenance().snapshotPublicId());
+            if (jobStore.enqueueAutomaticSellerWeek(snapshotId, properties.providerCode(),
+                    yandexProperties.getModelUri(), properties.maxProviderCalls(),
+                    clock.instant(), properties.jobDeadline())) {
+                return 1;
+            }
+        }
+        return 0;
     }
 }

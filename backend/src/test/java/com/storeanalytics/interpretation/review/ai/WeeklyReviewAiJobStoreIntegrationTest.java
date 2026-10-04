@@ -6,20 +6,27 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.storeanalytics.common.exception.PreconditionFailedException;
 import com.storeanalytics.interpretation.generation.LlmProviderPreflight;
+import com.storeanalytics.interpretation.generation.LlmProviderException;
+import com.storeanalytics.interpretation.generation.LlmProviderOutcome;
 import com.storeanalytics.interpretation.generation.LlmProviderRequest;
 import com.storeanalytics.interpretation.generation.LlmProviderResponseReceipt;
 import com.storeanalytics.interpretation.review.SellerWeeklyReviewProperties;
 import com.storeanalytics.interpretation.review.SellerWeeklyV3AssemblerTest;
+import com.storeanalytics.interpretation.validation.LlmValidationOutcome;
+import com.storeanalytics.interpretation.validation.LlmValidationViolation;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
+import java.util.List;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -153,9 +160,9 @@ class WeeklyReviewAiJobStoreIntegrationTest {
         WeeklyReviewAiJobStore sellerStore = sellerStore();
 
         assertThatThrownBy(() -> sellerStore.enqueueAutomaticSellerWeek(firstSeller,
-                "YANDEX", "synthetic-model", 2, NOW, Duration.ofHours(2)))
+                "YANDEX", "synthetic-model", 3, NOW, Duration.ofHours(2)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("exactly one provider attempt");
+                .hasMessageContaining("at most two bounded provider attempts");
         assertThat(automaticSellerEnqueue(sellerStore, firstSeller)).isTrue();
         UUID firstJob = sellerStore.findBySnapshot(firstSeller).orElseThrow().id();
         jdbcTemplate.update("UPDATE weekly_review_ai_jobs SET status = 'FAILED' WHERE id = ?", firstJob);
@@ -293,6 +300,10 @@ class WeeklyReviewAiJobStoreIntegrationTest {
             assertThat(count).isOne();
         } finally {
             executor.shutdownNow();
+            jdbcTemplate.update("""
+                    UPDATE weekly_review_ai_jobs SET status = 'FAILED'
+                    WHERE snapshot_id IN (?, ?) AND status IN ('PENDING', 'RETRY_WAIT')
+                    """, firstSeller, correctedSeller);
         }
     }
 
@@ -324,6 +335,10 @@ class WeeklyReviewAiJobStoreIntegrationTest {
                     .isEqualTo(1);
         } finally {
             executor.shutdownNow();
+            jdbcTemplate.update("""
+                    UPDATE weekly_review_ai_jobs SET status = 'FAILED'
+                    WHERE snapshot_id = ? AND status IN ('PENDING', 'RETRY_WAIT')
+                    """, snapshotId);
         }
     }
 
@@ -525,7 +540,7 @@ class WeeklyReviewAiJobStoreIntegrationTest {
     }
 
     @Test
-    void expiredLeaseClosesStartedAttemptBeforeSafeRetry() {
+    void expiredLeaseAfterProviderStartRecordsUnknownOutcomeWithoutBlindRetry() {
         UUID snapshotId = addSnapshot(
                 addStore("AI lease"), LocalDate.of(2026, 8, 17), 1
         );
@@ -545,17 +560,111 @@ class WeeklyReviewAiJobStoreIntegrationTest {
                 pending.id()
         );
 
-        WeeklyReviewAiJob reclaimed = store.claimNext(
+        assertThat(store.claimNext(
                 "worker-new", Duration.ofMinutes(4), NOW.plusSeconds(1)
-        ).orElseThrow();
+        )).isEmpty();
 
-        assertThat(reclaimed.id()).isEqualTo(pending.id());
-        assertThat(reclaimed.attemptCount()).isOne();
+        WeeklyReviewAiJob failed = store.findById(pending.id()).orElseThrow();
+        assertThat(failed.status()).isEqualTo(WeeklyReviewAiJobStatus.FAILED);
+        assertThat(failed.attemptCount()).isOne();
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT status FROM weekly_review_ai_attempts WHERE id = ?",
                 String.class,
                 attempt.id()
         )).isEqualTo("FAILED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT provider_outcome FROM weekly_review_ai_attempts WHERE id = ?",
+                String.class, attempt.id())).isEqualTo("UNKNOWN");
+    }
+
+    @Test
+    void expiredLeaseBeforeProviderStartCanBeReclaimedWithoutSpend() {
+        UUID snapshot = addSnapshot(addStore("AI free lease recovery"), LocalDate.of(2026, 8, 17), 1);
+        WeeklyReviewAiJob pending = store.enqueue(snapshot, "YANDEX", "synthetic-model", 2,
+                NOW, Duration.ofHours(2));
+        store.claimNext("old", Duration.ofMinutes(4), NOW).orElseThrow();
+        WeeklyReviewAiJob recovered = store.claimNext("new", Duration.ofMinutes(4), NOW.plusSeconds(241))
+                .orElseThrow();
+        assertThat(recovered.id()).isEqualTo(pending.id());
+        assertThat(recovered.attemptCount()).isZero();
+        assertThat(recovered.leaseOwner()).isEqualTo("new");
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM weekly_review_ai_attempts WHERE job_id = ?",
+                Integer.class, pending.id())).isZero();
+    }
+
+    @Test
+    void automaticSellerSemanticRetryIsBoundedInsideOneWeeklyJob() {
+        UUID legacy = addSnapshot(addStore("AI automatic bounded retry"), LocalDate.of(2026, 8, 17), 1);
+        UUID snapshot = addSellerRevision(legacy);
+        WeeklyReviewAiJobStore sellerStore = sellerStore();
+        Boolean planned = new TransactionTemplate(transactionManager).execute(status ->
+                sellerStore.enqueueAutomaticSellerWeek(
+                        snapshot, "YANDEX", "synthetic-model", 2, NOW, Duration.ofHours(2)));
+        assertThat(planned).isTrue();
+        SellerWeeklyReviewAiInput input = new SellerWeeklyReviewAiInputCompactor()
+                .compact(SellerWeeklyV3AssemblerTest.syntheticResponse());
+        WeeklyReviewAiJob first = sellerStore.claimNext("first", Duration.ofMinutes(4), NOW).orElseThrow();
+        WeeklyReviewAiAttempt attempt = sellerStore.startAttempt(
+                first, "first", prepared(first, input), preflight(), NOW);
+        WeeklyReviewAiValidationResult invalid = WeeklyReviewAiValidationResult.invalid(
+                LlmValidationOutcome.SEMANTIC_INVALID,
+                List.of(new LlmValidationViolation(
+                        "SYNTHETIC_INVALID", "$", null)));
+        sellerStore.recordValidationFailure(first, attempt, "first", receipt("{}"), invalid,
+                Duration.ofSeconds(30), NOW.plusSeconds(1));
+        WeeklyReviewAiJob second = sellerStore.claimNext("second", Duration.ofMinutes(4), NOW.plusSeconds(32))
+                .orElseThrow();
+        assertThat(second.id()).isEqualTo(first.id());
+        WeeklyReviewAiAttempt secondAttempt = sellerStore.startAttempt(second, "second", prepared(second, input),
+                preflight(), NOW.plusSeconds(32));
+        sellerStore.recordValidationFailure(second, secondAttempt, "second", receipt("{}"), invalid,
+                Duration.ofSeconds(30), NOW.plusSeconds(33));
+        assertThat(sellerStore.findById(first.id()).orElseThrow().status()).isEqualTo(WeeklyReviewAiJobStatus.FAILED);
+        assertThat(sellerStore.findById(first.id()).orElseThrow().attemptCount()).isEqualTo(2);
+        assertThat(sellerStore.claimNext("third", Duration.ofMinutes(4), NOW.plusSeconds(64))).isEmpty();
+        assertThat(automaticSellerEnqueue(sellerStore, addSellerRevision(snapshot))).isFalse();
+    }
+
+    @ParameterizedTest
+    @EnumSource(LlmProviderOutcome.class)
+    void unknownProviderFailureDoesNotRetryButKnownRetryableFailureDoes(LlmProviderOutcome outcome) {
+        UUID snapshot = addSnapshot(addStore("AI failure outcomes " + outcome), LocalDate.of(2026, 8, 17), 1);
+        store.enqueue(snapshot, "YANDEX", "synthetic-model", 2, NOW, Duration.ofHours(2));
+        WeeklyReviewAiJob claim = store.claimNext("worker", Duration.ofMinutes(4), NOW).orElseThrow();
+        WeeklyReviewAiAttempt attempt = store.startAttempt(claim, "worker", prepared(claim, input()), preflight(), NOW);
+        store.recordProviderFailure(claim, attempt, "worker", retryableFailure(outcome), Duration.ofSeconds(30), NOW);
+        assertThat(store.findById(claim.id()).orElseThrow().status()).isEqualTo(
+                outcome == LlmProviderOutcome.UNKNOWN
+                        ? WeeklyReviewAiJobStatus.FAILED : WeeklyReviewAiJobStatus.RETRY_WAIT);
+    }
+
+    private LlmProviderException retryableFailure(LlmProviderOutcome outcome) {
+        return new LlmProviderException("Synthetic failure", null) {
+            @Override
+            public String failureCode() {
+                return "SYNTHETIC";
+            }
+
+            @Override
+            public LlmProviderOutcome outcome() {
+                return outcome;
+            }
+
+            @Override
+            public Integer httpStatus() {
+                return null;
+            }
+
+            @Override
+            public Duration retryAfter() {
+                return null;
+            }
+
+            @Override
+            public boolean isRetryable() {
+                return true;
+            }
+        };
     }
 
     private UUID addLegacyJob(UUID snapshotId, Instant createdAt) {

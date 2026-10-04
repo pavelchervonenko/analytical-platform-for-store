@@ -274,6 +274,31 @@ class WeeklyReviewAiGenerationExecutionServiceTest {
     }
 
     @Test
+    void sourceRevisionChurnMayRefreshTheSameSnapshotBeforeTheOnlyProviderCall() {
+        WeeklyReviewAiJob sellerJob = sellerJob();
+        PersistedWeeklyReviewV3Snapshot snapshot = mock(PersistedWeeklyReviewV3Snapshot.class);
+        SellerWeeklyReviewAiFreshnessGuard guard = mock(SellerWeeklyReviewAiFreshnessGuard.class);
+        PreparedWeeklyReviewAiRequest request = prepared(sellerJob);
+        WeeklyReviewAiAttempt attempt = new WeeklyReviewAiAttempt(UUID.randomUUID(), sellerJob.id(), 1, NOW);
+        LlmProviderResponseReceipt response = receipt(validResponse());
+        WeeklyReviewAiValidationResult valid = semanticValid();
+        when(snapshotStore.findV3ById(sellerJob.snapshotId())).thenReturn(Optional.of(snapshot));
+        when(guard.isCurrent(snapshot)).thenReturn(false, true, true);
+        when(guard.refreshIfSameSnapshot(snapshot, NOW)).thenReturn(true);
+        when(requestFactory.prepare(any())).thenReturn(request);
+        when(provider.preflight(request.request())).thenReturn(preflight);
+        when(jobStore.startAttempt(sellerJob, OWNER, request, preflight, NOW)).thenReturn(attempt);
+        when(provider.generate(request.request())).thenReturn(response);
+        when(validator.validate(request.input(), response.responseBody())).thenReturn(valid);
+
+        sellerService(guard).execute(sellerJob, OWNER);
+
+        verify(guard).refreshIfSameSnapshot(snapshot, NOW);
+        verify(provider).generate(request.request());
+        verify(completionService).complete(sellerJob, attempt, OWNER, request, response, valid, NOW);
+    }
+
+    @Test
     void sellerJobFailsClosedWhenFreshnessReadFails() {
         WeeklyReviewAiJob sellerJob = sellerJob();
         PersistedWeeklyReviewV3Snapshot sellerSnapshot = mock(PersistedWeeklyReviewV3Snapshot.class);

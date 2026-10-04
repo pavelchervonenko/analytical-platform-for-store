@@ -69,6 +69,11 @@ enqueue заново из-за отсутствия немедленного р�
 режима и необходимых retries: [ADR-0005](../decisions/ADR-0005-weekly-ai-activation-and-retries.md),
 пакеты rollout: [production-план](../maintenance/weekly-ai-production-automation-plan.md).
 
+При UNKNOWN provider outcome или LEASE_EXPIRED после первой attempt сохранять terminal job
+и проверять receipt/стоимость. Не создавать новый job для обхода остановки. Retry cap применяется
+к известному retryable отказу и semantic rejection внутри той же задачи, с backoff; исходное
+exact approval продолжает ограничивать число разрешённых attempts.
+
 - Операция пишет job/attempt/enrichment; enrichment после публикации не удаляется.
 - Внешний эффект — платный outbound request в YandexGPT.
 - Нужны operator approval точного snapshot и отдельное явное approval exact case/payload hash,

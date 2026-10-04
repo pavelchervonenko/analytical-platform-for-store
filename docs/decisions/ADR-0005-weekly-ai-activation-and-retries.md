@@ -56,6 +56,7 @@ superseded_by: null
 ## Состояние реализации и проверка
 
 Это согласованный продуктовый контракт, не подтверждение работы автоматического режима.
-Текущий код сохраняет один automatic job и одну attempt; расширение retry policy, period backlog
-и temporal aggregates ещё требуется. Baseline не объявляется активированным этим документом.
+Локальный candidate сохраняет один automatic job и поддерживает ограниченные attempts по
+конфигурации с запретом UNKNOWN retry. Period backlog и temporal aggregates ещё требуются;
+полный release gate не завершён. Baseline не объявляется активированным этим документом.
 Проверки перечислены в [плане](../maintenance/weekly-ai-production-automation-plan.md).
