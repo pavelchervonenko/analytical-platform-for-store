@@ -107,5 +107,11 @@ canary не переносятся на другую неделю или нов�
   остаётся прежним; Checkstyle main/test и documentation gates проходят. Это проверка
   независимой projection, не всего нового финансового контура.
 - Production не менялся; постоянная автоматическая публикация ещё не готова к включению.
+- Общая локальная контрольная точка сохранена в
+  [sanitized evidence](../history/audits/2026/10/weekly-ai-local-regression-checkpoint.md).
+  Полный backend run: 1 896 tests, один `ContainerLaunchException` при инициализации retention
+  integration test, без skips. Отдельный повтор всех 4 retention-тестов прошёл без изменения
+  retention-кода. Frontend check (61 test file), generated OpenAPI, security и supply-chain
+  проверки прошли. Это не зелёный полный release gate окончательного объединённого кода.
 - Решения о forward-only baseline и необходимых retries зафиксированы в ADR-0005; конкретный
   timestamp baseline и production-конфигурация ещё не активированы.

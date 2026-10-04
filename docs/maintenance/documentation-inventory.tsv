@@ -1,4 +1,5 @@
 path	tracking	kind	owner	migration_status	action	target	verification
+docs/history/audits/2026/10/weekly-ai-local-regression-checkpoint.md	tracked	local-regression-evidence	backend	historical	keep	docs/history/audits/2026/10/weekly-ai-local-regression-checkpoint.md	Preserve failed full gate and passing isolated checks without claiming release approval
 AGENTS.md	tracked	working-policy	project	current	keep	AGENTS.md	Keep documentation impact rules synchronized with lifecycle policy and CI
 BACKEND_STARTUP_SYNC_REGRESSION_AUDIT.md	removed	audit-handoff	backend	removed	removed	docs/history/audits/2026/07/backend/BACKEND_STARTUP_SYNC_REGRESSION_AUDIT.md	fragment-map=docs/maintenance/residual-documentation-migration-map.md;reviewer-sign-off=docs/history/audits/2026/08/residual-documentation-migration-signoff.md
 BACKEND_STARTUP_SYNC_REGRESSION_AUDIT_RESULT.md	removed	audit-result	backend	removed	removed	docs/history/audits/2026/07/backend/BACKEND_STARTUP_SYNC_REGRESSION_AUDIT_RESULT.md	fragment-map=docs/maintenance/residual-documentation-migration-map.md;reviewer-sign-off=docs/history/audits/2026/08/residual-documentation-migration-signoff.md
