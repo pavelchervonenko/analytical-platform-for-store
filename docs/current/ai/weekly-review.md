@@ -499,6 +499,24 @@ Snapshot row lock и уникальность job закрывают гонку 
 
 ## Неизменяемость и повторный запуск
 
+### Fencing перед платной попыткой
+
+Начало provider attempt атомарно проверяет status, владельца, неистёкший lease, deadline и
+счётчик attempts именно полученного claim. Один claim нельзя повторно использовать для второго
+запроса, даже если retry cap допускает две попытки; повтор требует нового claim. Потеря lease
+останавливает worker до provider call, не переводя задачу другого владельца в FAILED.
+Heartbeat не оживляет истёкший lease, не сокращает действующий и не продлевает его за deadline.
+Один локальный runner сериализует runNext, но heartbeat работает независимо от выполнения.
+
+Закрытая неделя имеет явную календарную идентичность Monday–Sunday в timezone магазина;
+closure наступает в полночь следующего понедельника, включая DST. Для будущего temporal
+сравнения authoritative baseline должен покрывать начало предыдущей недели, не только текущей.
+Сам этот календарный тип не включает period backlog или temporal aggregates.
+
+Продуктовое уточнение baseline/retries записано в
+[ADR-0005](../../decisions/ADR-0005-weekly-ai-activation-and-retries.md). Оно не включает
+автоматический planner и не меняет действующий runtime retry cap.
+
 `weekly_review_ai_enrichments` имеет уникальность по snapshot/prompt/schema и DB trigger против
 update/delete. Повторная запись с теми же input/content hashes идемпотентна; другое содержимое для
 того же ключа отклоняется.

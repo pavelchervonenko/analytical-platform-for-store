@@ -32,13 +32,9 @@ import com.storeanalytics.interpretation.review.WeeklyReviewResponse.Unit;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.VersionSet;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.DayOfWeek;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
-import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Locale;
 
@@ -68,13 +64,8 @@ public final class WeeklyReviewPolicyV1 {
     ).withLocale(Locale.forLanguageTag("ru-RU"));
 
     public PeriodContext period(Instant now, String timezone) {
-        ZoneId zone = ZoneId.of(timezone);
-        LocalDate currentWeekStart = LocalDate.ofInstant(now, zone)
-                .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-        DateRange current = new DateRange(
-                currentWeekStart.minusWeeks(1),
-                currentWeekStart.minusDays(1)
-        );
+        ClosedSellerWeek week = ClosedSellerWeek.latest(now, timezone);
+        DateRange current = new DateRange(week.start(), week.end());
         DateRange previous = new DateRange(
                 current.start().minusWeeks(1),
                 current.end().minusWeeks(1)

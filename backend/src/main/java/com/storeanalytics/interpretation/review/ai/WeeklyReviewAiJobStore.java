@@ -461,15 +461,20 @@ public class WeeklyReviewAiJobStore {
                 UPDATE weekly_review_ai_jobs
                 SET attempt_count = attempt_count + 1
                 WHERE id = ? AND status = 'RUNNING' AND lease_owner = ?
+                  AND lease_until > ? AND attempt_count = ?
                   AND attempt_count < max_attempts AND deadline_at > ?
                 RETURNING attempt_count
                 """,
                 (resultSet, rowNumber) -> resultSet.getInt(1),
                 claimed.id(),
                 leaseOwner,
+                Timestamp.from(timestamp),
+                claimed.attemptCount(),
                 Timestamp.from(timestamp)
         );
-        require(numbers.size() == 1, "Weekly review AI attempt cannot start");
+        if (numbers.size() != 1) {
+            throw new WeeklyReviewAiLeaseLostException();
+        }
         UUID attemptId = UUID.randomUUID();
         jdbcTemplate.update("""
                 INSERT INTO weekly_review_ai_attempts (
@@ -636,16 +641,20 @@ public class WeeklyReviewAiJobStore {
             Duration leaseDuration,
             Instant now
     ) {
+        Instant timestamp = requireNonNull(now, "now");
         return jdbcTemplate.update("""
                 UPDATE weekly_review_ai_jobs
-                SET lease_until = ?
+                SET lease_until = LEAST(deadline_at, GREATEST(lease_until, ?))
                 WHERE id = ? AND status = 'RUNNING' AND lease_owner = ?
+                  AND lease_until > ? AND deadline_at > ?
                 """,
-                Timestamp.from(requireNonNull(now, "now").plus(
+                Timestamp.from(timestamp.plus(
                         positive(leaseDuration, "leaseDuration")
                 )),
                 requireNonNull(jobId, "jobId"),
-                requireText(owner, "owner")
+                requireText(owner, "owner"),
+                Timestamp.from(timestamp),
+                Timestamp.from(timestamp)
         ) == 1;
     }
 

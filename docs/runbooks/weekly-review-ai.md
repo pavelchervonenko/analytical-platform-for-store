@@ -62,6 +62,13 @@ production read-only evidence и отдельное разрешение exact c
 
 ## Влияние и требуемая авторизация
 
+Потерявший lease worker не может начать provider attempt; recovery выполняет штатный lifecycle,
+а не ручная правка статуса. Heartbeat после истечения lease не является восстановлением права
+на запрос. При диагностике повторного запуска сначала сверить job/attempt/receipt, не выполнять
+enqueue заново из-за отсутствия немедленного результата. Уточнение будущего автоматического
+режима и необходимых retries: [ADR-0005](../decisions/ADR-0005-weekly-ai-activation-and-retries.md),
+пакеты rollout: [production-план](../maintenance/weekly-ai-production-automation-plan.md).
+
 - Операция пишет job/attempt/enrichment; enrichment после публикации не удаляется.
 - Внешний эффект — платный outbound request в YandexGPT.
 - Нужны operator approval точного snapshot и отдельное явное approval exact case/payload hash,

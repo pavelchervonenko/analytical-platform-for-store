@@ -34,3 +34,4 @@ superseded_by: null
 
 - [ADR-0003: независимая атрибуция гарантий](ADR-0003-warranty-attach-attribution.md) — accepted, implemented за настройкой включения.
 - [ADR-0004: исторический состав и восстановление seller-недель](ADR-0004-seller-weekly-historical-membership.md) — accepted, реализована только защита автоматических AI-вызовов; temporal/backlog остаются отдельным gate.
+- [ADR-0005: начало истории и необходимые повторы недельного ИИ](ADR-0005-weekly-ai-activation-and-retries.md) — accepted, уточняет baseline и retry policy без немедленной production-активации.

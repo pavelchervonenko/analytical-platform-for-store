@@ -26,7 +26,7 @@ public class WeeklyReviewAiJobRunner {
         this.clock = clock;
     }
 
-    public Optional<WeeklyReviewAiJob> runNext(String owner) {
+    public synchronized Optional<WeeklyReviewAiJob> runNext(String owner) {
         Optional<WeeklyReviewAiJob> claimed = jobStore.claimNext(
                 owner, properties.leaseDuration(), clock.instant()
         );

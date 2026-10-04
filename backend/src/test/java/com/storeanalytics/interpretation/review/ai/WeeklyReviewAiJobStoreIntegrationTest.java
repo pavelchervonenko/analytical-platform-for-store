@@ -202,6 +202,64 @@ class WeeklyReviewAiJobStoreIntegrationTest {
     }
 
     @Test
+    void expiredSellerLeaseCannotStartPaidAttemptOrBeResurrectedByHeartbeat() {
+        UUID legacy = addSnapshot(addStore("AI expired seller lease"), LocalDate.of(2026, 8, 17), 1);
+        WeeklyReviewAiJobStore sellerStore = sellerStore();
+        WeeklyReviewAiJob pending = sellerStore.enqueueApproved(addSellerRevision(legacy),
+                "YANDEX", "synthetic-model", 1, NOW, Duration.ofHours(2));
+        jdbcTemplate.update("""
+                UPDATE weekly_review_ai_jobs SET status = 'RUNNING', lease_owner = 'expired', lease_until = ?
+                WHERE id = ?
+                """, Timestamp.from(NOW), pending.id());
+        WeeklyReviewAiJob claimed = sellerStore.findById(pending.id()).orElseThrow();
+        SellerWeeklyReviewAiInput input = new SellerWeeklyReviewAiInputCompactor()
+                .compact(SellerWeeklyV3AssemblerTest.syntheticResponse());
+
+        assertThat(sellerStore.heartbeat(pending.id(), "expired", Duration.ofMinutes(4), NOW)).isFalse();
+        assertThatThrownBy(() -> sellerStore.startAttempt(claimed, "expired",
+                prepared(claimed, input), preflight(), NOW)).isInstanceOf(WeeklyReviewAiLeaseLostException.class);
+        assertThat(sellerStore.findById(pending.id()).orElseThrow().attemptCount()).isZero();
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM weekly_review_ai_attempts WHERE job_id = ?",
+                Integer.class, pending.id())).isZero();
+    }
+
+    @Test
+    void heartbeatNeverShortensLeaseAndNeverExtendsPastDeadline() {
+        UUID snapshot = addSnapshot(addStore("AI heartbeat boundaries"), LocalDate.of(2026, 8, 17), 1);
+        WeeklyReviewAiJob pending = store.enqueue(snapshot, "YANDEX", "synthetic-model", 1,
+                NOW, Duration.ofHours(2));
+        jdbcTemplate.update("""
+                UPDATE weekly_review_ai_jobs SET status = 'RUNNING', lease_owner = 'worker', lease_until = ?
+                WHERE id = ?
+                """, Timestamp.from(NOW.plusSeconds(240)), pending.id());
+        assertThat(store.heartbeat(pending.id(), "worker", Duration.ofSeconds(60), NOW)).isTrue();
+        assertThat(store.findById(pending.id()).orElseThrow().leaseUntil()).isEqualTo(NOW.plusSeconds(240));
+        assertThat(store.heartbeat(pending.id(), "other-owner", Duration.ofHours(3), NOW)).isFalse();
+        assertThat(store.heartbeat(pending.id(), "worker", Duration.ofHours(3), NOW)).isTrue();
+        assertThat(store.findById(pending.id()).orElseThrow().leaseUntil()).isEqualTo(pending.deadlineAt());
+        assertThat(store.heartbeat(pending.id(), "worker", Duration.ofMinutes(4), pending.deadlineAt())).isFalse();
+    }
+
+    @Test
+    void repeatedStartWithTheSameClaimCannotConsumeASecondPaidAttempt() {
+        UUID snapshot = addSnapshot(addStore("AI duplicate attempt fence"), LocalDate.of(2026, 8, 17), 1);
+        WeeklyReviewAiJob pending = store.enqueue(snapshot, "YANDEX", "synthetic-model", 2,
+                NOW, Duration.ofHours(2));
+        jdbcTemplate.update("""
+                UPDATE weekly_review_ai_jobs SET status = 'RUNNING', lease_owner = 'worker', lease_until = ?
+                WHERE id = ?
+                """, Timestamp.from(NOW.plusSeconds(240)), pending.id());
+        WeeklyReviewAiJob claimed = store.findById(pending.id()).orElseThrow();
+        PreparedWeeklyReviewAiRequest request = prepared(claimed, input());
+        assertThat(store.startAttempt(claimed, "worker", request, preflight(), NOW).attemptNumber()).isOne();
+        assertThatThrownBy(() -> store.startAttempt(claimed, "worker", request, preflight(), NOW))
+                .isInstanceOf(WeeklyReviewAiLeaseLostException.class);
+        assertThat(store.findById(pending.id()).orElseThrow().attemptCount()).isOne();
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM weekly_review_ai_attempts WHERE job_id = ?",
+                Integer.class, pending.id())).isOne();
+    }
+
+    @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void concurrentAutomaticSellerAiAcrossRevisionsCreatesOneJob() throws Exception {
         UUID storeId = addStore("AI seller weekly concurrent limit");

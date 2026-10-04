@@ -122,6 +122,9 @@ public class WeeklyReviewAiGenerationExecutionService {
             attempt = jobStore.startAttempt(
                     job, owner, prepared, preflight, clock.instant()
             );
+        } catch (WeeklyReviewAiLeaseLostException lost) {
+            // No provider call happened. The current owner/recovery path alone may transition the job.
+            return;
         } catch (WeeklyReviewAiBudgetException failure) {
             jobStore.failClaimed(
                     job, owner, "PREFLIGHT_" + failure.code(),

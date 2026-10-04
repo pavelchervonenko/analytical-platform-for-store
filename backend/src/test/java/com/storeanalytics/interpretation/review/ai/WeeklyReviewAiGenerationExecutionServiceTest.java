@@ -221,6 +221,18 @@ class WeeklyReviewAiGenerationExecutionServiceTest {
     }
 
     @Test
+    void lostLeaseStopsBeforeProviderWithoutTouchingTheNewOwnersJob() {
+        org.mockito.Mockito.doThrow(new WeeklyReviewAiLeaseLostException()).when(jobStore)
+                .startAttempt(job, OWNER, prepared, preflight, NOW);
+
+        service.execute(job, OWNER);
+
+        verify(provider, never()).generate(any());
+        verify(jobStore, never()).failClaimed(any(), any(), any(), any(), any());
+        verify(completionService, never()).complete(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void sellerJobStopsBeforeProviderWhenSnapshotIsNotCurrent() {
         WeeklyReviewAiJob sellerJob = sellerJob();
         PersistedWeeklyReviewV3Snapshot sellerSnapshot = mock(PersistedWeeklyReviewV3Snapshot.class);
