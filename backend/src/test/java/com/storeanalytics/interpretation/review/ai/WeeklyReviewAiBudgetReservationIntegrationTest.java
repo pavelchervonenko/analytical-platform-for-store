@@ -85,7 +85,7 @@ class WeeklyReviewAiBudgetReservationIntegrationTest {
         store.startAttempt(
                 firstClaim,
                 "worker-first",
-                prepared(firstClaim),
+                prepared(firstClaim, NOW.plusSeconds(1)),
                 preflight(),
                 NOW.plusSeconds(1)
         );
@@ -98,7 +98,7 @@ class WeeklyReviewAiBudgetReservationIntegrationTest {
         assertThatThrownBy(() -> store.startAttempt(
                 secondClaim,
                 "worker-second",
-                prepared(secondClaim),
+                prepared(secondClaim, NOW.plusSeconds(2)),
                 preflight(),
                 NOW.plusSeconds(2)
         )).isInstanceOf(WeeklyReviewAiBudgetException.class)
@@ -138,7 +138,7 @@ class WeeklyReviewAiBudgetReservationIntegrationTest {
         WeeklyReviewAiAttempt attempt = store.startAttempt(
                 firstClaim,
                 "worker-first",
-                prepared(firstClaim),
+                prepared(firstClaim, now.plusSeconds(1)),
                 preflight(),
                 now.plusSeconds(1)
         );
@@ -165,7 +165,7 @@ class WeeklyReviewAiBudgetReservationIntegrationTest {
         assertThatThrownBy(() -> store.startAttempt(
                 secondClaim,
                 "worker-second",
-                prepared(secondClaim),
+                prepared(secondClaim, now.plusSeconds(3)),
                 preflight(),
                 now.plusSeconds(3)
         )).isInstanceOf(WeeklyReviewAiBudgetException.class)
@@ -184,7 +184,7 @@ class WeeklyReviewAiBudgetReservationIntegrationTest {
         store.enqueue(addSnapshot("late-receipt-first"), "YANDEX", "gpt://folder/yandexgpt-5.1",
                 2, now, Duration.ofHours(2));
         WeeklyReviewAiJob first = store.claimNext("first", Duration.ofMinutes(4), now).orElseThrow();
-        PreparedWeeklyReviewAiRequest request = prepared(first);
+        PreparedWeeklyReviewAiRequest request = prepared(first, now);
         WeeklyReviewAiAttempt attempt = store.startAttempt(first, "first", request, preflight(), now);
         Instant late = now.plusSeconds(241);
         assertThat(store.claimNext("recovery", Duration.ofMinutes(4), late)).isEmpty();
@@ -202,12 +202,12 @@ class WeeklyReviewAiBudgetReservationIntegrationTest {
                 1, late.plusSeconds(2), Duration.ofHours(2));
         WeeklyReviewAiJob second = store.claimNext("second", Duration.ofMinutes(4), late.plusSeconds(2))
                 .orElseThrow();
-        store.startAttempt(second, "second", prepared(second), preflight(), late.plusSeconds(2));
+        store.startAttempt(second, "second", prepared(second, late.plusSeconds(2)), preflight(), late.plusSeconds(2));
         store.enqueue(addSnapshot("late-receipt-third"), "YANDEX", "gpt://folder/yandexgpt-5.1",
                 1, late.plusSeconds(3), Duration.ofHours(2));
         WeeklyReviewAiJob third = store.claimNext("third", Duration.ofMinutes(4), late.plusSeconds(3))
                 .orElseThrow();
-        assertThatThrownBy(() -> store.startAttempt(third, "third", prepared(third), preflight(),
+        assertThatThrownBy(() -> store.startAttempt(third, "third", prepared(third, late.plusSeconds(3)), preflight(),
                 late.plusSeconds(3))).isInstanceOf(WeeklyReviewAiBudgetException.class);
     }
 
@@ -217,7 +217,7 @@ class WeeklyReviewAiBudgetReservationIntegrationTest {
         store.enqueue(addSnapshot("validator-crash"), "YANDEX", "gpt://folder/yandexgpt-5.1",
                 2, now, Duration.ofHours(2));
         WeeklyReviewAiJob job = store.claimNext("worker", Duration.ofMinutes(4), now).orElseThrow();
-        WeeklyReviewAiAttempt attempt = store.startAttempt(job, "worker", prepared(job), preflight(), now);
+        WeeklyReviewAiAttempt attempt = store.startAttempt(job, "worker", prepared(job, now), preflight(), now);
         WeeklyReviewAiValidationResult failed = WeeklyReviewAiValidationResult.invalid(
                 LlmValidationOutcome.SEMANTIC_INVALID,
                 List.of(new LlmValidationViolation("VALIDATION_EXECUTION_FAILED", "$", null)));
@@ -236,7 +236,7 @@ class WeeklyReviewAiBudgetReservationIntegrationTest {
         store.enqueue(addSnapshot("unknown-receipt-first"), "YANDEX", "gpt://folder/yandexgpt-5.1",
                 2, now, Duration.ofHours(2));
         WeeklyReviewAiJob first = store.claimNext("first", Duration.ofMinutes(4), now).orElseThrow();
-        PreparedWeeklyReviewAiRequest request = prepared(first);
+        PreparedWeeklyReviewAiRequest request = prepared(first, now);
         WeeklyReviewAiAttempt attempt = store.startAttempt(first, "first", request, preflight(), now);
         Instant late = now.plusSeconds(241);
         assertThat(store.claimNext("recovery", Duration.ofMinutes(4), late)).isEmpty();
@@ -251,8 +251,9 @@ class WeeklyReviewAiBudgetReservationIntegrationTest {
                 1, late.plusSeconds(2), Duration.ofHours(2));
         WeeklyReviewAiJob second = store.claimNext("second", Duration.ofMinutes(4), late.plusSeconds(2))
                 .orElseThrow();
-        assertThatThrownBy(() -> store.startAttempt(second, "second", prepared(second), preflight(),
-                late.plusSeconds(2))).isInstanceOf(WeeklyReviewAiBudgetException.class);
+        assertThatThrownBy(() -> store.startAttempt(second, "second",
+                prepared(second, late.plusSeconds(2)), preflight(), late.plusSeconds(2)))
+                .isInstanceOf(WeeklyReviewAiBudgetException.class);
     }
 
     private LlmProviderPreflight preflight() {
@@ -261,7 +262,7 @@ class WeeklyReviewAiBudgetReservationIntegrationTest {
         );
     }
 
-    private PreparedWeeklyReviewAiRequest prepared(WeeklyReviewAiJob job) {
+    private PreparedWeeklyReviewAiRequest prepared(WeeklyReviewAiJob job, Instant preparedAt) {
         WeeklyReviewAiInput input =
                 WeeklyReviewAiTestFixtures.minimalInput("NEUTRAL");
         LlmProviderRequest request = new LlmProviderRequest(
@@ -273,7 +274,8 @@ class WeeklyReviewAiBudgetReservationIntegrationTest {
                 "{}",
                 new BigDecimal("0.1"),
                 1400,
-                job.updatedAt().plusSeconds(180)
+                preparedAt.plusSeconds(180).isBefore(job.deadlineAt())
+                        ? preparedAt.plusSeconds(180) : job.deadlineAt()
         );
         return new PreparedWeeklyReviewAiRequest(
                 request, "a".repeat(64), input, "b".repeat(64)

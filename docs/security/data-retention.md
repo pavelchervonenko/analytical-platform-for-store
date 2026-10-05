@@ -19,6 +19,7 @@ implementation_sources:
   - backend/src/main/resources/db/migration/V12__add_data_retention.sql
   - backend/src/main/resources/db/migration/V94__preserve_weekly_ai_response_receipts.sql
   - backend/src/main/resources/db/migration/V96__add_seller_weekly_preparation_backlog.sql
+  - backend/src/main/resources/db/migration/V97__identify_automatic_weekly_ai_jobs.sql
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStore.java
   - backend/src/main/resources/application.yml
 verification_sources:
@@ -84,6 +85,12 @@ batches, holds и dry-run. Production deletion остаётся draft-проце
 разовой авторизации exact target.
 
 ## Триггеры пересмотра
+
+Candidate planning origin добавляет только `EXACT`/`AUTOMATIC`, store UUID и границы недели
+к существующим AI jobs. Это не новый provider/employee payload и не новая цель retention purge.
+Old exact approvals и их receipt/billing history сохраняются; automatic unpaid rebind не удаляет
+snapshots, attempts или receipts. Срок хранения этой metadata остаётся частью отдельного AI
+retention решения; миграция не является разрешением удаления или production activation.
 
 Новая таблица с payload/PII, изменение сроков, backfill horizon, deletion target, hold semantics,
 backup или legal requirement требует совместного backend/security review.

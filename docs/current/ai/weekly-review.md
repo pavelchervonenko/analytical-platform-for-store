@@ -362,6 +362,16 @@ enrichment. Потеря lease откатывает обе записи, но н
 и не разрешает новый automatic job для той же недели.
 Automatic enqueue также перепроверяет exact CURRENT под store/source fence, прежде чем занять
 единственный store/week job: изменение источника откладывает бесплатную подготовку без job.
+Candidate явно хранит `planning_origin`: прежние jobs и manual approvals остаются `EXACT`,
+не переклассифицируются по догадке и никогда не меняют snapshot. Новый `AUTOMATIC` привязан
+уникальным ключом к store/week; provenance защищён DB constraint/trigger. Пока нет ни одного
+attempt/receipt, enrichment или активного lease, тот же automatic job может бесплатно принять
+свежий CURRENT snapshot этой недели. Deadline, max attempts, provider/model и job ID сохраняются;
+увеличение retry cap или продление окна не является частью refresh. Свободный source failure
+`SNAPSHOT_NOT_CURRENT` может быть переоценён, но иной terminal failure и истёкший deadline — нет.
+После любого attempt, включая UNKNOWN, перепривязка и новая automatic job запрещены. Старый claim
+не может начать попытку с прежним snapshot после rebind. Exact approvals сохраняют исходные hashes;
+historical paid planner и production activation этим механизмом не включаются.
 Seller enrichment integrity reader принимает explicit v26/schema-4 только в seller read path;
 legacy readable prompt list и STORE selector/schema не расширяются. Успешный provider response
 не должен откатывать публикацию из-за ошибочного применения legacy-only prompt allowlist.

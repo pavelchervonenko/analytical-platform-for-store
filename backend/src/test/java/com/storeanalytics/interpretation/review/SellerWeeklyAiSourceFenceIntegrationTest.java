@@ -199,6 +199,58 @@ class SellerWeeklyAiSourceFenceIntegrationTest {
     }
 
     @Test
+    void automaticUnpaidBindingChangesOnlyAfterTheNewRevisionIsCurrent() {
+        Instant now = (Instant.now().isBefore(NOW) ? NOW : Instant.now())
+                .truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        clock.value.set(now);
+        var original = snapshot();
+        assertThat(jobs.enqueueAutomaticSellerWeek(original.id(), "YANDEX", "synthetic-model",
+                2, now, Duration.ofHours(2))).isTrue();
+        var job = jobs.findBySnapshot(original.id()).orElseThrow();
+        jdbc.update("UPDATE employees SET is_active=false WHERE id IN "
+                + "(SELECT employee_id FROM employee_store_assignments WHERE store_id=?)", store);
+        assertThat(jobs.enqueueAutomaticSellerWeek(original.id(), "YANDEX", "synthetic-model",
+                2, now, Duration.ofHours(2))).isFalse();
+        assertThat(jobs.findById(job.id()).orElseThrow().snapshotId()).isEqualTo(original.id());
+        var refreshed = planner.evaluate(store, START, "UTC").review().snapshot().orElseThrow();
+        assertThat(refreshed.id()).isNotEqualTo(original.id());
+        assertThat(jobs.enqueueAutomaticSellerWeek(refreshed.id(), "YANDEX", "synthetic-model",
+                2, now, Duration.ofHours(2))).isTrue();
+        var rebound = jobs.findById(job.id()).orElseThrow();
+        assertThat(rebound.snapshotId()).isEqualTo(refreshed.id());
+        assertThat(rebound.deadlineAt()).isEqualTo(job.deadlineAt());
+        assertThat(rebound.attemptCount()).isZero();
+    }
+
+    @Test
+    void paidAutomaticJobKeepsItsBindingWhenTheNewSourceRevisionIsReady() {
+        Instant now = (Instant.now().isBefore(NOW) ? NOW : Instant.now())
+                .truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        clock.value.set(now);
+        var original = snapshot();
+        assertThat(jobs.enqueueAutomaticSellerWeek(original.id(), "YANDEX", "synthetic-model",
+                2, now, Duration.ofHours(2))).isTrue();
+        var claim = jobs.claimNext(OWNER, Duration.ofMinutes(4), now).orElseThrow();
+        var request = factory.prepare(new WeeklyReviewAiProviderRequestCommand(claim.id(), original,
+                "YANDEX", "synthetic-model", new BigDecimal("0.1"), 1400, now, Duration.ofSeconds(180),
+                claim.deadlineAt(), List.of()));
+        var prepared = new Prepared(claim, request);
+        var attempt = start(prepared);
+        jdbc.update("UPDATE employees SET is_active=false WHERE id IN "
+                + "(SELECT employee_id FROM employee_store_assignments WHERE store_id=?)", store);
+        var refreshed = planner.evaluate(store, START, "UTC").review().snapshot().orElseThrow();
+        assertThat(refreshed.id()).isNotEqualTo(original.id());
+        assertThat(jobs.enqueueAutomaticSellerWeek(refreshed.id(), "YANDEX", "synthetic-model",
+                2, now, Duration.ofHours(2))).isFalse();
+        complete(prepared, attempt);
+        assertThat(jobs.findById(claim.id()).orElseThrow().snapshotId()).isEqualTo(original.id());
+        assertThat(jobs.findById(claim.id()).orElseThrow().lastErrorCode()).isEqualTo("SNAPSHOT_NOT_CURRENT");
+        assertThat(jdbc.queryForObject("SELECT actual_cost FROM weekly_review_ai_response_receipts WHERE attempt_id=?",
+                BigDecimal.class, attempt.id())).isEqualByComparingTo("2.00");
+        assertThat(jobs.findBySnapshot(refreshed.id())).isEmpty();
+    }
+
+    @Test
     void changedSourceAfterPaidResponsePreservesBillingButNeverPublishesOrRetries() {
         Prepared prepared = prepare();
         WeeklyReviewAiAttempt attempt = start(prepared);

@@ -153,7 +153,8 @@ public class WeeklyReviewAiJobStore {
 
     /**
      * One automatic seller AI job per store and completed week, across immutable revisions.
-     * A corrected revision requires the exact approved operator path instead.
+     * Only an explicitly automatic, unpaid and unleased job may adopt a corrected revision.
+     * Exact approvals and any job with an attempt never change their binding or call budget.
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public boolean enqueueAutomaticSellerWeek(
@@ -169,6 +170,10 @@ public class WeeklyReviewAiJobStore {
         }
         require(maxAttempts >= 1 && maxAttempts <= 2,
                 "Automatic seller AI allows at most two bounded provider attempts");
+        requireNonNull(now, "now");
+        Duration ttl = positive(deadline, "deadline");
+        String provider = requireText(providerCode, "providerCode");
+        String model = requireText(requestedModel, "requestedModel");
         if (!TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("Automatic seller AI requires one writable transaction");
         }
@@ -186,26 +191,69 @@ public class WeeklyReviewAiJobStore {
         }
         SellerWeek period = periods.getFirst();
         lockStoreForAiPlanning(period.storeId());
-        Boolean alreadyPlanned = jdbcTemplate.queryForObject("""
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM weekly_review_ai_jobs job
-                    JOIN weekly_review_snapshots report ON report.id = job.snapshot_id
-                    WHERE report.store_id = ?
-                      AND report.period_start = ?
-                      AND report.period_end = ?
-                      AND report.report_contract_version = 3
-                )
-                """, Boolean.class, period.storeId(), period.start(), period.end());
-        if (Boolean.TRUE.equals(alreadyPlanned)) {
-            return false;
-        }
         if (sourceFence != null && !sourceFence.lockAndIsCurrent(snapshot)) {
             return false;
         }
-        enqueue(snapshot, providerCode, requestedModel, maxAttempts,
-                executionClock == null ? now : executionClock.instant(), deadline);
-        return true;
+        List<UUID> existing = jdbcTemplate.queryForList("""
+                SELECT job.id FROM weekly_review_ai_jobs job
+                JOIN weekly_review_snapshots report ON report.id = job.snapshot_id
+                WHERE report.store_id = ? AND report.period_start = ? AND report.period_end = ?
+                  AND report.report_contract_version = 3
+                ORDER BY job.id FOR UPDATE OF job
+                """, UUID.class, period.storeId(), period.start(), period.end());
+        Instant evaluatedAt = executionClock == null ? requireNonNull(now, "now") : executionClock.instant();
+        // Refresh the action/calendar horizon after a possible job-lock wait too.
+        if (sourceFence != null && !sourceFence.lockAndIsCurrent(snapshot)) {
+            return false;
+        }
+        if (hasSellerWeekEnrichment(period)) {
+            return false;
+        }
+        evaluatedAt = executionClock == null ? evaluatedAt : executionClock.instant();
+        if (!existing.isEmpty()) {
+            return existing.size() == 1 && rebindUnpaidAutomatic(existing.getFirst(), snapshot, evaluatedAt,
+                    provider, model);
+        }
+        return jdbcTemplate.update("""
+                INSERT INTO weekly_review_ai_jobs(id,snapshot_id,prompt_version,content_schema_version,
+                    provider_code,requested_model,status,attempt_count,max_attempts,next_attempt_at,
+                    deadline_at,created_at,updated_at,planning_origin,automatic_store_id,
+                    automatic_period_start,automatic_period_end)
+                VALUES (?,?,?,?,?,?,'PENDING',0,?,?,?,?,?,'AUTOMATIC',?,?,?)
+                ON CONFLICT DO NOTHING
+                """, UUID.randomUUID(), snapshot, promptVersion, WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION,
+                provider, model,
+                maxAttempts, Timestamp.from(evaluatedAt), Timestamp.from(evaluatedAt.plus(ttl)),
+                Timestamp.from(evaluatedAt), Timestamp.from(evaluatedAt),
+                period.storeId(), period.start(), period.end()) == 1;
+    }
+
+    private boolean hasSellerWeekEnrichment(SellerWeek period) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM weekly_review_ai_enrichments enrichment
+                    JOIN weekly_review_snapshots report ON report.id = enrichment.snapshot_id
+                    WHERE report.store_id = ? AND report.period_start = ? AND report.period_end = ?
+                      AND report.report_contract_version = 3)
+                """, Boolean.class, period.storeId(), period.start(), period.end()));
+    }
+
+    private boolean rebindUnpaidAutomatic(UUID jobId, UUID snapshotId, Instant now,
+            String providerCode, String requestedModel) {
+        return jdbcTemplate.update("""
+                UPDATE weekly_review_ai_jobs job SET snapshot_id = ?, status = 'PENDING',
+                    next_attempt_at = ?, lease_owner = NULL, lease_until = NULL,
+                    last_error_code = NULL, last_error_message = NULL, last_validation_codes = '[]'::jsonb
+                WHERE job.id = ? AND job.planning_origin = 'AUTOMATIC' AND job.snapshot_id <> ?
+                  AND job.prompt_version = ? AND job.content_schema_version = ?
+                  AND job.provider_code = ? AND job.requested_model = ?
+                  AND job.attempt_count = 0 AND job.deadline_at > ? AND job.deadline_at > clock_timestamp()
+                  AND (job.status IN ('PENDING','RETRY_WAIT')
+                       OR (job.status = 'RUNNING' AND job.lease_until <= ? AND job.lease_until <= clock_timestamp())
+                       OR (job.status = 'FAILED' AND job.last_error_code = 'SNAPSHOT_NOT_CURRENT'))
+                  AND NOT EXISTS (SELECT 1 FROM weekly_review_ai_attempts WHERE job_id = job.id)
+                """, snapshotId, Timestamp.from(now), jobId, snapshotId, promptVersion,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION, providerCode, requestedModel,
+                Timestamp.from(now), Timestamp.from(now)) == 1;
     }
 
     @Transactional
@@ -368,6 +416,8 @@ public class WeeklyReviewAiJobStore {
     }
 
     private void lockStoreForAiPlanning(UUID storeId) {
+        jdbcTemplate.execute("SET LOCAL lock_timeout = '5s'");
+        jdbcTemplate.execute("SET LOCAL statement_timeout = '30s'");
         jdbcTemplate.queryForObject("SELECT id FROM stores WHERE id = ? FOR UPDATE",
                 UUID.class, requireNonNull(storeId, "storeId"));
     }

@@ -51,7 +51,7 @@ class SellerWeeklyPreparationStoreIntegrationTest {
         List<String> before = jdbc.queryForList(
                 "SELECT to_jsonb(store)::text FROM stores store ORDER BY id", String.class);
         List<String> preserved = retainedFacts();
-        var migration = Flyway.configure().dataSource(source).locations("classpath:db/migration").load();
+        var migration = Flyway.configure().dataSource(source).locations("classpath:db/migration").target("96").load();
         assertThat(migration.migrate().migrationsExecuted).isEqualTo(1);
         assertThat(jdbc.queryForList("SELECT to_jsonb(store)::text FROM stores store ORDER BY id", String.class))
                 .isEqualTo(before);

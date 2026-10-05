@@ -15,9 +15,11 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStore.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationRunner.java
   - backend/src/main/resources/db/migration/V96__add_seller_weekly_preparation_backlog.sql
+  - backend/src/main/resources/db/migration/V97__identify_automatic_weekly_ai_jobs.sql
 verification_sources:
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiJobStoreIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStoreIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/common/database/WeeklyAiPlanningOriginMigrationIntegrationTest.java
 required_reviewers:
   - product
   - backend
@@ -72,6 +74,14 @@ Discovery начинается лишь с первой недели, чья п�
 бесплатны и отложены; техническая ошибка подготовки terminal, а не бесконечный busy retry.
 Полный release gate не завершён. Baseline не объявляется активированным этим документом.
 Проверки перечислены в [плане](../maintenance/weekly-ai-production-automation-plan.md).
+
+Candidate хранит explicit immutable planning origin. Старые/manual jobs остаются `EXACT` без
+ретроспективного переименования. Бесплатная смена snapshot той же недели допустима лишь для
+`AUTOMATIC` без attempts/receipts/enrichment и active lease; deadline и paid cap сохраняются.
+После любого платного/UNKNOWN attempt новая revision не создаёт новый automatic budget.
+Zero-attempt `SNAPSHOT_NOT_CURRENT` допускает free refresh до прежнего deadline; другие terminal
+ошибки требуют диагностики. Это реализация границы бесплатной подготовки из пункта 4, не новое
+разрешение платного запуска и не доказательство завершённого historical planner/rollout.
 
 Уточнение от 5 октября: [ADR-0006](ADR-0006-livesklad-return-employee-analytics.md) меняет
 аналитического автора возврата и его membership timestamp. Условие пункта 2 о более ранней

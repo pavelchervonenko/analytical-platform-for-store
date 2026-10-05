@@ -158,6 +158,16 @@ durable cursor/jobs. `SUCCEEDED` остаётся успехом бесплат�
 а не UPDATE старого payload. Отчёт без future actions не меняется только из-за новой недели.
 До historical paid planner и runtime acceptance не выдавать free scheduler за готовый автообзор.
 
+Candidate различает `EXACT` и `AUTOMATIC` jobs. Все прежние rows остаются `EXACT`; не менять их
+origin вручную и не переносить exact approval на новую revision. Только неоплаченная automatic
+job без active lease может принять CURRENT snapshot того же store/week: сохраняются ID, deadline,
+provider/model и retry cap. Наличие любого attempt/receipt, UNKNOWN или published enrichment
+запрещает такой refresh. Для zero-attempt source failure допускается только `SNAPSHOT_NOT_CURRENT`,
+не прочие terminal failures. Deadline не продлевается; истёкшая job требует operator diagnosis.
+Перед cutover проверить filled upgrade с сохранением old rows/receipts, DB unique key/trigger,
+старый claim после rebind и гонку с startAttempt. Этот механизм ещё не включает historical paid
+planner, baseline или production scheduler.
+
 Исторический GET `/api/stores/{storeId}/weekly-reviews/seller-period?periodStart=YYYY-MM-DD`
 проверяет закрытый Monday-start period и store authorization под прежними parent/seller feature
 gates. Он не пишет данные и не вызывает ИИ. Нет historical snapshot — PREPARING, без fallback;

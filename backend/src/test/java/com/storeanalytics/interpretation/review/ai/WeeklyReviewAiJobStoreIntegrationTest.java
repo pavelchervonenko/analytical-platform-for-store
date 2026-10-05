@@ -180,6 +180,142 @@ class WeeklyReviewAiJobStoreIntegrationTest {
     }
 
     @Test
+    void unpaidAutomaticRevisionKeepsTheSameJobDeadlineAndPaidCallCap() {
+        Instant now = Instant.now();
+        UUID first = addSellerRevision(addSnapshot(addStore("Unpaid automatic revision"),
+                LocalDate.of(2026, 8, 17), 1));
+        WeeklyReviewAiJobStore sellers = sellerStore();
+        assertThat(automaticSellerEnqueue(sellers, first, now)).isTrue();
+        WeeklyReviewAiJob original = sellers.findBySnapshot(first).orElseThrow();
+        UUID corrected = addSellerRevision(first);
+        assertThat(new TransactionTemplate(transactionManager).<Boolean>execute(status ->
+                sellers.enqueueAutomaticSellerWeek(corrected, "YANDEX", "synthetic-model", 2,
+                        now.plusSeconds(1), Duration.ofDays(1)))).isTrue();
+        WeeklyReviewAiJob rebound = sellers.findBySnapshot(corrected).orElseThrow();
+        assertThat(rebound.id()).isEqualTo(original.id());
+        assertThat(rebound.deadlineAt()).isEqualTo(original.deadlineAt());
+        assertThat(rebound.maxAttempts()).isEqualTo(original.maxAttempts()).isOne();
+        assertThat(rebound.attemptCount()).isZero();
+        assertThat(sellers.findBySnapshot(first)).isEmpty();
+        assertThat(automaticSellerEnqueue(sellers, corrected, now.plusSeconds(2))).isFalse();
+        assertThat(jdbcTemplate.queryForObject("SELECT planning_origin FROM weekly_review_ai_jobs WHERE id=?",
+                String.class, rebound.id())).isEqualTo("AUTOMATIC");
+    }
+
+    @Test
+    void activeLeaseCannotRebindAndExpiredUnpaidClaimCannotStartAfterRebind() {
+        Instant now = Instant.now();
+        UUID first = addSellerRevision(addSnapshot(addStore("Unpaid automatic stale claim"),
+                LocalDate.of(2026, 8, 17), 1));
+        WeeklyReviewAiJobStore sellers = sellerStore();
+        assertThat(automaticSellerEnqueue(sellers, first, now)).isTrue();
+        WeeklyReviewAiJob claim = sellers.claimNext("old", Duration.ofMinutes(4), now).orElseThrow();
+        UUID corrected = addSellerRevision(first);
+        assertThat(automaticSellerEnqueue(sellers, corrected, now.plusSeconds(1))).isFalse();
+        jdbcTemplate.update("UPDATE weekly_review_ai_jobs SET lease_until=? WHERE id=?",
+                Timestamp.from(now.minusSeconds(1)), claim.id());
+        assertThat(automaticSellerEnqueue(sellers, corrected, now.plusSeconds(2))).isTrue();
+        SellerWeeklyReviewAiInput input = new SellerWeeklyReviewAiInputCompactor()
+                .compact(SellerWeeklyV3AssemblerTest.syntheticResponse());
+        assertThatThrownBy(() -> sellers.startAttempt(claim, "old", prepared(claim, input, now),
+                preflight(), now.plusSeconds(2))).isInstanceOf(WeeklyReviewAiLeaseLostException.class);
+        assertThat(sellers.findBySnapshot(corrected).orElseThrow().attemptCount()).isZero();
+    }
+
+    @Test
+    void exactApprovalNeverAdoptsAnotherSnapshotEvenWithoutSpend() {
+        Instant now = Instant.now();
+        UUID first = addSellerRevision(addSnapshot(addStore("Exact approval stays exact"),
+                LocalDate.of(2026, 8, 17), 1));
+        WeeklyReviewAiJobStore sellers = sellerStore();
+        WeeklyReviewAiJob exact = sellers.enqueueApproved(first, "YANDEX", "synthetic-model", 1,
+                now, Duration.ofHours(2));
+        UUID corrected = addSellerRevision(first);
+        assertThat(automaticSellerEnqueue(sellers, corrected, now.plusSeconds(1))).isFalse();
+        assertThat(sellers.findById(exact.id()).orElseThrow().snapshotId()).isEqualTo(first);
+        assertThat(jdbcTemplate.queryForObject("SELECT planning_origin FROM weekly_review_ai_jobs WHERE id=?",
+                String.class, exact.id())).isEqualTo("EXACT");
+        assertThatThrownBy(() -> jdbcTemplate.update("UPDATE weekly_review_ai_jobs SET snapshot_id=? WHERE id=?",
+                corrected, exact.id())).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void evenOneStartedAttemptPreventsRebindingAndCreatingAnotherAutomaticJob() {
+        Instant now = Instant.now();
+        UUID first = addSellerRevision(addSnapshot(addStore("Paid automatic immutable binding"),
+                LocalDate.of(2026, 8, 17), 1));
+        WeeklyReviewAiJobStore sellers = sellerStore();
+        assertThat(automaticSellerEnqueue(sellers, first, now)).isTrue();
+        WeeklyReviewAiJob claim = sellers.claimNext("paid", Duration.ofMinutes(4), now).orElseThrow();
+        SellerWeeklyReviewAiInput input = new SellerWeeklyReviewAiInputCompactor()
+                .compact(SellerWeeklyV3AssemblerTest.syntheticResponse());
+        WeeklyReviewAiAttempt attempt = sellers.startAttempt(claim, "paid", prepared(claim, input, now),
+                preflight(), now);
+        UUID corrected = addSellerRevision(first);
+        assertThat(automaticSellerEnqueue(sellers, corrected, now.plusSeconds(241))).isFalse();
+        assertThat(sellers.findById(claim.id()).orElseThrow().snapshotId()).isEqualTo(first);
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM weekly_review_ai_attempts WHERE job_id=?",
+                Integer.class, claim.id())).isOne();
+        assertThat(jdbcTemplate.queryForObject("SELECT request_hash FROM weekly_review_ai_attempts WHERE id=?",
+                String.class, attempt.id())).isEqualTo("b".repeat(64));
+    }
+
+    @Test
+    void freeSourceFailureCanRebindButDeadlineTechnicalFailureAndModelChangeCannot() {
+        Instant now = Instant.now();
+        UUID first = addSellerRevision(addSnapshot(addStore("Free source failure refresh"),
+                LocalDate.of(2026, 8, 17), 1));
+        WeeklyReviewAiJobStore sellers = sellerStore();
+        assertThat(automaticSellerEnqueue(sellers, first, now)).isTrue();
+        WeeklyReviewAiJob original = sellers.findBySnapshot(first).orElseThrow();
+        jdbcTemplate.update("UPDATE weekly_review_ai_jobs SET status='FAILED', "
+                + "last_error_code='SNAPSHOT_NOT_CURRENT' WHERE id=?", original.id());
+        UUID corrected = addSellerRevision(first);
+        assertThat(new TransactionTemplate(transactionManager).<Boolean>execute(status ->
+                sellers.enqueueAutomaticSellerWeek(corrected, "YANDEX", "different-model", 1,
+                        now.plusSeconds(1), Duration.ofHours(2)))).isFalse();
+        assertThat(automaticSellerEnqueue(sellers, corrected, now.plusSeconds(1))).isTrue();
+        UUID later = addSellerRevision(corrected);
+        jdbcTemplate.update("UPDATE weekly_review_ai_jobs SET status='FAILED', "
+                + "last_error_code='VALIDATION_EXECUTION_FAILED' WHERE id=?", original.id());
+        assertThat(automaticSellerEnqueue(sellers, later, now.plusSeconds(2))).isFalse();
+        jdbcTemplate.update("UPDATE weekly_review_ai_jobs SET status='PENDING' WHERE id=?", original.id());
+        assertThat(automaticSellerEnqueue(sellers, later, original.deadlineAt())).isFalse();
+        assertThat(sellers.findById(original.id()).orElseThrow().snapshotId()).isEqualTo(corrected);
+    }
+
+    @Test
+    void databaseRejectsProvenanceReclassificationOfAnExistingExactJob() {
+        UUID first = addSellerRevision(addSnapshot(addStore("Immutable planning origin"),
+                LocalDate.of(2026, 8, 17), 1));
+        WeeklyReviewAiJob exact = sellerStore().enqueue(first, "YANDEX", "synthetic-model", 1,
+                NOW, Duration.ofHours(2));
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                UPDATE weekly_review_ai_jobs job SET planning_origin='AUTOMATIC',
+                    automatic_store_id=report.store_id, automatic_period_start=report.period_start,
+                    automatic_period_end=report.period_end FROM weekly_review_snapshots report
+                WHERE job.id=? AND report.id=job.snapshot_id
+                """, exact.id())).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void databaseUniqueKeyPreventsAnotherAutomaticJobForTheSameWeek() {
+        UUID first = addSellerRevision(addSnapshot(addStore("Unique automatic week"),
+                LocalDate.of(2026, 8, 17), 1));
+        WeeklyReviewAiJobStore sellers = sellerStore();
+        assertThat(automaticSellerEnqueue(sellers, first)).isTrue();
+        UUID corrected = addSellerRevision(first);
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                INSERT INTO weekly_review_ai_jobs(snapshot_id,prompt_version,content_schema_version,
+                    provider_code,requested_model,status,max_attempts,next_attempt_at,deadline_at,
+                    planning_origin,automatic_store_id,automatic_period_start,automatic_period_end)
+                SELECT ?,prompt_version,content_schema_version,provider_code,requested_model,'PENDING',
+                    max_attempts,now(),now()+interval '2h','AUTOMATIC',automatic_store_id,
+                    automatic_period_start,automatic_period_end FROM weekly_review_ai_jobs WHERE snapshot_id=?
+                """, corrected, first)).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void startsExactlyOneProviderAttemptForActiveSellerV26Job() {
         UUID storeId = addStore("AI seller v26 attempt");
         UUID legacySnapshot = addSnapshot(storeId, LocalDate.of(2026, 8, 17), 1);
@@ -716,11 +852,16 @@ class WeeklyReviewAiJobStoreIntegrationTest {
             WeeklyReviewAiJob job,
             WeeklyReviewAiEditorialInput input
     ) {
+        return prepared(job, input, NOW);
+    }
+
+    private PreparedWeeklyReviewAiRequest prepared(WeeklyReviewAiJob job,
+            WeeklyReviewAiEditorialInput input, Instant preparedAt) {
         String inputJson = new WeeklyReviewAiContentCodec().canonical(input);
         LlmProviderRequest request = new LlmProviderRequest(
                 job.id(), job.providerCode(), job.requestedModel(), "system",
                 inputJson, "{}", new BigDecimal("0.1"), 1400,
-                NOW.plus(Duration.ofMinutes(3))
+                preparedAt.plus(Duration.ofMinutes(3))
         );
         return new PreparedWeeklyReviewAiRequest(
                 request, "b".repeat(64), input, "c".repeat(64)
@@ -768,9 +909,13 @@ class WeeklyReviewAiJobStoreIntegrationTest {
     }
 
     private boolean automaticSellerEnqueue(WeeklyReviewAiJobStore sellerStore, UUID snapshotId) {
+        return automaticSellerEnqueue(sellerStore, snapshotId, NOW);
+    }
+
+    private boolean automaticSellerEnqueue(WeeklyReviewAiJobStore sellerStore, UUID snapshotId, Instant now) {
         return Boolean.TRUE.equals(new TransactionTemplate(transactionManager).execute(status ->
                 sellerStore.enqueueAutomaticSellerWeek(snapshotId, "YANDEX", "synthetic-model",
-                        1, NOW, Duration.ofHours(2))));
+                        1, now, Duration.ofHours(2))));
     }
 
     private UUID addSellerRevision(UUID predecessor) {

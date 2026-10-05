@@ -78,7 +78,53 @@ canary не переносятся на другую неделю или нов�
 - Опубликованный отчёт остаётся immutable; исправления создают revision без платного автоповтора.
 - Есть проверяемый runbook включения/остановки и понятный статус для нового разработчика.
 
+## Оставшийся cutover: обязательные границы следующего пакета
+
+Перечень ниже разделяет готовые candidate-инварианты и ещё не подключённый cutover;
+ни один из них не является разрешением production включения:
+
+- Historical paid planner читает только точные `SUCCEEDED` free jobs и повторно проверяет
+  CURRENT/quality/закрытие обеих недель. Он не вызывает current-roster planner как fallback.
+- Candidate unpaid rebind имеет явную provenance automatic/exact job. Existing jobs нельзя задним
+  числом объявить automatic: безопасный default сохраняет exact binding и прежние approvals.
+- В candidate только automatic job без attempts/receipts/расхода и без активного lease может бесплатно
+  сменить snapshot внутри того же store/week и того же job ID. Max paid calls не увеличивается;
+  exact approval никогда не меняет snapshot/input/request hashes. Claim старого snapshot после
+  rebind не должен пройти startAttempt, даже если worker возобновится после потери lease.
+- После любой платной попытки, UNKNOWN или terminal publication failure новый source revision
+  не разрешает automatic rebind/новую weekly job. Receipt, billing и immutable snapshots сохраняются.
+- Перед публичным current-reader cutover проверить forward-only baseline и обе полные недели.
+  Первые pre-baseline обзоры могут быть только явно current-roster manual по решению владельца,
+  не автоматической fabricated history. Timestamp baseline записывает отдельная approved операция.
+- Проверить idle/wait/technical-failure наблюдаемость и bounded counters без raw payload/PII;
+  выполнить окончательный общий gate после wiring, а не считать нынешний intermediate run выпуском.
+
 ## Прогресс
+
+- Intermediate frozen gate после free scheduler и source/publication fence: 2 046 backend tests
+  в 432 классах, 0 failures/errors/skips, Checkstyle main/test и bootJar PASS. Это не окончательный
+  gate всей автоматики: historical paid wiring, current-reader cutover и runtime acceptance
+  остаются обязательными. Budget fixture теперь использует explicit synthetic request time
+  и ограничивает call deadline job deadline, не timestamp PostgreSQL updated-at trigger.
+  Production и provider calls не затронуты.
+
+- Следующий пакет: explicit `EXACT`/`AUTOMATIC` provenance с default EXACT для существующих rows,
+  DB unique automatic store/week и immutable binding guard. Free automatic rebind сохраняет job,
+  provider/model, deadline и paid cap; допускается лишь до attempts/receipts/enrichment и без
+  active lease. Exact approvals, любой paid/UNKNOWN outcome и иные terminal failures не
+  перепривязываются. Свежесть перепроверяется до и после job lock, stale claim запрещён.
+  Code review выявил clock-skew границу и ранний неограниченный store-lock: rebind проверяет
+  также DB wall clock, initial store locks получили transaction-only timeouts. Synthetic fixtures
+  используют валидный provider outcome и точность часов, совместимую с PostgreSQL; source change
+  проверяется на реально меняющей отчёт actionability, а не document-only поле без item facts.
+  Filled upgrade сохраняет все old job fields, snapshots, attempts и receipts, оставляя old jobs
+  EXACT; validate и повтор migration no-op PASS. Конкурентный automatic enqueue, DB uniqueness,
+  immutable provenance, stale/active/expired claims, zero-attempt source failure, model/deadline
+  boundaries и paid publication после source change проверены. Финальный targeted gate:
+  78 tests в 15 классах, 0 failures/errors/skips, Checkstyle main/test и bootJar PASS; включены
+  restricted migrator, migration executable и все затронутые schema contracts. Operator/release
+  security и documentation unit (25)/strict (459 rows, 0 warnings) PASS. Historical paid planner,
+  current-reader cutover, baseline activation и итоговый combined release gate ещё не завершены.
 
 - Пакет 3, opt-in бесплатный scheduler: bounded discovery, stale refresh и leased preparation
   соединены отдельным serial worker scheduler, default off. Нет implicit baseline, AI job или
