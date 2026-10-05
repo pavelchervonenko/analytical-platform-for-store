@@ -2244,6 +2244,34 @@
         }
       }
     },
+    "/api/stores/{storeId}/weekly-reviews/seller-period": {
+      "get": {
+        "tags": ["seller-weekly-historical-review-controller"],
+        "operationId": "period",
+        "parameters": [
+          {
+            "name": "storeId",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          },
+          {
+            "name": "periodStart",
+            "in": "query",
+            "required": true,
+            "schema": {"type": "string", "format": "date"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {"schema": {"$ref": "#/components/schemas/SellerWeeklyReviewView"}}
+            }
+          }
+        }
+      }
+    },
     "/api/stores/{storeId}/weekly-reviews/seller-current": {
       "get": {
         "tags": [

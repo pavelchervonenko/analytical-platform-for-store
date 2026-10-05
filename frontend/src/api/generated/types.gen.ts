@@ -3500,6 +3500,26 @@ export type FindResponses = {
 
 export type FindResponse = FindResponses[keyof FindResponses];
 
+export type PeriodData = {
+    body?: never;
+    path: {
+        storeId: string;
+    };
+    query: {
+        periodStart: string;
+    };
+    url: '/api/stores/{storeId}/weekly-reviews/seller-period';
+};
+
+export type PeriodResponses = {
+    /**
+     * OK
+     */
+    200: SellerWeeklyReviewView;
+};
+
+export type PeriodResponse = PeriodResponses[keyof PeriodResponses];
+
 export type CurrentData = {
     body?: never;
     path: {

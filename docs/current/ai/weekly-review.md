@@ -622,6 +622,9 @@ Opt-in historical presenter сохраняет финансовую карточ
 production activation: основной current reader использует forward-only opt-in routing; отдельный
 opt-in free scheduler использует temporal backlog и исключает competing legacy snapshot scheduler.
 Additive exact-period GET/free planner и opt-in automatic historical paid planning соединены с preparation.
+Exact-period маршрут `GET /api/stores/{storeId}/weekly-reviews/seller-period?periodStart=YYYY-MM-DD`
+включён в committed OpenAPI и generated frontend transport types. Он сохраняет store-access
+проверку и private/no-store response; не запускает generation, provider или baseline.
 Текущий Overview и first-manual pre-baseline path не переключены. Payroll/saved employee и
 snapshots не переписываются. Нужны runtime acceptance atomic AI source fence и release gate
 до включения автоматики.

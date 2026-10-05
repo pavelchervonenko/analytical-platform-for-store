@@ -317,6 +317,7 @@ class CatalogSaleRoleSnapshotIntegrationTest {
         var f = fixture();
         UUID sale = item(f, null, f.confirmedAt());
         capture(sale);
+        assertThat(snapshot(sale)).containsEntry("state", "CURRENT");
         UUID returned = item(f, sale, databaseNow());
         jdbc.update("UPDATE sales_document_items SET quantity = 0.25 WHERE id = :id", Map.of("id", returned));
         capture(returned);
@@ -330,6 +331,7 @@ class CatalogSaleRoleSnapshotIntegrationTest {
 
         jdbc.update("UPDATE sales_document_items SET product_name_snapshot = 'Corrected role fact' "
                 + "WHERE id = :id", Map.of("id", sale));
+        assertThat(snapshot(sale)).containsEntry("state", "STALE");
         assertPendingRoleEquivalence(f, legacy, optimized);
         decide(f, sale, "ACCESSORY_APPLE_WATCH");
         assertPendingRoleEquivalence(f, legacy, optimized);
@@ -398,7 +400,9 @@ class CatalogSaleRoleSnapshotIntegrationTest {
         transactions.executeWithoutResult(status -> {
             jdbc.getJdbcTemplate().execute("SET LOCAL jit = off");
             var repository = new com.storeanalytics.metrics.cases.CaseAttachRepository(jdbc);
-            repository.save(repository.find(f.store(), sale),
+            var source = repository.find(f.store(), sale);
+            assertThat(source).as("catalog review before %s, snapshot=%s", target, snapshot(sale)).isNotNull();
+            repository.save(source,
                     new com.storeanalytics.metrics.cases.CaseAttachDecisionRequest(
                             target, "Synthetic reviewed evidence"),
                     f.actor(), f.store());

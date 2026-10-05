@@ -101,6 +101,28 @@ canary не переносятся на другую неделю или нов�
 
 ## Прогресс
 
+- Общий frozen backend gate после пакета наблюдаемости: 2 079 tests в 437 классах,
+  1 failure, 0 errors/skips. Падение существующего каталожного parity-сценария: review row
+  отсутствовала перед первым ручным решением. Причина пока не установлена; production-код,
+  predicates и опубликованные migrations не изменены ради прохождения теста. Повтор всех
+  16 каталожных тестов и временная диагностическая серия из 30 повторов спорного сценария
+  прошли. В постоянном тесте добавлены точные CURRENT/STALE и presence assertions вместо
+  неинформативного NPE; временная серия удалена. Targeted повторы не закрывают исходное
+  падение и не заменяют следующий полный gate окончательного кода.
+  Полный повтор Java: 2 079 tests в 437 классах, 0 failures/errors/skips; Checkstyle main/test PASS.
+  Завершающий OpenAPI gate обнаружил отсутствие additive `seller-period` GET в committed artifact.
+  Синхронизирован только API artifact и generated transport; Java runtime/tests не изменены.
+  Generated-vs-committed и baseline compatibility после исправления PASS, breaking changes нет.
+  Общая повторная команда PASS с неизменными Java inputs: full tests/style/package/export
+  UP-TO-DATE, API artifact проверен заново, bootBuildInfo timestamp сохранён. Java tests не
+  исключались; это не второй новый запуск всей suite после transport regeneration.
+  Frontend после regeneration: 61 file / 314 tests, contract/lint/types/build PASS. Documentation:
+  25 unit tests, strict 462 rows / 0 warnings; security/supply-chain и 7 promtool rules PASS.
+  [Финальное local evidence](../history/audits/2026/10/weekly-ai-production-candidate-final-local.md)
+  сохраняет исходное catalog failure и отсутствие установленной причины. Это candidate для CI,
+  не production activation: остаются filled rehearsal, runtime ACL/monitoring acceptance,
+  exact baseline operator/approval, rollout и свежий ограниченный paid canary.
+
 - Пакет наблюдаемости: free queue экспортирует отдельные fixed-status wait/failure/delay/lease
   counts без store/employee labels; read-only query имеет timeout. Ошибка чтения метрик даёт
   NaN/exporter-health=0 вместо сохранения старых «здоровых» значений. AI metric исправлена на
