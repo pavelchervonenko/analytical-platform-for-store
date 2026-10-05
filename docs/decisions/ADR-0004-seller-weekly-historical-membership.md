@@ -23,6 +23,9 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyV3TeamPresenter.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalFactsSource.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStore.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalIdentity.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewSnapshotStore.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationRunner.java
   - backend/src/main/resources/db/migration/V96__add_seller_weekly_preparation_backlog.sql
   - backend/src/main/java/com/storeanalytics/sync/service/EmployeeSyncBatchApplier.java
 verification_sources:
@@ -36,6 +39,8 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyV3TeamPresenterTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalFactsSourceTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStoreIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalIdentityIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalPreparationIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/EmployeeSyncMembershipHistoryIntegrationTest.java
 required_reviewers:
   - product
@@ -95,9 +100,14 @@ combined reader добавляет temporal attach с точным document prov
 неделю и до тяжёлого чтения проверяет continuous coverage/stability за обе недели в одной
 read-only RR-транзакции. Additive backlog сохраняет per-store cursor и уникальные store/week
 jobs, bounded discovery и token-fenced lease. Он не выводит baseline из текущего состава,
-не теряет старые задачи после рестарта и не создаёт платные jobs. Публичный historical membership
-contract, периодный read API, snapshot assembly и scheduler этой очереди ещё не подключены;
-current-roster путь не переключён.
+не теряет старые задачи после рестарта и не создаёт платные jobs. Локальная historical assembly
+использует самостоятельную interval/baseline identity и отдельный actionability hash; backend codec
+и frontend parser поддерживают новый basis без переписывания прежних payload. Отдельный writer
+атомарно сохраняет immutable snapshot/checkpoint под store/source locks с проверкой membership
+revision. Бесплатный runner связывает его с exact store/week job после lease/freshness checks.
+Давно пропущенная неделя не назначает future actions; вклад ушедших и их карточки сохранены.
+Периодный read API, scheduler и paid planning этой очереди ещё не подключены;
+current-roster публичный путь не переключён.
 Поэтому включение постоянной автоматической публикации до их проверки запрещено.
 
 ## Условия вступления решения в силу

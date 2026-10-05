@@ -24,6 +24,7 @@ import com.storeanalytics.interpretation.review.WeeklyReviewResponse.StructureNo
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.VersionSet;
 import com.storeanalytics.metrics.service.SellerCohortSnapshot;
 import java.time.Instant;
+import java.util.Set;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,9 +36,15 @@ final class SellerWeeklyV3Assembler {
 
     private static final VersionSet VERSIONS = new VersionSet(
             "weekly-metrics-v9-sellers-return-processor", "weekly-snapshot-v17", "weekly-quality-v11");
+    private static final VersionSet HISTORICAL_VERSIONS = new VersionSet(
+            "weekly-metrics-v10-sellers-historical", "weekly-snapshot-v18", "weekly-quality-v11");
 
     static VersionSet versions() {
         return VERSIONS;
+    }
+
+    static VersionSet historicalVersions() {
+        return HISTORICAL_VERSIONS;
     }
 
     private final SellerWeeklyReviewProjector projector = new SellerWeeklyReviewProjector();
@@ -49,16 +56,60 @@ final class SellerWeeklyV3Assembler {
         SellerWeeklyReviewFacts source = requireNonNull(facts, "facts");
         SellerWeeklyReviewProjector.Projection projected = projector.project(source);
         SellerCohortSnapshot cohort = source.comparison().current().metrics().cohort();
-        boolean blocked = projected.quality().reportState() == ReportState.BLOCKED;
-        boolean sourceCoverageComplete = projected.quality().sourceCoverage().stream()
-                .filter(item -> item.requiredForReport())
-                .allMatch(item -> item.state() == COMPLETE);
-        var people = !sourceCoverageComplete ? teamPresenter.unavailable()
-                : projected.teamFacts().map(factsForTeam -> teamPresenter.present(
-                        factsForTeam, projected.returnAttributionComplete(),
-                        projected.additionalSales().additionalRevenue().metricState()
-                                == com.storeanalytics.interpretation.review.WeeklyReviewResponse.MetricState.READY))
+        var membership = new WeeklyReviewV3Response.Membership(SellerCohortSnapshot.BASIS,
+                cohort.fingerprint(), cohort.fingerprint(), cohort.fingerprint(),
+                requireNonNull(actionabilityAsOf, "actionabilityAsOf"), cohort.employeeIds().size());
+        return assemble(new AssemblyContext(source.period(), source.sourceCoverage(), VERSIONS, true),
+                projected, people(projected, Set.copyOf(cohort.employeeIds())), membership, provenance,
+                sourceIdentityHash);
+    }
+
+    WeeklyReviewV3Response assembleHistorical(SellerWeeklyHistoricalFacts facts, Provenance provenance,
+            String sourceIdentityHash, Instant actionabilityAsOf) {
+        SellerWeeklyHistoricalFacts source = requireNonNull(facts, "facts");
+        Instant asOf = requireNonNull(actionabilityAsOf, "actionabilityAsOf");
+        var projected = projector.projectHistorical(source);
+        var selected = source.membership();
+        var cohort = source.historical().comparison().current().metrics().cohort();
+        var membership = new WeeklyReviewV3Response.Membership(SellerWeeklyHistoricalMembership.BASIS,
+                selected.selectionHash(), selected.selectionHash(), selected.actionabilityHash(),
+                asOf, cohort.employeeIds().size());
+        boolean latest = ClosedSellerWeek.latest(asOf, source.period().timezone()).start()
+                .equals(source.period().current().start());
+        var people = people(projected, source.historical().actionEmployeeIds());
+        if (!latest) {
+            people = withoutFutureActions(people);
+        }
+        return assemble(new AssemblyContext(source.period(), source.sourceCoverage(), HISTORICAL_VERSIONS, latest),
+                projected, people, membership, provenance, sourceIdentityHash);
+    }
+
+    private SellerWeeklyV3TeamPresenter.Projection people(SellerWeeklyReviewProjector.Projection projected,
+            Set<java.util.UUID> actionIds) {
+        boolean complete = projected.quality().sourceCoverage().stream()
+                .filter(item -> item.requiredForReport()).allMatch(item -> item.state() == COMPLETE);
+        return !complete ? teamPresenter.unavailable()
+                : projected.teamFacts().map(facts -> teamPresenter.presentHistorical(facts,
+                        projected.returnAttributionComplete(), projected.additionalSales().additionalRevenue()
+                                .metricState() == WeeklyReviewResponse.MetricState.READY, actionIds))
                         .orElseGet(teamPresenter::unavailable);
+    }
+
+    private SellerWeeklyV3TeamPresenter.Projection withoutFutureActions(SellerWeeklyV3TeamPresenter.Projection people) {
+        var cards = people.cards().stream().map(item -> {
+            var card = item.card();
+            var withoutAction = new WeeklyReviewResponse.EmployeeCard(card.employeePublicId(), card.displayName(),
+                    card.participatesInBenchmark(), card.sortGroup(), card.metrics(), card.ownDynamics(),
+                    card.peerComparison(), card.strength(), card.attention(), null, card.limitations());
+            return new WeeklyReviewV3Response.EmployeeCard(withoutAction, item.actionableNow());
+        }).toList();
+        return new SellerWeeklyV3TeamPresenter.Projection(people.team(), people.display(), cards);
+    }
+
+    private WeeklyReviewV3Response assemble(AssemblyContext source, SellerWeeklyReviewProjector.Projection projected,
+            SellerWeeklyV3TeamPresenter.Projection people, WeeklyReviewV3Response.Membership membership,
+            Provenance provenance, String sourceIdentityHash) {
+        boolean blocked = projected.quality().reportState() == ReportState.BLOCKED;
         var additional = projected.additionalSales();
         var additionalSales = new WeeklyReviewV3Response.AdditionalSales(
                 additional.additionalRevenue(), additional.additionalShare(),
@@ -66,15 +117,12 @@ final class SellerWeeklyV3Assembler {
                 additional.accessoryMixShare(), additional.serviceMixShare(),
                 additional.integrityResidual(), additional.compositionChartSafe());
         List<Factor> factors = blocked ? List.of() : factors(projected);
-        List<Action> actions = blocked ? List.of() : actions(factors);
+        List<Action> actions = blocked || !source.allowFutureActions() ? List.of() : actions(factors);
         List<Limitation> limitations = projected.quality().limitations();
         ReportState reportState = projected.quality().reportState();
         QualitySummary qualitySummary = projected.quality().qualitySummary();
-        var membership = new WeeklyReviewV3Response.Membership(SellerCohortSnapshot.BASIS,
-                cohort.fingerprint(), cohort.fingerprint(), cohort.fingerprint(),
-                requireNonNull(actionabilityAsOf, "actionabilityAsOf"), cohort.employeeIds().size());
         List<Evidence> evidence = evidence(source, projected, additionalSales, people);
-        var response = new WeeklyReviewV3Response(3, VERSIONS, source.period(),
+        var response = new WeeklyReviewV3Response(3, source.versions(), source.period(),
                 requireNonNull(provenance, "provenance"), reportState, qualitySummary,
                 coverage(source, projected), "SELLERS", membership, sourceIdentityHash,
                 summaryPresenter.present(reportState, projected.core().results(), factors,
@@ -88,7 +136,7 @@ final class SellerWeeklyV3Assembler {
     }
 
     private List<WeeklyReviewV3Response.SellerSourceCoverage> coverage(
-            SellerWeeklyReviewFacts source, SellerWeeklyReviewProjector.Projection projected) {
+            AssemblyContext source, SellerWeeklyReviewProjector.Projection projected) {
         var coverage = new ArrayList<>(projected.quality().sourceCoverage().stream()
                 .map(WeeklyReviewV3Response.SellerSourceCoverage::from).toList());
         var orders = source.sourceCoverage().orders();
@@ -134,7 +182,7 @@ final class SellerWeeklyV3Assembler {
                 }).limit(3).toList();
     }
 
-    private List<Evidence> evidence(SellerWeeklyReviewFacts source,
+    private List<Evidence> evidence(AssemblyContext source,
             SellerWeeklyReviewProjector.Projection projection,
             WeeklyReviewV3Response.AdditionalSales additional,
             SellerWeeklyV3TeamPresenter.Projection people) {
@@ -159,14 +207,14 @@ final class SellerWeeklyV3Assembler {
         return List.copyOf(collected.values());
     }
 
-    private void structure(Map<String, Evidence> target, SellerWeeklyReviewFacts source,
+    private void structure(Map<String, Evidence> target, AssemblyContext source,
             StructureNode node) {
         add(target, source, node.comparison(), "SELLERS", null);
         add(target, source, node.shareComparison(), "SELLERS", null);
         node.children().forEach(child -> structure(target, source, child));
     }
 
-    private void add(Map<String, Evidence> target, SellerWeeklyReviewFacts source,
+    private void add(Map<String, Evidence> target, AssemblyContext source,
             MetricComparison metric, String scope, String employeeId) {
         for (String ref : metric.evidenceRefs()) {
             var currentSample = metric.currentSample();
@@ -178,9 +226,12 @@ final class SellerWeeklyV3Assembler {
                     currentSample == null ? null : currentSample.denominator(),
                     previousSample == null ? null : previousSample.numerator(),
                     previousSample == null ? null : previousSample.denominator(),
-                    VERSIONS.metricsPolicy(), metric.sufficiency(), metric.materiality(),
+                    source.versions().metricsPolicy(), metric.sufficiency(), metric.materiality(),
                     metric.metricState() != UNAVAILABLE && metric.current() != null);
             target.putIfAbsent(ref, item);
         }
     }
+
+    private record AssemblyContext(WeeklyReviewResponse.PeriodContext period, SellerWeeklySourceCoverage sourceCoverage,
+            VersionSet versions, boolean allowFutureActions) { }
 }

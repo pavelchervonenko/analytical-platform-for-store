@@ -6,6 +6,7 @@ import com.storeanalytics.interpretation.review.WeeklyReviewResponse.CoverageSta
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.ReportState;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.SalesStructureBlock;
 import com.storeanalytics.metrics.service.SellerPeriodFacts;
+import com.storeanalytics.metrics.service.SellerPeriodComparisonFacts;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 
@@ -23,14 +24,24 @@ final class SellerWeeklyReviewProjector {
 
     Projection project(SellerWeeklyReviewFacts facts) {
         SellerWeeklyReviewFacts source = requireNonNull(facts, "facts");
-        SellerPeriodFacts current = source.comparison().current();
-        SellerPeriodFacts previous = source.comparison().previous();
+        return project(source.period(), source.comparison(), source.sourceCoverage(), source.sourceStability());
+    }
+
+    Projection projectHistorical(SellerWeeklyHistoricalFacts facts) {
+        SellerWeeklyHistoricalFacts source = requireNonNull(facts, "facts");
+        return project(source.period(), source.historical().comparison(),
+                source.sourceCoverage(), source.sourceStability());
+    }
+
+    private Projection project(WeeklyReviewResponse.PeriodContext period, SellerPeriodComparisonFacts comparison,
+            SellerWeeklySourceCoverage coverage, SellerWeeklySourceStability stability) {
+        SellerPeriodFacts current = comparison.current();
+        SellerPeriodFacts previous = comparison.previous();
         WeeklyReviewQualityPolicyV1.Decision decision = quality.decideSellers(
-                source.sourceCoverage(), current.metrics(), previous.metrics(),
+                coverage, current.metrics(), previous.metrics(),
                 new WeeklyReviewQualityPolicyV1.AttributionWindows(
                         current.returnAttribution(), previous.returnAttribution()),
-                source.period().current(), source.period().previous(),
-                source.sourceStability());
+                period.current(), period.previous(), stability);
         boolean blocked = decision.reportState() == ReportState.BLOCKED;
         boolean returnAttributionComplete = current.returnAttribution().complete()
                 && previous.returnAttribution().complete();
@@ -48,7 +59,7 @@ final class SellerWeeklyReviewProjector {
         SellerWeeklyAdditionalSalesProjector.Projection additionalSales = additional.project(
                 current, previous, blocked, categoryQualityComplete);
         Optional<SellerWeeklyTeamFactsProjector.TeamFinancialFacts> teamFacts = blocked
-                ? Optional.empty() : Optional.of(team.project(source.comparison()));
+                ? Optional.empty() : Optional.of(team.project(comparison));
         return new Projection(decision, results, salesStructure, additionalSales,
                 teamFacts, returnAttributionComplete);
     }

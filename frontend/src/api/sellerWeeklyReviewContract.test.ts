@@ -27,6 +27,29 @@ describe("seller weekly review v3", () => {
     expect(sellerWeeklyReviewSchema.safeParse(report).success).toBe(false);
   });
 
+  it("accepts historical selection with a distinct present-day action roster", () => {
+    const report = makeSellerWeeklyReview();
+    report.membership.basis = "HISTORICAL_DOCUMENT_MEMBERSHIP_V1";
+    report.membership.actionabilityRosterHash = "f".repeat(64);
+    expect(sellerWeeklyReviewSchema.safeParse(report).success).toBe(true);
+    report.membership.previousCohortHash = "e".repeat(64);
+    expect(sellerWeeklyReviewSchema.safeParse(report).success).toBe(false);
+  });
+
+  it("rejects future actions for a historical seller who is no longer actionable", () => {
+    const report = makeSellerWeeklyReview();
+    report.membership.basis = "HISTORICAL_DOCUMENT_MEMBERSHIP_V1";
+    const employee = report.employees[0]!;
+    employee.card.action = { actionId: "action:former", priority: "HIGH", actionType: "REVIEW_SELLER_METRIC",
+      scope: "EMPLOYEE", employeePublicId: employee.card.employeePublicId, title: "Synthetic action",
+      metricCode: "NET_REVENUE", target: { operator: "AT_LEAST", value: 1, unit: "RUB" },
+      check: "Synthetic criterion", horizon: "NEXT_FULL_WEEK", generatedBy: "DETERMINISTIC",
+      evidenceRefs: employee.card.metrics.netRevenue.evidenceRefs };
+    expect(sellerWeeklyReviewSchema.safeParse(report).success).toBe(true);
+    employee.actionableNow = false;
+    expect(sellerWeeklyReviewSchema.safeParse(report).success).toBe(false);
+  });
+
   it("keeps monetary and percentage denominators separate", () => {
     const report = makeSellerWeeklyReview();
     report.additionalSales.shareOfSellerRevenue.code = "ADDITIONAL_REVENUE";

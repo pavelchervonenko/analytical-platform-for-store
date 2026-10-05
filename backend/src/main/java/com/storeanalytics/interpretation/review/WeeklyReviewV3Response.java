@@ -108,12 +108,12 @@ public record WeeklyReviewV3Response(
             int selectedSellerCount
     ) {
         public Membership {
-            require("CURRENT_RANKING_AT_GENERATION".equals(basis),
-                    "v3 membership basis must be current ranking");
+            require("CURRENT_RANKING_AT_GENERATION".equals(basis)
+                    || SellerWeeklyHistoricalMembership.BASIS.equals(basis), "Unsupported v3 membership basis");
             requireHash(currentCohortHash, "currentCohortHash");
             requireHash(previousCohortHash, "previousCohortHash");
             require(currentCohortHash.equals(previousCohortHash),
-                    "stage A must use one cohort for both weeks");
+                    "Both weeks must share the selected comparison cohort");
             requireHash(actionabilityRosterHash, "actionabilityRosterHash");
             requireNonNull(actionabilityAsOf, "actionabilityAsOf");
             require(selectedSellerCount >= 0, "selectedSellerCount must not be negative");

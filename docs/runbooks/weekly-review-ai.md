@@ -104,8 +104,11 @@ Runtime table/contract availability проверяется отдельно; с�
 view не доказывает совместимость schema-version guard. Для обычных позиций membership берётся
 на дату их операции, для гарантийных allocations/base — целевой продажи. UNKNOWN истории/автора
 не обходить включением текущего roster. Baseline должен покрывать обе сравниваемые недели.
-Combined facts и opt-in карточки не подключены к endpoint/planner: перед включением нужны
-historical membership identity/schema, source-publication fence и release gates по плану.
+Combined facts, historical identity и opt-in snapshot writer соединены free runner, но не подключены
+к endpoint/scheduler/AI planner: перед включением нужны period read, source-publication fence и
+release gates по плану. Codec/frontend parsing поддерживают temporal basis; runtime activation
+это не доказывает. Для старого периода проверять отсутствие future actions; departed card должна
+сохранить исторические суммы и `actionableNow=false`.
 
 Dormant preparation backlog требует grants для `seller_weekly_backlog_state` и
 `seller_weekly_preparation_jobs`, upgrade rehearsal и отдельного согласованного подключения
@@ -123,8 +126,14 @@ status, next_evaluation_at, lease_until, preparation_attempt_count, last_reason_
 Устаревший `SUCCEEDED` возвращается в бесплатную подготовку bounded refresh (1–100 jobs),
 с тем же ID/store/week. Это не разрешение повторять provider job и не удаление опубликованного
 snapshot/enrichment; paid counters остаются независимыми.
-Существующая canary-команда не подключает backlog. До public historical assembly/identity и
-publication fence не переключать scheduler на эти таблицы и не выдавать их за готовый автообзор.
+Существующая canary-команда не подключает backlog. Free runner подготавливает одну claimed неделю,
+не создаёт baseline/AI job, не вызывает provider и не имеет scheduler. Он использует historical
+assembler с отдельной identity, перепроверяет source/membership revision под locks и exact binding.
+Source change даёт отложенную бесплатную подготовку; contract/technical failure требует вмешательства.
+Проверять sanitized reason/state, а не raw exception/provider payload. При повторном выполнении
+равный semantic content сохраняет прежний snapshot ID/payload и обновляет совместимый checkpoint.
+До period read/planner и atomic AI publication fence не переключать scheduler на эти таблицы
+и не выдавать их за готовый автообзор.
 
 При seller cutover проверять version/scope exact snapshot, а не считать прежний STORE preflight
 разрешением нового input. Seller API: GET `/api/stores/{storeId}/weekly-reviews/seller-current`,

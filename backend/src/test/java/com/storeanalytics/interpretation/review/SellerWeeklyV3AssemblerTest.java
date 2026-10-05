@@ -19,6 +19,8 @@ import com.storeanalytics.metrics.service.CategoryKpiGroup;
 import com.storeanalytics.metrics.service.CategoryKpiMetrics;
 import com.storeanalytics.metrics.service.CategoryKpiResult;
 import com.storeanalytics.metrics.service.SellerCohortSnapshot;
+import com.storeanalytics.metrics.service.SellerHistoricalComparisonFacts;
+import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.metrics.service.SellerPeriodComparisonFacts;
 import com.storeanalytics.metrics.service.SellerPeriodFacts;
 import com.storeanalytics.metrics.service.SellerPeriodMetrics;
@@ -30,6 +32,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -167,6 +170,95 @@ public class SellerWeeklyV3AssemblerTest {
         assertThat(first.employees().getFirst().card().displayName())
                 .isNotEqualTo(renamed.employees().getFirst().card().displayName());
         assertThat(codec.contentHash(first)).isEqualTo(codec.contentHash(renamed));
+    }
+
+    @Test
+    void historicalAssemblyKeepsFinancialValuesButSeparatesSelectionAndDepartedActions() {
+        var membership = new SellerWeeklyHistoricalMembership(Instant.parse("2026-08-01T00:00:00Z"),
+                2, "c".repeat(64), "d".repeat(64));
+        var facts = historicalFacts(STORE, new PeriodContext("Europe/Moscow", CURRENT, PREVIOUS,
+                "Текущая", "Предыдущая"), false, 0, membership);
+        var historical = new SellerWeeklyV3Assembler().assembleHistorical(facts, provenance(), SOURCE_HASH, NOW);
+        var current = new SellerWeeklyV3Assembler().assemble(source(CURRENT.end()), provenance(), SOURCE_HASH, NOW);
+        assertThat(historical.results()).isEqualTo(current.results());
+        assertThat(historical.revenueDecomposition()).isEqualTo(current.revenueDecomposition());
+        assertThat(historical.additionalSales()).isEqualTo(current.additionalSales());
+        assertThat(historical.membership().basis()).isEqualTo(SellerWeeklyHistoricalMembership.BASIS);
+        assertThat(historical.membership().currentCohortHash()).isEqualTo(membership.selectionHash());
+        assertThat(historical.membership().actionabilityRosterHash()).isEqualTo(membership.actionabilityHash());
+        assertThat(historical.employees()).singleElement().satisfies(item -> {
+            assertThat(item.actionableNow()).isFalse();
+            assertThat(item.card().action()).isNull();
+            assertThat(item.card().limitations()).anyMatch(value -> value.startsWith("Не в текущей команде"));
+        });
+        assertThat(historical.evidence()).allMatch(item ->
+                item.formulaVersion().equals(SellerWeeklyV3Assembler.historicalVersions().metricsPolicy()));
+        var codec = new WeeklyReviewV3SnapshotCodec();
+        String encoded = codec.serialize(historical);
+        assertThat(codec.serialize(codec.deserialize(encoded))).isEqualTo(encoded);
+        assertThat(codec.contentHash(codec.deserialize(encoded))).isEqualTo(codec.contentHash(historical));
+        assertThat(codec.contentHash(historical)).isNotEqualTo(codec.contentHash(current));
+    }
+
+    @Test
+    void oldHistoricalWeekDoesNotAssignNewFutureActionsToCurrentEmployees() {
+        var membership = new SellerWeeklyHistoricalMembership(Instant.parse("2026-08-01T00:00:00Z"),
+                2, "c".repeat(64), "d".repeat(64));
+        var facts = historicalFacts(STORE, new PeriodContext("Europe/Moscow", CURRENT, PREVIOUS,
+                "Текущая", "Предыдущая"), true, 0, membership);
+        declineWithSufficientSample(facts);
+        var latest = new SellerWeeklyV3Assembler().assembleHistorical(facts, provenance(), SOURCE_HASH, NOW);
+        assertThat(latest.actions()).isNotEmpty();
+        assertThat(latest.employees()).anyMatch(item -> item.card().action() != null);
+        var response = new SellerWeeklyV3Assembler().assembleHistorical(facts, provenance(), SOURCE_HASH,
+                NOW.plusSeconds(14 * 86400));
+        assertThat(response.actions()).isEmpty();
+        assertThat(response.employees()).singleElement().satisfies(item -> {
+            assertThat(item.actionableNow()).isTrue();
+            assertThat(item.card().action()).isNull();
+            assertThat(item.card().limitations()).noneMatch(value -> value.startsWith("Не в текущей команде"));
+        });
+    }
+
+    private void declineWithSufficientSample(SellerWeeklyHistoricalFacts facts) {
+        var current = facts.historical().comparison().current();
+        var groups = List.of(
+                group("PHONES", new BigDecimal("95")), group("DEVICES", new BigDecimal("95")),
+                group("ADDITIONAL_REVENUE", new BigDecimal("5")), group("ACCESSORY", new BigDecimal("2")),
+                group("SERVICE", new BigDecimal("3")));
+        when(current.metrics().categories().groups()).thenReturn(groups);
+        var additional = mock(EmployeeCategoryKpiAggregate.class);
+        when(additional.employeeId()).thenReturn(SELLER);
+        when(additional.countsAsAdditionalRevenue()).thenReturn(true);
+        when(additional.netRevenue()).thenReturn(new BigDecimal("5"));
+        when(current.metrics().employeeCategories()).thenReturn(List.of(additional));
+        for (var selected : List.of(current, facts.historical().comparison().previous())) {
+            BigDecimal net = selected.metrics().totals().netRevenue();
+            when(selected.documents()).thenReturn(List.of(new SellerDocumentAggregate(
+                    SELLER, net, BigDecimal.ZERO, 20, 0, 20)));
+        }
+    }
+
+    static SellerWeeklyHistoricalFacts historicalFacts(UUID storeId, PeriodContext period, boolean actionable,
+            long revision, SellerWeeklyHistoricalMembership membership) {
+        var fixture = new SellerWeeklyV3AssemblerTest();
+        var source = fixture.source(CURRENT.end());
+        var comparison = source.comparison();
+        var cohort = new SellerCohortSnapshot(storeId, List.of(SELLER));
+        when(source.sourceDataStatus().storeId()).thenReturn(storeId);
+        when(comparison.current().metrics().cohort()).thenReturn(cohort);
+        when(comparison.previous().metrics().cohort()).thenReturn(cohort);
+        when(comparison.current().metrics().period()).thenReturn(
+                new StoreKpiPeriod(period.current().start(), period.current().end()));
+        when(comparison.previous().metrics().period()).thenReturn(
+                new StoreKpiPeriod(period.previous().start(), period.previous().end()));
+        when(comparison.current().projectedAttachRates().formulaVersion()).thenReturn("attach-rate-v4");
+        when(comparison.previous().projectedAttachRates().formulaVersion()).thenReturn("attach-rate-v4");
+        when(comparison.current().attachFormulaVersion()).thenReturn("attach-rate-v4-historical-membership-v1");
+        when(comparison.previous().attachFormulaVersion()).thenReturn("attach-rate-v4-historical-membership-v1");
+        return new SellerWeeklyHistoricalFacts(storeId, period, source.sourceDataStatus(),
+                new SellerHistoricalComparisonFacts(comparison, actionable ? Set.of(SELLER) : Set.of()), NOW,
+                SellerWeeklySourceStability.STABLE, SellerWeeklySourceCoverage.complete(), revision, membership);
     }
 
     private Provenance provenance() {

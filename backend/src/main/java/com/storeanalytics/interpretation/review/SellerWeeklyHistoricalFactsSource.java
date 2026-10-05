@@ -27,16 +27,19 @@ class SellerWeeklyHistoricalFactsSource {
     private final SellerWeeklySourceStabilityRepository stability;
     private final SellerWeeklySourceCoverageRepository coverage;
     private final SellerWeeklySourceRevisionRepository revision;
+    private final SellerWeeklyHistoricalIdentity identity;
 
     SellerWeeklyHistoricalFactsSource(JdbcTemplate jdbc, SellerHistoricalFactsService sellers,
             StoreDataStatusService dataStatus, SellerWeeklySourceStabilityRepository stability,
-            SellerWeeklySourceCoverageRepository coverage, SellerWeeklySourceRevisionRepository revision) {
+            SellerWeeklySourceCoverageRepository coverage, SellerWeeklySourceRevisionRepository revision,
+            SellerWeeklyHistoricalIdentity identity) {
         this.jdbc = jdbc;
         this.sellers = sellers;
         this.dataStatus = dataStatus;
         this.stability = stability;
         this.coverage = coverage;
         this.revision = revision;
+        this.identity = identity;
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -72,6 +75,7 @@ class SellerWeeklyHistoricalFactsSource {
                 new StoreKpiPeriod(previous.start(), previous.end()), week.zone(), now);
         var status = dataStatus.get(storeId);
         return new SellerWeeklyHistoricalFacts(storeId, period, status, comparison,
-                status.lastCompletedSyncAt(), selectedStability, selectedCoverage, revision.read(storeId));
+                status.lastCompletedSyncAt(), selectedStability, selectedCoverage, revision.read(storeId),
+                identity.read(storeId, week, comparison));
     }
 }

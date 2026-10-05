@@ -29,7 +29,7 @@ export const sellerWeeklyReviewSchema = z.object({
   contractVersion: z.literal(3),
   scope: z.literal("SELLERS"),
   membership: z.object({
-    basis: z.literal("CURRENT_RANKING_AT_GENERATION"),
+    basis: z.enum(["CURRENT_RANKING_AT_GENERATION", "HISTORICAL_DOCUMENT_MEMBERSHIP_V1"]),
     currentCohortHash: hash,
     previousCohortHash: hash,
     actionabilityRosterHash: hash,
@@ -78,8 +78,9 @@ export const sellerWeeklyReviewSchema = z.object({
     issue("Seller enrichment must use its dedicated versioned prompt", ["aiEnhancement"]);
   }
   if (review.membership.currentCohortHash !== review.membership.previousCohortHash
-      || review.membership.currentCohortHash !== review.membership.actionabilityRosterHash) {
-    issue("Stage A requires one current cohort for both weeks", ["membership"]);
+      || (review.membership.basis === "CURRENT_RANKING_AT_GENERATION"
+        && review.membership.currentCohortHash !== review.membership.actionabilityRosterHash)) {
+    issue("Both weeks require one selection; current-ranking actions must use the same cohort", ["membership"]);
   }
   const display = review.teamDisplay;
   if (display.displayedCount !== review.employees.length || display.displayedCount > display.totalCount

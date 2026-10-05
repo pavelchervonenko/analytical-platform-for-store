@@ -40,8 +40,9 @@ class SellerWeeklyHistoricalFactsSourceTest {
     private final SellerWeeklySourceStabilityRepository stability = mock(SellerWeeklySourceStabilityRepository.class);
     private final SellerWeeklySourceCoverageRepository coverage = mock(SellerWeeklySourceCoverageRepository.class);
     private final SellerWeeklySourceRevisionRepository revision = mock(SellerWeeklySourceRevisionRepository.class);
+    private final SellerWeeklyHistoricalIdentity identity = mock(SellerWeeklyHistoricalIdentity.class);
     private final SellerWeeklyHistoricalFactsSource source = new SellerWeeklyHistoricalFactsSource(
-            jdbc, sellers, status, stability, coverage, revision);
+            jdbc, sellers, status, stability, coverage, revision, identity);
 
     @BeforeEach
     void configure() {
@@ -50,6 +51,8 @@ class SellerWeeklyHistoricalFactsSourceTest {
         when(coverage.read(eq(STORE), any())).thenReturn(SellerWeeklySourceCoverage.complete());
         when(stability.read(eq(STORE), any(), any())).thenReturn(SellerWeeklySourceStability.STABLE);
         when(revision.read(STORE)).thenReturn(42L);
+        when(identity.read(eq(STORE), any(), any())).thenReturn(new SellerWeeklyHistoricalMembership(
+                Instant.parse("2026-09-01T00:00:00Z"), 3, "a".repeat(64), "b".repeat(64)));
     }
 
     @Test
@@ -62,6 +65,8 @@ class SellerWeeklyHistoricalFactsSourceTest {
         when(comparison.previous().metrics().cohort().storeId()).thenReturn(STORE);
         when(comparison.current().metrics().period()).thenReturn(current);
         when(comparison.previous().metrics().period()).thenReturn(previous);
+        when(comparison.current().attachFormulaVersion()).thenReturn("attach-rate-v4-historical-membership-v1");
+        when(comparison.previous().attachFormulaVersion()).thenReturn("attach-rate-v4-historical-membership-v1");
         var historical = new SellerHistoricalComparisonFacts(comparison, Set.of());
         when(sellers.read(eq(STORE), eq(current), eq(previous), eq(ZoneId.of(ZONE)), eq(NOW)))
                 .thenReturn(historical);
@@ -72,6 +77,8 @@ class SellerWeeklyHistoricalFactsSourceTest {
         assertThat(facts.period().current().start()).isEqualTo(START);
         assertThat(facts.historical()).isSameAs(historical);
         assertThat(facts.sourceRevision()).isEqualTo(42);
+        assertThat(facts.membership().revision()).isEqualTo(3);
+        verify(identity).read(STORE, new ClosedSellerWeek(START, ZoneId.of(ZONE)), historical);
         verify(stability).read(STORE, Instant.parse("2026-09-06T22:00:00Z"),
                 Instant.parse("2026-09-20T22:00:00Z"));
     }

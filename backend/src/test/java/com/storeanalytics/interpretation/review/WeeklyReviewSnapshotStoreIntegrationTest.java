@@ -574,6 +574,120 @@ class WeeklyReviewSnapshotStoreIntegrationTest {
     }
 
     @Test
+    void historicalWriterCreatesImmutableDistinctBasisAndReusesExactSemanticContent() {
+        UUID storeId = addStore();
+        var facts = historicalFacts(storeId, PERIOD);
+        var first = store.persistHistoricalCandidate(facts, Instant.parse("2026-08-24T04:00:00Z"));
+        var reused = store.persistHistoricalCandidate(facts, Instant.parse("2026-08-24T04:05:00Z"));
+        assertThat(reused.id()).isEqualTo(first.id());
+        assertThat(first.response().membership().basis()).isEqualTo(SellerWeeklyHistoricalMembership.BASIS);
+        assertThat(first.response().membership().actionabilityRosterHash()).isEqualTo("d".repeat(64));
+        assertThat(store.findV3GenerationState(storeId, CURRENT)).get().satisfies(checkpoint -> {
+            assertThat(checkpoint.outcome()).isEqualTo("REUSED");
+            assertThat(checkpoint.identityHash()).isEqualTo(SellerWeeklyHistoricalIdentity.sourceHash(facts));
+            assertThat(checkpoint.snapshotId()).isEqualTo(first.id());
+        });
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE weekly_review_snapshots SET report_state='PARTIAL' WHERE id=?", first.id()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM weekly_review_ai_jobs job "
+                + "JOIN weekly_review_snapshots snapshot ON snapshot.id=job.snapshot_id WHERE snapshot.store_id=?",
+                Long.class, storeId)).isZero();
+    }
+
+    @Test
+    void historicalWriterSupportsOldClosedWeekWithoutLatestWeekOrTodaysDataStatusSubstitution() {
+        UUID storeId = addStore();
+        var period = new PeriodContext(PERIOD.timezone(), PREVIOUS,
+                new DateRange(PREVIOUS.start().minusWeeks(1), PREVIOUS.end().minusWeeks(1)), "Old", "Comparison");
+        var snapshot = store.persistHistoricalCandidate(historicalFacts(storeId, period),
+                Instant.parse("2026-08-24T04:00:00Z"));
+        assertThat(snapshot.response().period()).isEqualTo(period);
+        assertThat(snapshot.response().actions()).isEmpty();
+        assertThat(snapshot.response().employees()).allMatch(item -> item.card().action() == null);
+        assertThat(store.findLatestV3(storeId, CURRENT)).isEmpty();
+        assertThat(store.findV3GenerationState(storeId, PREVIOUS)).isPresent();
+    }
+
+    @Test
+    void historicalWriterRejectsMembershipRevisionChangeEvenWhenGlobalRevisionWasNotBumped() {
+        UUID storeId = addStore();
+        var facts = historicalFacts(storeId, PERIOD);
+        jdbcTemplate.update("UPDATE store_seller_membership_state SET membership_revision=1 WHERE store_id=?", storeId);
+        assertThat(sourceRevisions.read(storeId)).isEqualTo(facts.sourceRevision());
+        assertThatThrownBy(() -> store.persistHistoricalCandidate(facts, Instant.parse("2026-08-24T04:00:00Z")))
+                .isInstanceOf(SellerWeeklySourceChangedException.class);
+        assertThat(store.findLatestV3(storeId, CURRENT)).isEmpty();
+        assertThat(store.findV3GenerationState(storeId, CURRENT)).isEmpty();
+    }
+
+    @Test
+    void historicalWriterRejectsSourceChangeAndInactiveOrRetimedStore() {
+        for (String mutation : List.of("UPDATE stores SET timezone='UTC' WHERE id=?",
+                "UPDATE stores SET is_active=false WHERE id=?",
+                "UPDATE store_analytics_source_state SET revision=revision+1 WHERE store_id=?")) {
+            UUID storeId = addStore();
+            var facts = historicalFacts(storeId, PERIOD);
+            jdbcTemplate.update(mutation, storeId);
+            assertThatThrownBy(() -> store.persistHistoricalCandidate(facts, Instant.parse("2026-08-24T04:00:00Z")))
+                    .isInstanceOf(SellerWeeklySourceChangedException.class);
+            assertThat(store.findLatestV3(storeId, CURRENT)).isEmpty();
+        }
+    }
+
+    @Test
+    void historicalWriterCannotPublishAnOpenWeekEvenWithMatchingVersionsAndHistory() {
+        UUID storeId = addStore();
+        var period = new PeriodContext(PERIOD.timezone(),
+                new DateRange(CURRENT.start().plusWeeks(1), CURRENT.end().plusWeeks(1)), CURRENT, "Open", "Previous");
+        var facts = historicalFacts(storeId, period);
+        assertThatThrownBy(() -> store.persistHistoricalCandidate(facts, Instant.parse("2026-08-24T04:00:00Z")))
+                .isInstanceOf(SellerWeeklySourceChangedException.class);
+        assertThat(store.findLatestV3(storeId, period.current())).isEmpty();
+        assertThat(store.findV3GenerationState(storeId, period.current())).isEmpty();
+    }
+
+    @Test
+    void historicalWriterRechecksHistoryAfterWaitingForStorePublicationLock() throws Exception {
+        UUID storeId = addStore();
+        var facts = historicalFacts(storeId, PERIOD);
+        ExecutorService workers = Executors.newSingleThreadExecutor();
+        try (Connection blocker = dataSource.getConnection()) {
+            blocker.setAutoCommit(false);
+            try (var lock = blocker.prepareStatement("SELECT id FROM stores WHERE id=? FOR UPDATE")) {
+                lock.setObject(1, storeId);
+                lock.execute();
+                Future<?> saved = workers.submit(() ->
+                        store.persistHistoricalCandidate(facts, Instant.parse("2026-08-24T04:00:00Z")));
+                awaitBlockedSql("SELECT id FROM stores");
+                try (var change = blocker.prepareStatement(
+                        "UPDATE store_seller_membership_state SET membership_revision=1 WHERE store_id=?")) {
+                    change.setObject(1, storeId);
+                    change.executeUpdate();
+                }
+                blocker.commit();
+                assertThatThrownBy(() -> saved.get(10, TimeUnit.SECONDS))
+                        .hasCauseInstanceOf(SellerWeeklySourceChangedException.class);
+                assertThat(store.findLatestV3(storeId, CURRENT)).isEmpty();
+            } finally {
+                blocker.rollback();
+            }
+        } finally {
+            workers.shutdownNow();
+        }
+    }
+
+    private SellerWeeklyHistoricalFacts historicalFacts(UUID storeId, PeriodContext period) {
+        Instant baseline = Instant.parse("2026-08-01T00:00:00Z");
+        jdbcTemplate.update("INSERT INTO store_seller_membership_state(store_id,authoritative_from,baseline_source) "
+                + "VALUES (?,?,'SYNTHETIC_ONLY')", storeId, Timestamp.from(baseline));
+        jdbcTemplate.update("INSERT INTO store_analytics_source_state(store_id,revision) "
+                + "VALUES (?,0) ON CONFLICT DO NOTHING", storeId);
+        return SellerWeeklyV3AssemblerTest.historicalFacts(storeId, period, true, sourceRevisions.read(storeId),
+                new SellerWeeklyHistoricalMembership(baseline, 0, "c".repeat(64), "d".repeat(64)));
+    }
+
+    @Test
     void sourceChangesCoalescePerStoreTransactionAndDoNotPreventStoreDeletion() {
         UUID storeId = addStore();
         new TransactionTemplate(transactions).executeWithoutResult(ignored -> {

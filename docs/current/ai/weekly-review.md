@@ -33,6 +33,9 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklySourceStabilityRepository.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklySourceRevisionRepository.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklySourceIdentity.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalIdentity.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalMembership.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationRunner.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyIdentityFacts.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyIdentityFactsSource.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyTemporalFence.java
@@ -195,7 +198,8 @@ Store должен оставаться активным с той же timezone
 полуночи, обе недели — непрерывно покрыты SALES/RETURNS/ORDERS и reconciled. Combined temporal
 facts читаются вместе с coverage, stability и source revision в одной read-only RR-транзакции.
 UNKNOWN history/author блокирует подготовку, не отбрасывает деньги и не включает current roster.
-Отдельный тип результата не позволяет передать temporal facts в прежний current-roster assembler.
+Отдельный тип результата не позволяет передать temporal facts в прежнюю current-roster assembly.
+Temporal snapshot создаётся отдельным opt-in writer, описанным ниже.
 
 `seller_weekly_backlog_state` хранит baseline/timezone и cursor; `seller_weekly_preparation_jobs`
 хранит уникальные store/week, состояние, число бесплатных подготовок, next evaluation и lease.
@@ -212,11 +216,50 @@ Claim использует `SKIP LOCKED`; отдельный token защища�
 `FAILED` terminal. `SUCCEEDED` обозначает только привязку exact historical snapshot и актуального
 checkpoint, не ИИ-публикацию; текущий current-roster snapshot не подходит. Короткая транзакция
 привязки блокирует store/source revision, но paid attempt и публикация требуют своего повторного
-atomic fence. Public historical schema/identity, snapshot assembler, planner/runner и provider
-этого пути ещё не подключены. Само наличие таблиц не включает автоматический режим.
+atomic fence. Исторический assembler и бесплатный runner этой очереди реализованы локально,
+но scheduler, public period read/planner и provider этого пути ещё не подключены.
+Само наличие таблиц или runner не включает автоматический режим.
 Bounded `requeueStaleSnapshots` возвращает устаревшую привязку в `PENDING` той же бесплатной
 задачи, без перемотки cursor, нового store/week и вмешательства в paid jobs. Проверяются текущий
 checkpoint/source revision и latest snapshot; повторный refresh уже ожидающей задачи no-op.
+
+### Opt-in исторический снимок и идентичность
+
+`SellerWeeklyHistoricalIdentity` читает baseline, membership revision и интервалы в той же
+RR-транзакции, что финансовые/attach факты. Оба cohort hash публичного membership обозначают
+единую selection сравнения двух недель: baseline, store/timezone, границы периода и отсортированные
+интервалы, обрезанные этими границами, включая состояния участия. Это не fingerprint сегодняшнего
+списка сотрудников и не две разные выборки по неделям. Численность — union исторически eligible
+участников; identity reader проверяет совпадение union с финансовым cohort.
+`actionabilityRosterHash` отдельно описывает пересечение исторического состава с текущим roster.
+Имена, суммы, причины изменений и внешние provider IDs в identity не входят. Source identity
+дополнительно включает source/membership revisions и обе temporal attach policies.
+Сегодняшний store-wide freshness timestamp не заменяет доказанный coverage старого периода.
+
+Basis `HISTORICAL_DOCUMENT_MEMBERSHIP_V1` поддерживается backend codec и frontend parser отдельно
+от `CURRENT_RANKING_AT_GENERATION`. Current-ranking parsing сохраняет требование одинаковых
+selection/action hashes. Historical parsing допускает отдельный action hash, но сохраняет
+единую selection обеих недель и запрет future action для `actionableNow=false`.
+Historical assembly имеет отдельные `weekly-metrics-v10-sellers-historical` и
+`weekly-snapshot-v18`; quality rules не изменены. Прежние версии prompt/input/schema и payload
+не переписываются. Карточка ушедшего сотрудника сохраняется; восстановление давно пропущенной
+недели не назначает новые действия ни команде, ни текущим сотрудникам на следующую неделю.
+Для последней закрытой недели действует обычный actionability gate.
+
+`persistHistoricalCandidate` сохраняет точный закрытый период под store → source publication
+locks. После ожидания locks перепроверяет активность/timezone, source revision, неизменный baseline
+и membership revision; устаревшие факты не вставляют snapshot/checkpoint. Snapshot и совместимый
+checkpoint атомарны. Повтор равного semantic content переиспользует immutable snapshot, обновляя
+checkpoint для проверенной source revision; имя и время проверки сами по себе не создают revision.
+Это publication детерминированного snapshot, не atomic fence публикации ответа ИИ.
+
+`SellerWeeklyPreparationRunner` за один вызов claims только одно задание. RR preparation не держит
+внешнюю write-транзакцию; после чтения проверяется lease, затем writer и exact binding. Потеря lease
+не позволяет отмечать успех или оживлять token. Source churn даёт бесплатный backoff на той же
+задаче; UNKNOWN history/author остаётся отдельным ожиданием. Техническая/contract failure terminal
+с sanitized code, без сохранения raw exception message. Runner не имеет scheduler и AI dependency;
+не создаёт baseline, paid job или provider call. Его включение, периодный read path и AI planning
+требуют следующих reviewed пакетов и release gates.
 
 ```text
 weekly-review facts
@@ -428,11 +471,12 @@ allocations и правила классификации не переписыв
 
 Opt-in historical presenter сохраняет финансовую карточку ушедшего продавца с явной пометкой
 «не в текущей команде», `actionableNow=false` и без future action. Current-roster presentation
-сохраняет прежнее поведение. Это ещё не historical API/schema cutover: текущий membership
-contract и публичные readers остаются current-roster. Новый combined reader не подключён к
-endpoint, scheduler, snapshot assembly или AI enqueue. Текущий Overview и first-manual path
-не переключены. Payroll/saved employee и snapshots не переписываются. Нужны периодный read/planner,
-явная historical identity, durable backlog, publication fence и release gate до публикации.
+сохраняет прежнее поведение. Historical identity/assembly и free backlog runner уже доступны
+отдельному внутреннему пути; additive membership parsing поддерживает оба basis. Это ещё не
+historical API cutover: публичные readers и scheduler остаются current-roster. Combined reader
+не подключён к endpoint, действующему scheduler или AI enqueue. Текущий Overview и first-manual
+path не переключены. Payroll/saved employee и snapshots не переписываются. Нужны периодный
+read/planner, atomic AI publication fence и release gate до включения автоматического пути.
 Следовательно, описанный ниже roster остаётся current-roster,
 не восстановленным историческим составом. Автоматическое восстановление пропущенной недели
 и чтение произвольного исторического периода пока не включены.

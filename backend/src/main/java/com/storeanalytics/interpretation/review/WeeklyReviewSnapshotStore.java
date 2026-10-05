@@ -267,6 +267,72 @@ public class WeeklyReviewSnapshotStore {
                 identityHash, source.sourceRevision(), snapshotId, Timestamp.from(evaluatedAt), outcome);
     }
 
+    /** Dormant period writer: never substitutes the current roster or starts a provider job. */
+    @Transactional(isolation = Isolation.READ_COMMITTED, propagation = Propagation.REQUIRES_NEW)
+    PersistedWeeklyReviewV3Snapshot persistHistoricalCandidate(
+            SellerWeeklyHistoricalFacts facts, Instant calculatedAt) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()
+                || TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
+            throw new IllegalStateException("Historical snapshot writer requires a writable transaction");
+        }
+        SellerWeeklyHistoricalFacts source = requireNonNull(facts, "facts");
+        Instant calculated = requireNonNull(calculatedAt, "calculatedAt");
+        lockStore(source.storeId());
+        List<String> zones = jdbcTemplate.queryForList(
+                "SELECT timezone FROM stores WHERE id = ? AND is_active", String.class,
+                source.storeId());
+        if (zones.isEmpty() || !source.period().timezone().equals(zones.getFirst())) {
+            throw new SellerWeeklySourceChangedException();
+        }
+        jdbcTemplate.update("""
+                INSERT INTO store_analytics_source_state (store_id, revision) VALUES (?, 0) ON CONFLICT DO NOTHING
+                """, source.storeId());
+        Long sourceRevision = jdbcTemplate.queryForObject("""
+                SELECT revision FROM store_analytics_source_state WHERE store_id = ? FOR UPDATE
+                """, Long.class, source.storeId());
+        var membership = source.membership();
+        Boolean historyMatches = jdbcTemplate.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM store_seller_membership_state
+                    WHERE store_id = ? AND authoritative_from = ? AND membership_revision = ?)
+                """, Boolean.class, source.storeId(), Timestamp.from(membership.authoritativeFrom()),
+                membership.revision());
+        Instant evaluatedAt = clock.instant();
+        var week = new ClosedSellerWeek(source.period().current().start(),
+                java.time.ZoneId.of(source.period().timezone()));
+        if (sourceRevision == null || sourceRevision != source.sourceRevision()
+                || !Boolean.TRUE.equals(historyMatches) || !week.isClosedAt(evaluatedAt)) {
+            throw new SellerWeeklySourceChangedException();
+        }
+        String identityHash = SellerWeeklyHistoricalIdentity.sourceHash(source);
+        Optional<LatestHeader> latest = findLatestHeaderInternal(source.storeId(), source.period().current());
+        int revision = latest.map(item -> item.revision() + 1).orElse(1);
+        UUID snapshotId = UUID.randomUUID();
+        Provenance provenance = new Provenance(snapshotId.toString(), revision, calculated,
+                source.sourceDataUpdatedAt(), latest.isPresent(), latest.map(LatestHeader::createdAt).orElse(null));
+        WeeklyReviewV3Response response = sellerAssembler.assembleHistorical(
+                source, provenance, identityHash, evaluatedAt);
+        String contentHash = versionedCodec.contentHash(response);
+        UUID compatibleId = snapshotId;
+        String outcome = "CREATED";
+        if (latest.isPresent() && latest.get().contractVersion() == 3
+                && latest.get().contentHash().equals(contentHash)) {
+            compatibleId = latest.get().id();
+            outcome = "REUSED";
+        } else {
+            jdbcTemplate.update(INSERT_V3_SQL, snapshotId, source.storeId(), source.period().current().start(),
+                    source.period().current().end(), source.period().timezone(), revision,
+                    latest.map(LatestHeader::id).orElse(null), response.versions().metricsPolicy(),
+                    response.versions().snapshotPolicy(), response.versions().qualityPolicy(),
+                    response.reportState().name(), timestamp(source.sourceDataUpdatedAt()),
+                    versionedCodec.serialize(response), contentHash, identityHash);
+        }
+        jdbcTemplate.update(UPSERT_V3_GENERATION_STATE_SQL, source.storeId(), source.period().current().start(),
+                source.period().current().end(), identityHash, source.sourceRevision(), compatibleId,
+                Timestamp.from(evaluatedAt), outcome);
+        return findV3ById(compatibleId).orElseThrow(() ->
+                new IllegalStateException("Historical v3 weekly review snapshot could not be read"));
+    }
+
     @Transactional(readOnly = true)
     public Optional<PersistedWeeklyReviewSnapshot> findLatest(
             UUID storeId,

@@ -80,6 +80,31 @@ canary не переносятся на другую неделю или нов�
 
 ## Прогресс
 
+- Пакет 3, historical snapshot и free runner: interval/baseline identity читается в той же RR
+  транзакции, что combined facts, и проверяет исторический union cohort. Canonical selection
+  содержит обрезанные обеими неделями интервалы; текущая actionability имеет отдельный hash.
+  UNKNOWN не превращается в current-roster fallback. Historical assembler имеет отдельные
+  policy versions и сохраняет вклад/карточки ушедших без future action. Давно пропущенная неделя
+  также не назначает новые team/employee actions на следующую неделю. Backend codec и frontend
+  parser поддерживают additive historical basis, сохраняя legacy current-ranking contract.
+  Отдельный period writer под store → source locks проверяет активность/timezone, source и
+  membership revisions, baseline и закрытие периода; snapshot/checkpoint атомарны. Равный
+  semantic content переиспользует immutable snapshot. Free runner делает одну подготовку за
+  вызов, проверяет lease перед writer и exact binding; waits имеют backoff, technical failure
+  terminal с безопасным кодом. Scheduler/period read/AI planner не подключены; production,
+  baseline и paid calls не затронуты. Code review и сверка с планом завершены: temporal selection
+  не подменяется текущим составом, UNKNOWN не скрывается, immutable reports не переписываются.
+  При review усилен regression старой недели: сначала подтверждены реально создаваемые team и
+  employee actions, затем их отсутствие в запоздалом отчёте. Canonical codec roundtrip проверяет
+  bytes/content hash, а не Java-типы чисел в polymorphic evidence. Targeted backend gate:
+  137 tests в 14 классах, 0 failures/errors/skips; Checkstyle main/test PASS. Полный frontend check:
+  61 файл, 312 tests, contract check, lint, TypeScript/Vite build PASS. Documentation: 25 tests,
+  strict integrity 457 inventory rows, 0 warnings; operator/release security и Gradle supply-chain
+  integrity (449 components, 840 artifacts) PASS; diff check PASS. Frontend изменён только в parser,
+  не в UI; visual verification не выполнялась и остаётся gate при публичном historical cutover.
+  Это не полный backend release gate и не закрытие автоматического режима: далее period read/AI
+  planner, atomic AI publication fence, scheduler wiring и общий выпускной прогон.
+
 - Пакет 3, durable free preparation: добавлены per-store baseline/timezone cursor и уникальные
   store/week jobs. Discovery ограничена 1–52 неделями и начинается лишь после двух полных
   authoritative недель; restart и задержки через новые границы не удаляют старые задачи.
