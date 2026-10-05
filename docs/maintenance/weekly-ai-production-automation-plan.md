@@ -80,6 +80,25 @@ canary не переносятся на другую неделю или нов�
 
 ## Прогресс
 
+- Пакет 2, temporal financial preparation: внутренний reader применяет единую document selection
+  к employee/category и document aggregates обеих недель в одной RR-транзакции. Baseline до начала
+  сравнения обязателен; открытая неделя и UNKNOWN автор/history не удаляются молча. Исторический
+  roster сохраняет ушедших и нулевые строки, текущие action IDs отделены. Публичные readers,
+  payroll, warranty и scheduler не переключены. Attach views теряют document provenance:
+  их безопасная temporal проекция и presentation остаются обязательными до публикации.
+  Финальный targeted run: 36 tests в 5 классах, 0 failures/errors/skips, Checkstyle main/test PASS.
+  Новый historical integration suite (8 tests) проверяет midweek toggle, уход с удалённым
+  assignment, own-return processor без payroll DML, UNKNOWN author/history, отсутствующий/поздний
+  baseline, пустые периоды/cohort, точную локальную границу closure и parity прежних финансовых
+  формул при неизменном составе. Также проходят document selection (1), employee KPI (12),
+  employee category KPI (2) и current analytics service (13). Self-review подтвердил одну RR
+  транзакцию, одинаковый document filter для трёх проекций, half-open membership boundaries,
+  сохранение нулевых строк ушедших и отсутствие подключения financial-only результата к AI.
+  Первые проверки нашли missing source_system в synthetic fixture, длинные строки и неоднозначное
+  generic AssertJ assertion в новом boundary test; исправлены без ослабления проверок.
+  Documentation unit tests (25), strict integrity (0 warnings), host operator security и diff check
+  проходят. Полный release gate не запускался для этого промежуточного этапа; temporal attach,
+  presentation, durable backlog и atomic source-publication fence ещё остаются открытыми.
 - План зафиксирован; production изменения и платные вызовы не выполнялись.
 - Пакет 1: локально проверены календарная идентичность, lease/deadline heartbeat,
   attempt-count fence и сериализация runner. Code review не выявил изменения формул/transport.

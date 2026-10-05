@@ -360,6 +360,20 @@ snapshot ID/hash без лишней revision. Опубликованные payl
 
 V91 уже хранит интервалы участия после явно утверждённого baseline; отдельная document-level
 проекция eligibility проверена синтетически, но текущий seller-v3 facts reader пока её не использует.
+Локальный внутренний `SellerHistoricalFinancialFactsService` применяет эту selection к денежным
+employee/category агрегатам и документным totals сразу для двух последовательных полных недель.
+Вся подготовка выполняется в одной `REPEATABLE_READ` транзакции. Baseline должен покрывать начало
+предыдущей недели; открытый период, отсутствующий интервал или неизвестный автор возврата
+возвращают явную preparation failure, а не нулевой/урезанный исторический итог. Roster — объединение
+исторически eligible участников обеих недель, включая ушедших; нулевые строки сохраняются для
+сопоставления. Отдельный immutable `currentActionEmployeeIds` содержит только пересечение с
+текущим составом и не меняет исторические суммы. Финансовая basis обозначена
+`HISTORICAL_DOCUMENT_MEMBERSHIP_V1`; общий cohort fingerprint сам по себе не доказывает temporal
+семантику. Результат намеренно не является `SellerPeriodFacts`/publishable report: он не содержит
+attach и не подключён к public endpoint, scheduler или AI enqueue. Текущий Overview и first-manual
+current-roster path не переключены. Payroll/saved employee, warranty allocations и snapshots не
+переписываются. Нужны temporal attach с document provenance, исторические карточки/actions,
+периодный read/planner и release gate перед подключением результата к публикации.
 Следовательно, описанный ниже roster остаётся current-roster,
 не восстановленным историческим составом. Автоматическое восстановление пропущенной недели
 и чтение произвольного исторического периода пока не включены.

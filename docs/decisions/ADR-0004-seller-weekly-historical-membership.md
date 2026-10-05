@@ -16,12 +16,14 @@ implementation_sources:
   - backend/src/main/resources/db/migration/V91__seller_membership_history.sql
   - backend/src/main/java/com/storeanalytics/metrics/repository/SellerMembershipHistoryWriter.java
   - backend/src/main/java/com/storeanalytics/metrics/repository/SellerHistoricalDocumentSelectionRepository.java
+  - backend/src/main/java/com/storeanalytics/metrics/service/SellerHistoricalFinancialFactsService.java
   - backend/src/main/java/com/storeanalytics/sync/service/EmployeeSyncBatchApplier.java
 verification_sources:
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiJobStoreIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/common/database/SellerMembershipHistoryMigrationIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/metrics/repository/SellerMembershipHistoryWriterIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/metrics/repository/SellerHistoricalDocumentSelectionRepositoryIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/metrics/service/SellerHistoricalFinancialFactsServiceIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/EmployeeSyncMembershipHistoryIntegrationTest.java
 required_reviewers:
   - product
@@ -63,8 +65,8 @@ forward-only baseline и разрешение необходимых огран�
 Уточнение от 5 октября: [ADR-0006](ADR-0006-livesklad-return-employee-analytics.md) заменяет
 наследование аналитического сотрудника возврата в пункте 1. Для seller facts автором служит
 сотрудник записи возврата, с membership на дату возврата; связь с оригиналом не подменяет автора.
-Локальная экспериментальная projection реализует это уточнение, но ещё не подключена к
-агрегатам; действующие показатели этим reader-ом не меняются.
+Локальная projection реализует это уточнение; внутренний opt-in financial reader подключает
+её к денежным и документным агрегатам. Публичные показатели этим reader-ом не переключены.
 
 ## Текущее реализованное поведение
 
@@ -73,7 +75,9 @@ forward-only baseline и разрешение необходимых огран�
 Ручное изменение флага и полный employee sync после baseline теперь пишут интервалы и текущие
 назначения атомарно. Точечные локальные тесты это подтверждают, но baseline не активирован,
 отдельная document-level eligibility projection проверена на synthetic sale/return cases,
-но не подключена к агрегатам. Периодный read API и durable backlog ещё не реализованы.
+и подключена к внутренней подготовке исторических финансовых агрегатов. UNKNOWN блокирует
+подготовку; исторический вклад ушедших сохраняется отдельно от текущих action IDs. Temporal
+attach, historical presentation, периодный read API и durable backlog ещё не реализованы.
 Поэтому включение постоянной автоматической публикации до их проверки запрещено.
 
 ## Условия вступления решения в силу

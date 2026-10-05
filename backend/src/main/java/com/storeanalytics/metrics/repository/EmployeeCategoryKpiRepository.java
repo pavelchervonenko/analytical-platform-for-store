@@ -1,5 +1,7 @@
 package com.storeanalytics.metrics.repository;
 
+import com.storeanalytics.metrics.service.SellerCohortSnapshot;
+import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.product.model.AnalyticsCategoryKind;
 import com.storeanalytics.product.model.DeviceFamily;
 import java.time.LocalDate;
@@ -141,9 +143,31 @@ public class EmployeeCategoryKpiRepository {
                 "periodStart", periodStart,
                 "periodEnd", periodEnd
         );
+        return read(EMPLOYEE_CATEGORY_QUERY, parameters);
+    }
+
+    public List<EmployeeCategoryKpiAggregate> aggregateSelected(
+            SellerCohortSnapshot cohort, StoreKpiPeriod period, List<UUID> documentIds
+    ) {
+        if (cohort.employeeIds().isEmpty()) {
+            return List.of();
+        }
+        Map<String, Object> parameters = Map.of(
+                "storeId", cohort.storeId(), "periodStart", period.start(), "periodEnd", period.end(),
+                "employeeIds", cohort.employeeIds(), "documentIds", documentIds);
+        String query = AnalyticalDocumentSql.selectedDocuments(EMPLOYEE_CATEGORY_QUERY, documentIds.isEmpty())
+                .replace("employee_ids AS (", """
+                        employee_ids AS (
+                            SELECT id AS employee_id, false AS unassigned
+                            FROM employees WHERE id IN (:employeeIds)
+                            UNION
+                        """);
+        return read(query, parameters);
+    }
+
+    private List<EmployeeCategoryKpiAggregate> read(String query, Map<String, Object> parameters) {
         return jdbcTemplate.query(
-                EMPLOYEE_CATEGORY_QUERY,
-                parameters,
+                query, parameters,
                 (resultSet, rowNumber) -> new EmployeeCategoryKpiAggregate(
                         resultSet.getObject("employee_id", UUID.class),
                         resultSet.getString("display_name"),

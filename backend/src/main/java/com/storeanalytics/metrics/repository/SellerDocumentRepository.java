@@ -52,12 +52,24 @@ public class SellerDocumentRepository {
     }
 
     public List<SellerDocumentAggregate> read(SellerCohortSnapshot cohort, StoreKpiPeriod period) {
+        return read(cohort, period, QUERY, List.of());
+    }
+
+    public List<SellerDocumentAggregate> readSelected(
+            SellerCohortSnapshot cohort, StoreKpiPeriod period, List<java.util.UUID> documentIds
+    ) {
+        return read(cohort, period, AnalyticalDocumentSql.selectedDocuments(QUERY, documentIds.isEmpty()),
+                documentIds);
+    }
+
+    private List<SellerDocumentAggregate> read(SellerCohortSnapshot cohort, StoreKpiPeriod period,
+            String query, List<java.util.UUID> documentIds) {
         if (cohort.employeeIds().isEmpty()) {
             return List.of();
         }
-        return jdbcTemplate.query(QUERY, Map.of(
+        return jdbcTemplate.query(query, Map.of(
                 "storeId", cohort.storeId(), "employeeIds", cohort.employeeIds(),
-                "periodStart", period.start(), "periodEnd", period.end()
+                "periodStart", period.start(), "periodEnd", period.end(), "documentIds", documentIds
         ), (row, index) -> new SellerDocumentAggregate(
                 row.getObject("employee_id", java.util.UUID.class),
                 row.getBigDecimal("sales_revenue"), row.getBigDecimal("return_revenue"),

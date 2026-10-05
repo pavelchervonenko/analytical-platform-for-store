@@ -21,4 +21,18 @@ public final class AnalyticalDocumentSql {
 
     private AnalyticalDocumentSql() {
     }
+
+    /** Selected IDs came from the document-level temporal reader in the same RR transaction. */
+    static String selectedDocuments(String query, boolean empty) {
+        if (!query.startsWith(PERIOD_DOCUMENTS_CTE)) {
+            throw new IllegalArgumentException("Expected analytical document projection");
+        }
+        String selected = PERIOD_DOCUMENTS_CTE.replace("WITH analytical_documents AS",
+                "WITH candidate_documents AS") + """
+                , analytical_documents AS (
+                    SELECT * FROM candidate_documents WHERE %s
+                )
+                """.formatted(empty ? "false" : "id IN (:documentIds)");
+        return selected + query.substring(PERIOD_DOCUMENTS_CTE.length());
+    }
 }

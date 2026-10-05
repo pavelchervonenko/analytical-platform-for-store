@@ -4,6 +4,7 @@ import static com.storeanalytics.common.validation.ModelValidation.requireNonNul
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -49,5 +50,27 @@ public class SellerMembershipHistoryRepository {
                 """, (row, index) -> Eligibility.valueOf(row.getString("eligibility")),
                 moment, employee, moment, moment, store);
         return found.isEmpty() ? Eligibility.UNKNOWN : found.getFirst();
+    }
+
+    public Optional<Instant> authoritativeFrom(UUID storeId) {
+        return jdbc.query("SELECT authoritative_from FROM store_seller_membership_state WHERE store_id = ?",
+                (row, index) -> row.getTimestamp("authoritative_from").toInstant(),
+                requireNonNull(storeId, "storeId")).stream().findFirst();
+    }
+
+    /** Every historically eligible member, including departed members without current assignments. */
+    public List<UUID> eligibleDuring(UUID storeId, Instant start, Instant endExclusive) {
+        requireNonNull(start, "start");
+        requireNonNull(endExclusive, "endExclusive");
+        if (!start.isBefore(endExclusive)) {
+            throw new IllegalArgumentException("Historical interval must be nonempty");
+        }
+        return jdbc.query("""
+                SELECT DISTINCT employee_id FROM seller_membership_history
+                WHERE store_id = ? AND employee_active AND assignment_active AND participates_in_ranking
+                  AND valid_from < ? AND (valid_to IS NULL OR valid_to > ?)
+                ORDER BY employee_id
+                """, (row, index) -> row.getObject("employee_id", UUID.class),
+                requireNonNull(storeId, "storeId"), Timestamp.from(endExclusive), Timestamp.from(start));
     }
 }
