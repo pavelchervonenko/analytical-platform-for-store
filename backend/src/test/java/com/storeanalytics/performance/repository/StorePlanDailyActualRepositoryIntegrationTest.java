@@ -3,6 +3,9 @@ package com.storeanalytics.performance.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.storeanalytics.metrics.service.OverviewMetricScope;
+import com.storeanalytics.metrics.service.OverviewMetricsResult;
+import com.storeanalytics.metrics.service.OverviewMetricsService;
+import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -12,6 +15,8 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -31,6 +36,9 @@ class StorePlanDailyActualRepositoryIntegrationTest {
 
     @Autowired
     private StorePlanDailyActualRepository repository;
+
+    @Autowired
+    private OverviewMetricsService overview;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -125,6 +133,7 @@ class StorePlanDailyActualRepositoryIntegrationTest {
                 sellerId
         );
         addItem(graph, sellerReturnId, "CHARGER_CABLE", "20.00", false);
+        setReturnProcessor(sellerReturnId, sellerId);
 
         List<StorePlanDailyActual> result = repository.aggregate(
                 graph.storeId(),
@@ -136,6 +145,94 @@ class StorePlanDailyActualRepositoryIntegrationTest {
         assertThat(result).hasSize(2);
         assertThat(result.get(0).revenueAmount()).isEqualByComparingTo("100.00");
         assertThat(result.get(1).revenueAmount()).isEqualByComparingTo("-20.00");
+        assertMatchesOverview(graph, saleDate, returnDate, OverviewMetricScope.SELLERS);
+    }
+
+    @Test
+    void usesReturnProcessorAndOwnMonthRegardlessOfOriginalSaleAuthorOrLink() {
+        TestGraph graph = createGraph();
+        UUID seller = addEmployee(graph, "Processor", true, true, true);
+        UUID outside = addEmployee(graph, "Outside", true, true, false);
+        LocalDate returnDate = LocalDate.of(2026, 8, 1);
+        UUID original = addDocument(graph, "old-original", "SALE", returnDate.minusDays(1), null, outside);
+        addItem(graph, original, "CHARGER_CABLE", "100.00", false);
+        UUID returnId = addDocument(graph, "different-author", "RETURN", returnDate, original, outside);
+        setReturnProcessor(returnId, seller);
+        addItem(graph, returnId, "CHARGER_CABLE", "25.00", false);
+        addItem(graph, returnId, "SETUP_SERVICE", "50.00", false);
+        addItem(graph, returnId, "EXCLUDE", "999.00", false);
+        addItem(graph, returnId, "SETUP_SERVICE", "888.00", true);
+        UUID inverse = addDocument(graph, "outside-processor", "RETURN", returnDate, null, seller);
+        setReturnProcessor(inverse, outside);
+        addItem(graph, inverse, "CHARGER_CABLE", "200.00", false);
+        UUID orphan = addDocument(graph, "known-orphan", "RETURN", returnDate.plusDays(1), null, null);
+        setReturnProcessor(orphan, seller);
+        addItem(graph, orphan, "WARRANTY_GENERIC", "10.00", false);
+
+        List<StorePlanDailyActual> daily = repository.aggregate(
+                graph.storeId(), returnDate, returnDate.plusDays(1), OverviewMetricScope.SELLERS);
+        assertThat(daily).hasSize(2);
+        assertThat(daily.getFirst().revenueAmount()).isEqualByComparingTo("-75.00");
+        assertThat(daily.getFirst().accessoryAmount()).isEqualByComparingTo("-25.00");
+        assertThat(daily.getFirst().serviceAmount()).isEqualByComparingTo("-50.00");
+        assertThat(daily.getLast().serviceAmount()).isEqualByComparingTo("-10.00");
+        assertMatchesOverview(graph, returnDate, returnDate.plusDays(1), OverviewMetricScope.SELLERS);
+        assertMatchesOverview(graph, returnDate, returnDate.plusDays(1), OverviewMetricScope.STORE);
+        assertThat(repository.aggregate(graph.storeId(), returnDate, returnDate).getFirst().revenueAmount())
+                .isEqualByComparingTo("-275.00");
+        assertThat(jdbcTemplate.queryForObject("SELECT employee_id FROM sales_documents WHERE id = ?",
+                UUID.class, returnId)).isEqualTo(outside);
+
+        jdbcTemplate.update("UPDATE sales_documents SET is_deleted = true WHERE id = ?", original);
+        assertThat(repository.aggregate(graph.storeId(), returnDate, returnDate.plusDays(1),
+                OverviewMetricScope.SELLERS)).isEqualTo(daily);
+        jdbcTemplate.update("UPDATE sales_documents SET is_deleted = true WHERE id = ?", returnId);
+        assertThat(repository.aggregate(graph.storeId(), returnDate, returnDate.plusDays(1),
+                OverviewMetricScope.SELLERS)).containsExactly(daily.getLast());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"MISSING", "UNRESOLVED", "INACTIVE_EMPLOYEE", "INACTIVE_ASSIGNMENT", "NON_RANKING"})
+    void unknownOrIneligibleProcessorNeverFallsBackToStoredSeller(String state) {
+        TestGraph graph = createGraph();
+        UUID originalSeller = addEmployee(graph, "Original", true, true, true);
+        UUID processor = addEmployee(graph, "Processor", !state.equals("INACTIVE_EMPLOYEE"),
+                !state.equals("INACTIVE_ASSIGNMENT"), !state.equals("NON_RANKING"));
+        LocalDate date = LocalDate.of(2026, 8, 2);
+        UUID returnId = addDocument(graph, "unknown-return", "RETURN", date, null, originalSeller);
+        if (!state.equals("MISSING")) {
+            setReturnProcessor(returnId, processor);
+        }
+        if (state.equals("UNRESOLVED")) {
+            jdbcTemplate.update("UPDATE sales_documents SET attach_source_employee_external_id = 'not-imported' "
+                    + "WHERE id = ?", returnId);
+        }
+        addItem(graph, returnId, "CHARGER_CABLE", "20.00", false);
+        assertThat(repository.aggregate(graph.storeId(), date, date, OverviewMetricScope.SELLERS)).isEmpty();
+        assertThat(repository.aggregate(graph.storeId(), date, date).getFirst().revenueAmount())
+                .isEqualByComparingTo("-20.00");
+        assertMatchesOverview(graph, date, date, OverviewMetricScope.SELLERS);
+        assertMatchesOverview(graph, date, date, OverviewMetricScope.STORE);
+        assertThat(jdbcTemplate.queryForObject("SELECT employee_id FROM sales_documents WHERE id = ?",
+                UUID.class, returnId)).isEqualTo(originalSeller);
+    }
+
+    private void assertMatchesOverview(
+            TestGraph graph, LocalDate start, LocalDate end, OverviewMetricScope scope
+    ) {
+        OverviewMetricsResult total = overview.calculate(graph.storeId(), new StoreKpiPeriod(start, end), scope);
+        List<StorePlanDailyActual> daily = repository.aggregate(graph.storeId(), start, end, scope);
+        assertThat(daily.stream().map(StorePlanDailyActual::revenueAmount).reduce(BigDecimal.ZERO, BigDecimal::add))
+                .isEqualByComparingTo(total.netRevenue());
+        assertThat(daily.stream().map(StorePlanDailyActual::accessoryAmount).reduce(BigDecimal.ZERO, BigDecimal::add))
+                .isEqualByComparingTo(total.accessory().netRevenue());
+        assertThat(daily.stream().map(StorePlanDailyActual::serviceAmount).reduce(BigDecimal.ZERO, BigDecimal::add))
+                .isEqualByComparingTo(total.service().netRevenue());
+    }
+
+    private void setReturnProcessor(UUID documentId, UUID employeeId) {
+        jdbcTemplate.update("UPDATE sales_documents SET attach_source_employee_external_id = "
+                + "(SELECT external_id FROM employees WHERE id = ?) WHERE id = ?", employeeId, documentId);
     }
 
     private TestGraph createGraph() {

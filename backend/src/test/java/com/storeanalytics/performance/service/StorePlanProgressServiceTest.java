@@ -83,6 +83,7 @@ class StorePlanProgressServiceTest {
 
         StorePlanProgressView result = service.calculate(storeId, month, asOf);
 
+        assertThat(result.formulaVersion()).isEqualTo("store-plan-progress-v4-return-processor");
         StorePlanDirectionView revenue = direction(result, StorePlanDirectionCode.REVENUE);
         assertThat(revenue.targetAmount()).isEqualByComparingTo("24000000.00");
         assertThat(revenue.amountCompletionPercent()).isEqualByComparingTo("66.00");

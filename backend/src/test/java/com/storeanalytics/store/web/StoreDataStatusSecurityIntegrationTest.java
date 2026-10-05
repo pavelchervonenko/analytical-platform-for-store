@@ -246,7 +246,7 @@ class StoreDataStatusSecurityIntegrationTest {
                         "2026-07"
                 ).queryParam("asOf", "2026-07-20").session(adminSession))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.formulaVersion").value("store-plan-progress-v3"));
+                .andExpect(jsonPath("$.formulaVersion").value("store-plan-progress-v4-return-processor"));
         mockMvc.perform(get("/api/stores/{storeId}/data-status", deniedStore.getId())
                         .session(adminSession))
                 .andExpect(status().isOk())

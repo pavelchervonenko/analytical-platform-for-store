@@ -29,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class StorePlanProgressService {
 
-    static final String FORMULA_VERSION = "store-plan-progress-v3";
+    static final String FORMULA_VERSION = "store-plan-progress-v4-return-processor";
     private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
     private static final int MONEY_SCALE = 2;
     private static final int PERCENT_SCALE = 2;

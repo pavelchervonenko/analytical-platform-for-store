@@ -1,5 +1,6 @@
 package com.storeanalytics.performance.repository;
 
+import com.storeanalytics.metrics.repository.AnalyticalDocumentSql;
 import com.storeanalytics.metrics.service.OverviewMetricScope;
 import java.time.LocalDate;
 import java.util.List;
@@ -11,7 +12,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class StorePlanDailyActualRepository {
 
-    private static final String DAILY_ACTUAL_QUERY = """
+    private static final String DAILY_ACTUAL_QUERY = AnalyticalDocumentSql.PERIOD_DOCUMENTS_CTE + """
             SELECT
                 document.business_date,
                 COALESCE(SUM(
@@ -30,7 +31,7 @@ public class StorePlanDailyActualRepository {
                                                                ELSE -item.net_amount END
                          ELSE 0 END
                 ), 0) AS service_amount
-            FROM sales_documents document
+            FROM analytical_documents document
             JOIN sales_document_items item ON item.sales_document_id = document.id
             JOIN analytics_categories category ON category.id = item.analytics_category_id
             WHERE document.store_id = :storeId
@@ -45,7 +46,7 @@ public class StorePlanDailyActualRepository {
                       FROM employee_store_assignments assignment
                       JOIN employees employee ON employee.id = assignment.employee_id
                       WHERE assignment.store_id = document.store_id
-                        AND assignment.employee_id = document.employee_id
+                        AND assignment.employee_id = document.analytical_employee_id
                         AND assignment.is_active
                         AND assignment.participates_in_ranking
                         AND employee.is_active

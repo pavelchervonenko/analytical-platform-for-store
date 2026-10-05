@@ -6,15 +6,17 @@ owner: backend
 audience:
   - developer
   - manager
-last_verified: 2026-09-14
+last_verified: 2026-10-05
 requirement_sources:
   - docs/archive/legacy-contracts/store-plan-progress-api.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/performance/service/StorePlanProgressService.java
+  - backend/src/main/java/com/storeanalytics/performance/repository/StorePlanDailyActualRepository.java
   - backend/src/main/java/com/storeanalytics/performance/web/StorePlanProgressController.java
   - contracts/openapi/current.json
 verification_sources:
   - backend/src/test/java/com/storeanalytics/performance/service/StorePlanProgressServiceTest.java
+  - backend/src/test/java/com/storeanalytics/performance/repository/StorePlanDailyActualRepositoryIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/performance/web/StorePlanProgressControllerTest.java
   - backend/src/test/java/com/storeanalytics/store/web/StoreDataStatusSecurityIntegrationTest.java
 runtime_evidence: []
@@ -41,6 +43,13 @@ superseded_by: null
 План в базе один. `SELLERS` применяет его к факту `rankingEligible`, `STORE` — ко всему магазину.
 Revenue, direction amount, daily actuals, share, forecast и target amount внутри одного response
 всегда используют один scope.
+
+В локальном кандидате `formulaVersion=store-plan-progress-v4-return-processor`. Месячные totals
+и daily actuals используют сотрудника возврата LiveSklad в собственной дате возврата,
+без fallback на автора исходной продажи. SELLERS-фильтр применяется к разрешённому автору
+в действующем активном roster; missing/unresolved author остаётся в STORE, но не SELLERS.
+Это версия аналитического чтения, не новая зарплатная формула и не изменение месячных целей.
+Transport shape/default/permissions сохраняются; runtime-версия подтверждается только отдельно.
 
 Для направления доли:
 

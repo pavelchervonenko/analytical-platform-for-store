@@ -123,6 +123,18 @@ canary не переносятся на другую неделю или нов�
   Scope, self-review и результаты повторов сохранены в
   [локальном evidence денежного этапа](../history/audits/2026/10/return-processor-financial-projections-local.md).
 - Production не менялся; постоянная автоматическая публикация ещё не готова к включению.
+- Пакет 2, ежедневный аналитический факт плана: SELLERS-фильтр теперь использует тот же
+  read-only resolver автора возврата, что месячный Overview; собственная business date сохранена.
+  Версия чтения обновлена без изменения целей, прогнозных формул или payroll. Финальный targeted
+  набор: 44 tests в 7 классах, 0 failures/errors/skips; Checkstyle main/test проходит.
+  Проверена parity дневных revenue/accessory/service totals с Overview в обоих scopes,
+  разные авторы, граница месяца, orphan, удаление оригинала/возврата, missing/unresolved
+  автор и неактивный roster. Включены неизменённые payroll repository/engine/calculation tests.
+  Self-review подтверждает отсутствие fallback/DML и совпадение SELLERS roster predicate.
+  Documentation unit/strict и operator security проходят. Этот прежний потребитель исправлен;
+  historical membership, temporal attach, backlog и late receipts остаются открытыми.
+  [Локальное evidence](../history/audits/2026/10/return-processor-daily-plan-local.md) сохраняет
+  область проверки; полный release gate и production cutover этим набором не заменяются.
 - Владелец подтвердил read-only аудитом полное покрытие и стабильность источника за новую
   закрытую неделю: [наблюдение 5 октября](../history/audits/2026/10/weekly-source-readiness-october5.md).
   Это снимает прежний source blocker, но не заменяет snapshot/quality/paid approval gates.

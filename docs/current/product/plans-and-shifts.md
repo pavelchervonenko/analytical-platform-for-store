@@ -6,12 +6,13 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-09-19
+last_verified: 2026-10-05
 requirement_sources:
   - docs/archive/legacy-contracts/store-plan-progress-api.md
   - docs/archive/discoveries/analytics-business-rules-draft.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/performance/service/StorePlanProgressService.java
+  - backend/src/main/java/com/storeanalytics/performance/repository/StorePlanDailyActualRepository.java
   - backend/src/main/java/com/storeanalytics/metrics/service/OverviewMetricsService.java
   - backend/src/main/java/com/storeanalytics/performance/model/StorePlanTargets.java
   - frontend/src/plan-schedule/PlanSchedulePage.tsx
@@ -25,6 +26,7 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/performance/service/WorkScheduleServiceTest.java
   - backend/src/test/java/com/storeanalytics/performance/service/OptimisticConcurrencyIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/performance/service/StorePlanProgressServiceTest.java
+  - backend/src/test/java/com/storeanalytics/performance/repository/StorePlanDailyActualRepositoryIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/performance/web/StorePlanProgressControllerTest.java
   - frontend/src/plan-schedule/PlanPanel.test.tsx
   - frontend/src/plan-schedule/PlanSettingsPanel.test.tsx
@@ -56,6 +58,19 @@ superseded_by: null
 Отдельный экран управления «План» позволяет переключать progress между `SELLERS` и `STORE`, по
 умолчанию открывая `SELLERS`. Это переключение меняет только состав факта, прогноза и дневных
 ориентиров; второй план и второй набор целей не создаются.
+
+Месячный и ежедневный аналитический факт используют одинакового автора: для SALE — сотрудника
+продажи, для RETURN — сотрудника записи возврата LiveSklad, разрешённого в той же connection.
+Возврат уменьшает факт своей `business_date`, не дату исходной продажи. В `SELLERS` применяется
+действующий активный состав рейтинга к этому автору. Неизвестный автор не подменяется исходным
+продавцом и не входит в `SELLERS`, но сумма остаётся в `STORE`. Связь с оригиналом и его удаление
+не определяют аналитического автора. Удалённые документы/позиции и `EXCLUDE` не входят в факт.
+Это локально реализованный контракт кандидата, не свидетельство его включения на сервере.
+
+Цели, прогнозные формулы, смены, зарплатная проекция и сохранённые ведомости не меняются.
+Исторический состав продавцов ещё не подключён к этому чтению; текущий состав нельзя называть
+исторически восстановленным. Граница analytics/payroll закреплена в
+[ADR-0006](../../decisions/ADR-0006-livesklad-return-employee-analytics.md).
 
 Экран плана разделяет контроль выполнения и редактирование целей. «Обзор плана» отвечает на три
 вопроса менеджера: где магазин находится сейчас, какое действие важнее всего и что требуется в
