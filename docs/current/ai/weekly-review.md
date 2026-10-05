@@ -255,7 +255,8 @@ API/MIGRATION не создают scheduler. Нужны parent weekly-review и 
 Defaults candidate: 10 stores/page, 4 weeks/store/page, 25 stale jobs/refresh, 2 free claims/tick,
 scan delay 1 minute, cooperative time budget 1 minute. Числовые/временные bounds проверяются
 на startup и release preflight до migration, даже когда free flag выключен. Operator duration
-values требуют целое число с единицей ms/s/m/h; bare integers и ISO expressions не принимаются
+values требуют целое число с единицей ms/s/m/h (включая верхний scan-delay bound `3600000ms`);
+bare integers и ISO expressions не принимаются
 preflight. Budget проверяется между операциями и не прерывает уже начатую RR preparation.
 Short queue transactions имеют timeout 30 seconds. Due work, discovery и stale refresh по очереди
 становятся первой фазой, чтобы медленная фаза не вытесняла другие на каждом tick.

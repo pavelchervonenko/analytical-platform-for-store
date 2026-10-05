@@ -138,8 +138,8 @@ for invalid in \
   'STORE_BATCH_SIZE=0' 'STORE_BATCH_SIZE=101' 'DISCOVERY_WEEKS=0' 'DISCOVERY_WEEKS=53' \
   'REFRESH_BATCH_SIZE=0' 'REFRESH_BATCH_SIZE=101' 'BATCH_SIZE=0' 'BATCH_SIZE=11' \
   'BATCH_SIZE=1+1' 'BATCH_SIZE=999999999999999999999' \
-  'SCAN_DELAY=0s' 'SCAN_DELAY=9s' 'SCAN_DELAY=2h' 'SCAN_DELAY=999999h' \
-  'TIME_BUDGET=0s' 'TIME_BUDGET=6m' 'TIME_BUDGET=1' 'TIME_BUDGET=PT1M'; do
+  'SCAN_DELAY=0s' 'SCAN_DELAY=9s' 'SCAN_DELAY=2h' 'SCAN_DELAY=999999h' 'SCAN_DELAY=3600001ms' \
+  'TIME_BUDGET=0s' 'TIME_BUDGET=6m' 'TIME_BUDGET=300001ms' 'TIME_BUDGET=1' 'TIME_BUDGET=PT1M'; do
   candidate="${temporary_directory}/invalid.env"
   cp -- "${release_env}" "${candidate}"
   printf 'SELLER_WEEKLY_PREPARATION_%s\n' "${invalid}" >>"${candidate}"
@@ -147,7 +147,8 @@ for invalid in \
     fail_test 'unsafe free preparation bounds were accepted'
   fi
 done
-for valid in 'SCAN_DELAY=10s' 'SCAN_DELAY=1h' 'TIME_BUDGET=1000ms' 'TIME_BUDGET=5m' 'BATCH_SIZE=008'; do
+for valid in 'SCAN_DELAY=10s' 'SCAN_DELAY=1h' 'SCAN_DELAY=3600000ms' \
+  'TIME_BUDGET=1000ms' 'TIME_BUDGET=5m' 'TIME_BUDGET=300000ms' 'BATCH_SIZE=008'; do
   candidate="${temporary_directory}/valid.env"
   cp -- "${release_env}" "${candidate}"
   printf 'SELLER_WEEKLY_PREPARATION_%s\n' "${valid}" >>"${candidate}"

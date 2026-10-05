@@ -25,7 +25,7 @@ release_validate_seller_weekly_preparation_duration() {
   local env_file="$1" variable_name="SELLER_WEEKLY_PREPARATION_$2" fallback="$3"
   local minimum="$4" maximum="$5" value milliseconds multiplier
   value="$(release_env_value_or_default "${env_file}" "${variable_name}" "${fallback}")" || return 1
-  if [[ ! "${value}" =~ ^([1-9][0-9]{0,5})(ms|s|m|h)$ ]]; then
+  if [[ ! "${value}" =~ ^([1-9][0-9]{0,6})(ms|s|m|h)$ ]]; then
     release_safety_fail "${variable_name} requires a positive integer with ms/s/m/h unit"
     return 1
   fi
