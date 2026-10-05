@@ -36,6 +36,7 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalIdentity.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalIdentityFactsSource.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalReadService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyAiSourceFence.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalPlanningService.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalReviewService.java
   - backend/src/main/java/com/storeanalytics/interpretation/web/SellerWeeklyHistoricalReviewController.java
@@ -304,8 +305,33 @@ Seller AI freshness guard выбирает периодный path только 
 current-ranking path сохраняет latest-week restriction. Бесплатный refresh historical snapshot
 может подтвердить тот же immutable ID или отказать; новая revision не заменяет ранее одобренный
 snapshot/input/request. Read-time optional AI failure не скрывает deterministic report. Это
-as-of RR freshness, не atomic paid-attempt/publication fence: automatic backlog AI planning и
-source-lock защита публикации ответа ИИ остаются отдельным незавершённым rollout gate.
+as-of RR freshness, не самостоятельное разрешение платного вызова. Локальный candidate теперь
+имеет отдельный atomic source fence на startAttempt и completion; automatic backlog AI planning
+и runtime acceptance этой защиты остаются незавершёнными rollout gates.
+
+`SellerWeeklyAiSourceFence` работает только внутри writable READ_COMMITTED транзакции. Порядок
+locks совпадает с snapshot writer: store → source revision. После ожидания locks reader получает
+неподделываемый package token текущей транзакции и использует отдельный fenced entry в общей
+проверке identity, а не ранее открытый RR snapshot. Обычный historical identity entry по-прежнему
+требует REPEATABLE_READ; plain RC, read-only и повторное использование token в другой транзакции
+не допускаются. Проверяются
+activity/timezone, compatible/latest checkpoint, policy/identity, coverage/stability, membership
+и календарный action horizon. Legacy current-ranking сохраняет свой freshness protocol, temporal
+report — exact historical period; optional enrichment storage в этой проверке не участвует.
+Start attempt держит fence только до commit резервирования/attempt, не вокруг provider network.
+Локальные transaction-only lock/statement timeouts ограничивают ожидание; глобальные настройки
+БД не меняются. Execution не наследует внешнюю транзакцию, а fence отвергает read-only/RR context.
+После budget/job locks повторно проверяются календарь и свежий Clock для lease/deadline; supplied
+старый timestamp не оживляет seller claim. Completion сначала сохраняет независимую receipt,
+затем под fence либо terminal-отклоняет stale response, либо атомарно завершает job и публикует
+enrichment. Потеря lease откатывает обе записи, но не receipt/billing. Изменение источника после
+этой точки может сделать опубликованный immutable отчёт STALE; оно не переписывает enrichment
+и не разрешает новый automatic job для той же недели.
+Automatic enqueue также перепроверяет exact CURRENT под store/source fence, прежде чем занять
+единственный store/week job: изменение источника откладывает бесплатную подготовку без job.
+Seller enrichment integrity reader принимает explicit v26/schema-4 только в seller read path;
+legacy readable prompt list и STORE selector/schema не расширяются. Успешный provider response
+не должен откатывать публикацию из-за ошибочного применения legacy-only prompt allowlist.
 
 ```text
 weekly-review facts
@@ -519,13 +545,14 @@ Opt-in historical presenter сохраняет финансовую карточ
 «не в текущей команде», `actionableNow=false` и без future action. Current-roster presentation
 сохраняет прежнее поведение. Historical identity/assembly и free backlog runner уже доступны
 отдельному внутреннему пути; additive membership parsing поддерживает оба basis. Это ещё не
-historical API cutover: публичные readers и scheduler остаются current-roster. Combined reader
-не подключён к endpoint, действующему scheduler или AI enqueue. Текущий Overview и first-manual
-path не переключены. Payroll/saved employee и snapshots не переписываются. Нужны периодный
-read/planner, atomic AI publication fence и release gate до включения автоматического пути.
+historical current-screen cutover: основной current reader и scheduler остаются current-roster.
+Additive exact-period GET/free planner соединены с historical preparation, но этот путь ещё не
+подключён к действующему automatic backlog scheduler/AI planning. Текущий Overview и first-manual
+path не переключены. Payroll/saved employee и snapshots не переписываются. Нужны automatic
+scheduler wiring, runtime acceptance atomic AI source fence и release gate до включения автоматики.
 Следовательно, описанный ниже roster остаётся current-roster,
 не восстановленным историческим составом. Автоматическое восстановление пропущенной недели
-и чтение произвольного исторического периода пока не включены.
+пока не включено; exact historical period можно читать отдельным additive GET без generation/AI.
 
 Roster вычисляется во время формирования snapshot, а не при каждом открытии страницы. Активностью
 считается хотя бы одна завершённая продажа, ненулевая чистая выручка или смена в текущей либо

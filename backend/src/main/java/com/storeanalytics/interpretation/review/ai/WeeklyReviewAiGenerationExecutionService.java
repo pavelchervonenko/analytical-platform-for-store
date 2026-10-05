@@ -14,6 +14,8 @@ import java.time.ZoneOffset;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class WeeklyReviewAiGenerationExecutionService {
@@ -45,6 +47,7 @@ public class WeeklyReviewAiGenerationExecutionService {
         this.sellerGuard = sellerGuard;
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void execute(WeeklyReviewAiJob job, String owner) {
         Instant now = clock.instant();
         boolean seller = SellerWeeklyReviewAiContract.isActive(job.promptVersion(), job.contentSchemaVersion());
@@ -128,6 +131,10 @@ public class WeeklyReviewAiGenerationExecutionService {
             );
         } catch (WeeklyReviewAiLeaseLostException lost) {
             // No provider call happened. The current owner/recovery path alone may transition the job.
+            return;
+        } catch (WeeklyReviewAiSnapshotNotCurrentException changed) {
+            jobStore.failClaimed(job, owner, "SNAPSHOT_NOT_CURRENT",
+                    "Seller source changed before provider execution", clock.instant());
             return;
         } catch (WeeklyReviewAiBudgetException failure) {
             jobStore.failClaimed(

@@ -37,6 +37,16 @@ class SellerWeeklyHistoricalIdentity {
                         .equals(TransactionSynchronizationManager.getCurrentTransactionIsolationLevel())) {
             throw new IllegalStateException("Historical identity requires the facts repeatable-read transaction");
         }
+        return readIdentity(storeId, week, cohort, actionIds);
+    }
+
+    SellerWeeklyHistoricalMembership readFenced(SellerWeeklyAiSourceFence.LockedSource locked,
+            ClosedSellerWeek week, SellerCohortSnapshot cohort, Set<UUID> actionIds) {
+        return readIdentity(locked.storeId(), week, cohort, actionIds);
+    }
+
+    private SellerWeeklyHistoricalMembership readIdentity(UUID storeId, ClosedSellerWeek week,
+            SellerCohortSnapshot cohort, Set<UUID> actionIds) {
         List<Baseline> baselines = jdbc.query("""
                 SELECT authoritative_from, membership_revision
                 FROM store_seller_membership_state WHERE store_id = ?

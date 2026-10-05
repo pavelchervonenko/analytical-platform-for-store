@@ -250,9 +250,8 @@ public class WeeklyReviewAiEnrichmentStore {
         int contentSchemaVersion = resultSet.getInt("content_schema_version");
         boolean headerMatches = promptVersion.equals(expectedPromptVersion)
                 && contentSchemaVersion == expectedContentSchemaVersion
-                && WeeklyReviewAiContract.isReadable(
-                        promptVersion, contentSchemaVersion
-                )
+                && (WeeklyReviewAiContract.isReadable(promptVersion, contentSchemaVersion)
+                    || SellerWeeklyReviewAiContract.isActive(promptVersion, contentSchemaVersion))
                 && content.schemaVersion() == contentSchemaVersion;
         if (!headerMatches
                 || !contentHash.equals(codec.hash(canonicalContent))) {

@@ -106,8 +106,8 @@ view не доказывает совместимость schema-version guard. 
 не обходить включением текущего roster. Baseline должен покрывать обе сравниваемые недели.
 Combined facts, historical identity и opt-in snapshot writer соединены free runner. Additive
 period read и внутренний free planner реализованы, но backlog не подключён к scheduler/AI planner:
-перед включением нужны atomic paid-attempt/publication fence и
-release gates по плану. Codec/frontend parsing поддерживают temporal basis; runtime activation
+atomic paid-attempt/publication fence реализован в локальном candidate; перед включением нужны
+его filled-DB concurrency/release acceptance и scheduler wiring по плану. Codec/frontend parsing поддерживают temporal basis; runtime activation
 это не доказывает. Для старого периода проверять отсутствие future actions; departed card должна
 сохранить исторические суммы и `actionableNow=false`.
 
@@ -133,7 +133,7 @@ assembler с отдельной identity, перепроверяет source/memb
 Source change даёт отложенную бесплатную подготовку; contract/technical failure требует вмешательства.
 Проверять sanitized reason/state, а не raw exception/provider payload. При повторном выполнении
 равный semantic content сохраняет прежний snapshot ID/payload и обновляет совместимый checkpoint.
-До automatic AI planner и atomic AI publication fence не переключать scheduler на эти таблицы
+До automatic AI planner и runtime acceptance atomic AI publication fence не переключать scheduler на эти таблицы
 и не выдавать их за готовый автообзор.
 
 Исторический GET `/api/stores/{storeId}/weekly-reviews/seller-period?periodStart=YYYY-MM-DD`
@@ -143,10 +143,21 @@ gates. Он не пишет данные и не вызывает ИИ. Нет h
 compatible/latest ID и актуальный checkpoint; после бесплатного semantic reuse embedded identity
 старого payload не сравнивается напрямую с новой revision. Смена дня не требует переписывать
 старый отчёт; истечение горизонта future actions требует free revision. Не считать ответ CURRENT
-atomic разрешением provider call: paid/publication source fence остаётся отдельным gate.
+atomic разрешением provider call: worker повторяет проверку под отдельным source fence.
 Free exact refresh historical snapshot не меняет одобренные ID/хеши и не открывает новый paid job.
 Новая revision требует нового exact review, не повторного запуска старой команды. Endpoint/free
 planner не активируют scheduler или baseline; локальный UI ещё не переключён на historical read.
+
+Source fence candidate удерживает store/source locks только в коротких READ_COMMITTED операциях
+startAttempt и completion, никогда во время provider network/free generation. Fence использует
+transaction-only lock/statement timeouts, не меняет глобальные настройки БД. Worker execution
+не наследует внешнюю транзакцию. Старый caller timestamp
+не продлевает seller lease после ожидания budget/job locks. Stale source до start не создаёт attempt;
+stale source после ответа даёт terminal SNAPSHOT_NOT_CURRENT без enrichment/automatic retry.
+Receipt и известный расход сохраняются независимо. Не повторять canary из-за отсутствия enrichment:
+сначала read-only проверить job/attempt/receipt и exact freshness. Технический сбой fence безопасно
+запрещает публикацию, а не означает нулевую стоимость. CURRENT read остаётся диагностикой,
+не заменяет runtime/release acceptance или точное разрешение.
 
 При seller cutover проверять version/scope exact snapshot, а не считать прежний STORE preflight
 разрешением нового input. Seller API: GET `/api/stores/{storeId}/weekly-reviews/seller-current`,

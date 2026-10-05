@@ -40,6 +40,15 @@ class SellerWeeklyHistoricalReadService {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public SellerWeeklyV3ReadResult assess(UUID storeId, LocalDate periodStart) {
+        return assess(storeId, periodStart, null);
+    }
+
+    SellerWeeklyV3ReadResult assessFenced(SellerWeeklyAiSourceFence.LockedSource locked, LocalDate periodStart) {
+        return assess(locked.storeId(), periodStart, locked);
+    }
+
+    private SellerWeeklyV3ReadResult assess(UUID storeId, LocalDate periodStart,
+            SellerWeeklyAiSourceFence.LockedSource locked) {
         requireNonNull(storeId, "storeId");
         if (periodStart == null || periodStart.getDayOfWeek() != DayOfWeek.MONDAY) {
             throw new InvalidRequestException("Historical seller period must start on Monday");
@@ -78,7 +87,8 @@ class SellerWeeklyHistoricalReadService {
             return new SellerWeeklyV3ReadResult(STALE, saved);
         }
         try {
-            var facts = metadata.load(storeId, week, assessedAt);
+            var facts = locked == null ? metadata.load(storeId, week, assessedAt)
+                    : metadata.loadFenced(locked, week, assessedAt);
             boolean current = state.sourceRevision() == facts.sourceRevision()
                     && state.identityHash().equals(SellerWeeklyHistoricalIdentity.sourceHash(facts));
             // A formerly latest report with future actions needs a free revision after a week boundary.

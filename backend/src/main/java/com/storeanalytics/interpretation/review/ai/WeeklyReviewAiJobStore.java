@@ -10,6 +10,7 @@ import com.storeanalytics.interpretation.generation.LlmProviderPreflight;
 import com.storeanalytics.interpretation.generation.LlmProviderResponseReceipt;
 import com.storeanalytics.common.exception.PreconditionFailedException;
 import com.storeanalytics.interpretation.review.SellerWeeklyReviewProperties;
+import com.storeanalytics.interpretation.review.SellerWeeklyAiSourceFence;
 import com.storeanalytics.interpretation.validation.LlmValidationViolation;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -19,6 +20,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Duration;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -31,6 +33,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.core.JacksonException;
@@ -65,6 +68,8 @@ public class WeeklyReviewAiJobStore {
     private final WeeklyReviewAiGenerationProperties properties;
     private final String promptVersion;
     private final int reportContractVersion;
+    private final SellerWeeklyAiSourceFence sourceFence;
+    private final Clock executionClock;
 
     public WeeklyReviewAiJobStore(
             JdbcTemplate jdbcTemplate,
@@ -74,15 +79,23 @@ public class WeeklyReviewAiJobStore {
         this(jdbcTemplate, objectMapper, properties, new SellerWeeklyReviewProperties(false));
     }
 
-    @Autowired
     public WeeklyReviewAiJobStore(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper,
             WeeklyReviewAiGenerationProperties properties, SellerWeeklyReviewProperties sellers) {
+        this(jdbcTemplate, objectMapper, properties, sellers, null, null);
+    }
+
+    @Autowired
+    public WeeklyReviewAiJobStore(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper,
+            WeeklyReviewAiGenerationProperties properties, SellerWeeklyReviewProperties sellers,
+            SellerWeeklyAiSourceFence sourceFence, Clock executionClock) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.properties = properties;
         this.promptVersion = sellers.enabled() ? SellerWeeklyReviewAiContract.PROMPT_VERSION
                 : WeeklyReviewAiContract.PROMPT_VERSION;
         this.reportContractVersion = sellers.enabled() ? 3 : 2;
+        this.sourceFence = sourceFence;
+        this.executionClock = executionClock;
     }
 
     String activePromptVersion() {
@@ -142,7 +155,7 @@ public class WeeklyReviewAiJobStore {
      * One automatic seller AI job per store and completed week, across immutable revisions.
      * A corrected revision requires the exact approved operator path instead.
      */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public boolean enqueueAutomaticSellerWeek(
             UUID snapshotId,
             String providerCode,
@@ -187,7 +200,11 @@ public class WeeklyReviewAiJobStore {
         if (Boolean.TRUE.equals(alreadyPlanned)) {
             return false;
         }
-        enqueue(snapshot, providerCode, requestedModel, maxAttempts, now, deadline);
+        if (sourceFence != null && !sourceFence.lockAndIsCurrent(snapshot)) {
+            return false;
+        }
+        enqueue(snapshot, providerCode, requestedModel, maxAttempts,
+                executionClock == null ? now : executionClock.instant(), deadline);
         return true;
     }
 
@@ -437,7 +454,7 @@ public class WeeklyReviewAiJobStore {
         return findById(jobId);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public WeeklyReviewAiAttempt startAttempt(
             WeeklyReviewAiJob job,
             String owner,
@@ -457,19 +474,31 @@ public class WeeklyReviewAiJobStore {
                         && claimed.contentSchemaVersion()
                         == request.input().contentSchemaVersion(),
                 "Weekly review AI request contract does not match job");
+        require(claimed.id().equals(request.request().jobId()), "Weekly review AI request job does not match");
         LlmProviderPreflight estimate = requireNonNull(preflight, "preflight");
         Instant timestamp = requireNonNull(now, "now");
-        reserveDailyBudget(estimate, timestamp);
+        fenceSeller(claimed);
+        timestamp = reserveDailyBudget(estimate, timestamp, claimed);
+        jdbcTemplate.queryForObject("SELECT id FROM weekly_review_ai_jobs WHERE id=? FOR UPDATE",
+                UUID.class, claimed.id());
+        Instant afterLocks = executionTime(claimed, timestamp);
+        if (!afterLocks.atZone(ZoneOffset.UTC).toLocalDate().equals(timestamp.atZone(ZoneOffset.UTC).toLocalDate())) {
+            reserveDailyBudget(estimate, afterLocks, claimed);
+        }
+        // Refresh calendar/action horizon too: source and budget locks may have waited across a week boundary.
+        fenceSeller(claimed);
+        timestamp = executionTime(claimed, afterLocks);
         List<Integer> numbers = jdbcTemplate.query("""
                 UPDATE weekly_review_ai_jobs
                 SET attempt_count = attempt_count + 1
-                WHERE id = ? AND status = 'RUNNING' AND lease_owner = ?
+                WHERE id = ? AND snapshot_id = ? AND status = 'RUNNING' AND lease_owner = ?
                   AND lease_until > ? AND attempt_count = ?
                   AND attempt_count < max_attempts AND deadline_at > ?
                 RETURNING attempt_count
                 """,
                 (resultSet, rowNumber) -> resultSet.getInt(1),
                 claimed.id(),
+                claimed.snapshotId(),
                 leaseOwner,
                 Timestamp.from(timestamp),
                 claimed.attemptCount(),
@@ -477,6 +506,10 @@ public class WeeklyReviewAiJobStore {
         );
         if (numbers.size() != 1) {
             throw new WeeklyReviewAiLeaseLostException();
+        }
+        if (!request.request().callDeadline().isAfter(timestamp)) {
+            throw new WeeklyReviewAiBudgetException("CALL_DEADLINE_EXCEEDED",
+                    "Weekly review AI provider call deadline expired before attempt start");
         }
         UUID attemptId = UUID.randomUUID();
         jdbcTemplate.update("""
@@ -592,6 +625,8 @@ public class WeeklyReviewAiJobStore {
             WeeklyReviewAiValidationResult validation,
             Instant now
     ) {
+        require(requireNonNull(job, "job").id().equals(requireNonNull(attempt, "attempt").jobId()),
+                "Weekly review AI attempt job does not match completion");
         finishAttemptResponse(
                 attempt,
                 "SUCCEEDED",
@@ -601,23 +636,40 @@ public class WeeklyReviewAiJobStore {
                 null,
                 now
         );
+        jdbcTemplate.queryForObject("SELECT id FROM weekly_review_ai_jobs WHERE id=? FOR UPDATE",
+                UUID.class, job.id());
+        Instant completedAt = executionTime(job, now);
         int changed = jdbcTemplate.update("""
                 UPDATE weekly_review_ai_jobs
                 SET status = 'SUCCEEDED', next_attempt_at = ?,
                     lease_owner = NULL, lease_until = NULL,
                     last_error_code = NULL, last_error_message = NULL,
                     last_validation_codes = '[]'::jsonb
-                WHERE id = ? AND status = 'RUNNING' AND lease_owner = ?
+                WHERE id = ? AND snapshot_id = ? AND status = 'RUNNING' AND lease_owner = ?
                   AND lease_until > ? AND deadline_at > ? AND attempt_count = ?
                 """,
-                Timestamp.from(requireNonNull(now, "now")),
+                Timestamp.from(completedAt),
                 requireNonNull(job, "job").id(),
+                job.snapshotId(),
                 requireText(owner, "owner"),
-                Timestamp.from(now), Timestamp.from(now), attempt.attemptNumber()
+                Timestamp.from(completedAt), Timestamp.from(completedAt), attempt.attemptNumber()
         );
         if (changed != 1) {
             throw new WeeklyReviewAiLeaseLostException();
         }
+    }
+
+    private void fenceSeller(WeeklyReviewAiJob job) {
+        if (sourceFence != null && SellerWeeklyReviewAiContract.isActive(
+                job.promptVersion(), job.contentSchemaVersion()) && !sourceFence.lockAndIsCurrent(job.snapshotId())) {
+            throw new WeeklyReviewAiSnapshotNotCurrentException();
+        }
+    }
+
+    private Instant executionTime(WeeklyReviewAiJob job, Instant supplied) {
+        return executionClock != null && SellerWeeklyReviewAiContract.isActive(
+                job.promptVersion(), job.contentSchemaVersion())
+                ? executionClock.instant() : requireNonNull(supplied, "now");
     }
 
     /** Persist billing evidence before publication, even if recovery finalized the immutable attempt. */
@@ -788,9 +840,10 @@ public class WeeklyReviewAiJobStore {
         return value == null ? 0L : value;
     }
 
-    private void reserveDailyBudget(
+    private Instant reserveDailyBudget(
             LlmProviderPreflight preflight,
-            Instant now
+            Instant now,
+            WeeklyReviewAiJob job
     ) {
         if (!"RUB".equals(preflight.costCurrency())) {
             throw new WeeklyReviewAiBudgetException(
@@ -804,7 +857,8 @@ public class WeeklyReviewAiJobStore {
         jdbcTemplate.execute(
                 "LOCK TABLE weekly_review_ai_response_receipts IN SHARE ROW EXCLUSIVE MODE"
         );
-        Instant dayStart = now.atZone(ZoneOffset.UTC).toLocalDate()
+        Instant budgetAt = executionTime(job, now);
+        Instant dayStart = budgetAt.atZone(ZoneOffset.UTC).toLocalDate()
                 .atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant dayEnd = dayStart.plus(Duration.ofDays(1));
         BigDecimal reserved = jdbcTemplate.queryForObject("""
@@ -833,6 +887,7 @@ public class WeeklyReviewAiJobStore {
                     "Weekly review AI request exceeds daily budget"
             );
         }
+        return budgetAt;
     }
 
     private void retireSuperseded(Instant now) {

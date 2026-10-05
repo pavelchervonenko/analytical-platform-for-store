@@ -80,6 +80,28 @@ canary не переносятся на другую неделю или нов�
 
 ## Прогресс
 
+- Пакет 4, atomic seller AI source fence: enqueue, startAttempt и completion повторно проверяют
+  exact CURRENT под store/source locks в writable READ_COMMITTED, без provider network под locks.
+  Fenced historical read использует неподделываемый package token текущей транзакции и общую
+  canonical identity; обычный RR entry не ослаблен. Plain RC/read-only context и чужая транзакция
+  не получают historical identity. После budget/job lock waits обновляется Clock: старый timestamp
+  не оживляет lease/deadline, истёкший prepared request не создаёт attempt. Actual job snapshot ID
+  должен совпасть с проверенным claim. Stale automatic enqueue не занимает единственный week job;
+  после бесплатного semantic reuse он может планироваться идемпотентно. Source change после
+  оплаченного ответа оставляет terminal SNAPSHOT_NOT_CURRENT без enrichment/automatic retry;
+  immutable independent receipt сохраняет billing/validation. Completion и enrichment атомарны,
+  loss of lease откатывает обе записи, не receipt. Transaction-only timeouts ограничивают locks.
+  Реальный positive publication test выявил отдельный legacy-only prompt allowlist дефект: explicit
+  seller v26/schema-4 теперь читается seller enrichment path, legacy readable list не расширен.
+  Code review проверил lock order, отсутствие network под locks, contract/snapshot/job binding,
+  сохранение RR guard и независимой receipt, rollback успешного job при ошибке enrichment.
+  Финальный targeted gate: 117 tests в 17 классах, 0 failures/errors/skips, включая 12 real DB
+  source/lease/publication race и v26 readback checks; Checkstyle main/test и bootJar PASS.
+  Documentation: 25 tests, strict integrity 457 rows/0 warnings; operator/release security,
+  Gradle supply-chain (449 components/840 artifacts), diff check PASS. Full backend/frontend
+  release gate, automatic scheduler/backlog wiring и runtime acceptance остаются незавершёнными.
+  Production, baseline и платные вызовы не затронуты.
+
 - Пакет 3, exact period read/free planner: additive historical GET под store authorization и
   прежними feature gates не пишет данные, не подставляет current-ranking/STORE snapshot и не
   вызывает provider. Cheap metadata и snapshot/checkpoint читаются в одной RR-транзакции;

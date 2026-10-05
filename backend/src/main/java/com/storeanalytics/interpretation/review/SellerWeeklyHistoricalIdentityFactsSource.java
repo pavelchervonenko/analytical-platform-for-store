@@ -39,6 +39,16 @@ class SellerWeeklyHistoricalIdentityFactsSource {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public SellerWeeklyHistoricalIdentityFacts load(UUID storeId, ClosedSellerWeek week, Instant now) {
+        return read(storeId, week, now, null);
+    }
+
+    SellerWeeklyHistoricalIdentityFacts loadFenced(SellerWeeklyAiSourceFence.LockedSource locked,
+            ClosedSellerWeek week, Instant now) {
+        return read(locked.storeId(), week, now, locked);
+    }
+
+    private SellerWeeklyHistoricalIdentityFacts read(UUID storeId, ClosedSellerWeek week, Instant now,
+            SellerWeeklyAiSourceFence.LockedSource locked) {
         if (!week.isClosedAt(now)) {
             throw new SellerHistoricalFactsUnavailableException("WEEK_NOT_CLOSED");
         }
@@ -54,7 +64,8 @@ class SellerWeeklyHistoricalIdentityFactsSource {
                 history.eligibleDuring(storeId, week.previous().startInstant(), week.closesAt()));
         var actionIds = new HashSet<>(current.read(storeId).employeeIds());
         actionIds.retainAll(selected.employeeIds());
-        var membership = identity.read(storeId, week, selected, actionIds);
+        var membership = locked == null ? identity.read(storeId, week, selected, actionIds)
+                : identity.readFenced(locked, week, selected, actionIds);
         return new SellerWeeklyHistoricalIdentityFacts(storeId, period, revisions.read(storeId), membership,
                 attach.historicalFormulaVersion());
     }

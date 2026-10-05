@@ -302,6 +302,26 @@ class WeeklyReviewAiGenerationExecutionServiceTest {
     }
 
     @Test
+    void atomicSourceConflictAfterCheapCheckStopsBeforeProvider() {
+        WeeklyReviewAiJob sellerJob = sellerJob();
+        PersistedWeeklyReviewV3Snapshot sellerSnapshot = mock(PersistedWeeklyReviewV3Snapshot.class);
+        SellerWeeklyReviewAiFreshnessGuard guard = mock(SellerWeeklyReviewAiFreshnessGuard.class);
+        PreparedWeeklyReviewAiRequest request = prepared(sellerJob);
+        when(snapshotStore.findV3ById(sellerJob.snapshotId())).thenReturn(Optional.of(sellerSnapshot));
+        when(guard.isCurrent(sellerSnapshot)).thenReturn(true);
+        when(requestFactory.prepare(any())).thenReturn(request);
+        when(provider.preflight(request.request())).thenReturn(preflight);
+        when(jobStore.startAttempt(sellerJob, OWNER, request, preflight, NOW))
+                .thenThrow(new WeeklyReviewAiSnapshotNotCurrentException());
+
+        sellerService(guard).execute(sellerJob, OWNER);
+
+        verify(jobStore).failClaimed(sellerJob, OWNER, "SNAPSHOT_NOT_CURRENT",
+                "Seller source changed before provider execution", NOW);
+        verify(provider, never()).generate(any());
+    }
+
+    @Test
     void sellerJobPreservesBilledReceiptButDoesNotPublishAfterSourceChanges() {
         WeeklyReviewAiJob sellerJob = sellerJob();
         PersistedWeeklyReviewV3Snapshot sellerSnapshot = mock(PersistedWeeklyReviewV3Snapshot.class);

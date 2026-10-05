@@ -43,6 +43,14 @@ class SellerWeeklyV3ReadService {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     SellerWeeklyV3ReadResult assessForPlanning(UUID storeId) {
+        return assess(storeId);
+    }
+
+    SellerWeeklyV3ReadResult assessFenced(SellerWeeklyAiSourceFence.LockedSource locked) {
+        return assess(locked.storeId());
+    }
+
+    private SellerWeeklyV3ReadResult assess(UUID storeId) {
         UUID selectedStore = requireNonNull(storeId, "storeId");
         String timezone = jdbc.queryForObject("SELECT timezone FROM stores WHERE id = ?",
                 String.class, selectedStore);
