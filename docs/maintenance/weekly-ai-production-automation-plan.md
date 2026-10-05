@@ -101,6 +101,22 @@ canary не переносятся на другую неделю или нов�
 
 ## Прогресс
 
+- Пакет public current-reader/UI cutover: при отдельном preparation opt-in последняя закрытая
+  неделя выбирается по timezone магазина и только когда явный baseline покрывает обе недели.
+  Read/бесплатный generate используют exact historical период; STALE/PREPARING, отсутствие
+  истории и переход недели не вызывают silent fallback/fabricated history. Before-baseline
+  manual current-roster путь и Overview/payroll сохранены. UI поясняет participation на дату
+  операции и помечает no-longer-actionable sellers, сохраняя финансовые карточки без поручений.
+  Новая revision с old paid/exact/terminal blocker показывает UNAVAILABLE вместо вечного ожидания;
+  бесплатный automatic rebind остаётся PREPARING, расходы и immutable payload не меняются.
+  Self-review + targeted gate: 69 tests в 8 классах, 0 failures/errors/skips,
+  Checkstyle main/test и bootJar PASS. Frontend Node 22: contracts/lint/typecheck/build и
+  314 tests в 61 файле PASS. `visual:local` для seller-action и seller-historical на localhost:
+  по три проверки desktop/tablet/mobile PASS, изображения просмотрены; это synthetic API fixtures,
+  не authenticated visual acceptance с live backend/production. Screenshots не коммитятся.
+  Security, supply chain и docs unit/strict PASS. Forward-only activation operator/rehearsal,
+  окончательный combined gate и production approval/canary ещё нужны.
+
 - Пакет historical paid wiring: bounded exact prepared-period discovery и повторный CURRENT read
   подключены к automatic enqueue без current-roster fallback и без provider call из planner.
   Нужны независимые parent AI/planner opt-ins; release/startup guards допускают эту комбинацию,

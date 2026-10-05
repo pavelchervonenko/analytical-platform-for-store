@@ -169,7 +169,9 @@ function ReviewHeader({ review }: { review: WeeklyReview }) {
         <strong>{review.period.currentLabel}</strong>
         <small>Сравнение: {review.period.previousLabel}</small>
         {review.sellerContext && <small>
-          Только продавцы рейтинга · один состав для обеих недель на момент расчёта
+          {review.sellerContext.membership.basis === "HISTORICAL_DOCUMENT_MEMBERSHIP_V1"
+            ? "Только продавцы рейтинга · участие на дату каждой операции"
+            : "Только продавцы рейтинга · один состав для обеих недель на момент расчёта"}
         </small>}
       </div>
       <div className="weekly-review-header__meta">
@@ -701,6 +703,9 @@ function SellerTeamSection({ review, openDetail }: { review: WeeklyReview; openD
       {visible.map((employee) => <article className="weekly-review-seller-row" key={employee.employeePublicId}>
         <div className="weekly-review-seller-row__identity">
           <h3>{employee.displayName}</h3>
+          {review.sellerContext!.membership.basis === "HISTORICAL_DOCUMENT_MEMBERSHIP_V1"
+            && review.sellerContext!.nonActionableSellerIds.includes(employee.employeePublicId)
+            && <p className="weekly-review-calm-copy">Не в текущем составе рейтинга</p>}
           {employee.action && employee.attention && <p className="weekly-review-seller-row__attention">
             Проверить: {employee.attention.title}
           </p>}

@@ -235,8 +235,17 @@ checkpoint, не ИИ-публикацию; текущий current-roster snapsh
 atomic fence. Исторический assembler и бесплатный runner этой очереди реализованы локально,
 и отдельный opt-in free scheduler подключён к этой очереди. Historical automatic AI planner
 читает её точные `SUCCEEDED` bindings; платный worker остаётся отдельным контуром. Периодный read/free planner
-реализованы отдельным additive путём, описанным ниже; прежний current-roster read не переключён.
+реализованы отдельным additive путём, описанным ниже. При preparation opt-in основной seller-current
+reader выбирает historical путь только после подтверждения обеих недель явным baseline.
 Само наличие таблиц или runner не включает автоматический режим.
+
+Current seller GET при preparation opt-in выбирает последнюю закрытую неделю в timezone магазина,
+если начало предыдущей недели не раньше явного `authoritative_from`. Только тогда reader и
+free generate идут через exact historical period; PREPARING/STALE остаются такими, без подмены
+current-roster/STORE. При переходе календарной недели во время чтения старый payload показывается
+STALE. До baseline/полноты обеих недель сохраняется явно legacy-current-roster manual path;
+automatic historical planner этот путь не использует. Ни routing, ни GET не пишут baseline,
+snapshot, job или attempt. Overview/payroll этим переключением не меняются.
 
 Historical AI discovery использует bounded ordered metadata page по period/preparation ID. Только
 закрытая `SUCCEEDED` неделя с historical basis, сохранённым baseline/timezone и READY/PARTIAL
@@ -247,6 +256,10 @@ report может стать candidate. Exact/paid/terminal/deadline jobs и о�
 ошибка одной недели не удерживает cursor. Cursor в памяти лишь ускоряет sweep: restart безопасно
 повторяет discovery, а durable free jobs и unique automatic weekly job сохраняют пропущенные недели.
 Planner сообщает количество созданных или бесплатно перепривязанных jobs, не число paid calls.
+Если для той же недели другая immutable revision уже имеет paid/exact/terminal job либо
+published enrichment, read показывает AI UNAVAILABLE, а не бесконечное PREPARING для новой
+revision. Непотраченная automatic job, допускающая free rebind, сохраняет PREPARING; это
+наблюдаемость, не разрешение повторной оплаты. Финансовый deterministic payload не меняется.
 Если бесплатная повторная проверка подтвердила тот же immutable snapshot, automatic job с
 нулём attempts и `FAILED/SNAPSHOT_NOT_CURRENT` может вернуться в `PENDING` с прежними ID,
 deadline и call cap. Уже ожидающая задача не перезапускается; exact approval и любой paid attempt
@@ -603,15 +616,15 @@ allocations и правила классификации не переписыв
 превращается в персональное обвинение.
 
 Opt-in historical presenter сохраняет финансовую карточку ушедшего продавца с явной пометкой
-«не в текущей команде», `actionableNow=false` и без future action. Current-roster presentation
+«Не в текущем составе рейтинга», `actionableNow=false` и без future action. Current-roster presentation
 сохраняет прежнее поведение. Historical identity/assembly и free backlog runner уже доступны
 отдельному внутреннему пути; additive membership parsing поддерживает оба basis. Это ещё не
-historical current-screen cutover: основной current reader остаётся current-roster; отдельный
+production activation: основной current reader использует forward-only opt-in routing; отдельный
 opt-in free scheduler использует temporal backlog и исключает competing legacy snapshot scheduler.
 Additive exact-period GET/free planner и opt-in automatic historical paid planning соединены с preparation.
-Текущий Overview и first-manual
-path не переключены. Payroll/saved employee и snapshots не переписываются. Нужны automatic
-current-reader cutover, runtime acceptance atomic AI source fence и release gate до включения автоматики.
+Текущий Overview и first-manual pre-baseline path не переключены. Payroll/saved employee и
+snapshots не переписываются. Нужны runtime acceptance atomic AI source fence и release gate
+до включения автоматики.
 Следовательно, описанный ниже roster остаётся current-roster,
 не восстановленным историческим составом. Автоматическое восстановление пропущенной недели
 пока не включено; exact historical period можно читать отдельным additive GET без generation/AI.

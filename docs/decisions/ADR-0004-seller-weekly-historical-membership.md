@@ -115,8 +115,9 @@ Cheap RR metadata identity совпадает с heavy identity, без фина
 read не использует current-ranking fallback и не помечает старый payload CURRENT без compatible
 checkpoint. Exact AI refresh не подменяет snapshot новой ревизией. Отдельный opt-in free scheduler
 подключён к очереди; opt-in historical automatic paid planning читает exact SUCCEEDED bindings.
-Current-roster публичный
-путь и frontend не переключены. Free flag не создаёт baseline/paid call и исключает competing
+Current seller reader при preparation opt-in выбирает exact historical путь лишь когда обе недели
+имеют authoritative baseline. Before-baseline manual current-roster путь сохраняется; stale или
+отсутствующий historical snapshot не подменяется legacy. Free flag не создаёт baseline/paid call и исключает competing
 legacy snapshot scheduler. AI planner при free flag использует только historical period path,
 не legacy fallback; дополнительные AI parent/planner flags и runtime acceptance обязательны.
 Поэтому включение постоянной автоматической публикации до их проверки запрещено.

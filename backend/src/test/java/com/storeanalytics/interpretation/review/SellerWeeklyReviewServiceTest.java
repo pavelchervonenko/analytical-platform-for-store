@@ -112,4 +112,70 @@ class SellerWeeklyReviewServiceTest {
         assertThatThrownBy(() -> new SellerWeeklyReviewView(SellerWeeklyReviewView.Freshness.PREPARING,
                 mock(WeeklyReviewV3Response.class))).isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void authoritativeCurrentReadNeverFallsBackOrGeneratesWhenHistoryIsPreparing() {
+        var routing = mock(SellerWeeklyCurrentRouting.class);
+        var historical = mock(SellerWeeklyHistoricalReviewService.class);
+        var week = new ClosedSellerWeek(java.time.LocalDate.parse("2026-09-28"), ZoneOffset.UTC);
+        when(stores.existsById(storeId)).thenReturn(true);
+        when(routing.historicalTarget(storeId)).thenReturn(Optional.of(week));
+        var pending = new SellerWeeklyReviewView(SellerWeeklyReviewView.Freshness.PREPARING, null);
+        when(historical.period(storeId, week.start())).thenReturn(pending);
+        var selected = new SellerWeeklyReviewService(stores, reads, planner, null, Clock.systemUTC(),
+                routing, historical);
+        assertThat(selected.current(storeId)).isEqualTo(pending);
+        verifyNoInteractions(reads, planner);
+        org.mockito.Mockito.verify(historical, org.mockito.Mockito.never()).refresh(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void authoritativeRefreshUsesOnlyTheExactWeekAndTimezone() {
+        var routing = mock(SellerWeeklyCurrentRouting.class);
+        var historical = mock(SellerWeeklyHistoricalReviewService.class);
+        var week = new ClosedSellerWeek(java.time.LocalDate.parse("2026-09-28"), ZoneOffset.UTC);
+        when(stores.existsById(storeId)).thenReturn(true);
+        when(routing.historicalTarget(storeId)).thenReturn(Optional.of(week));
+        when(routing.stillLatest(week)).thenReturn(true);
+        var view = new SellerWeeklyReviewView(SellerWeeklyReviewView.Freshness.CURRENT,
+                mock(WeeklyReviewV3Response.class));
+        when(historical.refresh(storeId, week.start(), "Z")).thenReturn(view);
+        var selected = new SellerWeeklyReviewService(stores, reads, planner, null, Clock.systemUTC(),
+                routing, historical);
+        assertThat(selected.generate(storeId)).isSameAs(view);
+        verifyNoInteractions(reads, planner);
+    }
+
+    @Test
+    void weekBoundaryDuringHistoricalReadCannotReturnTheOldWeekAsCurrent() {
+        var routing = mock(SellerWeeklyCurrentRouting.class);
+        var historical = mock(SellerWeeklyHistoricalReviewService.class);
+        var week = new ClosedSellerWeek(java.time.LocalDate.parse("2026-09-28"), ZoneOffset.UTC);
+        when(stores.existsById(storeId)).thenReturn(true);
+        when(routing.historicalTarget(storeId)).thenReturn(Optional.of(week));
+        var report = mock(WeeklyReviewV3Response.class);
+        when(historical.period(storeId, week.start())).thenReturn(
+                new SellerWeeklyReviewView(SellerWeeklyReviewView.Freshness.CURRENT, report));
+        var selected = new SellerWeeklyReviewService(stores, reads, planner, null, Clock.systemUTC(),
+                routing, historical);
+        assertThat(selected.current(storeId)).isEqualTo(
+                new SellerWeeklyReviewView(SellerWeeklyReviewView.Freshness.STALE, report));
+        verifyNoInteractions(reads, planner);
+    }
+
+    @Test
+    void initialManualPathStillWorksBeforeBothWeeksHaveAuthoritativeHistory() {
+        var routing = mock(SellerWeeklyCurrentRouting.class);
+        var historical = mock(SellerWeeklyHistoricalReviewService.class);
+        when(stores.existsById(storeId)).thenReturn(true);
+        when(routing.historicalTarget(storeId)).thenReturn(Optional.empty());
+        when(reads.assessForPlanning(storeId)).thenReturn(new SellerWeeklyV3ReadResult(
+                SellerWeeklyV3ReadResult.State.PREPARING, Optional.empty()));
+        var selected = new SellerWeeklyReviewService(stores, reads, planner, null, Clock.systemUTC(),
+                routing, historical);
+        assertThat(selected.current(storeId).freshness()).isEqualTo(SellerWeeklyReviewView.Freshness.PREPARING);
+        verifyNoInteractions(historical, planner);
+    }
 }

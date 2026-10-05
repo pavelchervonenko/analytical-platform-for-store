@@ -730,6 +730,7 @@ export type WeeklyReview = CommonWeeklyReview & {
   sellerContext?: {
     freshness: SellerWeeklyReviewView["freshness"];
     membership: SellerWeeklyReview["membership"];
+    nonActionableSellerIds: string[];
     additionalSales: SellerWeeklyReview["additionalSales"];
     teamDisplay: SellerWeeklyReview["teamDisplay"];
   };

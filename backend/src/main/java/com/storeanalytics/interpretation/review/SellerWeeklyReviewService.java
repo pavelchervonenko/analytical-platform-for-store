@@ -20,25 +20,40 @@ public class SellerWeeklyReviewService {
     private final SellerWeeklyV3PlanningService planner;
     private final SellerWeeklyReviewAiReadSupport aiSupport;
     private final Clock clock;
+    private final SellerWeeklyCurrentRouting routing;
+    private final SellerWeeklyHistoricalReviewService historical;
 
     SellerWeeklyReviewService(StoreRepository stores, SellerWeeklyV3ReadService reads,
                               SellerWeeklyV3PlanningService planner) {
         this(stores, reads, planner, null, Clock.systemUTC());
     }
 
-    @Autowired
     public SellerWeeklyReviewService(StoreRepository stores, SellerWeeklyV3ReadService reads,
                                     SellerWeeklyV3PlanningService planner,
                                     SellerWeeklyReviewAiReadSupport aiSupport, Clock clock) {
+        this(stores, reads, planner, aiSupport, clock, null, null);
+    }
+
+    @Autowired
+    SellerWeeklyReviewService(StoreRepository stores, SellerWeeklyV3ReadService reads,
+            SellerWeeklyV3PlanningService planner, SellerWeeklyReviewAiReadSupport aiSupport, Clock clock,
+            SellerWeeklyCurrentRouting routing, SellerWeeklyHistoricalReviewService historical) {
         this.stores = stores;
         this.reads = reads;
         this.planner = planner;
         this.aiSupport = aiSupport;
         this.clock = clock;
+        this.routing = routing;
+        this.historical = historical;
     }
 
     public SellerWeeklyReviewView current(UUID storeId) {
         requireStore(storeId);
+        var target = routing == null ? java.util.Optional.<ClosedSellerWeek>empty() : routing.historicalTarget(storeId);
+        if (target.isPresent()) {
+            var week = target.orElseThrow();
+            return currentPeriodView(historical.period(storeId, week.start()), week);
+        }
         SellerWeeklyReviewView view = SellerWeeklyReviewView.from(reads.assessForPlanning(storeId));
         if (view.freshness() != SellerWeeklyReviewView.Freshness.CURRENT
                 || aiSupport == null || !aiSupport.properties().enabled()) {
@@ -63,7 +78,19 @@ public class SellerWeeklyReviewService {
 
     public SellerWeeklyReviewView generate(UUID storeId) {
         requireStore(storeId);
+        var target = routing == null ? java.util.Optional.<ClosedSellerWeek>empty() : routing.historicalTarget(storeId);
+        if (target.isPresent()) {
+            var week = target.orElseThrow();
+            return currentPeriodView(historical.refresh(storeId, week.start(), week.zone().getId()), week);
+        }
         return SellerWeeklyReviewView.from(planner.evaluate(storeId).review());
+    }
+
+    private SellerWeeklyReviewView currentPeriodView(SellerWeeklyReviewView view, ClosedSellerWeek week) {
+        if (routing.stillLatest(week) || view.report() == null) {
+            return view;
+        }
+        return new SellerWeeklyReviewView(SellerWeeklyReviewView.Freshness.STALE, view.report());
     }
 
     private void requireStore(UUID storeId) {

@@ -112,6 +112,8 @@ class SellerWeeklyAiSourceFenceIntegrationTest {
     @Autowired private SellerWeeklyPreparationRunner preparationRunner;
     @Autowired private SellerWeeklyAutomaticAiCandidates automaticCandidates;
     @Autowired private SellerWeeklyHistoricalReviewService historicalReviews;
+    @Autowired private com.storeanalytics.store.repository.StoreRepository stores;
+    @Autowired private com.storeanalytics.metrics.repository.SellerMembershipHistoryRepository history;
     private UUID store;
 
     @BeforeEach
@@ -257,6 +259,24 @@ class SellerWeeklyAiSourceFenceIntegrationTest {
         assertThat(planning.plan()).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM weekly_review_ai_attempts WHERE job_id=?",
                 Long.class, original.id())).isZero();
+    }
+
+    @Test
+    void authoritativePublicCurrentReadsThePreparedHistoricalSnapshotWithoutLegacyFallback() {
+        var snapshot = snapshot();
+        var properties = new SellerWeeklyPreparationProperties(true, Duration.ofMinutes(1),
+                10, 4, 25, 2, Duration.ofMinutes(1));
+        var routing = new SellerWeeklyCurrentRouting(properties, stores, history, clock);
+        var publicReview = new SellerWeeklyReviewService(stores, null, null, null, clock, routing, historicalReviews);
+        var current = publicReview.current(store);
+        assertThat(current.freshness()).isEqualTo(SellerWeeklyReviewView.Freshness.CURRENT);
+        assertThat(current.report().provenance().snapshotPublicId()).isEqualTo(snapshot.id().toString());
+        assertThat(current.report().membership().basis()).isEqualTo(SellerWeeklyHistoricalMembership.BASIS);
+        invalidate();
+        assertThat(publicReview.current(store).freshness()).isEqualTo(SellerWeeklyReviewView.Freshness.STALE);
+        assertThat(jobs.findBySnapshot(snapshot.id())).isEmpty();
+        assertThat(publicReview.generate(store).freshness()).isEqualTo(SellerWeeklyReviewView.Freshness.CURRENT);
+        assertThat(jobs.findBySnapshot(snapshot.id())).isEmpty();
     }
 
     @Test

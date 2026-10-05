@@ -408,6 +408,39 @@ public class WeeklyReviewAiJobStore {
         ));
     }
 
+    /** A new immutable revision must not hide a spent/exact/terminal job that blocks this same seller week. */
+    @Transactional(readOnly = true, timeout = 30)
+    public boolean hasSellerWeekPublicationBlocker(UUID snapshotId, Instant now) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM weekly_review_snapshots current_report
+                    JOIN weekly_review_snapshots bound ON bound.store_id=current_report.store_id
+                        AND bound.period_start=current_report.period_start
+                        AND bound.period_end=current_report.period_end
+                        AND bound.report_contract_version=3
+                    JOIN weekly_review_ai_jobs job ON job.snapshot_id=bound.id
+                    WHERE current_report.id=? AND current_report.report_contract_version=3
+                        AND job.snapshot_id<>current_report.id
+                        AND (job.planning_origin<>'AUTOMATIC' OR job.attempt_count>0
+                            OR job.deadline_at<=? OR job.deadline_at<=clock_timestamp()
+                            OR job.prompt_version<>? OR job.content_schema_version<>?
+                            OR EXISTS (SELECT 1 FROM weekly_review_ai_attempts WHERE job_id=job.id)
+                            OR (job.status IN ('FAILED','SUCCEEDED') AND NOT ((job.status='FAILED'
+                                AND job.last_error_code='SNAPSHOT_NOT_CURRENT') IS TRUE)))
+                ) OR EXISTS (
+                    SELECT 1 FROM weekly_review_snapshots current_report
+                    JOIN weekly_review_snapshots bound ON bound.store_id=current_report.store_id
+                        AND bound.period_start=current_report.period_start
+                        AND bound.period_end=current_report.period_end
+                        AND bound.report_contract_version=3
+                    JOIN weekly_review_ai_enrichments enrichment ON enrichment.snapshot_id=bound.id
+                    WHERE current_report.id=? AND current_report.report_contract_version=3
+                        AND bound.id<>current_report.id)
+                """, Boolean.class, requireNonNull(snapshotId, "snapshotId"),
+                Timestamp.from(requireNonNull(now, "now")), promptVersion,
+                WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION, snapshotId));
+    }
+
     @Transactional(readOnly = true)
     public Optional<WeeklyReviewAiJob> findById(UUID jobId) {
         return single(jdbcTemplate.query(

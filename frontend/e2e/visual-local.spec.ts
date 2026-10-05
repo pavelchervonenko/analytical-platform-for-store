@@ -767,6 +767,12 @@ async function installFixtureApi(page: Page) {
       return;
     }
     const view = makeSellerWeeklyReviewView();
+    if (scenario === "seller-historical") {
+      view.report!.membership.basis = "HISTORICAL_DOCUMENT_MEMBERSHIP_V1";
+      view.report!.membership.actionabilityRosterHash = "f".repeat(64);
+      view.report!.employees[0]!.actionableNow = false;
+      view.report!.employees[0]!.card.action = null;
+    }
     if (scenario === "seller-stale") view.freshness = "STALE";
     if (scenario === "seller-action") {
       const card = view.report!.employees[0]!.card;
@@ -1208,6 +1214,11 @@ test.describe("local frontend visual review", () => {
         await page.getByRole("heading", { name: "ИИ-разбор", exact: true }).click();
 
         const reviewScenario = routeUrl.searchParams.get("reviewScenario") ?? "ready-dense";
+        if (!useLiveWeeklyReview && reviewScenario === "seller-historical") {
+          await expect(page.getByText(/участие на дату каждой операции/u)).toBeVisible();
+          await expect(page.getByText("Не в текущем составе рейтинга")).toBeVisible();
+          await expect(page.getByText(/один состав для обеих недель/u)).toHaveCount(0);
+        }
         if (!useLiveWeeklyReview && reviewScenario.startsWith("seller-")) {
           await expect(page.getByText(/Только продавцы рейтинга/u)).toBeVisible();
           const composition = page.locator(".weekly-review-additional details > summary");

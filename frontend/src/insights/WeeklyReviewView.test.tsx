@@ -139,6 +139,21 @@ describe("WeeklyReviewView", () => {
     expect(screen.queryByText("Почему сотрудник в списке")).not.toBeInTheDocument();
   });
 
+  it("explains historical participation and retains results for a no-longer-actionable seller", async () => {
+    const view = makeSellerWeeklyReviewView();
+    view.report!.membership.basis = "HISTORICAL_DOCUMENT_MEMBERSHIP_V1";
+    view.report!.membership.actionabilityRosterHash = "f".repeat(64);
+    view.report!.employees[0]!.actionableNow = false;
+    view.report!.employees[0]!.card.action = null;
+    vi.mocked(getSellerWeeklyReview).mockResolvedValue(view);
+    renderView(undefined, makeWeeklyReview());
+    expect(await screen.findByText(/участие на дату каждой операции/u)).toBeInTheDocument();
+    expect(screen.getByText("Не в текущем составе рейтинга")).toBeInTheDocument();
+    expect(screen.queryByText(/один состав для обеих недель/u)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Результаты продавца: Synthetic" })).toBeVisible();
+    expect(getWeeklyReviewMock).not.toHaveBeenCalled();
+  });
+
   it("shows a sales-based seller action without shifts and hides it when stale", async () => {
     const view = makeSellerWeeklyReviewView();
     const card = view.report!.employees[0]!.card;

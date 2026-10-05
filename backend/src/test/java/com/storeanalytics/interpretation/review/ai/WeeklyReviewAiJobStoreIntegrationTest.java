@@ -188,6 +188,7 @@ class WeeklyReviewAiJobStoreIntegrationTest {
         assertThat(automaticSellerEnqueue(sellers, first, now)).isTrue();
         WeeklyReviewAiJob original = sellers.findBySnapshot(first).orElseThrow();
         UUID corrected = addSellerRevision(first);
+        assertThat(sellers.hasSellerWeekPublicationBlocker(corrected, now)).isFalse();
         assertThat(new TransactionTemplate(transactionManager).<Boolean>execute(status ->
                 sellers.enqueueAutomaticSellerWeek(corrected, "YANDEX", "synthetic-model", 2,
                         now.plusSeconds(1), Duration.ofDays(1)))).isTrue();
@@ -200,6 +201,28 @@ class WeeklyReviewAiJobStoreIntegrationTest {
         assertThat(automaticSellerEnqueue(sellers, corrected, now.plusSeconds(2))).isFalse();
         assertThat(jdbcTemplate.queryForObject("SELECT planning_origin FROM weekly_review_ai_jobs WHERE id=?",
                 String.class, rebound.id())).isEqualTo("AUTOMATIC");
+    }
+
+    @Test
+    void newRevisionReadShowsTheSpentOrExactWeeklyBlockerInsteadOfWaitingForever() {
+        Instant now = Instant.now();
+        UUID first = addSellerRevision(addSnapshot(addStore("Visible blocked seller week"),
+                LocalDate.of(2026, 8, 17), 1));
+        WeeklyReviewAiJobStore sellers = sellerStore();
+        assertThat(automaticSellerEnqueue(sellers, first, now)).isTrue();
+        UUID corrected = addSellerRevision(first);
+        var original = sellers.findBySnapshot(first).orElseThrow();
+        jdbcTemplate.update("UPDATE weekly_review_ai_jobs SET status='FAILED',last_error_code='SNAPSHOT_NOT_CURRENT' "
+                + "WHERE id=?", original.id());
+        assertThat(sellers.hasSellerWeekPublicationBlocker(corrected, now)).isFalse();
+        jdbcTemplate.update("UPDATE weekly_review_ai_jobs SET attempt_count=1 WHERE id=?", original.id());
+        assertThat(sellers.hasSellerWeekPublicationBlocker(corrected, now)).isTrue();
+        assertThat(sellers.hasSellerWeekPublicationBlocker(first, now)).isFalse();
+        UUID exact = addSellerRevision(addSnapshot(addStore("Visible exact approval blocker"),
+                LocalDate.of(2026, 8, 17), 1));
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+                sellers.enqueueApproved(exact, "YANDEX", "synthetic-model", 1, now, Duration.ofHours(2)));
+        assertThat(sellers.hasSellerWeekPublicationBlocker(addSellerRevision(exact), now)).isTrue();
     }
 
     @Test

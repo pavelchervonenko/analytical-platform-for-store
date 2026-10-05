@@ -57,6 +57,8 @@ export function sellerReviewPresentation(view: SellerWeeklyReviewView): WeeklyRe
     sellerContext: {
       freshness: view.freshness,
       membership: report.membership,
+      nonActionableSellerIds: report.employees.filter((item) => !item.actionableNow)
+        .map((item) => item.card.employeePublicId),
       additionalSales: report.additionalSales,
       teamDisplay: report.teamDisplay
     }

@@ -69,7 +69,7 @@ superseded_by: null
 реализованы отдельно. Исторический freshness guard не подставляет новую revision вместо одобренной.
 Отдельный opt-in free scheduler и atomic paid-attempt/publication fence реализованы в candidate.
 Historical automatic paid planning подключён opt-in к точным prepared bindings, без legacy fallback.
-Runtime acceptance и UI/current-reader cutover ещё требуются.
+Forward-only current-reader routing реализован opt-in; runtime acceptance ещё требуется.
 Discovery начинается лишь с первой недели, чья предыдущая
 полностью покрыта явным baseline, не с даты старого manual canary. Source/history ожидания
 бесплатны и отложены; техническая ошибка подготовки terminal, а не бесконечный busy retry.

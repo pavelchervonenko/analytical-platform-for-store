@@ -27,12 +27,14 @@ public final class SellerWeeklyReviewAiStateResolver {
         if (!properties.enabled()) {
             return report.withAiEnhancement(new AiEnhancement(AiState.DISABLED, null, null, null));
         }
-        AiState state = jobs.findBySnapshot(UUID.fromString(report.provenance().snapshotPublicId()))
+        UUID snapshotId = UUID.fromString(report.provenance().snapshotPublicId());
+        AiState state = jobs.findBySnapshot(snapshotId)
                 .map(job -> switch (job.status()) {
                     case FAILED, SUCCEEDED -> AiState.UNAVAILABLE;
                     case PENDING, RUNNING, RETRY_WAIT -> now.isAfter(job.createdAt().plus(properties.preparationSla()))
                             ? AiState.DELAYED : AiState.PREPARING;
-                }).orElse(properties.plannerEnabled() ? AiState.PREPARING : AiState.UNAVAILABLE);
+                }).orElseGet(() -> jobs.hasSellerWeekPublicationBlocker(snapshotId, now)
+                        ? AiState.UNAVAILABLE : properties.plannerEnabled() ? AiState.PREPARING : AiState.UNAVAILABLE);
         return report.withAiEnhancement(new AiEnhancement(state, SellerWeeklyReviewAiContract.PROMPT_VERSION, 4, null));
     }
 }

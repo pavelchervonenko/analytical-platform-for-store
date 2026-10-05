@@ -110,7 +110,7 @@ Combined facts, historical identity и opt-in snapshot writer соединены
 period read и внутренний free planner реализованы; отдельный opt-in free scheduler подключён
 к backlog; historical paid planner читает только точные SUCCEEDED bindings:
 atomic paid-attempt/publication fence реализован в локальном candidate; перед включением нужны
-его filled-DB concurrency/release acceptance и current-reader cutover по плану. Codec/frontend parsing поддерживают temporal basis; runtime activation
+его filled-DB concurrency/release acceptance по плану. Opt-in current-reader routing и codec/frontend parsing поддерживают temporal basis; runtime activation
 это не доказывает. Для старого периода проверять отсутствие future actions; departed card должна
 сохранить исторические суммы и `actionableNow=false`.
 
@@ -142,7 +142,12 @@ weekly features обязательны. На API/MIGRATION scheduler не соз
 current-roster snapshot planner исключён. При отдельных AI parent/planner flags платный planner
 использует только historical queue и exact period reader, без current-roster fallback. Release
 preflight принимает free preparation как deterministic предусловие; parent/provider/budget
-проверки сохраняются. UI/current reader ещё требует reviewed cutover. Free flag не включает AI worker и не
+проверки сохраняются. Current seller reader при free flag использует historical exact period
+только после authoritative coverage обеих недель baseline; stale/preparing не подменять legacy.
+Ранее этого сохраняется согласованный manual current-roster путь, не automatic fallback.
+GET не создаёт snapshots/jobs, а generate бесплатно пересчитывает только выбранный exact period.
+Проверить store timezone, границу обеих недель и отсутствие будущих действий для departed sellers.
+Free flag не включает AI worker и не
 разрешает платный вызов. Перед включением нужны локальные gates, filled-DB rehearsal, forward-only
 baseline approval и отдельное production решение; документ не утверждает выполненный cutover.
 
@@ -157,7 +162,7 @@ Short queue transactions ограничены 30 seconds. Перезапуск �
 durable cursor/jobs. `SUCCEEDED` остаётся успехом бесплатной подготовки, не AI publication.
 При новой неделе free refresh удаляет future-action horizon посредством новой immutable revision,
 а не UPDATE старого payload. Отчёт без future actions не меняется только из-за новой недели.
-До current-reader cutover и runtime acceptance не выдавать free scheduler за готовый автообзор.
+До runtime acceptance не выдавать free scheduler за подтверждённый production автообзор.
 
 Candidate различает `EXACT` и `AUTOMATIC` jobs. Все прежние rows остаются `EXACT`; не менять их
 origin вручную и не переносить exact approval на новую revision. Только неоплаченная automatic
@@ -165,6 +170,10 @@ job без active lease может принять CURRENT snapshot того же
 provider/model и retry cap. Наличие любого attempt/receipt, UNKNOWN или published enrichment
 запрещает такой refresh. Для zero-attempt source failure допускается только `SNAPSHOT_NOT_CURRENT`,
 не прочие terminal failures. Deadline не продлевается; истёкшая job требует operator diagnosis.
+Новая current revision с paid/exact/terminal blocker другой revision той же недели показывает
+AI UNAVAILABLE, не бесконечное PREPARING. Проверить соответствующую weekly job и сохранённые
+receipts; не создавать новую job для обхода лимита. Неоплаченная automatic source failure
+может дождаться бесплатного восстановления той же job, включая semantic reuse того же snapshot.
 Перед cutover проверить filled upgrade с сохранением old rows/receipts, DB unique key/trigger,
 старый claim после rebind и гонку с startAttempt. Этот механизм не включает baseline или production scheduler.
 
@@ -186,7 +195,8 @@ compatible/latest ID и актуальный checkpoint; после беспла
 atomic разрешением provider call: worker повторяет проверку под отдельным source fence.
 Free exact refresh historical snapshot не меняет одобренные ID/хеши и не открывает новый paid job.
 Новая revision требует нового exact review, не повторного запуска старой команды. Endpoint/free
-planner не активируют scheduler или baseline; локальный UI ещё не переключён на historical read.
+planner не активируют scheduler или baseline; current UI выбирает historical только через
+описанный opt-in baseline-aware routing, а не посредством этого additive endpoint.
 
 Source fence candidate удерживает store/source locks только в коротких READ_COMMITTED операциях
 startAttempt и completion, никогда во время provider network/free generation. Fence использует
