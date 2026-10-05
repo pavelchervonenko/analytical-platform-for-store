@@ -96,6 +96,36 @@ Runtime table/contract availability проверяется отдельно; с�
 
 ## Предусловия
 
+### Forward-only начало истории состава
+
+Не выполнять baseline одновременно с первым paid canary. Сначала проверить на заполненной
+изолированной копии именно candidate artifact и штатный `SellerMembershipHistoryWriter`, не
+дублировать его INSERT-логику ad-hoc SQL. Порядок отдельной approved операции:
+
+1. Read-only зафиксировать exact stores/timezone, current roster count и неперсональный fingerprint
+   IDs/active/ranking flags, актуальную успешную employee/store sync и отсутствие конфликтующей
+   sync/webhook/free/AI работы. Если provenance или синхронизация неизвестны — STOP.
+2. Получить approval именно этого store set/fingerprint и начала истории сейчас. Не принимать
+   пользовательскую прошлую дату. Release/image/schema должны соответствовать фактическому
+   проверенному candidate; список старого canary не заменяет свежие проверки.
+3. В изолированном one-shot context отключить все schedulers, provider и migration. Writable
+   transaction должна иметь локальные lock/statement timeouts; lock stores в стабильном порядке,
+   повторно проверить fingerprint/guards после lock и вызвать `bootstrapStore` для каждого target.
+   Любое расхождение или ошибка откатывает весь target set. Source поля, payroll и snapshots не
+   менять. При existing baseline не перезаписывать timestamp/source: сверить прежнюю provenance,
+   иначе STOP. Операция сама не включает preparation или paid AI.
+4. После commit read-only проверить authoritative timestamp, approved source и количество/flags
+   открытых history intervals; отдельно подтвердить неизменность financial/payroll/snapshot facts.
+   Сохранить sanitized mode/IDs/counts/hash/time evidence без имён/сырого roster. Повтор — no-op,
+   не «обновление» baseline. После начала history не удалять её ради отката приложения.
+5. По timezone вычислить первую полную Monday-start неделю после baseline; automatic comparison
+   доступен лишь после её следующей полной недели. Более ранний первый обзор возможен только
+   отдельным approved manual current-roster path. Baseline не переносится назад для ускорения.
+
+Этот порядок — контракт подготовки operator/rehearsal, не готовая production команда и не
+подтверждение активации. Конкретный one-shot package готовится после фиксации release coordinates
+и exact read-only roster proof; перед runtime операцией нужны rehearsal и новое approval.
+
 ### Дополнительные проверки seller-контракта
 
 Исторический candidate reader сам по себе не даёт разрешения публикации. До temporal cutover
@@ -163,6 +193,13 @@ durable cursor/jobs. `SUCCEEDED` остаётся успехом бесплат�
 При новой неделе free refresh удаляет future-action horizon посредством новой immutable revision,
 а не UPDATE старого payload. Отчёт без future actions не меняется только из-за новой недели.
 До runtime acceptance не выдавать free scheduler за подтверждённый production автообзор.
+
+Наблюдаемость free queue и AI имеет отдельные cached gauges/health exporter и правила
+`monitoring/prometheus/weekly-review-ai-alerts.yml`. WAITING_HISTORY/WAITING_SOURCES диагностируются
+как ожидание; незавершённая free job старше шести часов даёт sustained warning, FAILED — technical
+alert. Ошибка чтения counts даёт NaN/health=0, не ложный healthy queue. Перед auto enable нужны
+protected scrape, дедуплицируемая техническая доставка и проверка fire/recovery по
+[alert-response](alert-response.md). Public readiness и repository promtool tests не заменяют этот gate.
 
 Candidate различает `EXACT` и `AUTOMATIC` jobs. Все прежние rows остаются `EXACT`; не менять их
 origin вручную и не переносить exact approval на новую revision. Только неоплаченная automatic

@@ -30,6 +30,7 @@ public class WeeklyReviewAiJobStateMetrics implements MeterBinder {
     private final AtomicReference<JobCounts> counts = new AtomicReference<>(
             JobCounts.unknown()
     );
+    private volatile boolean refreshed;
 
     public WeeklyReviewAiJobStateMetrics(
             WeeklyReviewAiJobStore jobStore,
@@ -50,6 +51,8 @@ public class WeeklyReviewAiJobStateMetrics implements MeterBinder {
         gauge(registry, "failed", JobCounts::failed);
         gauge(registry, "delayed", JobCounts::delayed);
         gauge(registry, "expired_lease", JobCounts::expiredLease);
+        Gauge.builder("storeanalytics.interpretation.weekly.review.ai.metrics.healthy", this,
+                state -> state.refreshed ? 1 : 0).register(registry);
     }
 
     @Scheduled(
@@ -71,8 +74,12 @@ public class WeeklyReviewAiJobStateMetrics implements MeterBinder {
                     ),
                     jobStore.countExpiredLeases(now)
             ));
+            refreshed = true;
         } catch (RuntimeException exception) {
-            LOGGER.error("Failed to refresh weekly review AI job metrics", exception);
+            counts.set(JobCounts.unknown());
+            refreshed = false;
+            LOGGER.error("Failed to refresh weekly review AI job metrics; failure_type={}",
+                    exception.getClass().getSimpleName());
         }
     }
 
@@ -87,7 +94,7 @@ public class WeeklyReviewAiJobStateMetrics implements MeterBinder {
                 state -> value.applyAsDouble(state.get())
         ).description("Current active weekly review AI jobs by operational state")
                 .tag("status", status)
-                .tag("prompt_version", WeeklyReviewAiContract.PROMPT_VERSION)
+                .tag("prompt_version", jobStore.activePromptVersion())
                 .tag("content_schema_version", String.valueOf(
                         WeeklyReviewAiContract.CONTENT_SCHEMA_VERSION
                 ))

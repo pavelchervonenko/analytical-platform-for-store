@@ -101,6 +101,23 @@ canary не переносятся на другую неделю или нов�
 
 ## Прогресс
 
+- Пакет наблюдаемости: free queue экспортирует отдельные fixed-status wait/failure/delay/lease
+  counts без store/employee labels; read-only query имеет timeout. Ошибка чтения метрик даёт
+  NaN/exporter-health=0 вместо сохранения старых «здоровых» значений. AI metric исправлена на
+  фактическую active prompt version. Prometheus sustained rules и startup/fire/recovery fixtures
+  добавлены как обязательный CI/release gate, не runtime monitoring. Targeted gate: 30 tests в
+  4 классах, 0 failures/errors/skips, Checkstyle main/test PASS. Review проверил отсутствие DML,
+  provider/notification network в job transactions, тайм-грань lease и шестичасовую delay boundary.
+  Первые два failure относились к Mockito restubbing и накопленным unrelated synthetic leases;
+  fixtures исправлены без ослабления predicates. YAML/static syntax PASS; локальный promtool
+  пока не выполнен: оба registry пути недоступны из среды, это явный gate CI, не заявленный PASS.
+  Readiness monitor не заменяет Alertmanager delivery: protected scrape и deduplicated fire/recovery
+  acceptance нужны до постоянного auto enable. Runbook фиксирует check/approved forward-only
+  baseline/apply/verify с повторной roster guard под store locks и штатным writer; exact operator
+  package/rehearsal готовятся после неизменных release coordinates и свежего roster proof.
+  Полный backend прогон предыдущего commit остановлен для включения этого пакета; он не считается
+  полным PASS. Production/baseline/provider не затронуты, итоговый frozen gate остаётся впереди.
+
 - Пакет public current-reader/UI cutover: при отдельном preparation opt-in последняя закрытая
   неделя выбирается по timezone магазина и только когда явный baseline покрывает обе недели.
   Read/бесплатный generate используют exact historical период; STALE/PREPARING, отсутствие

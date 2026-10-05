@@ -1,0 +1,70 @@
+rule_files:
+  - ../weekly-review-ai-alerts.yml
+evaluation_interval: 1m
+tests:
+  - name: startup and short source waits do not alert
+    interval: 1m
+    input_series:
+      - series: 'storeanalytics_interpretation_seller_weekly_preparation_metrics_healthy{application="test",role="WORKER"}'
+        values: '0 0 1 1 1 1'
+      - series: 'storeanalytics_interpretation_seller_weekly_preparation_jobs{application="test",role="WORKER",status="waiting_sources"}'
+        values: '1+0x5'
+      - series: 'storeanalytics_interpretation_seller_weekly_preparation_jobs{application="test",role="WORKER",status="delayed"}'
+        values: '0+0x5'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: WeeklyReviewMetricsUnavailable
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: SellerWeeklyPreparationFailed
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: SellerWeeklyPreparationDelayed
+        exp_alerts: []
+  - name: terminal technical failure fires and recovers without payload labels
+    interval: 1m
+    input_series:
+      - series: 'storeanalytics_interpretation_seller_weekly_preparation_jobs{application="test",role="WORKER",status="failed"}'
+        values: '1 1 1 0 0'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: SellerWeeklyPreparationFailed
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: SellerWeeklyPreparationFailed
+        exp_alerts:
+          - exp_labels:
+              application: test
+              severity: critical
+              owner: developer
+              subsystem: weekly-review
+            exp_annotations:
+              summary: Historical weekly preparation needs operator action
+              description: >-
+                Inspect exact store/week, job state and safe reason code without report payload.
+                Do not fabricate history, delete the job or change queue status manually.
+      - eval_time: 4m
+        alertname: SellerWeeklyPreparationFailed
+        exp_alerts: []
+  - name: six hour backlog uses a sustained warning instead of repeated tick events
+    interval: 1m
+    input_series:
+      - series: 'storeanalytics_interpretation_seller_weekly_preparation_jobs{application="test",role="WORKER",status="delayed"}'
+        values: '1+0x11'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: SellerWeeklyPreparationDelayed
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: SellerWeeklyPreparationDelayed
+        exp_alerts:
+          - exp_labels:
+              application: test
+              severity: warning
+              owner: developer
+              subsystem: weekly-review
+            exp_annotations:
+              summary: Historical weekly preparation has waited over six hours
+              description: >-
+                Distinguish WAITING_SOURCES and WAITING_HISTORY from technical failure.
+                Restore missing coverage or investigate the baseline; never bypass either gate.

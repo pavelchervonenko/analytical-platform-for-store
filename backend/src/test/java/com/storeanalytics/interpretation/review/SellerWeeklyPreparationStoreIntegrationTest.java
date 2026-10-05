@@ -80,6 +80,36 @@ class SellerWeeklyPreparationStoreIntegrationTest {
     }
 
     @Test
+    void operationalQueryIsReadOnlyAndDistinguishesWaitDelayAndExactLeaseBoundary() {
+        var observer = new SellerWeeklyPreparationOperationalState(jdbc);
+        var readOnly = new TransactionTemplate(transaction.getTransactionManager());
+        readOnly.setReadOnly(true);
+        var before = readOnly.execute(status -> observer.read(NOW));
+        UUID store = store("UTC", "2026-09-21T00:00:00Z");
+        assertThat(discover(store, NOW, 1).insertedWeeks()).isOne();
+        Claim claim = claim(NOW);
+        assertThat(defer(claim, Deferral.WAITING_SOURCES, NOW)).isTrue();
+        jdbc.update("UPDATE seller_weekly_preparation_jobs SET created_at = ? WHERE id = ?",
+                Timestamp.from(NOW.minus(Duration.ofHours(6))), claim.id());
+        var boundary = readOnly.execute(status -> observer.read(NOW));
+        assertThat(boundary.waitingSources()).isEqualTo(before.waitingSources() + 1);
+        assertThat(boundary.delayed()).isEqualTo(before.delayed());
+        jdbc.update("UPDATE seller_weekly_preparation_jobs SET created_at = ? WHERE id = ?",
+                Timestamp.from(NOW.minus(Duration.ofHours(6)).minusSeconds(1)), claim.id());
+        var delayed = readOnly.execute(status -> observer.read(NOW));
+        assertThat(delayed.delayed()).isEqualTo(before.delayed() + 1);
+        assertThat(delayed.failed()).isEqualTo(before.failed());
+        Claim running = claim(NOW.plus(LEASE));
+        Instant leaseBoundary = running.leaseUntil().plusSeconds(43);
+        jdbc.update("UPDATE seller_weekly_preparation_jobs SET lease_until = ? WHERE id = ?",
+                Timestamp.from(leaseBoundary), running.id());
+        var beforeLease = readOnly.execute(status -> observer.read(leaseBoundary.minusNanos(1000)));
+        var exactLease = readOnly.execute(status -> observer.read(leaseBoundary));
+        assertThat(exactLease.expiredLease()).isEqualTo(beforeLease.expiredLease() + 1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM weekly_review_ai_jobs", Long.class)).isZero();
+    }
+
+    @Test
     void migrationAndDiscoveryDoNotInferBaselineOrCreatePaidJobs() {
         UUID store = store("UTC", null);
         assertThat(discover(store, NOW, 52).reasonCode()).isEqualTo("BASELINE_OR_ACTIVE_STORE_MISSING");

@@ -58,6 +58,13 @@ superseded_by: null
   references вместо raw identifiers.
 - Host monitor проверяет только публичный `/readyz` и отправляет Telegram сообщение при изменении
   состояния. Он не проверяет очереди, backup age, БД отдельно или полноту бизнес-данных.
+- Candidate seller preparation экспортирует fixed-status gauges отдельно от AI lifecycle:
+  `WAITING_SOURCES`/`WAITING_HISTORY` не являются `FAILED`. Незавершённая подготовка старше
+  шести часов — `delayed`, точная граница lease — `expired_lease`. Exporter health показывает
+  ошибку чтения БД, counts становятся NaN вместо сохранения прежних значений. AI metrics
+  используют фактическую active prompt version. Repository weekly-review rules требуют
+  отдельного Prometheus/Alertmanager wiring и fire/recovery acceptance; на production это
+  не подтверждено. Metric labels не содержат store/week/employee IDs или provider payload.
 
 ## Инварианты
 

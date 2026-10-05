@@ -88,6 +88,18 @@ restart запрещён. Rollback — отменить минимальное �
 
 ## Evidence и известные пробелы
 
+### Автоматический недельный разбор
+
+Для candidate `weekly-review-ai-alerts.yml` отдельно проверять free preparation и paid AI:
+source/history wait требует восстановления покрытия или расследования baseline, а не paid retry.
+Технический FAILED и expired lease требуют exact job/attempt/receipt triage. При UNKNOWN или
+stale-after-paid запрещены новый job, удаление terminal row и принудительная публикация.
+Exporter health=0/NaN counts означают потерю диагностики, а не отсутствие проблем. Delayed free
+queue начинается после шести часов; warm-up без authoritative недель не считать пропущенным job.
+Readiness monitor не доставляет эти alerts. Перед постоянной автоматикой operations owner должен
+подключить защищённый scrape/Alertmanager route и подтвердить один fire/recovery без повтора на
+каждом scheduler tick. Store/week/job IDs допустимы в sanitized triage, не в metric labels.
+
 Сохранить alert fingerprint, bounded metrics/log refs, действие и recovery time. Нет runtime
 evidence загрузки rules, конечной доставки и stale-backup alert; до fire/recovery rehearsal runbook
 остаётся draft.

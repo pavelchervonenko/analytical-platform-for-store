@@ -1,0 +1,103 @@
+groups:
+  - name: seller-weekly-review-pipeline
+    interval: 1m
+    rules:
+      - alert: WeeklyReviewMetricsUnavailable
+        expr: >-
+          min by (application) (
+            {__name__=~"storeanalytics_interpretation_(seller_weekly_preparation|weekly_review_ai)_metrics_healthy",role=~"WORKER|COMBINED"}
+          ) == 0
+        for: 3m
+        labels:
+          severity: warning
+          owner: developer
+          subsystem: weekly-review
+        annotations:
+          summary: Weekly review queue metrics cannot be refreshed
+          description: >-
+            Do not interpret unknown or stale metrics as an empty healthy queue.
+            Check sanitized exporter failure type and database connectivity.
+      - alert: SellerWeeklyPreparationFailed
+        expr: >-
+          max by (application) (
+            storeanalytics_interpretation_seller_weekly_preparation_jobs{status="failed",role=~"WORKER|COMBINED"}
+          ) > 0
+        for: 2m
+        labels:
+          severity: critical
+          owner: developer
+          subsystem: weekly-review
+        annotations:
+          summary: Historical weekly preparation needs operator action
+          description: >-
+            Inspect exact store/week, job state and safe reason code without report payload.
+            Do not fabricate history, delete the job or change queue status manually.
+      - alert: SellerWeeklyPreparationDelayed
+        expr: >-
+          max by (application) (
+            storeanalytics_interpretation_seller_weekly_preparation_jobs{status="delayed",role=~"WORKER|COMBINED"}
+          ) > 0
+        for: 10m
+        labels:
+          severity: warning
+          owner: developer
+          subsystem: weekly-review
+        annotations:
+          summary: Historical weekly preparation has waited over six hours
+          description: >-
+            Distinguish WAITING_SOURCES and WAITING_HISTORY from technical failure.
+            Restore missing coverage or investigate the baseline; never bypass either gate.
+      - alert: SellerWeeklyPreparationExpiredLease
+        expr: >-
+          max by (application) (
+            storeanalytics_interpretation_seller_weekly_preparation_jobs{status="expired_lease",role=~"WORKER|COMBINED"}
+          ) > 0
+        for: 2m
+        labels:
+          severity: warning
+          owner: developer
+          subsystem: weekly-review
+        annotations:
+          summary: Free weekly preparation lease recovery is delayed
+          description: Check worker health and bounded scheduler recovery; do not reuse the old lease token.
+      - alert: WeeklyReviewAiFailed
+        expr: >-
+          max by (application) (
+            storeanalytics_interpretation_weekly_review_ai_jobs{status="failed",role=~"WORKER|COMBINED"}
+          ) > 0
+        for: 2m
+        labels:
+          severity: critical
+          owner: developer
+          subsystem: weekly-review
+        annotations:
+          summary: Weekly AI job requires operator diagnosis
+          description: >-
+            Inspect exact job, attempt and immutable response receipt before any retry.
+            UNKNOWN and stale-after-paid outcomes must not trigger a replacement paid job.
+      - alert: WeeklyReviewAiDelayed
+        expr: >-
+          max by (application) (
+            storeanalytics_interpretation_weekly_review_ai_jobs{status="delayed",role=~"WORKER|COMBINED"}
+          ) > 0
+        for: 5m
+        labels:
+          severity: warning
+          owner: developer
+          subsystem: weekly-review
+        annotations:
+          summary: Weekly AI queue exceeded its preparation SLA
+          description: Check worker, source freshness and budget reservations without enqueueing duplicate requests.
+      - alert: WeeklyReviewAiExpiredLease
+        expr: >-
+          max by (application) (
+            storeanalytics_interpretation_weekly_review_ai_jobs{status="expired_lease",role=~"WORKER|COMBINED"}
+          ) > 0
+        for: 1m
+        labels:
+          severity: critical
+          owner: developer
+          subsystem: weekly-review
+        annotations:
+          summary: Weekly AI worker lease expired
+          description: Verify receipt and known or unknown cost before recovery; no blind paid retry.

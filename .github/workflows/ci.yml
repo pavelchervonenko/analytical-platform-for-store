@@ -71,6 +71,9 @@ jobs:
       - name: Verify backend, migrations and LLM contracts
         run: ./gradlew :backend:check --no-daemon
 
+      - name: Verify weekly monitoring fire and recovery rules
+        run: bash scripts/tests/weekly-review-monitoring-test.sh
+
   frontend:
     name: Frontend checks
     runs-on: ubuntu-latest

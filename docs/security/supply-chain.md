@@ -54,6 +54,11 @@ superseded_by: null
   отдельные совпадающие digest-поля.
 - Server preflight сверяет remote OCI revisions до остановки приложения, а deploy повторяет
   проверку локально после pull и до Flyway.
+- Weekly monitoring rules проходят отдельный CI/release `promtool` gate (официальный validator
+  image с фиксированным version tag). Контейнер получает только read-only rules mount, без
+  application secrets, Docker socket или сетевого доступа во время выполнения. Этот dev validator
+  не устанавливает monitoring на сервер и не входит в backend/web runtime images; version tag
+  не является cryptographic digest pin, как и отмеченное ниже ограничение base images.
 
 ## Инварианты
 

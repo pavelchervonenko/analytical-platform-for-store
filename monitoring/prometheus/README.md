@@ -1,6 +1,6 @@
 # Prometheus Operator Alerts
 
-`weekly-snapshot-alerts.yml`, `llm-analysis-alerts.yml` и `telegram-delivery-alerts.yml`
+`weekly-snapshot-alerts.yml`, `weekly-review-ai-alerts.yml`, `llm-analysis-alerts.yml` и `telegram-delivery-alerts.yml`
 содержат transport-agnostic правила для технических уведомлений
 разработчику. Они не относятся к Telegram-уведомлениям руководителей и не выполняют внешние вызовы
 из backend job-транзакций.
@@ -18,6 +18,7 @@
 ```yaml
 rule_files:
   - /etc/prometheus/rules/weekly-snapshot-alerts.yml
+  - /etc/prometheus/rules/weekly-review-ai-alerts.yml
   - /etc/prometheus/rules/llm-analysis-alerts.yml
   - /etc/prometheus/rules/telegram-delivery-alerts.yml
 ```
@@ -36,3 +37,16 @@ delivery и recovery. Адрес, bot token, SMTP credentials и webhook URL я�
 Если wiring будет введён и подтверждён evidence, после первого месяца пороги и `for` следует
 калибровать по фактической длительности jobs. Alert закрывается только после устранения причины;
 terminal failed job нельзя удалять только ради погашения сигнала.
+
+Недельная seller preparation имеет отдельные фиксированные status gauges: source/history wait,
+technical failure, delayed и expired lease. Delayed означает незавершённую бесплатную подготовку
+старше шести часов; обычный первый scheduler tick или warm-up до authoritative периода не дают
+этого сигнала. AI gauges относятся к active prompt, не подписываются legacy версией в seller mode.
+Exporter health равен нулю до первого успешного чтения и после ошибки БД; неизвестные counts — NaN,
+не устаревшие «здоровые» нули. Высококардинальные IDs, report и provider payload не входят в labels.
+
+Локальные правила проверяются `promtool check rules weekly-review-ai-alerts.yml` и
+`promtool test rules tests/weekly-review-ai-alerts-test.yml`. Для неизменного firing state
+Alertmanager должен группировать по alertname/application/subsystem и дедуплицировать доставку;
+не настраивать уведомление на каждый минутный scrape. Конкретный receiver/repeat interval и
+проверенный fire/recovery обязателен при rollout, repository tests не доказывают доставку.

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 
 import com.storeanalytics.interpretation.review.ai.WeeklyReviewAiGenerationProperties;
 import java.time.Duration;
+import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -26,6 +27,7 @@ class SellerWeeklyPreparationConfigurationTest {
             assertThat(application).hasNotFailed();
             assertThat(application.getBean(SellerWeeklyPreparationProperties.class).enabled()).isFalse();
             assertThat(application).doesNotHaveBean(SellerWeeklyPreparationScheduler.class);
+            assertThat(application).doesNotHaveBean(SellerWeeklyPreparationStateMetrics.class);
             assertThat(application).doesNotHaveBean(SellerWeeklyPreparationSchedulingConfiguration.SCHEDULER);
         });
     }
@@ -45,6 +47,7 @@ class SellerWeeklyPreparationConfigurationTest {
                 "app.interpretation.weekly-review-snapshot-planner.enabled=true").run(application -> {
                     assertThat(application).hasNotFailed();
                     assertThat(application).hasSingleBean(SellerWeeklyPreparationScheduler.class);
+                    assertThat(application).hasSingleBean(SellerWeeklyPreparationStateMetrics.class);
                     assertThat(application).doesNotHaveBean(SellerWeeklyReviewSnapshotPlanner.class);
                     var scheduler = application.getBean(SellerWeeklyPreparationSchedulingConfiguration.SCHEDULER,
                             ThreadPoolTaskScheduler.class);
@@ -59,6 +62,7 @@ class SellerWeeklyPreparationConfigurationTest {
             enabled().withPropertyValues("app.runtime.role=" + role).run(application -> {
                 assertThat(application).hasNotFailed();
                 assertThat(application).doesNotHaveBean(SellerWeeklyPreparationScheduler.class);
+                assertThat(application).doesNotHaveBean(SellerWeeklyPreparationStateMetrics.class);
                 assertThat(application).doesNotHaveBean(SellerWeeklyPreparationSchedulingConfiguration.SCHEDULER);
             });
         }
@@ -110,13 +114,23 @@ class SellerWeeklyPreparationConfigurationTest {
     @Configuration(proxyBeanMethods = false)
     @ComponentScan(basePackageClasses = SellerWeeklyPreparationScheduler.class, useDefaultFilters = false,
             includeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE,
-                    classes = SellerWeeklyPreparationScheduler.class))
+                    classes = {SellerWeeklyPreparationScheduler.class, SellerWeeklyPreparationStateMetrics.class}))
     @EnableConfigurationProperties({SellerWeeklyPreparationProperties.class, SellerWeeklyReviewProperties.class,
         WeeklyReviewProperties.class, WeeklyReviewSnapshotPlannerProperties.class,
         WeeklyReviewAiGenerationProperties.class})
     @Import({SellerWeeklyPreparationConfiguration.class,
         SellerWeeklyPreparationSchedulingConfiguration.class, SellerWeeklyReviewSnapshotPlanner.class})
     static class TestConfiguration {
+        @Bean
+        SellerWeeklyPreparationOperationalState operationalState() {
+            return mock(SellerWeeklyPreparationOperationalState.class);
+        }
+
+        @Bean
+        Clock clock() {
+            return Clock.systemUTC();
+        }
+
         @Bean
         SellerWeeklyPreparationBatchService preparationBatch() {
             return mock(SellerWeeklyPreparationBatchService.class);

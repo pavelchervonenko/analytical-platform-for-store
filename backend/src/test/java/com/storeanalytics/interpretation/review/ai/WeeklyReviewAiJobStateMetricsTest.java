@@ -16,6 +16,7 @@ class WeeklyReviewAiJobStateMetricsTest {
     void exposesCachedLifecycleAndStalenessCounts() {
         Instant now = Instant.parse("2026-08-27T12:00:00Z");
         WeeklyReviewAiJobStore store = mock(WeeklyReviewAiJobStore.class);
+        when(store.activePromptVersion()).thenReturn(SellerWeeklyReviewAiContract.PROMPT_VERSION);
         when(store.countByStatus(WeeklyReviewAiJobStatus.PENDING)).thenReturn(2L);
         when(store.countByStatus(WeeklyReviewAiJobStatus.RUNNING)).thenReturn(1L);
         when(store.countByStatus(WeeklyReviewAiJobStatus.RETRY_WAIT)).thenReturn(3L);
@@ -40,6 +41,17 @@ class WeeklyReviewAiJobStateMetricsTest {
         assertGauge(registry, "failed", 5);
         assertGauge(registry, "delayed", 6);
         assertGauge(registry, "expired_lease", 7);
+        assertThat(registry.get(WeeklyReviewAiJobStateMetrics.JOBS_METRIC).tag("status", "pending")
+                .tag("prompt_version", SellerWeeklyReviewAiContract.PROMPT_VERSION).gauge().value()).isEqualTo(2);
+        assertThat(registry.get("storeanalytics.interpretation.weekly.review.ai.metrics.healthy")
+                .gauge().value()).isEqualTo(1);
+
+        when(store.countByStatus(WeeklyReviewAiJobStatus.PENDING)).thenThrow(new IllegalStateException("private"));
+        metrics.refresh();
+        assertThat(registry.get(WeeklyReviewAiJobStateMetrics.JOBS_METRIC)
+                .tag("status", "pending").gauge().value()).isNaN();
+        assertThat(registry.get("storeanalytics.interpretation.weekly.review.ai.metrics.healthy")
+                .gauge().value()).isZero();
     }
 
     private void assertGauge(
