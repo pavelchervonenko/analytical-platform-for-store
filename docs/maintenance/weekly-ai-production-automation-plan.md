@@ -109,8 +109,12 @@ canary не переносятся на другую неделю или нов�
   4 классах, 0 failures/errors/skips, Checkstyle main/test PASS. Review проверил отсутствие DML,
   provider/notification network в job transactions, тайм-грань lease и шестичасовую delay boundary.
   Первые два failure относились к Mockito restubbing и накопленным unrelated synthetic leases;
-  fixtures исправлены без ослабления predicates. YAML/static syntax PASS; локальный promtool
-  пока не выполнен: оба registry пути недоступны из среды, это явный gate CI, не заявленный PASS.
+  fixtures исправлены без ослабления predicates. YAML/static syntax PASS. Registry paths из среды
+  недоступны; официальный promtool получен временно из GitHub release через Windows network path,
+  archive проверен опубликованным checksum. Native promtool check всех 7 rules и test rules PASS:
+  startup silence, source wait, sustained delay, free/paid lease, terminal failure, exporter failure,
+  recovery и исключение API role проверены. Wrapper остаётся обязательным CI/release gate;
+  локально не заявляется успешный pull validator container или runtime delivery.
   Readiness monitor не заменяет Alertmanager delivery: protected scrape и deduplicated fire/recovery
   acceptance нужны до постоянного auto enable. Runbook фиксирует check/approved forward-only
   baseline/apply/verify с повторной roster guard под store locks и штатным writer; exact operator

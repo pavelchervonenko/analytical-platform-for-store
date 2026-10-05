@@ -68,3 +68,104 @@ tests:
               description: >-
                 Distinguish WAITING_SOURCES and WAITING_HISTORY from technical failure.
                 Restore missing coverage or investigate the baseline; never bypass either gate.
+  - name: unavailable exporter fires separately and recovers
+    interval: 1m
+    input_series:
+      - series: 'storeanalytics_interpretation_weekly_review_ai_metrics_healthy{application="test",role="WORKER"}'
+        values: '0+0x3 1 1'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: WeeklyReviewMetricsUnavailable
+        exp_alerts:
+          - exp_labels:
+              application: test
+              severity: warning
+              owner: developer
+              subsystem: weekly-review
+            exp_annotations:
+              summary: Weekly review queue metrics cannot be refreshed
+              description: >-
+                Do not interpret unknown or stale metrics as an empty healthy queue.
+                Check sanitized exporter failure type and database connectivity.
+      - eval_time: 5m
+        alertname: WeeklyReviewMetricsUnavailable
+        exp_alerts: []
+  - name: paid failure delay and lease alert without prompt or sensitive labels
+    interval: 1m
+    input_series:
+      - series: 'storeanalytics_interpretation_weekly_review_ai_jobs{application="test",role="WORKER",status="failed",prompt_version="synthetic"}'
+        values: '1+0x5 0 0'
+      - series: 'storeanalytics_interpretation_weekly_review_ai_jobs{application="test",role="WORKER",status="delayed",prompt_version="synthetic"}'
+        values: '1+0x5 0 0'
+      - series: 'storeanalytics_interpretation_weekly_review_ai_jobs{application="test",role="WORKER",status="expired_lease",prompt_version="synthetic"}'
+        values: '1+0x5 0 0'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: WeeklyReviewAiFailed
+        exp_alerts:
+          - exp_labels:
+              application: test
+              severity: critical
+              owner: developer
+              subsystem: weekly-review
+            exp_annotations:
+              summary: Weekly AI job requires operator diagnosis
+              description: >-
+                Inspect exact job, attempt and immutable response receipt before any retry.
+                UNKNOWN and stale-after-paid outcomes must not trigger a replacement paid job.
+      - eval_time: 5m
+        alertname: WeeklyReviewAiDelayed
+        exp_alerts:
+          - exp_labels:
+              application: test
+              severity: warning
+              owner: developer
+              subsystem: weekly-review
+            exp_annotations:
+              summary: Weekly AI queue exceeded its preparation SLA
+              description: Check worker, source freshness and budget reservations without enqueueing duplicate requests.
+      - eval_time: 1m
+        alertname: WeeklyReviewAiExpiredLease
+        exp_alerts:
+          - exp_labels:
+              application: test
+              severity: critical
+              owner: developer
+              subsystem: weekly-review
+            exp_annotations:
+              summary: Weekly AI worker lease expired
+              description: Verify receipt and known or unknown cost before recovery; no blind paid retry.
+      - eval_time: 7m
+        alertname: WeeklyReviewAiFailed
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: WeeklyReviewAiDelayed
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: WeeklyReviewAiExpiredLease
+        exp_alerts: []
+  - name: free expired lease is a sustained warning and API samples never page
+    interval: 1m
+    input_series:
+      - series: 'storeanalytics_interpretation_seller_weekly_preparation_jobs{application="test",role="WORKER",status="expired_lease"}'
+        values: '1 1 1 0 0'
+      - series: 'storeanalytics_interpretation_weekly_review_ai_jobs{application="test",role="API",status="failed"}'
+        values: '1+0x4'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: SellerWeeklyPreparationExpiredLease
+        exp_alerts:
+          - exp_labels:
+              application: test
+              severity: warning
+              owner: developer
+              subsystem: weekly-review
+            exp_annotations:
+              summary: Free weekly preparation lease recovery is delayed
+              description: Check worker health and bounded scheduler recovery; do not reuse the old lease token.
+      - eval_time: 4m
+        alertname: SellerWeeklyPreparationExpiredLease
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: WeeklyReviewAiFailed
+        exp_alerts: []
