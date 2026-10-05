@@ -3,6 +3,8 @@ package com.storeanalytics.interpretation.review.ai;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -140,12 +142,63 @@ class WeeklyReviewAiGenerationExecutionServiceTest {
 
         service.execute(job, OWNER);
 
+        org.mockito.InOrder order = inOrder(jobStore, completionService);
+        order.verify(jobStore).preserveResponseReceipt(job, attempt, prepared, response, valid, NOW);
+        order.verify(completionService).complete(job, attempt, OWNER, prepared, response, valid, NOW);
         verify(completionService).complete(
                 job, attempt, OWNER, prepared, response, valid, NOW
         );
         verify(jobStore, never()).recordValidationFailure(
                 any(), any(), any(), any(), any(), any(), any()
         );
+    }
+
+    @Test
+    void lostLeaseAfterResponsePreservesReceiptWithoutAnotherProviderCall() {
+        LlmProviderResponseReceipt response = receipt(validResponse());
+        WeeklyReviewAiValidationResult valid = semanticValid();
+        when(provider.generate(prepared.request())).thenReturn(response);
+        when(validator.validate(prepared.input(), response.responseBody())).thenReturn(valid);
+        doThrow(new WeeklyReviewAiLeaseLostException()).when(completionService)
+                .complete(job, attempt, OWNER, prepared, response, valid, NOW);
+        service.execute(job, OWNER);
+        verify(jobStore).preserveResponseReceipt(job, attempt, prepared, response, valid, NOW);
+        verify(provider).generate(prepared.request());
+        verify(jobStore, never()).failClaimed(any(), any(), any(), any(), any());
+        verify(jobStore, never()).recordValidationFailure(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void validatorCrashStillPreservesPaidResponseWithSafeFailureCode() {
+        LlmProviderResponseReceipt response = receipt(validResponse());
+        when(provider.generate(prepared.request())).thenReturn(response);
+        when(validator.validate(prepared.input(), response.responseBody()))
+                .thenThrow(new IllegalStateException("synthetic validator failure"));
+        service.execute(job, OWNER);
+        WeeklyReviewAiValidationResult invalid = WeeklyReviewAiValidationResult.invalid(
+                LlmValidationOutcome.SEMANTIC_INVALID,
+                List.of(new LlmValidationViolation("VALIDATION_EXECUTION_FAILED", "$", null)));
+        verify(jobStore).preserveResponseReceipt(job, attempt, prepared, response, invalid, NOW);
+        verify(jobStore).recordValidationFailure(job, attempt, OWNER, response, invalid,
+                properties.retryDelay(1), NOW);
+        verify(completionService, never()).complete(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void lostLeaseOnRejectedResponsePreservesReceiptWithoutSchedulingAnotherPaidAttempt() {
+        LlmProviderResponseReceipt response = receipt("{}");
+        WeeklyReviewAiValidationResult invalid = WeeklyReviewAiValidationResult.invalid(
+                LlmValidationOutcome.SEMANTIC_INVALID,
+                List.of(new LlmValidationViolation("UNAPPROVED_NUMBER", "$", null)));
+        when(provider.generate(prepared.request())).thenReturn(response);
+        when(validator.validate(prepared.input(), response.responseBody())).thenReturn(invalid);
+        doThrow(new WeeklyReviewAiLeaseLostException()).when(jobStore)
+                .recordValidationFailure(job, attempt, OWNER, response, invalid, properties.retryDelay(1), NOW);
+        service.execute(job, OWNER);
+        verify(jobStore).preserveResponseReceipt(job, attempt, prepared, response, invalid, NOW);
+        verify(provider).generate(prepared.request());
+        verify(completionService, never()).complete(any(), any(), any(), any(), any(), any(), any());
+        verify(jobStore, never()).failClaimed(any(), any(), any(), any(), any());
     }
 
     @Test

@@ -30,6 +30,7 @@ public class WeeklyReviewAiCompletionService {
             WeeklyReviewAiValidationResult validation,
             Instant now
     ) {
+        jobStore.preserveResponseReceipt(job, attempt, prepared, response, validation, now);
         enrichmentStore.persist(
                 job.snapshotId(),
                 prepared.input(),

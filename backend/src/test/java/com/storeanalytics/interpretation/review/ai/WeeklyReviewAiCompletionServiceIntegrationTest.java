@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
@@ -53,7 +54,8 @@ class WeeklyReviewAiCompletionServiceIntegrationTest {
     }
 
     @Test
-    void rollsBackPublicationAndAttemptWhenJobCompletionLosesItsLease() {
+    void rollsBackPublicationButPreservesReceiptWhenJobCompletionLosesItsLease() {
+        BigDecimal previousCost = jobStore.actualCostSince(NOW.minusSeconds(1));
         UUID snapshotId = addSnapshot();
         WeeklyReviewAiJob pending = jobStore.enqueue(
                 snapshotId,
@@ -87,8 +89,7 @@ class WeeklyReviewAiCompletionServiceIntegrationTest {
                 receipt,
                 validation,
                 NOW.plusSeconds(1)
-        )).isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("success transition was lost");
+        )).isInstanceOf(WeeklyReviewAiLeaseLostException.class);
 
         assertThat(enrichmentStore.findPublished(
                 snapshotId, NOW.plusSeconds(10)
@@ -100,6 +101,9 @@ class WeeklyReviewAiCompletionServiceIntegrationTest {
                 String.class,
                 attempt.id()
         )).isEqualTo("STARTED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT actual_cost FROM weekly_review_ai_response_receipts WHERE attempt_id = ?",
+                BigDecimal.class, attempt.id())).isEqualByComparingTo("2.00");
 
         completionService.complete(
                 claimed,
@@ -131,6 +135,120 @@ class WeeklyReviewAiCompletionServiceIntegrationTest {
                 String.class,
                 attempt.id()
         )).isEqualTo("SUCCEEDED");
+        assertThat(jobStore.actualCostSince(NOW.minusSeconds(1)))
+                .isEqualByComparingTo(previousCost.add(new BigDecimal("2.00")));
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM weekly_review_ai_response_receipts WHERE attempt_id = ?",
+                Long.class, attempt.id())).isOne();
+    }
+
+    @Test
+    void expiredLeaseCannotPublishAndLaterRecoveryCannotEraseReceiptOrPermitRetry() {
+        Started started = start();
+        BigDecimal before = jobStore.actualCostSince(NOW.minusSeconds(1));
+        Instant late = NOW.plus(Duration.ofMinutes(4));
+        assertThatThrownBy(() -> complete(started, late)).isInstanceOf(WeeklyReviewAiLeaseLostException.class);
+        assertThat(enrichmentStore.findPublished(started.job().snapshotId(), late)).isEmpty();
+        assertThat(jobStore.actualCostSince(NOW.minusSeconds(1)))
+                .isEqualByComparingTo(before.add(new BigDecimal("2.00")));
+        assertThat(jobStore.claimNext("recovery", Duration.ofMinutes(4), late.plusSeconds(1))).isEmpty();
+        assertThat(jobStore.findById(started.job().id()).orElseThrow().status())
+                .isEqualTo(WeeklyReviewAiJobStatus.FAILED);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT provider_outcome FROM weekly_review_ai_attempts WHERE id = ?",
+                String.class, started.attempt().id())).isEqualTo("UNKNOWN");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM weekly_review_ai_response_receipts WHERE attempt_id = ?",
+                Long.class, started.attempt().id())).isOne();
+    }
+
+    @Test
+    void responseAfterRecoveryIsDurableWithoutRewritingFinalAttemptAndIsCountedOnce() {
+        Started started = start();
+        Instant late = NOW.plus(Duration.ofMinutes(5));
+        assertThat(jobStore.claimNext("recovery", Duration.ofMinutes(4), late)).isEmpty();
+        BigDecimal before = jobStore.actualCostSince(NOW.minusSeconds(1));
+        assertThatThrownBy(() -> complete(started, late.plusSeconds(1)))
+                .isInstanceOf(WeeklyReviewAiLeaseLostException.class);
+        jobStore.preserveResponseReceipt(started.job(), started.attempt(), started.prepared(),
+                receipt(), validation(started.prepared().input()), late.plusSeconds(2));
+        assertThat(jobStore.actualCostSince(NOW.minusSeconds(1)))
+                .isEqualByComparingTo(before.add(new BigDecimal("2.00")));
+        assertThat(enrichmentStore.findPublished(started.job().snapshotId(), late)).isEmpty();
+        assertThat(jobStore.findById(started.job().id()).orElseThrow().status())
+                .isEqualTo(WeeklyReviewAiJobStatus.FAILED);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT provider_outcome FROM weekly_review_ai_attempts WHERE id = ?",
+                String.class, started.attempt().id())).isEqualTo("UNKNOWN");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT received_at FROM weekly_review_ai_response_receipts WHERE attempt_id = ?",
+                java.sql.Timestamp.class, started.attempt().id()).toInstant()).isEqualTo(late.plusSeconds(1));
+    }
+
+    @Test
+    void receiptIsImmutableAndConflictingMetadataOrIdentityCannotReplaceIt() {
+        Started started = start();
+        WeeklyReviewAiValidationResult valid = validation(started.prepared().input());
+        jobStore.preserveResponseReceipt(started.job(), started.attempt(), started.prepared(), receipt(), valid, NOW);
+        LlmProviderResponseReceipt changed = new LlmProviderResponseReceipt(responseBody(),
+                "gpt://folder/yandexgpt-5.1", "completion-request", 1000, 100, 0, 0, 1100,
+                new BigDecimal("9.00"), "RUB", 500L, 200);
+        assertThatThrownBy(() -> jobStore.preserveResponseReceipt(started.job(), started.attempt(),
+                started.prepared(), changed, valid, NOW)).isInstanceOf(IllegalArgumentException.class);
+        PreparedWeeklyReviewAiRequest wrongRequest = new PreparedWeeklyReviewAiRequest(
+                started.prepared().request(), "c".repeat(64), started.prepared().input(), "b".repeat(64));
+        assertThatThrownBy(() -> jobStore.preserveResponseReceipt(started.job(), started.attempt(),
+                wrongRequest, receipt(), valid, NOW)).isInstanceOf(IllegalArgumentException.class);
+        WeeklyReviewAiAttempt wrongNumber = new WeeklyReviewAiAttempt(
+                started.attempt().id(), started.job().id(), 2, NOW);
+        assertThatThrownBy(() -> jobStore.preserveResponseReceipt(started.job(), wrongNumber,
+                started.prepared(), receipt(), valid, NOW)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE weekly_review_ai_response_receipts SET actual_cost = 9 WHERE attempt_id = ?",
+                started.attempt().id())).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "DELETE FROM weekly_review_ai_response_receipts WHERE attempt_id = ?", started.attempt().id()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT actual_cost FROM weekly_review_ai_response_receipts WHERE attempt_id = ?",
+                BigDecimal.class, started.attempt().id())).isEqualByComparingTo("2.00");
+    }
+
+    private Started start() {
+        jobStore.enqueue(addSnapshot(), "YANDEX", "gpt://folder/yandexgpt-5.1", 2, NOW, Duration.ofHours(2));
+        WeeklyReviewAiJob job = jobStore.claimNext(OWNER, Duration.ofMinutes(4), NOW).orElseThrow();
+        PreparedWeeklyReviewAiRequest request = prepared(job);
+        WeeklyReviewAiAttempt attempt = jobStore.startAttempt(job, OWNER, request,
+                new LlmProviderPreflight(1000, 8000, new BigDecimal("3.00"), "RUB"), NOW);
+        return new Started(job, attempt, request);
+    }
+
+    @Test
+    void independentReceiptCannotOverrideAnAlreadyKnownLegacyResponseOrPrice() {
+        Started started = start();
+        WeeklyReviewAiValidationResult valid = validation(started.prepared().input());
+        jobStore.recordSuccessfulAttempt(started.job(), started.attempt(), OWNER, receipt(), valid, NOW);
+        LlmProviderResponseReceipt changed = new LlmProviderResponseReceipt(responseBody(),
+                "gpt://folder/yandexgpt-5.1", "completion-request", 1000, 100, 0, 0, 1100,
+                new BigDecimal("9.00"), "RUB", 500L, 200);
+        assertThatThrownBy(() -> jobStore.preserveResponseReceipt(started.job(), started.attempt(),
+                started.prepared(), changed, valid, NOW)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM weekly_review_ai_response_receipts WHERE attempt_id = ?",
+                Long.class, started.attempt().id())).isZero();
+        jobStore.preserveResponseReceipt(started.job(), started.attempt(), started.prepared(), receipt(), valid, NOW);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT actual_cost FROM weekly_review_ai_attempts WHERE id = ?",
+                BigDecimal.class, started.attempt().id())).isEqualByComparingTo("2.00");
+    }
+
+    private void complete(Started started, Instant now) {
+        completionService.complete(started.job(), started.attempt(), OWNER, started.prepared(),
+                receipt(), validation(started.prepared().input()), now);
+    }
+
+    private record Started(WeeklyReviewAiJob job, WeeklyReviewAiAttempt attempt,
+                           PreparedWeeklyReviewAiRequest prepared) {
     }
 
     private PreparedWeeklyReviewAiRequest prepared(WeeklyReviewAiJob job) {

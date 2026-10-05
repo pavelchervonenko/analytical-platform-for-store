@@ -94,8 +94,9 @@ canary не переносятся на другую неделю или нов�
   scheduler не создаёт другую weekly job, exact guard не подменяет revision. Operator security,
   25 documentation tests и strict documentation (0 warnings) проходят. Полный release gate
   этим targeted набором не заменяется.
-- Сохранение receipt при потере владельца после ответа, смена snapshot при source churn и durable
-  backlog остаются в следующих пакетах; существующая atomic completion не доказывает эти случаи.
+- На контрольной точке пакета 1 atomic completion ещё не доказывала сохранение receipt при
+  потере владельца. Этот случай реализован отдельным этапом ниже; смена snapshot при source churn
+  и durable backlog по-прежнему остаются в следующих пакетах.
 - Правило аналитического сотрудника возврата подтверждено владельцем и записано в ADR-0006.
   Независимая historical eligibility projection читает сотрудника записи LiveSklad на дату
   возврата. Не меняет сохранённый финансовый автор, не использует fallback на оригинал;
@@ -138,6 +139,23 @@ canary не переносятся на другую неделю или нов�
 - Владелец подтвердил read-only аудитом полное покрытие и стабильность источника за новую
   закрытую неделю: [наблюдение 5 октября](../history/audits/2026/10/weekly-source-readiness-october5.md).
   Это снимает прежний source blocker, но не заменяет snapshot/quality/paid approval gates.
+- Пакет 4, независимое сохранение provider response: additive append-only receipt хранится
+  отдельной транзакцией до публикации/retry. Поздний ответ не изменяет завершённую UNKNOWN attempt
+  и не оживляет terminal job. Известный RUB-расход учитывается один раз; неизвестный сохраняет
+  резерв оценки. Publication/retry fence дополнен lease/deadline/attempt count. Ошибка валидатора
+  сохраняет ответ и завершает job без автоматического платного повторения.
+  Финальный targeted набор: 45 tests в 6 классах, 0 failures/errors/skips, Checkstyle main/test PASS.
+  Отдельно 44 migration/security tests в 34 классах, 0 failures/errors/skips и Checkstyle PASS:
+  пустая/заполненная схема, промежуточный предыдущий target с AI attempts и restricted migrator.
+  Self-review проверил независимую транзакцию, immutable попытки, hash/claim binding, idempotency,
+  отсутствие повторного расхода и запрет переопределения уже известного legacy response/price.
+  Первая проверка стиля выявила восьмой параметр helper; сигнатура исправлена без ослабления
+  правила, финальный прогон зелёный. Документация/операторская безопасность/supply-chain проходят.
+  [Локальное evidence](../history/audits/2026/10/weekly-ai-response-receipts-local.md) сохраняет
+  scope и оставшиеся gates. Crash до durable записи остаётся UNKNOWN. Нужны privacy/retention
+  review, runtime grants и migration rehearsal; сохранённые production facts не изменены.
+  Это не закрывает гонку source change непосредственно перед publication, durable backlog,
+  historical cutover или весь автоматический режим.
 - Общая локальная контрольная точка сохранена в
   [sanitized evidence](../history/audits/2026/10/weekly-ai-local-regression-checkpoint.md).
   Полный backend run: 1 896 tests, один `ContainerLaunchException` при инициализации retention

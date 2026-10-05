@@ -6,9 +6,12 @@ import com.storeanalytics.interpretation.generation.LlmProviderPreflight;
 import com.storeanalytics.interpretation.generation.LlmProviderResponseReceipt;
 import com.storeanalytics.interpretation.review.PersistedWeeklyReview;
 import com.storeanalytics.interpretation.review.WeeklyReviewSnapshotStore;
+import com.storeanalytics.interpretation.validation.LlmValidationOutcome;
+import com.storeanalytics.interpretation.validation.LlmValidationViolation;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -147,9 +150,27 @@ public class WeeklyReviewAiGenerationExecutionService {
             );
             return;
         }
-        WeeklyReviewAiValidationResult validation = support.validator().validate(
-                prepared.input(), response.responseBody()
-        );
+        WeeklyReviewAiValidationResult validation;
+        try {
+            validation = support.validator().validate(prepared.input(), response.responseBody());
+        } catch (RuntimeException validationFailure) {
+            validation = WeeklyReviewAiValidationResult.invalid(LlmValidationOutcome.SEMANTIC_INVALID,
+                    List.of(new LlmValidationViolation("VALIDATION_EXECUTION_FAILED", "$", null)));
+        }
+        jobStore.preserveResponseReceipt(job, attempt, prepared, response, validation, clock.instant());
+        try {
+            finishResponse(job, attempt, owner, snapshot, prepared, response, validation);
+        } catch (WeeklyReviewAiLeaseLostException lost) {
+            // The receipt is durable; publication/retry belongs only to the current lease owner.
+        }
+    }
+
+    private void finishResponse(
+            WeeklyReviewAiJob job, WeeklyReviewAiAttempt attempt, String owner,
+            PersistedWeeklyReview snapshot, PreparedWeeklyReviewAiRequest prepared,
+            LlmProviderResponseReceipt response, WeeklyReviewAiValidationResult validation
+    ) {
+        boolean seller = SellerWeeklyReviewAiContract.isActive(job.promptVersion(), job.contentSchemaVersion());
         if (seller && !sellerCurrent(snapshot)) {
             jobStore.recordStaleResponse(job, attempt, owner, response, clock.instant());
             return;

@@ -6,7 +6,7 @@ owner: security
 audience:
   - developer
   - operator
-last_verified: 2026-09-30
+last_verified: 2026-10-05
 requirement_sources:
   - docs/archive/legacy-contracts/data-retention.md
 implementation_sources:
@@ -17,12 +17,14 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/maintenance
   - backend/src/main/java/com/storeanalytics/audit/service/AuditRetentionPolicy.java
   - backend/src/main/resources/db/migration/V12__add_data_retention.sql
+  - backend/src/main/resources/db/migration/V94__preserve_weekly_ai_response_receipts.sql
   - backend/src/main/resources/application.yml
 verification_sources:
   - backend/src/test/java/com/storeanalytics/product/service/CatalogSaleRoleSnapshotIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/product/service/CatalogCompatibilityPersistenceIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/common/config/DataRetentionPropertiesTest.java
   - backend/src/test/java/com/storeanalytics/maintenance
+  - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiCompletionServiceIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/audit/service/AuditRetentionPolicyTest.java
 runtime_evidence: []
 required_reviewers:
@@ -114,3 +116,14 @@ CATALOG_COMPATIBILITY_DECIDED относится к FINANCIAL audit retention, �
 требуют отдельного согласованного процесса до подключения к официальным расчётам.
 Soft-delete исходной строки исключает её, но не стирает снимок. Физическое удаление факта
 с таким снимком блокируется FK; будущие purge-процедуры должны учитывать эту зависимость.
+
+## Независимые receipts недельного ИИ
+
+Локальный кандидат добавляет `weekly_review_ai_response_receipts`: bounded provider response,
+результат валидации, billing metadata и hashes на одну attempt. UPDATE/DELETE запрещены,
+FK сохраняет связь с immutable attempt. Таблица не включена в technical purge. Она не является
+разрешением бессрочного хранения: существующий открытый retention contract AI payloads должен
+охватить и её, с контролируемым сроком, archival/legal holds и воспроизводимостью учёта расходов.
+Payloads недоступны через новые публичные API и не выводятся в logs/evidence. До production
+активации нужны отдельные security/privacy review, проверка runtime grants и migration rehearsal;
+локальные тесты не подтверждают серверное внедрение или legal basis хранения.

@@ -65,7 +65,12 @@ implementation_sources:
   - backend/src/main/resources/db/migration/V46__add_weekly_review_ai_enrichments.sql
   - backend/src/main/resources/db/migration/V47__add_weekly_review_ai_generation_jobs.sql
   - backend/src/main/resources/db/migration/V48__harden_weekly_review_rollout.sql
+  - backend/src/main/resources/db/migration/V94__preserve_weekly_ai_response_receipts.sql
+  - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiJobStore.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiCompletionService.java
 verification_sources:
+  - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiCompletionServiceIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiBudgetReservationIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/common/database/WarrantyFingerprintContextMigrationIntegrationTest.java
   - frontend/src/insights/WeeklyReviewView.test.tsx
   - frontend/src/api/sellerWeeklyReviewContract.test.ts
@@ -550,6 +555,21 @@ update/delete. Повторная запись с теми же input/content ha
 Завершённые attempts защищены от изменения. `weekly_review_ai_jobs` остаются изменяемыми
 lifecycle-записями для lease, retry и terminal state. Новая редакция отчёта создаёт новый snapshot
 и новый immutable enrichment, а не переписывает старый.
+
+В локальном кандидате полученный provider response и итог валидации отдельно сохраняются в
+`weekly_review_ai_response_receipts` транзакцией `REQUIRES_NEW` до публикации/retry transition.
+Один attempt имеет одну неизменяемую receipt, привязанную к job/attempt number/request/input
+hashes; одинаковый повтор записи идемпотентен, конфликт содержимого или billing metadata
+отвергается. Receipt может добавиться после recovery, не меняя завершённую UNKNOWN attempt.
+Публикация и retry требуют живого lease, deadline и точного attempt count. При потере права
+публикация откатывается, receipt и известный расход сохраняются, чужая/terminal job не оживает.
+Учёт RUB использует receipt вместо дублирующей attempt cost, не складывает их; неизвестная
+стоимость продолжает резервировать оценку. Атомарный budget guard сериализует также записи
+receipt. Сбой самого валидатора фиксируется безопасным `VALIDATION_EXECUTION_FAILED`, без
+автоматического платного повтора. Это локальная реализация, не runtime acceptance или активация.
+Crash процесса/БД до durable записи ответа остаётся UNKNOWN: нельзя восстановить несуществующую
+receipt или считать расход нулевым. Все provider payloads остаются в защищённой БД, не в логах,
+API диагностике, документах или evidence.
 
 ## Read path и frontend fallback
 

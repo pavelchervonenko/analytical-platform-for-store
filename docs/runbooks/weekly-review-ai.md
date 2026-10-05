@@ -74,6 +74,17 @@ enqueue заново из-за отсутствия немедленного р�
 к известному retryable отказу и semantic rejection внутри той же задачи, с backoff; исходное
 exact approval продолжает ограничивать число разрешённых attempts.
 
+Для кандидата с отдельным `weekly_review_ai_response_receipts` проверять также receipt по
+exact attempt ID: terminal UNKNOWN attempt может иметь позднюю RESPONSE receipt без enrichment.
+Это свидетельство уже полученного ответа, не право оживить job или вызвать ИИ заново.
+Известная RUB-стоимость учитывается однократно; при отсутствующей стоимости сохраняется резерв
+оценки. Диагностика выводит только IDs, outcome/validation codes, times и billing metadata —
+никогда response/input payload. `VALIDATION_EXECUTION_FAILED` требует исправления валидатора,
+а не автоматического платного повторения. До выпуска новой migration нужны rehearsal на
+заполненной БД, grants для runtime role и проверка несовместимости старого executable со схемой.
+Runtime table/contract availability проверяется отдельно; старую production-базу этими запросами
+не считать уже обновлённой.
+
 - Операция пишет job/attempt/enrichment; enrichment после публикации не удаляется.
 - Внешний эффект — платный outbound request в YandexGPT.
 - Нужны operator approval точного snapshot и отдельное явное approval exact case/payload hash,

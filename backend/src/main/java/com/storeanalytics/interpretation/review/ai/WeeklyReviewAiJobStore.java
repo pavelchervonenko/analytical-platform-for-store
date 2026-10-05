@@ -30,6 +30,7 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.core.JacksonException;
@@ -545,20 +546,22 @@ public class WeeklyReviewAiJobStore {
                 .distinct()
                 .limit(20)
                 .toList();
+        boolean validationExecuted = !codes.contains("VALIDATION_EXECUTION_FAILED");
+        String errorCode = validationExecuted ? "VALIDATION_REJECTED" : "VALIDATION_EXECUTION_FAILED";
         finishAttemptResponse(
                 attempt,
                 "REJECTED",
                 response,
                 validation,
-                "VALIDATION_REJECTED",
+                errorCode,
                 "Provider response failed weekly review semantic validation",
                 now
         );
         transitionAfterFailure(new FailureTransition(
                 job,
                 owner,
-                true,
-                "VALIDATION_REJECTED",
+                validationExecuted,
+                errorCode,
                 "Provider response failed weekly review semantic validation",
                 codes,
                 retryDelay,
@@ -605,12 +608,68 @@ public class WeeklyReviewAiJobStore {
                     last_error_code = NULL, last_error_message = NULL,
                     last_validation_codes = '[]'::jsonb
                 WHERE id = ? AND status = 'RUNNING' AND lease_owner = ?
+                  AND lease_until > ? AND deadline_at > ? AND attempt_count = ?
                 """,
                 Timestamp.from(requireNonNull(now, "now")),
                 requireNonNull(job, "job").id(),
-                requireText(owner, "owner")
+                requireText(owner, "owner"),
+                Timestamp.from(now), Timestamp.from(now), attempt.attemptNumber()
         );
-        require(changed == 1, "Weekly review AI success transition was lost");
+        if (changed != 1) {
+            throw new WeeklyReviewAiLeaseLostException();
+        }
+    }
+
+    /** Persist billing evidence before publication, even if recovery finalized the immutable attempt. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void preserveResponseReceipt(
+            WeeklyReviewAiJob job, WeeklyReviewAiAttempt attempt, PreparedWeeklyReviewAiRequest prepared,
+            LlmProviderResponseReceipt response, WeeklyReviewAiValidationResult validation, Instant now
+    ) {
+        requireNonNull(job, "job");
+        requireNonNull(attempt, "attempt");
+        requireNonNull(prepared, "prepared");
+        requireNonNull(response, "response");
+        requireNonNull(validation, "validation");
+        require(job.id().equals(attempt.jobId()) && job.id().equals(prepared.request().jobId())
+                        && attempt.attemptNumber() == job.attemptCount() + 1,
+                "Weekly review AI response receipt claim identity conflict");
+        String receiptHash = sha256(json(List.of(response, validation)));
+        jdbcTemplate.update("""
+                INSERT INTO weekly_review_ai_response_receipts (
+                    attempt_id, receipt_hash, response_payload, response_hash,
+                    validation_outcome, validation_violations, provider_request_id, resolved_model,
+                    actual_cost, cost_currency, input_tokens, output_tokens, total_tokens,
+                    latency_ms, http_status, received_at
+                )
+                SELECT id, ?, ?, ?, ?, CAST(? AS jsonb), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                FROM weekly_review_ai_attempts
+                WHERE id = ? AND job_id = ? AND attempt_number = ?
+                  AND request_hash = ? AND input_hash = ?
+                  AND (response_payload IS NULL OR (
+                      response_payload = ? AND actual_cost IS NOT DISTINCT FROM ?
+                      AND cost_currency IS NOT DISTINCT FROM ?
+                      AND provider_request_id IS NOT DISTINCT FROM ?
+                      AND resolved_model IS NOT DISTINCT FROM ?
+                  ))
+                ON CONFLICT (attempt_id) DO NOTHING
+                """, receiptHash, response.responseBody(), sha256(response.responseBody()),
+                validation.outcome().name(), json(validation.violations()), response.providerRequestId(),
+                response.resolvedModel(), response.costAmount(), response.costCurrency(), response.inputTokens(),
+                response.outputTokens(), response.totalTokens(), response.latencyMs(), response.httpStatus(),
+                Timestamp.from(requireNonNull(now, "now")), attempt.id(), job.id(), attempt.attemptNumber(),
+                prepared.requestHash(), prepared.inputHash(), response.responseBody(), response.costAmount(),
+                response.costCurrency(), response.providerRequestId(), response.resolvedModel());
+        List<String> saved = jdbcTemplate.query("""
+                SELECT receipt.receipt_hash
+                FROM weekly_review_ai_response_receipts receipt
+                JOIN weekly_review_ai_attempts attempt ON attempt.id = receipt.attempt_id
+                WHERE attempt.id = ? AND attempt.job_id = ? AND attempt.attempt_number = ?
+                  AND attempt.request_hash = ? AND attempt.input_hash = ?
+                """, (row, index) -> row.getString(1), attempt.id(), job.id(), attempt.attemptNumber(),
+                prepared.requestHash(), prepared.inputHash());
+        require(saved.size() == 1 && receiptHash.equals(saved.getFirst()),
+                "Weekly review AI response receipt identity conflict");
     }
 
     @Transactional
@@ -664,9 +723,11 @@ public class WeeklyReviewAiJobStore {
     @Transactional(readOnly = true)
     public BigDecimal actualCostSince(Instant since) {
         BigDecimal value = jdbcTemplate.queryForObject("""
-                SELECT COALESCE(SUM(actual_cost), 0)
-                FROM weekly_review_ai_attempts
-                WHERE finished_at >= ? AND cost_currency = 'RUB'
+                SELECT COALESCE(SUM(COALESCE(receipt.actual_cost, attempt.actual_cost)), 0)
+                FROM weekly_review_ai_attempts attempt
+                LEFT JOIN weekly_review_ai_response_receipts receipt ON receipt.attempt_id = attempt.id
+                WHERE COALESCE(receipt.received_at, attempt.finished_at) >= ?
+                  AND COALESCE(receipt.cost_currency, attempt.cost_currency) = 'RUB'
                 """,
                 BigDecimal.class,
                 Timestamp.from(requireNonNull(since, "since"))
@@ -740,21 +801,26 @@ public class WeeklyReviewAiJobStore {
         jdbcTemplate.execute(
                 "LOCK TABLE weekly_review_ai_attempts IN SHARE ROW EXCLUSIVE MODE"
         );
+        jdbcTemplate.execute(
+                "LOCK TABLE weekly_review_ai_response_receipts IN SHARE ROW EXCLUSIVE MODE"
+        );
         Instant dayStart = now.atZone(ZoneOffset.UTC).toLocalDate()
                 .atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant dayEnd = dayStart.plus(Duration.ofDays(1));
         BigDecimal reserved = jdbcTemplate.queryForObject("""
                 SELECT COALESCE(SUM(CASE
-                    WHEN actual_cost IS NOT NULL AND cost_currency = 'RUB'
-                        THEN actual_cost
-                    WHEN status = 'STARTED'
-                        THEN COALESCE(estimated_cost, 0)
-                    WHEN provider_outcome IN ('UNKNOWN', 'RESPONSE_RECEIVED')
-                        THEN COALESCE(estimated_cost, 0)
+                    WHEN COALESCE(receipt.actual_cost, attempt.actual_cost) IS NOT NULL
+                      AND COALESCE(receipt.cost_currency, attempt.cost_currency) = 'RUB'
+                        THEN COALESCE(receipt.actual_cost, attempt.actual_cost)
+                    WHEN attempt.status = 'STARTED'
+                        THEN COALESCE(attempt.estimated_cost, 0)
+                    WHEN attempt.provider_outcome IN ('UNKNOWN', 'RESPONSE_RECEIVED')
+                        THEN COALESCE(attempt.estimated_cost, 0)
                     ELSE 0
                 END), 0)
-                FROM weekly_review_ai_attempts
-                WHERE started_at >= ? AND started_at < ?
+                FROM weekly_review_ai_attempts attempt
+                LEFT JOIN weekly_review_ai_response_receipts receipt ON receipt.attempt_id = attempt.id
+                WHERE attempt.started_at >= ? AND attempt.started_at < ?
                 """,
                 BigDecimal.class,
                 Timestamp.from(dayStart),
@@ -874,6 +940,7 @@ public class WeeklyReviewAiJobStore {
                     last_error_code = ?, last_error_message = ?,
                     last_validation_codes = CAST(? AS jsonb)
                 WHERE id = ? AND status = 'RUNNING' AND lease_owner = ?
+                  AND lease_until > ? AND deadline_at > ? AND attempt_count = ?
                 """,
                 retry ? "RETRY_WAIT" : "FAILED",
                 Timestamp.from(retry ? retryAt : timestamp),
@@ -881,9 +948,12 @@ public class WeeklyReviewAiJobStore {
                 safe(value.errorMessage()),
                 json(value.validationCodes()),
                 claimed.id(),
-                requireText(value.owner(), "owner")
+                requireText(value.owner(), "owner"),
+                Timestamp.from(timestamp), Timestamp.from(timestamp), claimed.attemptCount() + 1
         );
-        require(changed == 1, "Weekly review AI retry transition was lost");
+        if (changed != 1) {
+            throw new WeeklyReviewAiLeaseLostException();
+        }
     }
 
     private void finishAttemptFailure(
@@ -953,7 +1023,9 @@ public class WeeklyReviewAiJobStore {
                 Timestamp.from(requireNonNull(now, "now")),
                 requireNonNull(attempt, "attempt").id()
         );
-        require(changed == 1, "Weekly review AI response persistence was lost");
+        if (changed != 1) {
+            throw new WeeklyReviewAiLeaseLostException();
+        }
     }
 
     private record FailureTransition(

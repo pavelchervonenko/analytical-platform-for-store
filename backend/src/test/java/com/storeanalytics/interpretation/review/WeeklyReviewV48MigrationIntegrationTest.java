@@ -47,9 +47,17 @@ class WeeklyReviewV48MigrationIntegrationTest {
         flyway("47").migrate();
         insertV47Fixture();
 
+        flyway("93").migrate();
+        assertThat(providerOutcome(FINAL_ATTEMPT_ID)).isEqualTo("RESPONSE_RECEIVED");
+        assertThat(providerOutcome(STARTED_ATTEMPT_ID)).isNull();
         flyway(null).migrate();
 
-        assertThat(currentVersion()).isEqualTo("93");
+        assertThat(currentVersion()).isEqualTo("94");
+        try (Connection connection = connection(); Statement statement = connection.createStatement();
+             ResultSet rows = statement.executeQuery("SELECT count(*) FROM weekly_review_ai_response_receipts")) {
+            assertThat(rows.next()).isTrue();
+            assertThat(rows.getLong(1)).isZero();
+        }
         assertThat(providerOutcome(FINAL_ATTEMPT_ID))
                 .isEqualTo("RESPONSE_RECEIVED");
         assertThat(providerOutcome(STARTED_ATTEMPT_ID)).isNull();

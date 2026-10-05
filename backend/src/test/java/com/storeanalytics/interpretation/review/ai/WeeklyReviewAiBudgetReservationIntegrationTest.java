@@ -9,10 +9,14 @@ import com.storeanalytics.integration.llm.yandex.LlmProviderOutcomeCertainty;
 import com.storeanalytics.integration.llm.yandex.YandexLlmProviderException;
 import com.storeanalytics.interpretation.generation.LlmProviderPreflight;
 import com.storeanalytics.interpretation.generation.LlmProviderRequest;
+import com.storeanalytics.interpretation.generation.LlmProviderResponseReceipt;
+import com.storeanalytics.interpretation.validation.LlmValidationOutcome;
+import com.storeanalytics.interpretation.validation.LlmValidationViolation;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -172,6 +176,83 @@ class WeeklyReviewAiBudgetReservationIntegrationTest {
                 String.class,
                 attempt.id()
         )).isEqualTo("UNKNOWN");
+    }
+
+    @Test
+    void lateReceiptReplacesEstimateInBudgetWithoutDoubleCountingOrReopeningJob() {
+        Instant now = NOW.plus(Duration.ofDays(2));
+        store.enqueue(addSnapshot("late-receipt-first"), "YANDEX", "gpt://folder/yandexgpt-5.1",
+                2, now, Duration.ofHours(2));
+        WeeklyReviewAiJob first = store.claimNext("first", Duration.ofMinutes(4), now).orElseThrow();
+        PreparedWeeklyReviewAiRequest request = prepared(first);
+        WeeklyReviewAiAttempt attempt = store.startAttempt(first, "first", request, preflight(), now);
+        Instant late = now.plusSeconds(241);
+        assertThat(store.claimNext("recovery", Duration.ofMinutes(4), late)).isEmpty();
+        LlmProviderResponseReceipt response = new LlmProviderResponseReceipt("{}", "model", "late-request",
+                1000, 100, 0, 0, 1100, new BigDecimal("2.00"), "RUB", 500L, 200);
+        WeeklyReviewAiValidationResult rejected = WeeklyReviewAiValidationResult.invalid(
+                LlmValidationOutcome.SEMANTIC_INVALID,
+                List.of(new LlmValidationViolation("SYNTHETIC_INVALID", "$", null)));
+        store.preserveResponseReceipt(first, attempt, request, response, rejected, late);
+        store.preserveResponseReceipt(first, attempt, request, response, rejected, late.plusSeconds(1));
+        assertThat(store.actualCostSince(now)).isEqualByComparingTo("2.00");
+        assertThat(store.findById(first.id()).orElseThrow().status()).isEqualTo(WeeklyReviewAiJobStatus.FAILED);
+
+        store.enqueue(addSnapshot("late-receipt-second"), "YANDEX", "gpt://folder/yandexgpt-5.1",
+                1, late.plusSeconds(2), Duration.ofHours(2));
+        WeeklyReviewAiJob second = store.claimNext("second", Duration.ofMinutes(4), late.plusSeconds(2))
+                .orElseThrow();
+        store.startAttempt(second, "second", prepared(second), preflight(), late.plusSeconds(2));
+        store.enqueue(addSnapshot("late-receipt-third"), "YANDEX", "gpt://folder/yandexgpt-5.1",
+                1, late.plusSeconds(3), Duration.ofHours(2));
+        WeeklyReviewAiJob third = store.claimNext("third", Duration.ofMinutes(4), late.plusSeconds(3))
+                .orElseThrow();
+        assertThatThrownBy(() -> store.startAttempt(third, "third", prepared(third), preflight(),
+                late.plusSeconds(3))).isInstanceOf(WeeklyReviewAiBudgetException.class);
+    }
+
+    @Test
+    void validatorExecutionFailureIsTerminalEvenWhenAnotherPaidAttemptIsPermitted() {
+        Instant now = NOW.plus(Duration.ofDays(3));
+        store.enqueue(addSnapshot("validator-crash"), "YANDEX", "gpt://folder/yandexgpt-5.1",
+                2, now, Duration.ofHours(2));
+        WeeklyReviewAiJob job = store.claimNext("worker", Duration.ofMinutes(4), now).orElseThrow();
+        WeeklyReviewAiAttempt attempt = store.startAttempt(job, "worker", prepared(job), preflight(), now);
+        WeeklyReviewAiValidationResult failed = WeeklyReviewAiValidationResult.invalid(
+                LlmValidationOutcome.SEMANTIC_INVALID,
+                List.of(new LlmValidationViolation("VALIDATION_EXECUTION_FAILED", "$", null)));
+        store.recordValidationFailure(job, attempt, "worker", new LlmProviderResponseReceipt("{}", "model",
+                "validator-request", 1000, 100, 0, 0, 1100, new BigDecimal("2.00"), "RUB", 500L, 200),
+                failed, Duration.ofSeconds(30), now.plusSeconds(1));
+        WeeklyReviewAiJob saved = store.findById(job.id()).orElseThrow();
+        assertThat(saved.status()).isEqualTo(WeeklyReviewAiJobStatus.FAILED);
+        assertThat(saved.lastErrorCode()).isEqualTo("VALIDATION_EXECUTION_FAILED");
+        assertThat(saved.attemptCount()).isOne();
+    }
+
+    @Test
+    void lateResponseWithoutKnownPriceKeepsConservativeEstimateReserved() {
+        Instant now = NOW.plus(Duration.ofDays(4));
+        store.enqueue(addSnapshot("unknown-receipt-first"), "YANDEX", "gpt://folder/yandexgpt-5.1",
+                2, now, Duration.ofHours(2));
+        WeeklyReviewAiJob first = store.claimNext("first", Duration.ofMinutes(4), now).orElseThrow();
+        PreparedWeeklyReviewAiRequest request = prepared(first);
+        WeeklyReviewAiAttempt attempt = store.startAttempt(first, "first", request, preflight(), now);
+        Instant late = now.plusSeconds(241);
+        assertThat(store.claimNext("recovery", Duration.ofMinutes(4), late)).isEmpty();
+        LlmProviderResponseReceipt response = new LlmProviderResponseReceipt("{}", "model", "unknown-price",
+                null, null, null, null, null, null, null, 500L, 200);
+        WeeklyReviewAiValidationResult rejected = WeeklyReviewAiValidationResult.invalid(
+                LlmValidationOutcome.SEMANTIC_INVALID,
+                List.of(new LlmValidationViolation("SYNTHETIC_INVALID", "$", null)));
+        store.preserveResponseReceipt(first, attempt, request, response, rejected, late);
+        assertThat(store.actualCostSince(now)).isEqualByComparingTo("0.00");
+        store.enqueue(addSnapshot("unknown-receipt-second"), "YANDEX", "gpt://folder/yandexgpt-5.1",
+                1, late.plusSeconds(2), Duration.ofHours(2));
+        WeeklyReviewAiJob second = store.claimNext("second", Duration.ofMinutes(4), late.plusSeconds(2))
+                .orElseThrow();
+        assertThatThrownBy(() -> store.startAttempt(second, "second", prepared(second), preflight(),
+                late.plusSeconds(2))).isInstanceOf(WeeklyReviewAiBudgetException.class);
     }
 
     private LlmProviderPreflight preflight() {
