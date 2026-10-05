@@ -72,7 +72,12 @@ implementation_sources:
   - backend/src/main/resources/db/migration/V94__preserve_weekly_ai_response_receipts.sql
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiJobStore.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiCompletionService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalFactsSource.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStore.java
+  - backend/src/main/resources/db/migration/V96__add_seller_weekly_preparation_backlog.sql
 verification_sources:
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalFactsSourceTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStoreIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiCompletionServiceIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiBudgetReservationIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/common/database/WarrantyFingerprintContextMigrationIntegrationTest.java
@@ -181,6 +186,37 @@ deterministic report: ответ остаётся `CURRENT` с AI `UNAVAILABLE`,
 prompt/schema версии не переписываются.
 
 Приведённый ниже STORE provider flow относится к совместимому legacy v2 пути.
+
+### Dormant историческая подготовка и backlog
+
+Внутренний `SellerWeeklyHistoricalFactsSource` принимает точный Monday-start период, timezone
+зафиксированного задания и время проверки. Он не заменяет старую неделю последней закрытой.
+Store должен оставаться активным с той же timezone; неделя должна быть закрыта по локальной
+полуночи, обе недели — непрерывно покрыты SALES/RETURNS/ORDERS и reconciled. Combined temporal
+facts читаются вместе с coverage, stability и source revision в одной read-only RR-транзакции.
+UNKNOWN history/author блокирует подготовку, не отбрасывает деньги и не включает current roster.
+Отдельный тип результата не позволяет передать temporal facts в прежний current-roster assembler.
+
+`seller_weekly_backlog_state` хранит baseline/timezone и cursor; `seller_weekly_preparation_jobs`
+хранит уникальные store/week, состояние, число бесплатных подготовок, next evaluation и lease.
+Discovery ограничена страницей 1–52 недели, начинается только с полного authoritative сравнения,
+идемпотентна и не затрагивает paid jobs. Нет baseline — нет cursor/заданий. После рестарта
+сохраняются и пропуски, и ожидания через несколько границ недель. Изменение timezone/baseline
+останавливает discovery/claim, а не переинтерпретирует прошлые даты.
+Claim использует `SKIP LOCKED`; отдельный token защищает даже takeover с прежним owner.
+Приоритет — время готовности/истечения lease, затем период: уже отложенная старая неделя
+не обгоняет ещё не проверенное задание только из-за своей даты.
+Истёкший lease не возобновляется heartbeat. `WAITING_SOURCES`/`WAITING_HISTORY` имеют backoff.
+Короткие операции выполняются отдельными транзакциями. Lease проверяется по свежему Clock
+после захвата блокировок, не только по времени начала запроса.
+`FAILED` terminal. `SUCCEEDED` обозначает только привязку exact historical snapshot и актуального
+checkpoint, не ИИ-публикацию; текущий current-roster snapshot не подходит. Короткая транзакция
+привязки блокирует store/source revision, но paid attempt и публикация требуют своего повторного
+atomic fence. Public historical schema/identity, snapshot assembler, planner/runner и provider
+этого пути ещё не подключены. Само наличие таблиц не включает автоматический режим.
+Bounded `requeueStaleSnapshots` возвращает устаревшую привязку в `PENDING` той же бесплатной
+задачи, без перемотки cursor, нового store/week и вмешательства в paid jobs. Проверяются текущий
+checkpoint/source revision и latest snapshot; повторный refresh уже ожидающей задачи no-op.
 
 ```text
 weekly-review facts

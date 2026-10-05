@@ -21,6 +21,9 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics/repository/SellerAttachRateRepository.java
   - backend/src/main/resources/db/migration/V95__add_temporal_seller_attach_provenance.sql
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyV3TeamPresenter.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalFactsSource.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStore.java
+  - backend/src/main/resources/db/migration/V96__add_seller_weekly_preparation_backlog.sql
   - backend/src/main/java/com/storeanalytics/sync/service/EmployeeSyncBatchApplier.java
 verification_sources:
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiJobStoreIntegrationTest.java
@@ -31,6 +34,8 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/metrics/repository/SellerHistoricalAttachIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/common/database/TemporalSellerAttachMigrationIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyV3TeamPresenterTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalFactsSourceTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStoreIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/EmployeeSyncMembershipHistoryIntegrationTest.java
 required_reviewers:
   - product
@@ -86,8 +91,13 @@ forward-only baseline и разрешение необходимых огран�
 подготовку; исторический вклад ушедших сохраняется отдельно от текущих action IDs. Внутренний
 combined reader добавляет temporal attach с точным document provenance и требует v4 policy;
 гарантийная target-sale семантика сохраняется. Opt-in presenter исключает future actions ушедших,
-сохраняя их финансовую карточку. Публичный historical membership contract, периодный read API,
-snapshot assembly и durable backlog ещё не подключены; current-roster путь не переключён.
+сохраняя их финансовую карточку. Периодный внутренний facts source принимает любую закрытую
+неделю и до тяжёлого чтения проверяет continuous coverage/stability за обе недели в одной
+read-only RR-транзакции. Additive backlog сохраняет per-store cursor и уникальные store/week
+jobs, bounded discovery и token-fenced lease. Он не выводит baseline из текущего состава,
+не теряет старые задачи после рестарта и не создаёт платные jobs. Публичный historical membership
+contract, периодный read API, snapshot assembly и scheduler этой очереди ещё не подключены;
+current-roster путь не переключён.
 Поэтому включение постоянной автоматической публикации до их проверки запрещено.
 
 ## Условия вступления решения в силу

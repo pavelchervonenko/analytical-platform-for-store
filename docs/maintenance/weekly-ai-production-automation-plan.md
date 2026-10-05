@@ -80,6 +80,44 @@ canary не переносятся на другую неделю или нов�
 
 ## Прогресс
 
+- Пакет 3, durable free preparation: добавлены per-store baseline/timezone cursor и уникальные
+  store/week jobs. Discovery ограничена 1–52 неделями и начинается лишь после двух полных
+  authoritative недель; restart и задержки через новые границы не удаляют старые задачи.
+  Claim использует SKIP LOCKED и независимый token, expired heartbeat/defer/complete запрещены.
+  Lease пересматривается по свежему Clock после ожидания блокировок; операции имеют отдельные
+  короткие транзакции, чтобы не унаследовать locks/isolation внешней подготовки.
+  Source/history waits имеют backoff, технический FAILED terminal. Очередь приоритизирует
+  время готовности/lease: due retry старой недели не обгоняет ещё не проверенную неделю
+  лишь из-за даты периода. Привязка snapshot проверяет
+  exact store/week/timezone, historical basis, latest revision и текущий checkpoint; короткий
+  store/source lock защищает только этот переход, не заменяет будущий publication fence.
+  Bounded refresh устаревшего результата возвращает ту же бесплатную задачу в PENDING,
+  не создавая другой store/week/paid job и не перематывая cursor.
+  Периодный внутренний facts source читает любую закрытую неделю в одной read-only RR-транзакции,
+  проверяя coverage/stability до combined temporal facts, без current-roster fallback.
+  Scheduler, public historical assembly/schema/identity, paid planning и publication ещё не
+  подключены. Production и frontend не изменены.
+  Общий migration/targeted gate: 108 tests в 48 классах, 0 failures/errors/skips, Checkstyle PASS.
+  После lease review: 70 tests в 12 классах, 0 failures/errors/skips, Checkstyle PASS; включены
+  historical financial/attach, coverage/stability, заполненный upgrade, restricted migrator,
+  migration executable, schema info/security guards. Последний отдельный fairness regression
+  финального кода: 24 tests в 2 классах, 0 failures/errors/skips, Checkstyle main/test PASS.
+  Новая queue integration проверяет restart и bounded cursor через две границы недель,
+  missing/midweek baseline, DST/local closure, timezone change, SKIP LOCKED, takeover того же
+  owner, expired/stale-token updates, lease после ожидания locks, free backoff/fairness,
+  exact/latest historical snapshot и повторную подготовку без нового paid job.
+  Filled-schema upgrade сохраняет прежний snapshot/checkpoint/baseline; validate и повтор
+  migration no-op проходят. Source unit suite отдельно проверяет точную старую неделю, scoped
+  coverage/stability, UNKNOWN без fallback, изменение timezone и read-only RR contract.
+  Self-review выявил два edge cases: проверку lease по времени до locks и обгон новых недель
+  due retry старого периода. Исправлены fresh-clock fence и порядок по времени готовности/lease;
+  регрессионные сценарии проходят. Первые прогоны нашли ошибки synthetic snapshot headers,
+  неправильный тестовый join paid jobs и Mockito/generic assertions; schema constraints не
+  ослаблялись. Documentation unit tests (25), strict integrity (457 rows, 0 warnings), operator
+  security, supply-chain (449 components / 840 artifacts) и diff check проходят. Это не полный
+  backend/frontend выпускной прогон. Public temporal identity/schema, historical assembly/read,
+  подключение queue runner и atomic AI publication fence остаются обязательными следующими gates.
+
 - Пакет 2, temporal attach и historical presentation: добавлена отдельная opt-in projection
   с provenance каждой позиции. Обычные операции используют собственный timestamp и source
   processor возврата; специальные warranty allocations/base сохраняют контракт целевой продажи.

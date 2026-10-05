@@ -107,6 +107,25 @@ view не доказывает совместимость schema-version guard. 
 Combined facts и opt-in карточки не подключены к endpoint/planner: перед включением нужны
 historical membership identity/schema, source-publication fence и release gates по плану.
 
+Dormant preparation backlog требует grants для `seller_weekly_backlog_state` и
+`seller_weekly_preparation_jobs`, upgrade rehearsal и отдельного согласованного подключения
+scheduler. Migration не создаёт baseline, задания, snapshots или provider calls. Discovery
+запускается только после явного per-store baseline и ждёт полноты обеих недель; отсутствие
+baseline не обходить подстановкой даты старой синхронизации. Cursor ограниченно продвигается,
+задания прошлых недель остаются в БД независимо от новых границ календаря.
+При изменении timezone получить `BACKLOG_CONFIGURATION_CHANGED` — ожидаемая безопасная
+остановка. Не переписывать cursor/job timezone вручную: требуется отдельная reviewed операция
+перехода, сохраняющая старые границы периодов. Для read-only диагностики достаточно store/week,
+status, next_evaluation_at, lease_until, preparation_attempt_count, last_reason_code и snapshot_id;
+не выводить report/provider payloads. `WAITING_SOURCES`/`WAITING_HISTORY` — бесплатное ожидание,
+`FAILED` — technical intervention, `SUCCEEDED` — подготовка snapshot, не оплата или публикация AI.
+Истёкший lease можно только reclaim с новым token; старый owner/token не должен завершать задачу.
+Устаревший `SUCCEEDED` возвращается в бесплатную подготовку bounded refresh (1–100 jobs),
+с тем же ID/store/week. Это не разрешение повторять provider job и не удаление опубликованного
+snapshot/enrichment; paid counters остаются независимыми.
+Существующая canary-команда не подключает backlog. До public historical assembly/identity и
+publication fence не переключать scheduler на эти таблицы и не выдавать их за готовый автообзор.
+
 При seller cutover проверять version/scope exact snapshot, а не считать прежний STORE preflight
 разрешением нового input. Seller API: GET `/api/stores/{storeId}/weekly-reviews/seller-current`,
 ADMIN POST `/api/admin/seller-weekly-reviews/stores/{storeId}/generate`. Parent weekly-review и

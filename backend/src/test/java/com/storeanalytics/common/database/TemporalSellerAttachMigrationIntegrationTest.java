@@ -32,7 +32,8 @@ class TemporalSellerAttachMigrationIntegrationTest {
                     "SELECT id,employee_id,net_amount,cost_amount FROM sales_documents ORDER BY id");
             assertThat(before).isNotEmpty();
             assertThat(allocations).isNotEmpty();
-            Flyway migration = Flyway.configure().dataSource(source).locations("classpath:db/migration").load();
+            Flyway migration = Flyway.configure().dataSource(source).locations("classpath:db/migration")
+                    .target("95").load();
             assertThat(migration.migrate().migrationsExecuted).isEqualTo(1);
             assertThat(jdbc.queryForList(
                     "SELECT to_jsonb(fact)::text FROM attach_rate_item_facts_v4_catalog fact", String.class))

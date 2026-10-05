@@ -12,8 +12,11 @@ decision_sources:
   - docs/maintenance/weekly-ai-production-automation-plan.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiJobStore.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStore.java
+  - backend/src/main/resources/db/migration/V96__add_seller_weekly_preparation_backlog.sql
 verification_sources:
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiJobStoreIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStoreIntegrationTest.java
 required_reviewers:
   - product
   - backend
@@ -57,8 +60,12 @@ superseded_by: null
 
 Это согласованный продуктовый контракт, не подтверждение работы автоматического режима.
 Локальный candidate сохраняет один automatic job и поддерживает ограниченные attempts по
-конфигурации с запретом UNKNOWN retry. Period backlog и temporal aggregates ещё требуются;
-полный release gate не завершён. Baseline не объявляется активированным этим документом.
+конфигурации с запретом UNKNOWN retry. Temporal aggregates и dormant preparation backlog
+реализованы отдельными внутренними компонентами; public snapshot/identity и подключение
+очереди к scheduler/AI ещё требуются. Discovery начинается лишь с первой недели, чья предыдущая
+полностью покрыта явным baseline, не с даты старого manual canary. Source/history ожидания
+бесплатны и отложены; техническая ошибка подготовки terminal, а не бесконечный busy retry.
+Полный release gate не завершён. Baseline не объявляется активированным этим документом.
 Проверки перечислены в [плане](../maintenance/weekly-ai-production-automation-plan.md).
 
 Уточнение от 5 октября: [ADR-0006](ADR-0006-livesklad-return-employee-analytics.md) меняет
