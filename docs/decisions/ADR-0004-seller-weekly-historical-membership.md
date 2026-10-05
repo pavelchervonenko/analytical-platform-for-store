@@ -113,8 +113,10 @@ revision. Бесплатный runner связывает его с exact store/w
 Периодный additive read API и внутренний бесплатный period planner реализованы локально.
 Cheap RR metadata identity совпадает с heavy identity, без финансовых агрегатов. Historical
 read не использует current-ranking fallback и не помечает старый payload CURRENT без compatible
-checkpoint. Exact AI refresh не подменяет snapshot новой ревизией. Scheduler и automatic paid
-planning этой очереди ещё не подключены; current-roster публичный путь и frontend не переключены.
+checkpoint. Exact AI refresh не подменяет snapshot новой ревизией. Отдельный opt-in free scheduler
+подключён к очереди; historical automatic paid planning ещё не подключён. Current-roster публичный
+путь и frontend не переключены. Free flag не создаёт baseline/paid call и исключает competing
+legacy snapshot scheduler; комбинация с legacy automatic paid planner запрещена до его cutover.
 Поэтому включение постоянной автоматической публикации до их проверки запрещено.
 
 ## Условия вступления решения в силу

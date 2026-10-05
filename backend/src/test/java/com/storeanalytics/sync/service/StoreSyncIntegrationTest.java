@@ -184,7 +184,7 @@ class StoreSyncIntegrationTest {
                 Integer.class
         );
 
-        assertThat(tableCount).isEqualTo(108);
+        assertThat(tableCount).isEqualTo(114);
         assertThat(entityManagerFactory.getMetamodel().getEntities()).hasSize(40);
         assertThat(applicationContext.getBeanNamesForType(JpaRepository.class)).hasSize(40);
         assertThat(jdbcTemplate.queryForObject(
@@ -240,6 +240,12 @@ class StoreSyncIntegrationTest {
                       'weekly_review_ai_enrichments',
                       'weekly_review_ai_jobs',
                       'weekly_review_ai_attempts',
+                      'weekly_review_ai_response_receipts',
+                      'seller_attach_ordinary_facts_v1',
+                      'seller_attach_reviewed_facts_v1',
+                      'seller_attach_item_facts_v1',
+                      'seller_weekly_backlog_state',
+                      'seller_weekly_preparation_jobs',
                       'attach_attribution_changes',
                       'attach_rate_item_facts_v3_with_cases',
                       'attach_rate_item_facts_v4',

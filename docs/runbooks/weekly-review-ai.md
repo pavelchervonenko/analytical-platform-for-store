@@ -24,6 +24,8 @@ source_of_truth:
   - backend/src/main/java/com/storeanalytics/interpretation/web/WeeklyReviewAiOperationsController.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiOperatorService.java
   - deploy/bin/weekly-review-ai-release-safety.sh
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationConfiguration.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationScheduler.java
 verification_evidence:
   - level: static
     scope: Exact preflight, approval, lifecycle, budget, validation and immutable publication paths reviewed
@@ -105,13 +107,14 @@ view не доказывает совместимость schema-version guard. 
 на дату их операции, для гарантийных allocations/base — целевой продажи. UNKNOWN истории/автора
 не обходить включением текущего roster. Baseline должен покрывать обе сравниваемые недели.
 Combined facts, historical identity и opt-in snapshot writer соединены free runner. Additive
-period read и внутренний free planner реализованы, но backlog не подключён к scheduler/AI planner:
+period read и внутренний free planner реализованы; отдельный opt-in free scheduler подключён
+к backlog, но historical paid planner ещё не подключён:
 atomic paid-attempt/publication fence реализован в локальном candidate; перед включением нужны
 его filled-DB concurrency/release acceptance и scheduler wiring по плану. Codec/frontend parsing поддерживают temporal basis; runtime activation
 это не доказывает. Для старого периода проверять отсутствие future actions; departed card должна
 сохранить исторические суммы и `actionableNow=false`.
 
-Dormant preparation backlog требует grants для `seller_weekly_backlog_state` и
+Opt-in preparation backlog требует grants для `seller_weekly_backlog_state` и
 `seller_weekly_preparation_jobs`, upgrade rehearsal и отдельного согласованного подключения
 scheduler. Migration не создаёт baseline, задания, snapshots или provider calls. Discovery
 запускается только после явного per-store baseline и ждёт полноты обеих недель; отсутствие
@@ -128,13 +131,32 @@ status, next_evaluation_at, lease_until, preparation_attempt_count, last_reason_
 с тем же ID/store/week. Это не разрешение повторять provider job и не удаление опубликованного
 snapshot/enrichment; paid counters остаются независимыми.
 Существующая canary-команда не подключает backlog. Free runner подготавливает одну claimed неделю,
-не создаёт baseline/AI job, не вызывает provider и не имеет scheduler. Он использует historical
+не создаёт baseline/AI job и не вызывает provider. Отдельный free scheduler вызывает runner
+только по dedicated opt-in flag. Он использует historical
 assembler с отдельной identity, перепроверяет source/membership revision под locks и exact binding.
 Source change даёт отложенную бесплатную подготовку; contract/technical failure требует вмешательства.
 Проверять sanitized reason/state, а не raw exception/provider payload. При повторном выполнении
 равный semantic content сохраняет прежний snapshot ID/payload и обновляет совместимый checkpoint.
-До automatic AI planner и runtime acceptance atomic AI publication fence не переключать scheduler на эти таблицы
-и не выдавать их за готовый автообзор.
+Free cutover использует `SELLER_WEEKLY_PREPARATION_ENABLED` (default false); parent и seller
+weekly features обязательны. На API/MIGRATION scheduler не создаётся. При free cutover legacy
+current-roster snapshot planner исключён; комбинация с действующим automatic current-roster paid
+planner запрещена release preflight и startup. Не обходить эту защиту: historical paid planning
+и UI/current reader ещё требуют reviewed подключения. Free flag не включает AI worker и не
+разрешает платный вызов. Перед включением нужны локальные gates, filled-DB rehearsal, forward-only
+baseline approval и отдельное production решение; документ не утверждает выполненный cutover.
+
+Параметры free contour: `SELLER_WEEKLY_PREPARATION_SCAN_DELAY`, `_STORE_BATCH_SIZE`,
+`_DISCOVERY_WEEKS`, `_REFRESH_BATCH_SIZE`, `_BATCH_SIZE`, `_TIME_BUDGET` с полным префиксом
+`SELLER_WEEKLY_PREPARATION`. Defaults и безопасные bounds задаются properties/compose example,
+не копируются из runtime state. Budget cooperative: не прерывает начатую подготовку.
+Перед migration release preflight проверяет и числовые/временные bounds, даже при выключенном
+free флаге. Для duration environment values применять целое число с единицей `ms`, `s`, `m` или
+`h`; bare integers, ISO duration и выражения не поддерживаются operator preflight.
+Short queue transactions ограничены 30 seconds. Перезапуск теряет лишь store sweep cursor в памяти, не
+durable cursor/jobs. `SUCCEEDED` остаётся успехом бесплатной подготовки, не AI publication.
+При новой неделе free refresh удаляет future-action horizon посредством новой immutable revision,
+а не UPDATE старого payload. Отчёт без future actions не меняется только из-за новой недели.
+До historical paid planner и runtime acceptance не выдавать free scheduler за готовый автообзор.
 
 Исторический GET `/api/stores/{storeId}/weekly-reviews/seller-period?periodStart=YYYY-MM-DD`
 проверяет закрытый Monday-start period и store authorization под прежними parent/seller feature

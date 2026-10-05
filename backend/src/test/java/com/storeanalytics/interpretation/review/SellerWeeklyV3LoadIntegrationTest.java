@@ -390,6 +390,11 @@ class SellerWeeklyV3LoadIntegrationTest {
     @Test
     void qualityOnlyCountsMatchLegacyStoreQualityForUnknownReturnsAndPendingWarranty() {
         Fixture fixture = fixture(3, 1, 5);
+        // This scenario deliberately has no native return processor, unlike the normal load fixture.
+        jdbc.update("""
+                UPDATE sales_documents SET attach_source_employee_external_id = NULL
+                WHERE store_id = ? AND document_kind = 'RETURN'
+                """, fixture.storeId());
         jdbc.update("""
                 INSERT INTO sales_document_items (sales_document_id, external_id, product_id,
                     product_name_snapshot, analytics_category_id, condition_type_snapshot,
@@ -964,14 +969,25 @@ class SellerWeeklyV3LoadIntegrationTest {
                 """, connection, storeId, PREVIOUS_START, PREVIOUS_START, saleRun, documentsPerWeek, storeId);
         jdbc.update("""
                 UPDATE sales_documents returned SET document_kind = 'RETURN', source_document_type = 'return',
-                    original_document_id = original.id
-                FROM sales_documents original
+                    original_document_id = original.id,
+                    attach_source_employee_external_id = processor.external_id
+                FROM sales_documents original, employees processor
                 WHERE returned.store_id = ? AND original.store_id = returned.store_id
+                  AND processor.id = returned.employee_id AND processor.connection_id = returned.connection_id
                   AND split_part(returned.external_id, ':', 3)::integer % 5 = 0
                   AND original.external_id = returned.employee_id::text || ':'
                       || split_part(returned.external_id, ':', 2) || ':'
                       || (split_part(returned.external_id, ':', 3)::integer - 1)
                 """, storeId);
+        // A native LiveSklad return has an explicit processor fact; payroll employee_id is not its substitute.
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM sales_documents returned
+                LEFT JOIN employees processor ON processor.connection_id = returned.connection_id
+                    AND processor.external_id = returned.attach_source_employee_external_id
+                    AND processor.source_system = 'LIVESKLAD'
+                WHERE returned.store_id = ? AND returned.document_kind = 'RETURN'
+                  AND processor.id IS DISTINCT FROM returned.employee_id
+                """, Long.class, storeId)).isZero();
     }
 
     private void insertItems(UUID storeId, UUID product) {

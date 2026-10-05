@@ -242,7 +242,7 @@ class WeeklyReviewAssemblerTest {
                 .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
                 .build();
         Path fixture = repositoryRoot().resolve(
-                "frontend/src/test/fixtures/weekly-review-v2-ready.json"
+                "frontend/src/test/fixtures/weekly-review-v2-return-processor-ready.json"
         );
         JsonNode expected = mapper.readTree(Files.readString(fixture));
         JsonNode actual = mapper.readTree(mapper.writeValueAsString(result));
@@ -386,7 +386,8 @@ class WeeklyReviewAssemblerTest {
         assertThat(result.team().limitations()).singleElement().satisfies(message ->
                 assertThat(message)
                         .contains("Итог магазина учтён")
-                        .contains("по доступной связи")
+                        .contains("не определён сотрудник LiveSklad")
+                        .contains("по известным авторам")
         );
         assertThat(result.sourceCoverage())
                 .filteredOn(coverage -> coverage.sourceCode()

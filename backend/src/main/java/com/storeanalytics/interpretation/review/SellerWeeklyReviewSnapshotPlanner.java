@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 
 /** Bounded local sweep. A restart safely restarts the sweep; identities avoid duplicate snapshots. */
 @Component
+@ConditionalOnProperty(prefix = "app.interpretation.seller-weekly-preparation",
+        name = "enabled", havingValue = "false", matchIfMissing = true)
 @ConditionalOnApplicationRole({ApplicationRole.WORKER, ApplicationRole.COMBINED})
 @ConditionalOnProperty(prefix = "app.interpretation.seller-weekly-review", name = "enabled", havingValue = "true")
 @ConditionalOnProperty(prefix = "app.interpretation.weekly-review-snapshot-planner",

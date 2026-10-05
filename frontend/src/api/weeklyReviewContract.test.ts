@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { makeWeeklyReview } from "../test/weeklyReviewFixture";
 import { weeklyReviewSchema } from "./weeklyReviewContract";
+import returnProcessorGolden from "../test/fixtures/weekly-review-v2-return-processor-ready.json" with { type: "json" };
 
 function makeBlockedReview() {
   const review = makeWeeklyReview();
@@ -71,6 +72,13 @@ function makeBlockedReview() {
 }
 
 describe("weeklyReviewSchema", () => {
+  it("accepts the new return-processor golden without rewriting the legacy published fixture", () => {
+    const parsed = weeklyReviewSchema.parse(returnProcessorGolden);
+    expect(parsed.versions.metricsPolicy).toBe("weekly-metrics-v8-return-processor");
+    expect(parsed.versions.snapshotPolicy).toBe("weekly-snapshot-v14");
+    expect(makeWeeklyReview().versions.metricsPolicy).toBe("weekly-metrics-v7");
+  });
+
   it("accepts the v2 golden response serialized by the backend assembler", () => {
     const review = makeWeeklyReview();
 

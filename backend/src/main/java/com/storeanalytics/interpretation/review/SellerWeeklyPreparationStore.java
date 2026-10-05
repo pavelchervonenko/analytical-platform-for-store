@@ -22,7 +22,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Dormant deterministic backlog. Discovery/claims never enqueue AI or infer membership history. */
+/** Deterministic free backlog. Discovery/claims never enqueue AI or infer membership history. */
 @Repository
 public class SellerWeeklyPreparationStore {
     private static final String CLAIM_SQL = """
@@ -52,7 +52,7 @@ public class SellerWeeklyPreparationStore {
     }
 
     /** At most one bounded page per store; cursor survives restarts and arbitrarily old gaps. */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, timeout = 30)
     public Discovery discover(UUID storeId, Instant now, int maximumWeeks) {
         requireNonNull(storeId, "storeId");
         requireNonNull(now, "now");
@@ -106,7 +106,7 @@ public class SellerWeeklyPreparationStore {
         return new Discovery(inserted, next.isAfter(latest) ? "CAUGHT_UP" : "MORE_PAGES", next);
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, timeout = 30)
     public Optional<Claim> claimNext(String owner, Duration lease, Instant now) {
         String selectedOwner = requireText(owner, "owner");
         require(selectedOwner.length() <= 120, "owner exceeds 120 characters");
@@ -120,7 +120,7 @@ public class SellerWeeklyPreparationStore {
     }
 
     /** Reopen free preparation, not the paid job, when a previously bound snapshot becomes stale. */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, timeout = 30)
     public int requeueStaleSnapshots(int maximumJobs, Instant now) {
         require(maximumJobs >= 1 && maximumJobs <= 100, "Refresh page must contain 1..100 jobs");
         requireNonNull(now, "now");
@@ -131,7 +131,11 @@ public class SellerWeeklyPreparationStore {
                     JOIN seller_weekly_backlog_state state ON state.store_id = job.store_id
                     JOIN store_seller_membership_state history ON history.store_id = job.store_id
                         AND history.authoritative_from = state.authoritative_from
-                    WHERE job.status = 'SUCCEEDED' AND state.timezone = job.timezone AND NOT EXISTS (
+                    JOIN weekly_review_snapshots saved ON saved.id = job.snapshot_id
+                    CROSS JOIN LATERAL (
+                        SELECT (?::timestamptz AT TIME ZONE job.timezone)::date AS local_day
+                    ) calendar
+                    WHERE job.status = 'SUCCEEDED' AND state.timezone = job.timezone AND (NOT EXISTS (
                         SELECT 1 FROM weekly_review_generation_state checkpoint
                         JOIN store_analytics_source_state source ON source.store_id = checkpoint.store_id
                         WHERE checkpoint.store_id = job.store_id AND checkpoint.period_start = job.period_start
@@ -143,15 +147,22 @@ public class SellerWeeklyPreparationStore {
                               WHERE later.store_id = job.store_id AND later.period_start = job.period_start
                                 AND later.period_end = job.period_end AND later.revision > (
                                     SELECT revision FROM weekly_review_snapshots WHERE id = job.snapshot_id)))
+                        OR (job.period_start < calendar.local_day
+                                - (extract(isodow FROM calendar.local_day)::integer - 1) - 7
+                            AND (jsonb_array_length(coalesce(saved.report_payload->'actions','[]'::jsonb)) > 0
+                                OR EXISTS (SELECT 1 FROM jsonb_array_elements(
+                                    coalesce(saved.report_payload->'employees','[]'::jsonb)) employee
+                                    WHERE employee #> '{card,action}' IS NOT NULL
+                                      AND employee #> '{card,action}' <> 'null'::jsonb))))
                     ORDER BY job.period_start, job.id FOR UPDATE OF job SKIP LOCKED LIMIT ?
                 )
                 UPDATE seller_weekly_preparation_jobs job SET status = 'PENDING', snapshot_id = NULL,
-                    last_reason_code = 'SOURCE_CHANGED', next_evaluation_at = ?, updated_at = ?
+                    last_reason_code = 'SNAPSHOT_NOT_CURRENT', next_evaluation_at = ?, updated_at = ?
                 FROM stale WHERE job.id = stale.id
-                """, maximumJobs, stamp(now), stamp(now));
+                """, stamp(evaluationTime(now)), maximumJobs, stamp(now), stamp(now));
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, timeout = 30)
     public boolean heartbeat(Claim claim, Duration lease, Instant now) {
         requireNonNull(claim, "claim");
         duration(lease, Duration.ofSeconds(15), Duration.ofMinutes(10));
@@ -168,7 +179,7 @@ public class SellerWeeklyPreparationStore {
     }
 
     /** Source/history waits are free and delayed; a technical failure is terminal, not a busy retry loop. */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, timeout = 30)
     public boolean defer(Claim claim, Deferral deferral, String reason, Duration delay, Instant now) {
         requireNonNull(claim, "claim");
         requireNonNull(deferral, "deferral");
@@ -188,7 +199,7 @@ public class SellerWeeklyPreparationStore {
     }
 
     /** Bind only a historical seller snapshot for this exact store/week; this is not AI publication. */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.REQUIRES_NEW, timeout = 30)
     public boolean completeWithSnapshot(Claim claim, UUID snapshotId, Instant now) {
         requireNonNull(claim, "claim");
         requireNonNull(snapshotId, "snapshotId");

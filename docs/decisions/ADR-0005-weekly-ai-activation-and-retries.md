@@ -65,7 +65,8 @@ superseded_by: null
 реализованы отдельными внутренними компонентами. Historical identity, opt-in snapshot writer и
 бесплатный runner уже соединены; additive public period read и бесплатный exact period planner
 реализованы отдельно. Исторический freshness guard не подставляет новую revision вместо одобренной.
-Подключение backlog к scheduler/automatic AI и atomic paid publication fence ещё требуются.
+Отдельный opt-in free scheduler и atomic paid-attempt/publication fence реализованы в candidate.
+Historical automatic paid planning, runtime acceptance и UI/current-reader cutover ещё требуются.
 Discovery начинается лишь с первой недели, чья предыдущая
 полностью покрыта явным baseline, не с даты старого manual canary. Source/history ожидания
 бесплатны и отложены; техническая ошибка подготовки terminal, а не бесконечный busy retry.

@@ -141,6 +141,31 @@ class SellerWeeklyHistoricalPreparationIntegrationTest {
     }
 
     @Test
+    void boundedFreeSchedulerBatchResumesDurableHistoryAfterRestartWithoutPaidJobs() {
+        UUID store = seed(true);
+        var targets = new com.storeanalytics.interpretation.snapshot.WeeklySnapshotPlanningStore(jdbc);
+        var properties = new SellerWeeklyPreparationProperties(true, java.time.Duration.ofMinutes(1),
+                100, 2, 25, 2, java.time.Duration.ofMinutes(1));
+        var clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        var batch = new SellerWeeklyPreparationBatchService(targets, queue, runner, properties, clock);
+        assertThat(batch.reconcile().discovered()).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM weekly_review_snapshots WHERE store_id=?",
+                Long.class, store)).isZero();
+        // Process persisted jobs first, then discover one further missed week, without regenerating past jobs.
+        var restarted = new SellerWeeklyPreparationBatchService(targets, queue, runner, properties, clock);
+        var resumed = restarted.reconcile();
+        assertThat(resumed.prepared()).isEqualTo(2);
+        assertThat(resumed.discovered()).isOne();
+        assertThat(restarted.reconcile().prepared()).isOne();
+        assertThat(restarted.reconcile().prepared()).isZero();
+        assertThat(jdbc.queryForList("SELECT period_start::text FROM weekly_review_snapshots "
+                + "WHERE store_id=? ORDER BY period_start", String.class, store))
+                .containsExactly("2026-09-14", "2026-09-21", "2026-09-28");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM weekly_review_ai_jobs", Long.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM weekly_review_ai_response_receipts", Long.class)).isZero();
+    }
+
+    @Test
     void incompleteOldSourceRemainsDelayedWithoutAnIncompleteSnapshotOrFallback() {
         UUID store = seed(false);
         queue.discover(store, NOW, 1);

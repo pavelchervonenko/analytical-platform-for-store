@@ -166,6 +166,14 @@ app:
       enabled: ${WEEKLY_REVIEW_ENABLED:false}
     seller-weekly-review:
       enabled: ${SELLER_WEEKLY_REVIEW_ENABLED:false}
+    seller-weekly-preparation:
+      enabled: ${SELLER_WEEKLY_PREPARATION_ENABLED:false}
+      scan-delay: ${SELLER_WEEKLY_PREPARATION_SCAN_DELAY:1m}
+      store-batch-size: ${SELLER_WEEKLY_PREPARATION_STORE_BATCH_SIZE:10}
+      discovery-weeks: ${SELLER_WEEKLY_PREPARATION_DISCOVERY_WEEKS:4}
+      refresh-batch-size: ${SELLER_WEEKLY_PREPARATION_REFRESH_BATCH_SIZE:25}
+      preparation-batch-size: ${SELLER_WEEKLY_PREPARATION_BATCH_SIZE:2}
+      time-budget: ${SELLER_WEEKLY_PREPARATION_TIME_BUDGET:1m}
     weekly-review-snapshot-planner:
       enabled: ${WEEKLY_REVIEW_SNAPSHOT_PLANNER_ENABLED:false}
       scan-delay: ${WEEKLY_REVIEW_SNAPSHOT_PLANNER_SCAN_DELAY:5m}

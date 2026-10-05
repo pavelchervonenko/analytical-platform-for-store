@@ -83,8 +83,15 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiCompletionService.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalFactsSource.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStore.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationProperties.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationBatchService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationScheduler.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationConfiguration.java
   - backend/src/main/resources/db/migration/V96__add_seller_weekly_preparation_backlog.sql
 verification_sources:
+  - frontend/src/test/fixtures/weekly-review-v2-return-processor-ready.json
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationConfigurationTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationBatchServiceTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalReadServiceTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalIdentityFactsSourceTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalPreparationIntegrationTest.java
@@ -199,7 +206,7 @@ prompt/schema версии не переписываются.
 
 Приведённый ниже STORE provider flow относится к совместимому legacy v2 пути.
 
-### Dormant историческая подготовка и backlog
+### Opt-in бесплатная историческая подготовка и backlog
 
 Внутренний `SellerWeeklyHistoricalFactsSource` принимает точный Monday-start период, timezone
 зафиксированного задания и время проверки. Он не заменяет старую неделю последней закрытой.
@@ -226,12 +233,37 @@ Claim использует `SKIP LOCKED`; отдельный token защища�
 checkpoint, не ИИ-публикацию; текущий current-roster snapshot не подходит. Короткая транзакция
 привязки блокирует store/source revision, но paid attempt и публикация требуют своего повторного
 atomic fence. Исторический assembler и бесплатный runner этой очереди реализованы локально,
-но scheduler и automatic paid planner этого пути ещё не подключены. Периодный read/free planner
+и отдельный opt-in free scheduler подключён к этой очереди; automatic paid planner этого пути
+ещё не подключён. Периодный read/free planner
 реализованы отдельным additive путём, описанным ниже; прежний current-roster read не переключён.
 Само наличие таблиц или runner не включает автоматический режим.
 Bounded `requeueStaleSnapshots` возвращает устаревшую привязку в `PENDING` той же бесплатной
 задачи, без перемотки cursor, нового store/week и вмешательства в paid jobs. Проверяются текущий
-checkpoint/source revision и latest snapshot; повторный refresh уже ожидающей задачи no-op.
+checkpoint/source revision, latest snapshot и истечение future-action горизонта при новой неделе;
+повторный refresh уже ожидающей задачи no-op. Старый отчёт без future actions не переподготавливается
+только из-за календаря; immutable payload, published enrichment и paid counters не меняются.
+
+`app.interpretation.seller-weekly-preparation.enabled` по умолчанию false. Он включает только
+бесплатный bounded discovery/refresh/preparation на WORKER/COMBINED, с отдельным serial scheduler.
+API/MIGRATION не создают scheduler. Нужны parent weekly-review и seller features; baseline
+по-прежнему записывается только отдельной approved forward-only операцией, не при startup/tick.
+Существующий current-roster snapshot scheduler при этом не создаётся: две несовместимые identity
+не должны конкурировать за одну revision chain. До подключения reviewed historical paid planner
+комбинация free historical scheduler с current-roster automatic AI planner запрещена на startup
+и release preflight. Manual exact worker остаётся отдельным контуром и не включается free флагом.
+
+Defaults candidate: 10 stores/page, 4 weeks/store/page, 25 stale jobs/refresh, 2 free claims/tick,
+scan delay 1 minute, cooperative time budget 1 minute. Числовые/временные bounds проверяются
+на startup и release preflight до migration, даже когда free flag выключен. Operator duration
+values требуют целое число с единицей ms/s/m/h; bare integers и ISO expressions не принимаются
+preflight. Budget проверяется между операциями и не прерывает уже начатую RR preparation.
+Short queue transactions имеют timeout 30 seconds. Due work, discovery и stale refresh по очереди
+становятся первой фазой, чтобы медленная фаза не вытесняла другие на каждом tick.
+Cursor store sweep в памяти — только оптимизация;
+per-store week cursor/jobs в БД сохраняются после restart. Один ошибочный магазин не закрепляет
+sweep cursor на себе и не скрывает следующий; его безопасный type логируется без exception message.
+Неизменённый tick и обычное SOURCE/HISTORY ожидание не создают повторяющихся info-уведомлений.
+Этот отдельный free contour не означает завершённый automatic AI/UI cutover или runtime approval.
 
 ### Opt-in исторический снимок и идентичность
 
@@ -267,9 +299,9 @@ checkpoint для проверенной source revision; имя и время �
 внешнюю write-транзакцию; после чтения проверяется lease, затем writer и exact binding. Потеря lease
 не позволяет отмечать успех или оживлять token. Source churn даёт бесплатный backoff на той же
 задаче; UNKNOWN history/author остаётся отдельным ожиданием. Техническая/contract failure terminal
-с sanitized code, без сохранения raw exception message. Runner не имеет scheduler и AI dependency;
-не создаёт baseline, paid job или provider call. Его автоматическое включение и AI planning
-требуют следующих reviewed пакетов и release gates.
+с sanitized code, без сохранения raw exception message. Runner сам не имеет AI dependency;
+отдельный scheduler вызывает его только по free opt-in flag. Он не создаёт baseline, paid job
+или provider call. Historical paid planning требует следующего reviewed пакета и release gates.
 
 ### Точный периодный historical read и free planner
 
@@ -545,11 +577,12 @@ Opt-in historical presenter сохраняет финансовую карточ
 «не в текущей команде», `actionableNow=false` и без future action. Current-roster presentation
 сохраняет прежнее поведение. Historical identity/assembly и free backlog runner уже доступны
 отдельному внутреннему пути; additive membership parsing поддерживает оба basis. Это ещё не
-historical current-screen cutover: основной current reader и scheduler остаются current-roster.
-Additive exact-period GET/free planner соединены с historical preparation, но этот путь ещё не
-подключён к действующему automatic backlog scheduler/AI planning. Текущий Overview и first-manual
+historical current-screen cutover: основной current reader остаётся current-roster; отдельный
+opt-in free scheduler использует temporal backlog и исключает competing legacy snapshot scheduler.
+Additive exact-period GET/free planner соединены с historical preparation, но automatic historical
+paid planning ещё не подключён. Текущий Overview и first-manual
 path не переключены. Payroll/saved employee и snapshots не переписываются. Нужны automatic
-scheduler wiring, runtime acceptance atomic AI source fence и release gate до включения автоматики.
+paid planner wiring, runtime acceptance atomic AI source fence и release gate до включения автоматики.
 Следовательно, описанный ниже roster остаётся current-roster,
 не восстановленным историческим составом. Автоматическое восстановление пропущенной недели
 пока не включено; exact historical period можно читать отдельным additive GET без generation/AI.
@@ -874,6 +907,12 @@ success-плашку. `BLOCKED` скрывает длинный недостов
   требуется sanitized runtime evidence.
 
 ## Проверка
+
+Новый legacy-v2 assembler с самостоятельным return-processor author использует отдельный golden
+`frontend/src/test/fixtures/weekly-review-v2-return-processor-ready.json`; точные serialization bytes
+проверяются backend assembler test, а transport parsing — frontend contract test. Прежний
+`weekly-review-v2-ready.json` не переписывается и остаётся compatibility fixture для старых codec
+и frontend consumers. Изменение policy headers не разрешает переписывать published snapshots.
 
 Contract tests проверяют resource versions, input/selection/content schemas, semantic selector
 rules и renderer. Integration tests проверяют immutable persistence, budget reservation,

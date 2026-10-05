@@ -18,6 +18,8 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/audit/service/AuditRetentionPolicy.java
   - backend/src/main/resources/db/migration/V12__add_data_retention.sql
   - backend/src/main/resources/db/migration/V94__preserve_weekly_ai_response_receipts.sql
+  - backend/src/main/resources/db/migration/V96__add_seller_weekly_preparation_backlog.sql
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStore.java
   - backend/src/main/resources/application.yml
 verification_sources:
   - backend/src/test/java/com/storeanalytics/product/service/CatalogSaleRoleSnapshotIntegrationTest.java
@@ -25,6 +27,7 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/common/config/DataRetentionPropertiesTest.java
   - backend/src/test/java/com/storeanalytics/maintenance
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiCompletionServiceIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStoreIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/audit/service/AuditRetentionPolicyTest.java
 runtime_evidence: []
 required_reviewers:
@@ -127,3 +130,14 @@ FK сохраняет связь с immutable attempt. Таблица не вк�
 Payloads недоступны через новые публичные API и не выводятся в logs/evidence. До production
 активации нужны отдельные security/privacy review, проверка runtime grants и migration rehearsal;
 локальные тесты не подтверждают серверное внедрение или legal basis хранения.
+
+## Бесплатная очередь восстановления недель
+
+`seller_weekly_backlog_state` и `seller_weekly_preparation_jobs` хранят store/week, baseline,
+timezone, cursor, lease, counters, sanitized reason и ссылку на snapshot, но не имена, суммы,
+provider payload или credentials. Они не включены в technical purge: удаление progress потеряло бы
+доказательство пропусков и ожиданий. FK на immutable snapshot сохраняет связь; stale refresh
+меняет только производное состояние free job, а не snapshot/enrichment или provider receipts.
+Opt-in scheduler не разрешает удаление этих данных. Retention/archival для этой технической
+очереди требует отдельного согласованного процесса с сохранением воспроизводимости store/week;
+сами локальные тесты и включение scheduler не являются таким approval.

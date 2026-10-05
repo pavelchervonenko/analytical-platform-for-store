@@ -273,7 +273,7 @@ class WeeklyReviewAiBudgetReservationIntegrationTest {
                 "{}",
                 new BigDecimal("0.1"),
                 1400,
-                NOW.plusSeconds(180)
+                job.updatedAt().plusSeconds(180)
         );
         return new PreparedWeeklyReviewAiRequest(
                 request, "a".repeat(64), input, "b".repeat(64)

@@ -334,6 +334,54 @@ class SellerWeeklyPreparationStoreIntegrationTest {
         assertThat(completed).isFalse();
     }
 
+    @Test
+    void weekBoundaryRequeuesExpiredTeamActionsWithoutAnySourceRevisionChange() {
+        assertCalendarRefresh(true);
+    }
+
+    @Test
+    void weekBoundaryRequeuesExpiredEmployeeActionWithoutTeamAction() {
+        assertCalendarRefresh(false);
+    }
+
+    @Test
+    void oldWeekWithoutFutureActionsDoesNotRefreshOnlyBecauseTheCalendarChanges() {
+        UUID store = store("UTC", "2026-09-07T00:00:00Z");
+        discover(store, NOW, 1);
+        Claim claim = claim(NOW);
+        UUID snapshot = snapshot(store, claim.periodStart(), "HISTORICAL_DOCUMENT_MEMBERSHIP_V1");
+        checkpoint(store, claim.periodStart(), snapshot, 0);
+        assertThat(complete(claim, snapshot, NOW)).isTrue();
+        assertThat(refresh(NOW.plus(Duration.ofDays(7)))).isZero();
+        assertThat(jdbc.queryForObject("SELECT status FROM seller_weekly_preparation_jobs WHERE id = ?",
+                String.class, claim.id())).isEqualTo("SUCCEEDED");
+    }
+
+    private void assertCalendarRefresh(boolean teamAction) {
+        UUID store = store("UTC", "2026-09-21T00:00:00Z");
+        discover(store, NOW, 1);
+        Claim claim = claim(NOW);
+        assertThat(claim.periodStart()).isEqualTo(LocalDate.parse("2026-09-28"));
+        UUID snapshot = snapshot(store, claim.periodStart(), "HISTORICAL_DOCUMENT_MEMBERSHIP_V1",
+                teamAction ? "[{}]" : "[]", teamAction ? "[]" : "[{\"card\":{\"action\":{}}}]");
+        checkpoint(store, claim.periodStart(), snapshot, 0);
+        assertThat(complete(claim, snapshot, NOW)).isTrue();
+        String payload = jdbc.queryForObject("SELECT report_payload::text FROM weekly_review_snapshots WHERE id = ?",
+                String.class, snapshot);
+        assertThat(refresh(NOW.plus(Duration.ofDays(6)))).isZero();
+        assertThat(refresh(NOW.plus(Duration.ofDays(7)))).isOne();
+        assertThat(refresh(NOW.plus(Duration.ofDays(7)))).isZero();
+        assertThat(jdbc.queryForObject("SELECT revision FROM store_analytics_source_state WHERE store_id = ?",
+                Long.class, store)).isZero();
+        assertThat(jdbc.queryForObject("SELECT report_payload::text FROM weekly_review_snapshots WHERE id = ?",
+                String.class, snapshot)).isEqualTo(payload);
+        assertThat(jdbc.queryForObject("SELECT status FROM seller_weekly_preparation_jobs WHERE id = ?",
+                String.class, claim.id())).isEqualTo("PENDING");
+        assertThat(jdbc.queryForObject("SELECT last_reason_code FROM seller_weekly_preparation_jobs WHERE id = ?",
+                String.class, claim.id())).isEqualTo("SNAPSHOT_NOT_CURRENT");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM weekly_review_ai_jobs", Long.class)).isZero();
+    }
+
     private SellerWeeklyPreparationStore.Discovery discover(UUID store, Instant now, int maximum) {
         return transaction.execute(status -> repository.discover(store, now, maximum));
     }
@@ -380,6 +428,10 @@ class SellerWeeklyPreparationStoreIntegrationTest {
     }
 
     private UUID snapshot(UUID store, LocalDate start, String basis) {
+        return snapshot(store, start, basis, "[]", "[]");
+    }
+
+    private UUID snapshot(UUID store, LocalDate start, String basis, String actions, String employees) {
         UUID id = UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO weekly_review_snapshots(id,store_id,period_start,period_end,timezone,revision,
@@ -393,9 +445,10 @@ class SellerWeeklyPreparationStoreIntegrationTest {
                             'current',jsonb_build_object('start',?::text,'end',?::text)),
                         'provenance',jsonb_build_object('snapshotPublicId',?::text,'revision',1),'sourceIdentityHash',?,
                         'membership',jsonb_build_object('basis',?,
-                            'currentCohortHash',repeat('c',64),'previousCohortHash',repeat('c',64))),?,?)
+                            'currentCohortHash',repeat('c',64),'previousCohortHash',repeat('c',64)),
+                        'actions',?::jsonb,'employees',?::jsonb),?,?)
                 """, id, store, start, start.plusDays(6), start.toString(), start.plusDays(6).toString(), id.toString(),
-                "a".repeat(64), basis, "b".repeat(64), "a".repeat(64));
+                "a".repeat(64), basis, actions, employees, "b".repeat(64), "a".repeat(64));
         return id;
     }
 

@@ -80,6 +80,33 @@ canary не переносятся на другую неделю или нов�
 
 ## Прогресс
 
+- Пакет 3, opt-in бесплатный scheduler: bounded discovery, stale refresh и leased preparation
+  соединены отдельным serial worker scheduler, default off. Нет implicit baseline, AI job или
+  provider call. Parent/seller features обязательны; API/MIGRATION не владеют scheduler, legacy
+  current-roster snapshot planner исключён. До подключения historical paid planner конкурирующая
+  комбинация запрещена startup/release guards, manual exact worker остаётся независимым.
+  Все три фазы по очереди получают первый ход в cooperative time budget; review исправил
+  starvation stale refresh. Durable week cursor/jobs переживают restart, in-memory store cursor
+  лишь оптимизация. Short queue transactions ограничены; безопасная ошибка одного магазина
+  не закрепляет sweep cursor. Calendar refresh переоткрывает ту же free job при истечении future
+  actions, но не обновляет immutable payload, paid job или counters. Старый отчёт без future
+  actions не переподготавливается только из-за календаря.
+  Полный frozen backend-прогон предыдущей контрольной точки: 2 027 tests, 12 failures,
+  без skips; четыре load fixtures не содержали native return processor, четыре budget fixtures
+  имели фиксированный просроченный call deadline, два assembler assertions ожидали прежний
+  контракт, два schema assertions не учитывали additive SQL-owned objects. Исправлены именно
+  fixtures/assertions, финансовые expectations и deadline/source protections не ослаблены.
+  Старый опубликованный golden не переписан: новый additive golden отдельно проверяет return
+  processor policy. Финальный targeted gate: 126 tests в 13 классах, 0 failures/errors/skips,
+  Checkstyle main/test и bootJar PASS. Review также исправил scheduler bean-name collision,
+  добавил реальные component-scan configuration checks и ограничение environment bounds
+  в release preflight до migration. Duration operator format ms/s/m/h документирован;
+  сообщения проверки не раскрывают значения. Это не зелёный полный release gate.
+  Frontend: 61 files/313 tests, lint/types/build PASS; documentation:
+  25 tests/459 inventory rows/0 warnings; release/operator safety и supply-chain PASS.
+  Historical paid planner, no-paid automatic rebind, public current-reader cutover, baseline
+  activation, runtime acceptance и production deploy остаются незавершёнными.
+
 - Пакет 4, atomic seller AI source fence: enqueue, startAttempt и completion повторно проверяют
   exact CURRENT под store/source locks в writable READ_COMMITTED, без provider network под locks.
   Fenced historical read использует неподделываемый package token текущей транзакции и общую
