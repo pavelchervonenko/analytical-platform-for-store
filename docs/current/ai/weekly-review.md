@@ -34,6 +34,11 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklySourceRevisionRepository.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklySourceIdentity.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalIdentity.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalIdentityFactsSource.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalReadService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalPlanningService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalReviewService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/web/SellerWeeklyHistoricalReviewController.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalMembership.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationRunner.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyIdentityFacts.java
@@ -79,6 +84,9 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStore.java
   - backend/src/main/resources/db/migration/V96__add_seller_weekly_preparation_backlog.sql
 verification_sources:
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalReadServiceTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalIdentityFactsSourceTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalPreparationIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalFactsSourceTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStoreIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiCompletionServiceIntegrationTest.java
@@ -217,7 +225,8 @@ Claim использует `SKIP LOCKED`; отдельный token защища�
 checkpoint, не ИИ-публикацию; текущий current-roster snapshot не подходит. Короткая транзакция
 привязки блокирует store/source revision, но paid attempt и публикация требуют своего повторного
 atomic fence. Исторический assembler и бесплатный runner этой очереди реализованы локально,
-но scheduler, public period read/planner и provider этого пути ещё не подключены.
+но scheduler и automatic paid planner этого пути ещё не подключены. Периодный read/free planner
+реализованы отдельным additive путём, описанным ниже; прежний current-roster read не переключён.
 Само наличие таблиц или runner не включает автоматический режим.
 Bounded `requeueStaleSnapshots` возвращает устаревшую привязку в `PENDING` той же бесплатной
 задачи, без перемотки cursor, нового store/week и вмешательства в paid jobs. Проверяются текущий
@@ -258,8 +267,45 @@ checkpoint для проверенной source revision; имя и время �
 не позволяет отмечать успех или оживлять token. Source churn даёт бесплатный backoff на той же
 задаче; UNKNOWN history/author остаётся отдельным ожиданием. Техническая/contract failure terminal
 с sanitized code, без сохранения raw exception message. Runner не имеет scheduler и AI dependency;
-не создаёт baseline, paid job или provider call. Его включение, периодный read path и AI planning
+не создаёт baseline, paid job или provider call. Его автоматическое включение и AI planning
 требуют следующих reviewed пакетов и release gates.
+
+### Точный периодный historical read и free planner
+
+Additive GET `/api/stores/{storeId}/weekly-reviews/seller-period?periodStart=YYYY-MM-DD` принимает
+только Monday-start закрытую неделю в timezone магазина. Нужны те же parent/seller feature gates
+и store-scoped authorization, что для seller-current; ответ `private, no-store`. Отсутствующий
+параметр, неверный ISO date, не понедельник или открытый период дают HTTP 400; отсутствие магазина
+для уполномоченного пользователя — 404. Endpoint не создаёт baseline, cursor, задачу, snapshot,
+checkpoint или provider call. Frontend на этот endpoint автоматически не переключён.
+
+Чтение использует одну read-only RR-транзакцию. Только exact latest historical snapshot указанной
+недели может получить `CURRENT`: проверяются store activity/timezone, обе границы сравнения,
+historical policy versions, compatible/latest ID checkpoint, его outcome и source revision.
+Checkpoint из будущего не считается актуальным. Нет historical snapshot — `PREPARING` без отчёта;
+current-ranking/STORE payload не подставляется. Исторический payload без актуального checkpoint,
+baseline/coverage/stability или canonical identity остаётся неизменным с `STALE`.
+
+Cheap metadata source читает historical interval union, current actionability intersection,
+baseline/membership revision, exact coverage/stability, source revision и temporal attach policy,
+без финансовых и attach агрегатов. Его canonical hash совпадает с heavy preparation hash.
+Проверка идёт по checkpoint identity, а не старому embedded source hash immutable snapshot:
+semantic reuse не требует переписывать payload. Новый локальный день сам по себе не делает старую
+закрытую неделю stale. Если в ранее latest отчёте остались future actions, новая граница недели,
+в том числе во время чтения, требует бесплатной revision с их удалением.
+
+Внутренний `SellerWeeklyHistoricalPlanningService` оценивает только запрошенный period/timezone;
+RR assessment/read и fenced RC writer не объединены внешней транзакцией. `CURRENT` — no-op;
+иначе одна бесплатная подготовка, writer и reassessment. Source conflict/недоступная история
+откладывают результат без immediate heavy retry и current-roster fallback. Planner не имеет
+scheduler, HTTP write endpoint или AI dependency.
+
+Seller AI freshness guard выбирает периодный path только по explicit historical basis; прежний
+current-ranking path сохраняет latest-week restriction. Бесплатный refresh historical snapshot
+может подтвердить тот же immutable ID или отказать; новая revision не заменяет ранее одобренный
+snapshot/input/request. Read-time optional AI failure не скрывает deterministic report. Это
+as-of RR freshness, не atomic paid-attempt/publication fence: automatic backlog AI planning и
+source-lock защита публикации ответа ИИ остаются отдельным незавершённым rollout gate.
 
 ```text
 weekly-review facts

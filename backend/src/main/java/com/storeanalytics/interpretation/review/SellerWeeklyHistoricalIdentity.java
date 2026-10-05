@@ -2,6 +2,7 @@ package com.storeanalytics.interpretation.review;
 
 import com.storeanalytics.metrics.service.SellerHistoricalComparisonFacts;
 import com.storeanalytics.metrics.service.SellerHistoricalFactsUnavailableException;
+import com.storeanalytics.metrics.service.SellerCohortSnapshot;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -9,6 +10,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -25,6 +27,11 @@ class SellerWeeklyHistoricalIdentity {
 
     SellerWeeklyHistoricalMembership read(UUID storeId, ClosedSellerWeek week,
             SellerHistoricalComparisonFacts facts) {
+        return read(storeId, week, facts.comparison().current().metrics().cohort(), facts.actionEmployeeIds());
+    }
+
+    SellerWeeklyHistoricalMembership read(UUID storeId, ClosedSellerWeek week,
+            SellerCohortSnapshot cohort, Set<UUID> actionIds) {
         if (!TransactionSynchronizationManager.isActualTransactionActive()
                 || !Integer.valueOf(java.sql.Connection.TRANSACTION_REPEATABLE_READ)
                         .equals(TransactionSynchronizationManager.getCurrentTransactionIsolationLevel())) {
@@ -53,33 +60,42 @@ class SellerWeeklyHistoricalIdentity {
                         row.getBoolean("employee_active"), row.getBoolean("assignment_active"),
                         row.getBoolean("participates_in_ranking")), Timestamp.from(start), Timestamp.from(end),
                 Timestamp.from(end), storeId, Timestamp.from(end), Timestamp.from(start));
-        var cohort = facts.comparison().current().metrics().cohort();
         List<UUID> eligible = intervals.stream().filter(Interval::eligible).map(Interval::employee)
                 .distinct().sorted().toList();
-        if (!storeId.equals(cohort.storeId()) || !eligible.equals(cohort.employeeIds())) {
+        if (!storeId.equals(cohort.storeId()) || !eligible.equals(cohort.employeeIds())
+                || !eligible.containsAll(actionIds)) {
             throw new SellerHistoricalFactsUnavailableException("HISTORICAL_COHORT_CHANGED");
         }
         String selection = String.join("\n", SellerWeeklyHistoricalMembership.BASIS, storeId.toString(),
                 week.zone().getId(), start.toString(), end.toString(), baseline.from().toString(),
                 String.join("\n", intervals.stream().map(Interval::canonical).toList()));
         String actionable = String.join("\n", "seller-actionability-v1", storeId.toString(),
-                String.join("\n", facts.actionEmployeeIds().stream().sorted().map(UUID::toString).toList()));
+                String.join("\n", actionIds.stream().sorted().map(UUID::toString).toList()));
         return new SellerWeeklyHistoricalMembership(baseline.from(), baseline.revision(),
                 hash(selection), hash(actionable));
     }
 
     static String sourceHash(SellerWeeklyHistoricalFacts facts) {
+        return sourceHash(facts.storeId(), facts.period(), facts.sourceRevision(), facts.membership(),
+                facts.historical().comparison().current().attachFormulaVersion(),
+                facts.historical().comparison().previous().attachFormulaVersion());
+    }
+
+    static String sourceHash(SellerWeeklyHistoricalIdentityFacts facts) {
+        return sourceHash(facts.storeId(), facts.period(), facts.sourceRevision(), facts.membership(),
+                facts.attachFormulaVersion(), facts.attachFormulaVersion());
+    }
+
+    private static String sourceHash(UUID storeId, WeeklyReviewResponse.PeriodContext period, long revision,
+            SellerWeeklyHistoricalMembership membership, String currentAttach, String previousAttach) {
         var versions = SellerWeeklyV3Assembler.historicalVersions();
-        var membership = facts.membership();
-        return hash(String.join("\n", "seller-weekly-historical-source-v1", facts.storeId().toString(),
-                facts.period().timezone(), facts.period().current().start().toString(),
-                facts.period().current().end().toString(), facts.period().previous().start().toString(),
-                facts.period().previous().end().toString(), Long.toString(facts.sourceRevision()),
+        return hash(String.join("\n", "seller-weekly-historical-source-v1", storeId.toString(),
+                period.timezone(), period.current().start().toString(),
+                period.current().end().toString(), period.previous().start().toString(),
+                period.previous().end().toString(), Long.toString(revision),
                 membership.authoritativeFrom().toString(), Long.toString(membership.revision()),
                 membership.selectionHash(), membership.actionabilityHash(),
-                facts.historical().comparison().current().attachFormulaVersion(),
-                facts.historical().comparison().previous().attachFormulaVersion(),
-                facts.sourceStability().name(), "SALES_RETURNS_ORDERS_BOTH_WEEKS_COMPLETE",
+                currentAttach, previousAttach, "STABLE", "SALES_RETURNS_ORDERS_BOTH_WEEKS_COMPLETE",
                 versions.metricsPolicy(), versions.snapshotPolicy(), versions.qualityPolicy()));
     }
 

@@ -104,8 +104,9 @@ Runtime table/contract availability проверяется отдельно; с�
 view не доказывает совместимость schema-version guard. Для обычных позиций membership берётся
 на дату их операции, для гарантийных allocations/base — целевой продажи. UNKNOWN истории/автора
 не обходить включением текущего roster. Baseline должен покрывать обе сравниваемые недели.
-Combined facts, historical identity и opt-in snapshot writer соединены free runner, но не подключены
-к endpoint/scheduler/AI planner: перед включением нужны period read, source-publication fence и
+Combined facts, historical identity и opt-in snapshot writer соединены free runner. Additive
+period read и внутренний free planner реализованы, но backlog не подключён к scheduler/AI planner:
+перед включением нужны atomic paid-attempt/publication fence и
 release gates по плану. Codec/frontend parsing поддерживают temporal basis; runtime activation
 это не доказывает. Для старого периода проверять отсутствие future actions; departed card должна
 сохранить исторические суммы и `actionableNow=false`.
@@ -132,8 +133,20 @@ assembler с отдельной identity, перепроверяет source/memb
 Source change даёт отложенную бесплатную подготовку; contract/technical failure требует вмешательства.
 Проверять sanitized reason/state, а не raw exception/provider payload. При повторном выполнении
 равный semantic content сохраняет прежний snapshot ID/payload и обновляет совместимый checkpoint.
-До period read/planner и atomic AI publication fence не переключать scheduler на эти таблицы
+До automatic AI planner и atomic AI publication fence не переключать scheduler на эти таблицы
 и не выдавать их за готовый автообзор.
+
+Исторический GET `/api/stores/{storeId}/weekly-reviews/seller-period?periodStart=YYYY-MM-DD`
+проверяет закрытый Monday-start period и store authorization под прежними parent/seller feature
+gates. Он не пишет данные и не вызывает ИИ. Нет historical snapshot — PREPARING, без fallback;
+изменившаяся identity/coverage/stability — STALE с прежним immutable payload. Для CURRENT нужны
+compatible/latest ID и актуальный checkpoint; после бесплатного semantic reuse embedded identity
+старого payload не сравнивается напрямую с новой revision. Смена дня не требует переписывать
+старый отчёт; истечение горизонта future actions требует free revision. Не считать ответ CURRENT
+atomic разрешением provider call: paid/publication source fence остаётся отдельным gate.
+Free exact refresh historical snapshot не меняет одобренные ID/хеши и не открывает новый paid job.
+Новая revision требует нового exact review, не повторного запуска старой команды. Endpoint/free
+planner не активируют scheduler или baseline; локальный UI ещё не переключён на historical read.
 
 При seller cutover проверять version/scope exact snapshot, а не считать прежний STORE preflight
 разрешением нового input. Seller API: GET `/api/stores/{storeId}/weekly-reviews/seller-current`,

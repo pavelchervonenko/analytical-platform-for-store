@@ -26,6 +26,9 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalIdentity.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/WeeklyReviewSnapshotStore.java
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationRunner.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalReadService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalPlanningService.java
+  - backend/src/main/java/com/storeanalytics/interpretation/web/SellerWeeklyHistoricalReviewController.java
   - backend/src/main/resources/db/migration/V96__add_seller_weekly_preparation_backlog.sql
   - backend/src/main/java/com/storeanalytics/sync/service/EmployeeSyncBatchApplier.java
 verification_sources:
@@ -41,6 +44,7 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyPreparationStoreIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalIdentityIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalPreparationIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyHistoricalReadServiceTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/EmployeeSyncMembershipHistoryIntegrationTest.java
 required_reviewers:
   - product
@@ -106,8 +110,11 @@ jobs, bounded discovery и token-fenced lease. Он не выводит baseline
 атомарно сохраняет immutable snapshot/checkpoint под store/source locks с проверкой membership
 revision. Бесплатный runner связывает его с exact store/week job после lease/freshness checks.
 Давно пропущенная неделя не назначает future actions; вклад ушедших и их карточки сохранены.
-Периодный read API, scheduler и paid planning этой очереди ещё не подключены;
-current-roster публичный путь не переключён.
+Периодный additive read API и внутренний бесплатный period planner реализованы локально.
+Cheap RR metadata identity совпадает с heavy identity, без финансовых агрегатов. Historical
+read не использует current-ranking fallback и не помечает старый payload CURRENT без compatible
+checkpoint. Exact AI refresh не подменяет snapshot новой ревизией. Scheduler и automatic paid
+planning этой очереди ещё не подключены; current-roster публичный путь и frontend не переключены.
 Поэтому включение постоянной автоматической публикации до их проверки запрещено.
 
 ## Условия вступления решения в силу

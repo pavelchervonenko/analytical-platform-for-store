@@ -80,6 +80,30 @@ canary не переносятся на другую неделю или нов�
 
 ## Прогресс
 
+- Пакет 3, exact period read/free planner: additive historical GET под store authorization и
+  прежними feature gates не пишет данные, не подставляет current-ranking/STORE snapshot и не
+  вызывает provider. Cheap metadata и snapshot/checkpoint читаются в одной RR-транзакции;
+  interval/actionability/baseline/source identity совпадает с heavy preparation без финансовых
+  агрегатов. Semantic reuse оценивается по compatible checkpoint, без изменения embedded payload.
+  Проверяются latest revision, policy versions, activity/timezone, coverage/stability и закрытие
+  периода; future actions устаревшей недели требуют free revision, включая boundary во время GET.
+  Exact free planner делает одну подготовку запрошенной недели и не меняет дату на latest week.
+  Historical AI guard использует этот path, но новая revision не заменяет одобренный snapshot.
+  Current-ranking reader/planner/AI path сохранены. Scheduler/backlog paid planning и atomic
+  publication fence ещё не подключены. Frontend, production, baseline и платные вызовы не менялись.
+  Code review и сверка с планом завершены. Review добавил expiry future-action горизонта и
+  повторную calendar проверку после metadata read; exact refresh новой revision не считается
+  разрешением старого snapshot. Финальный targeted gate: 149 tests в 21 классе, 0 failures/errors/skips,
+  Checkstyle main/test PASS. Включены real historical queue → facts → writer → read/free planner,
+  authenticated period API (401/403/400, CURRENT/PREPARING), checkpoint reuse без payload rewrite,
+  старый seller HTTP path и current-ranking AI planning/freshness regressions. Тестовый менеджер
+  проходит обычную password-change policy; security не ослаблена ради HTTP test.
+  Documentation: 25 tests, strict integrity 457 inventory rows и 0 warnings; release/operator
+  safety и Gradle supply-chain integrity (449 components, 840 artifacts), diff check PASS.
+  Frontend не изменён: нового visual gate в этом этапе нет, общий frontend/UI release gate остаётся.
+  Это не полный backend release gate и не доказательство atomic paid publication. Далее source-lock
+  paid-attempt/completion fence, automatic backlog AI planning/scheduler и общий выпускной прогон.
+
 - Пакет 3, historical snapshot и free runner: interval/baseline identity читается в той же RR
   транзакции, что combined facts, и проверяет исторический union cohort. Canonical selection
   содержит обрезанные обеими неделями интервалы; текущая actionability имеет отдельный hash.

@@ -63,7 +63,9 @@ superseded_by: null
 Локальный candidate сохраняет один automatic job и поддерживает ограниченные attempts по
 конфигурации с запретом UNKNOWN retry. Temporal aggregates и dormant preparation backlog
 реализованы отдельными внутренними компонентами. Historical identity, opt-in snapshot writer и
-бесплатный runner уже соединены; public period read и подключение к scheduler/AI ещё требуются.
+бесплатный runner уже соединены; additive public period read и бесплатный exact period planner
+реализованы отдельно. Исторический freshness guard не подставляет новую revision вместо одобренной.
+Подключение backlog к scheduler/automatic AI и atomic paid publication fence ещё требуются.
 Discovery начинается лишь с первой недели, чья предыдущая
 полностью покрыта явным baseline, не с даты старого manual canary. Source/history ожидания
 бесплатны и отложены; техническая ошибка подготовки terminal, а не бесконечный busy retry.

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.storeanalytics.interpretation.review.PersistedWeeklyReviewV3Snapshot;
 import com.storeanalytics.interpretation.review.SellerWeeklyReviewService;
+import com.storeanalytics.interpretation.review.SellerWeeklyHistoricalReviewService;
 import com.storeanalytics.interpretation.review.SellerWeeklyReviewView;
 import com.storeanalytics.interpretation.review.SellerWeeklyV3AssemblerTest;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse;
@@ -62,6 +63,54 @@ class SellerWeeklyReviewAiFreshnessGuardTest {
                 SellerWeeklyReviewView.Freshness.STALE, snapshot.response()));
         assertThat(guard.isCurrent(snapshot)).isFalse();
         verify(reviews, never()).generate(store);
+    }
+
+    @Test
+    void historicalExactWeekUsesPeriodReadNotUnrelatedLatestRoster() {
+        var historical = mock(SellerWeeklyHistoricalReviewService.class);
+        var selectedGuard = new SellerWeeklyReviewAiFreshnessGuard(reviews, historical);
+        var snapshot = historicalSnapshot(UUID.randomUUID());
+        var start = snapshot.response().period().current().start();
+        when(historical.period(store, start)).thenReturn(new SellerWeeklyReviewView(
+                SellerWeeklyReviewView.Freshness.CURRENT, snapshot.response()));
+        assertThat(selectedGuard.isCurrent(snapshot)).isTrue();
+        verify(historical).period(store, start);
+        org.mockito.Mockito.verifyNoInteractions(reviews);
+    }
+
+    @Test
+    void oldHistoricalSnapshotCanBeFreelyRefreshedButOnlyTheExactImmutableIdAccepted() {
+        var historical = mock(SellerWeeklyHistoricalReviewService.class);
+        var selectedGuard = new SellerWeeklyReviewAiFreshnessGuard(reviews, historical);
+        var snapshot = historicalSnapshot(UUID.randomUUID());
+        var period = snapshot.response().period();
+        when(historical.period(store, period.current().start())).thenReturn(new SellerWeeklyReviewView(
+                SellerWeeklyReviewView.Freshness.CURRENT, snapshot.response()));
+        assertThat(selectedGuard.refreshIfSameSnapshot(snapshot, NOW.plusSeconds(14 * 86400))).isTrue();
+        verify(historical).refresh(store, period.current().start(), period.timezone());
+        var newer = historicalSnapshot(UUID.randomUUID());
+        when(historical.period(store, period.current().start())).thenReturn(new SellerWeeklyReviewView(
+                SellerWeeklyReviewView.Freshness.CURRENT, newer.response()));
+        assertThat(selectedGuard.refreshIfSameSnapshot(snapshot, NOW.plusSeconds(14 * 86400))).isFalse();
+        org.mockito.Mockito.verifyNoInteractions(reviews);
+    }
+
+    @Test
+    void historicalSupportMissingOrPeriodOpenCannotTriggerLegacyGeneration() {
+        var snapshot = historicalSnapshot(UUID.randomUUID());
+        assertThat(guard.isCurrent(snapshot)).isFalse();
+        assertThat(guard.refreshIfSameSnapshot(snapshot, NOW)).isFalse();
+        var historical = mock(SellerWeeklyHistoricalReviewService.class);
+        var selectedGuard = new SellerWeeklyReviewAiFreshnessGuard(reviews, historical);
+        assertThat(selectedGuard.refreshIfSameSnapshot(snapshot, Instant.parse("2026-08-23T12:00:00Z"))).isFalse();
+        org.mockito.Mockito.verifyNoInteractions(reviews, historical);
+    }
+
+    private PersistedWeeklyReviewV3Snapshot historicalSnapshot(UUID id) {
+        var snapshot = snapshot(id);
+        when(snapshot.response().membership()).thenReturn(new WeeklyReviewV3Response.Membership(
+                "HISTORICAL_DOCUMENT_MEMBERSHIP_V1", "a".repeat(64), "a".repeat(64), "b".repeat(64), NOW, 1));
+        return snapshot;
     }
 
     private PersistedWeeklyReviewV3Snapshot snapshot(UUID id) {
