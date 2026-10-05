@@ -16,10 +16,14 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics/repository/AnalyticalDocumentSql.java
   - backend/src/main/java/com/storeanalytics/sync/service/ReturnSyncPersistence.java
   - backend/src/main/java/com/storeanalytics/metrics/repository/SellerHistoricalDocumentSelectionRepository.java
+  - backend/src/main/java/com/storeanalytics/metrics/service/SellerHistoricalFactsService.java
+  - backend/src/main/resources/db/migration/V95__add_temporal_seller_attach_provenance.sql
 verification_sources:
   - backend/src/test/java/com/storeanalytics/metrics/repository/EmployeeKpiIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/ReturnSyncIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/metrics/repository/SellerHistoricalDocumentSelectionRepositoryIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/metrics/repository/SellerHistoricalAttachIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/metrics/service/SellerHistoricalFinancialFactsServiceIntegrationTest.java
 required_reviewers:
   - product
   - integrations
@@ -74,8 +78,12 @@ timestamp возврата. Она не меняет общий `employee_id`, p
 факта; источник отсутствующего сотрудника не подменяется автором оригинала. Версии расчётов
 и новых weekly snapshots изменены, прежние published payloads не переписываются.
 
-Historical membership ещё не подключён ко всем финансовым/структурным/attach агрегатам.
-Это частичная реализация и не подтверждение production cutover или полного совпадения с CRM.
+Внутренний historical reader теперь объединяет финансовые, документные и v4 attach факты в
+одной RR-транзакции. Обычная attach-позиция возврата проверяет своего source processor на дату
+возврата. Гарантийная allocation и device base проверяют membership автора целевой продажи,
+сохраняя её контракт; общий сохранённый `employee_id` не меняется. UNKNOWN и неполный baseline
+останавливают подготовку. Публичный weekly path ещё не использует этот historical reader.
+Это частичная реализация, не подтверждение production cutover или полного совпадения с CRM.
 
 Перед реализацией проверить, где общий `employee_id` используется зарплатой, гарантией,
 рейтингом, weekly и reconciliation. Если общий факт менять небезопасно, аналитическая

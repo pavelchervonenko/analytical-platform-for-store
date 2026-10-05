@@ -52,7 +52,7 @@ class WeeklyReviewV48MigrationIntegrationTest {
         assertThat(providerOutcome(STARTED_ATTEMPT_ID)).isNull();
         flyway(null).migrate();
 
-        assertThat(currentVersion()).isEqualTo("94");
+        assertThat(currentVersion()).isEqualTo("95");
         try (Connection connection = connection(); Statement statement = connection.createStatement();
              ResultSet rows = statement.executeQuery("SELECT count(*) FROM weekly_review_ai_response_receipts")) {
             assertThat(rows.next()).isTrue();

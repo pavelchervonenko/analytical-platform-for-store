@@ -17,6 +17,10 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/metrics/repository/SellerMembershipHistoryWriter.java
   - backend/src/main/java/com/storeanalytics/metrics/repository/SellerHistoricalDocumentSelectionRepository.java
   - backend/src/main/java/com/storeanalytics/metrics/service/SellerHistoricalFinancialFactsService.java
+  - backend/src/main/java/com/storeanalytics/metrics/service/SellerHistoricalFactsService.java
+  - backend/src/main/java/com/storeanalytics/metrics/repository/SellerAttachRateRepository.java
+  - backend/src/main/resources/db/migration/V95__add_temporal_seller_attach_provenance.sql
+  - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyV3TeamPresenter.java
   - backend/src/main/java/com/storeanalytics/sync/service/EmployeeSyncBatchApplier.java
 verification_sources:
   - backend/src/test/java/com/storeanalytics/interpretation/review/ai/WeeklyReviewAiJobStoreIntegrationTest.java
@@ -24,6 +28,9 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/metrics/repository/SellerMembershipHistoryWriterIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/metrics/repository/SellerHistoricalDocumentSelectionRepositoryIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/metrics/service/SellerHistoricalFinancialFactsServiceIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/metrics/repository/SellerHistoricalAttachIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/common/database/TemporalSellerAttachMigrationIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/interpretation/review/SellerWeeklyV3TeamPresenterTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/EmployeeSyncMembershipHistoryIntegrationTest.java
 required_reviewers:
   - product
@@ -76,8 +83,11 @@ forward-only baseline и разрешение необходимых огран�
 назначения атомарно. Точечные локальные тесты это подтверждают, но baseline не активирован,
 отдельная document-level eligibility projection проверена на synthetic sale/return cases,
 и подключена к внутренней подготовке исторических финансовых агрегатов. UNKNOWN блокирует
-подготовку; исторический вклад ушедших сохраняется отдельно от текущих action IDs. Temporal
-attach, historical presentation, периодный read API и durable backlog ещё не реализованы.
+подготовку; исторический вклад ушедших сохраняется отдельно от текущих action IDs. Внутренний
+combined reader добавляет temporal attach с точным document provenance и требует v4 policy;
+гарантийная target-sale семантика сохраняется. Opt-in presenter исключает future actions ушедших,
+сохраняя их финансовую карточку. Публичный historical membership contract, периодный read API,
+snapshot assembly и durable backlog ещё не подключены; current-roster путь не переключён.
 Поэтому включение постоянной автоматической публикации до их проверки запрещено.
 
 ## Условия вступления решения в силу

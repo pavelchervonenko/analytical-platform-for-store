@@ -1,18 +1,47 @@
 package com.storeanalytics.metrics.repository;
 
 import com.storeanalytics.metrics.service.SellerCohortSnapshot;
+import com.storeanalytics.metrics.service.SellerHistoricalFactsUnavailableException;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
-import com.storeanalytics.product.model.AttachDenominatorCode;
 import com.storeanalytics.metrics.warranty.AttachAttributionPolicy;
+import com.storeanalytics.product.model.AttachDenominatorCode;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** Aggregates raw seller quantities using the existing classifier, before any clamp or division. */
 @Repository
 public class SellerAttachRateRepository {
+
+    private static final String TEMPORAL_ELIGIBILITY = """
+            EXISTS (
+                SELECT 1 FROM store_seller_membership_state state
+                JOIN seller_membership_history history ON history.store_id = state.store_id
+                WHERE state.store_id = fact.store_id AND history.employee_id = fact.employee_id
+                  AND fact.membership_at >= state.authoritative_from
+                  AND tstzrange(history.valid_from, history.valid_to, '[)') @> fact.membership_at
+                  AND history.employee_active AND history.assignment_active AND history.participates_in_ranking
+            )
+            """;
+
+    private static final String UNKNOWN_HISTORY = """
+            SELECT EXISTS (
+                SELECT 1 FROM seller_attach_item_facts_v1 fact
+                WHERE fact.store_id = :storeId AND fact.business_date BETWEEN :periodStart AND :periodEnd
+                  AND ((fact.employee_id IS NULL AND fact.membership_document_kind = 'RETURN')
+                       OR (fact.employee_id IS NOT NULL AND NOT EXISTS (
+                           SELECT 1 FROM store_seller_membership_state state
+                           JOIN seller_membership_history history ON history.store_id = state.store_id
+                           WHERE state.store_id = fact.store_id AND history.employee_id = fact.employee_id
+                             AND fact.membership_at >= state.authoritative_from
+                             AND tstzrange(history.valid_from, history.valid_to, '[)') @> fact.membership_at
+                       )))
+            )
+            """;
 
     private static final String QUERY = """
             WITH facts AS (
@@ -80,12 +109,53 @@ public class SellerAttachRateRepository {
         return readRates(parameters, selectedFilter, List.of());
     }
 
+    /** Must join the historical financial reader's RR transaction; never falls back to current roster/v3. */
+    public List<AttachRateAggregate> readHistorical(SellerCohortSnapshot cohort, StoreKpiPeriod period) {
+        if (!Integer.valueOf(TransactionDefinition.ISOLATION_REPEATABLE_READ).equals(
+                TransactionSynchronizationManager.getCurrentTransactionIsolationLevel())) {
+            throw new IllegalStateException("Historical attach requires the caller's consistent transaction");
+        }
+        if (!policy.enabled()) {
+            throw new SellerHistoricalFactsUnavailableException("HISTORICAL_ATTACH_REQUIRES_V4_POLICY");
+        }
+        Map<String, Object> parameters = new HashMap<>(Map.of(
+                "storeId", cohort.storeId(), "periodStart", period.start(), "periodEnd", period.end()));
+        String filter = "false";
+        String outsideCohort = "true";
+        if (!cohort.employeeIds().isEmpty()) {
+            parameters.put("employeeIds", cohort.employeeIds());
+            filter = "fact.employee_id IN (:employeeIds) AND " + TEMPORAL_ELIGIBILITY;
+            outsideCohort = "fact.employee_id NOT IN (:employeeIds)";
+        }
+        String selectedFilter = filter;
+        String cohortGuard = """
+                SELECT EXISTS (SELECT 1 FROM seller_attach_item_facts_v1 fact
+                    WHERE fact.store_id = :storeId AND fact.business_date BETWEEN :periodStart AND :periodEnd
+                      AND (%s) AND (%s))
+                """.formatted(TEMPORAL_ELIGIBILITY, outsideCohort);
+        return storeQuality.readWith(cohort.storeId(), period.start(), period.end(), quality -> {
+            if (Boolean.TRUE.equals(jdbcTemplate.queryForObject(UNKNOWN_HISTORY, parameters, Boolean.class))) {
+                throw new SellerHistoricalFactsUnavailableException("ATTACH_MEMBERSHIP_OR_AUTHOR_UNKNOWN");
+            }
+            if (Boolean.TRUE.equals(jdbcTemplate.queryForObject(cohortGuard, parameters, Boolean.class))) {
+                throw new SellerHistoricalFactsUnavailableException("ATTACH_COHORT_NOT_COVERED");
+            }
+            return readRates(parameters, selectedFilter, quality,
+                    QUERY.replace("attach_rate_item_facts_v3_catalog", "seller_attach_item_facts_v1"));
+        });
+    }
+
     private List<AttachRateAggregate> readRates(Map<String, Object> parameters, String filter,
                                                List<AttachAttributionQuality> qualityRows) {
-        Map<String, AttachAttributionQuality> quality = new HashMap<>();
-        qualityRows.forEach(value -> quality.put(value.metricCode(), value));
         String query = policy.enabled()
                 ? QUERY.replace("attach_rate_item_facts_v3", "attach_rate_item_facts_v4") : QUERY;
+        return readRates(parameters, filter, qualityRows, query);
+    }
+
+    private List<AttachRateAggregate> readRates(Map<String, Object> parameters, String filter,
+            List<AttachAttributionQuality> qualityRows, String query) {
+        Map<String, AttachAttributionQuality> quality = new HashMap<>();
+        qualityRows.forEach(value -> quality.put(value.metricCode(), value));
         return jdbcTemplate.query(query.formatted(filter), parameters,
                 (row, index) -> new AttachRateAggregate(
                         row.getString("metric_code"), row.getString("numerator_category_code"),
@@ -102,5 +172,9 @@ public class SellerAttachRateRepository {
 
     public String formulaVersion() {
         return policy.enabled() ? "attach-rate-v4" : "attach-rate-v3";
+    }
+
+    public String historicalFormulaVersion() {
+        return "attach-rate-v4-historical-membership-v1";
     }
 }

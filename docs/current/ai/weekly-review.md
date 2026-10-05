@@ -45,6 +45,10 @@ implementation_sources:
   - backend/src/main/java/com/storeanalytics/interpretation/review/SellerWeeklyV3BatchPlanningResult.java
   - backend/src/main/java/com/storeanalytics/metrics/repository/AttachAttributionQualityRepository.java
   - backend/src/main/java/com/storeanalytics/metrics/repository/AttachAttributionQuality.java
+  - backend/src/main/java/com/storeanalytics/metrics/service/SellerHistoricalFactsService.java
+  - backend/src/main/java/com/storeanalytics/metrics/service/SellerHistoricalComparisonFacts.java
+  - backend/src/main/java/com/storeanalytics/metrics/repository/SellerAttachRateRepository.java
+  - backend/src/main/resources/db/migration/V95__add_temporal_seller_attach_provenance.sql
   - backend/src/main/resources/db/migration/V78__fence_seller_analytics_sources.sql
   - backend/src/main/resources/db/migration/V79__add_weekly_review_generation_state.sql
   - backend/src/main/resources/db/migration/V80__bound_warranty_fingerprint_context_to_document.sql
@@ -94,6 +98,9 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/metrics/repository/AttachAttributionQualityTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewStructureProjectorTest.java
   - backend/src/test/java/com/storeanalytics/metrics/repository/AttachRateAggregateTest.java
+  - backend/src/test/java/com/storeanalytics/metrics/repository/SellerHistoricalAttachIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/metrics/service/SellerHistoricalFinancialFactsServiceIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/common/database/TemporalSellerAttachMigrationIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/metrics/warranty/WarrantyAttributionIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewServiceTest.java
   - backend/src/test/java/com/storeanalytics/interpretation/review/WeeklyReviewSnapshotStoreIntegrationTest.java
@@ -369,11 +376,27 @@ employee/category агрегатам и документным totals сразу
 сопоставления. Отдельный immutable `currentActionEmployeeIds` содержит только пересечение с
 текущим составом и не меняет исторические суммы. Финансовая basis обозначена
 `HISTORICAL_DOCUMENT_MEMBERSHIP_V1`; общий cohort fingerprint сам по себе не доказывает temporal
-семантику. Результат намеренно не является `SellerPeriodFacts`/publishable report: он не содержит
-attach и не подключён к public endpoint, scheduler или AI enqueue. Текущий Overview и first-manual
-current-roster path не переключены. Payroll/saved employee, warranty allocations и snapshots не
-переписываются. Нужны temporal attach с document provenance, исторические карточки/actions,
-периодный read/planner и release gate перед подключением результата к публикации.
+семантику. Financial-only результат остаётся отдельным типом. Внутренний opt-in
+`SellerHistoricalFactsService` дополняет его attach и return-quality в той же RR-транзакции,
+возвращая `SellerHistoricalComparisonFacts`, а не готовый публичный отчёт.
+
+Temporal attach требует v4 policy и читает отдельную projection `seller_attach_item_facts_v1`
+с document/item/time provenance. Обычная продажа и возврат проверяют membership своего автора
+на timestamp собственной операции; сотрудник возврата разрешается в точном LiveSklad scope,
+без fallback. Специальная гарантийная allocation и её device base сохраняют прежнего продавца,
+дату и количества целевой продажи; membership проверяется на timestamp этой продажи.
+Отсутствующая история/автор или eligible attach-author вне финансового cohort останавливают
+подготовку, а не silently drop строку. Legacy v3 fallback запрещён. Старые attach views,
+allocations и правила классификации не переписываются; store-wide preliminary quality не
+превращается в персональное обвинение.
+
+Opt-in historical presenter сохраняет финансовую карточку ушедшего продавца с явной пометкой
+«не в текущей команде», `actionableNow=false` и без future action. Current-roster presentation
+сохраняет прежнее поведение. Это ещё не historical API/schema cutover: текущий membership
+contract и публичные readers остаются current-roster. Новый combined reader не подключён к
+endpoint, scheduler, snapshot assembly или AI enqueue. Текущий Overview и first-manual path
+не переключены. Payroll/saved employee и snapshots не переписываются. Нужны периодный read/planner,
+явная historical identity, durable backlog, publication fence и release gate до публикации.
 Следовательно, описанный ниже roster остаётся current-roster,
 не восстановленным историческим составом. Автоматическое восстановление пропущенной недели
 и чтение произвольного исторического периода пока не включены.

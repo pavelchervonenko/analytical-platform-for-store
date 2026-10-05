@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.Set;
 
 /** Financial seller cards only; shift-dependent assessment is withheld until completeness is known. */
 final class SellerWeeklyV3TeamPresenter {
@@ -49,9 +50,21 @@ final class SellerWeeklyV3TeamPresenter {
 
     Projection present(TeamFinancialFacts facts, boolean returnAttributionComplete,
             boolean additionalQualityComplete) {
+        return presentHistorical(facts, returnAttributionComplete, additionalQualityComplete,
+                facts.employees().stream().map(EmployeeContribution::employeeId).collect(Collectors.toSet()));
+    }
+
+    Projection presentHistorical(TeamFinancialFacts facts, boolean returnAttributionComplete,
+            boolean additionalQualityComplete, Set<UUID> actionEmployeeIds) {
+        Set<UUID> actionable = Set.copyOf(actionEmployeeIds);
+        if (!facts.employees().stream().map(EmployeeContribution::employeeId).collect(Collectors.toSet())
+                .containsAll(actionable)) {
+            throw new IllegalArgumentException("Action IDs must belong to the selected historical cohort");
+        }
         List<UUID> active = facts.financiallyActiveIds();
         Map<UUID, WeeklyReviewV3Response.EmployeeCard> allCards = facts.employees().stream()
-                .map(item -> card(item, returnAttributionComplete, additionalQualityComplete))
+                .map(item -> card(item, returnAttributionComplete, additionalQualityComplete,
+                        actionable.contains(item.employeeId())))
                 .collect(Collectors.toMap(item -> UUID.fromString(item.card().employeePublicId()),
                         item -> item));
         List<UUID> order = facts.employees().stream()
@@ -99,7 +112,7 @@ final class SellerWeeklyV3TeamPresenter {
 
     private WeeklyReviewV3Response.EmployeeCard card(
             EmployeeContribution employee, boolean returnAttributionComplete,
-            boolean additionalQualityComplete) {
+            boolean additionalQualityComplete, boolean actionableNow) {
         String id = employee.employeeId().toString();
         PeriodEmployeeFacts current = employee.current();
         PeriodEmployeeFacts previous = employee.previous();
@@ -142,6 +155,9 @@ final class SellerWeeklyV3TeamPresenter {
         MetricComparison actionMetric = dynamics.stream().filter(item -> item.effect() == NEGATIVE)
                 .findFirst().orElse(null);
         List<String> limitations = new ArrayList<>();
+        if (!actionableNow) {
+            limitations.add("Не в текущей команде: исторический вклад сохранён, новое действие не назначается.");
+        }
         if (!returnAttributionComplete) {
             limitations.add("Неизвестная атрибуция части возвратов ограничивает личный финансовый вывод.");
         } else if (!additionalQualityComplete) {
@@ -152,8 +168,8 @@ final class SellerWeeklyV3TeamPresenter {
         }
         var base = new WeeklyReviewResponse.EmployeeCard(id, employee.displayName(), false,
                 "FINANCIAL_ONLY", metrics, dynamics.stream().map(item -> observation(id, item)).toList(),
-                null, strength, attention, action(id, actionMetric), limitations);
-        return new WeeklyReviewV3Response.EmployeeCard(base, true);
+                null, strength, attention, actionableNow ? action(id, actionMetric) : null, limitations);
+        return new WeeklyReviewV3Response.EmployeeCard(base, actionableNow);
     }
 
     private MetricComparison compare(String id, String code, String label, Unit unit,

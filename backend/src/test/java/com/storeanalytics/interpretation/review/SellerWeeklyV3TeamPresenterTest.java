@@ -17,6 +17,27 @@ import org.junit.jupiter.api.Test;
 class SellerWeeklyV3TeamPresenterTest {
 
     @Test
+    void departedSellerKeepsMetricsAndHistoricalObservationButReceivesNoFutureAction() {
+        TeamFinancialFacts facts = decliningFinancialFacts();
+        var result = new SellerWeeklyV3TeamPresenter().presentHistorical(facts, true, true, java.util.Set.of());
+        assertThat(result.cards()).singleElement().satisfies(item -> {
+            assertThat(item.actionableNow()).isFalse();
+            assertThat(item.card().action()).isNull();
+            assertThat(item.card().attention()).isNotNull();
+            assertThat(item.card().metrics().netRevenue().current()).isEqualByComparingTo("60");
+            assertThat(item.card().limitations()).anyMatch(text -> text.contains("Не в текущей команде"));
+        });
+    }
+
+    @Test
+    void currentHistoricalMemberPreservesTheExistingPresentationAndPersonalAction() {
+        TeamFinancialFacts facts = decliningFinancialFacts();
+        var presenter = new SellerWeeklyV3TeamPresenter();
+        assertThat(presenter.presentHistorical(facts, true, true,
+                java.util.Set.of(facts.employees().getFirst().employeeId()))).isEqualTo(presenter.present(facts));
+    }
+
+    @Test
     void displayCapKeepsHiddenFinancialRemainder() {
         List<EmployeeContribution> employees = new ArrayList<>();
         for (int index = 0; index < 101; index++) {

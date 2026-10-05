@@ -80,7 +80,31 @@ canary не переносятся на другую неделю или нов�
 
 ## Прогресс
 
-- Пакет 2, temporal financial preparation: внутренний reader применяет единую document selection
+- Пакет 2, temporal attach и historical presentation: добавлена отдельная opt-in projection
+  с provenance каждой позиции. Обычные операции используют собственный timestamp и source
+  processor возврата; специальные warranty allocations/base сохраняют контракт целевой продажи.
+  Historical attach требует v4 policy и RR-транзакцию; UNKNOWN автора/history и eligible автор
+  вне financial cohort блокируют подготовку. Combined reader объединяет финансовые, document,
+  attach и return-quality факты обеих недель без payroll/source/snapshot DML. Opt-in presenter
+  сохраняет карточку ушедшего продавца с `actionableNow=false`, явной пометкой и без future action;
+  действующая current-roster presentation сохраняет parity. Публичный membership contract,
+  historical snapshot assembly/period read, durable backlog и publication fence ещё не подключены.
+  Итоговый targeted run: 67 tests в 14 классах, 0 failures/errors/skips, Checkstyle main/test PASS.
+  Включены historical attach (5), combined financial preparation (9), cards (8), warranty (19),
+  catalog/attach parity, migration application и security. Filled-schema upgrade проверяет
+  прежние view definitions, raw quantities/arrays, allocations и financial fields; checksum
+  validation и no-op повтор migration проходят. Restricted migrator также проходит.
+  Отдельный общий migration gate: 43 tests в 40 классах, 0 failures/errors/skips,
+  Checkstyle main/test PASS; все обновлённые ожидания packaged schema проверены.
+  Self-review подтвердил half-open boundaries, same RR transaction, сохранность warranty
+  attribution, отсутствие current-roster fallback и закрытый статус новых public consumers.
+  Первый прогон выявил style нарушения, а новые migration fixtures — отсутствующий finish time
+  успешного run и сравнение JDBC arrays по object identity. Исправлены fixtures/сравнение
+  canonical JSON, не ослаблены schema constraints или расчетные инварианты.
+  Documentation unit tests (25), strict integrity (0 warnings), operator security, supply-chain
+  integrity и diff check проходят. Полный выпускной прогон ещё не выполнен; frontend source и
+  production не менялись. Historical UI ещё не подключён, визуальная проверка перед cutover обязательна.
+- Пакет 2, предыдущая контрольная точка temporal financial preparation: внутренний reader применяет selection
   к employee/category и document aggregates обеих недель в одной RR-транзакции. Baseline до начала
   сравнения обязателен; открытая неделя и UNKNOWN автор/history не удаляются молча. Исторический
   roster сохраняет ушедших и нулевые строки, текущие action IDs отделены. Публичные readers,

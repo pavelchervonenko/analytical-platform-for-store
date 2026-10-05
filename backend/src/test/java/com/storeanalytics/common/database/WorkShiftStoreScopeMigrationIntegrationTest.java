@@ -35,7 +35,7 @@ class WorkShiftStoreScopeMigrationIntegrationTest {
 
         flyway(null).migrate();
 
-        assertThat(currentVersion()).isEqualTo("94");
+        assertThat(currentVersion()).isEqualTo("95");
         update("""
                 INSERT INTO employee_work_shifts (
                     store_id, employee_id, work_date, worked_hours

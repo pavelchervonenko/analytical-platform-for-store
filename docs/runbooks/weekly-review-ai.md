@@ -96,6 +96,17 @@ Runtime table/contract availability проверяется отдельно; с�
 
 ### Дополнительные проверки seller-контракта
 
+Исторический candidate reader сам по себе не даёт разрешения публикации. До temporal cutover
+проверить v4 attach policy: исторический путь не поддерживает legacy v3 fallback. Новые views
+`seller_attach_item_facts_v1`, `seller_attach_ordinary_facts_v1` и `seller_attach_reviewed_facts_v1`
+требуют runtime SELECT grants и rehearsal на заполненной БД; прежние attach views/allocations
+должны дать прежние значения. Проверить readiness старого executable после миграции: добавление
+view не доказывает совместимость schema-version guard. Для обычных позиций membership берётся
+на дату их операции, для гарантийных allocations/base — целевой продажи. UNKNOWN истории/автора
+не обходить включением текущего roster. Baseline должен покрывать обе сравниваемые недели.
+Combined facts и opt-in карточки не подключены к endpoint/planner: перед включением нужны
+historical membership identity/schema, source-publication fence и release gates по плану.
+
 При seller cutover проверять version/scope exact snapshot, а не считать прежний STORE preflight
 разрешением нового input. Seller API: GET `/api/stores/{storeId}/weekly-reviews/seller-current`,
 ADMIN POST `/api/admin/seller-weekly-reviews/stores/{storeId}/generate`. Parent weekly-review и

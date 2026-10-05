@@ -5,10 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.storeanalytics.metrics.repository.EmployeeCategoryKpiRepository;
 import com.storeanalytics.metrics.repository.EmployeeKpiRepository;
+import com.storeanalytics.metrics.repository.AttachAttributionQualityRepository;
+import com.storeanalytics.metrics.repository.SellerAttachRateRepository;
 import com.storeanalytics.metrics.repository.SellerCohortRepository;
 import com.storeanalytics.metrics.repository.SellerDocumentRepository;
 import com.storeanalytics.metrics.repository.SellerHistoricalDocumentSelectionRepository;
 import com.storeanalytics.metrics.repository.SellerMembershipHistoryRepository;
+import com.storeanalytics.metrics.repository.SellerReturnAttributionRepository;
+import com.storeanalytics.metrics.warranty.AttachAttributionPolicy;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -169,6 +173,38 @@ class SellerHistoricalFinancialFactsServiceIntegrationTest {
                 assertThat(actual.documents()).isEqualTo(document.read(cohort, period));
             }
         });
+    }
+
+    @Test
+    void combinedHistoricalPreparationReconcilesFinanceAndAttachInTheSameConsistentTransaction() {
+        Graph graph = seed("2026-09-07T00:00:00Z");
+        UUID former = employee(graph, true, "2026-09-07T00:00:00Z", "2026-09-16T00:00:00Z");
+        UUID current = employee(graph, false, "2026-09-07T00:00:00Z", null);
+        item(graph, former, null, "SALE", "2026-09-08T12:00:00Z", "100", false);
+        item(graph, former, null, "SALE", "2026-09-15T12:00:00Z", "80", false);
+        item(graph, former, null, "SALE", "2026-09-16T00:00:00Z", "900", false);
+        item(graph, current, null, "SALE", "2026-09-17T12:00:00Z", "50", false);
+        item(graph, former, current, "RETURN", "2026-09-18T12:00:00Z", "20", false);
+        jdbc.update("UPDATE sales_document_items SET analytics_category_id = "
+                + "(SELECT id FROM analytics_categories WHERE code = 'FILM_PHONE') "
+                + "WHERE product_id = ?", graph.product());
+        var named = new NamedParameterJdbcTemplate(jdbc);
+        var combined = new SellerHistoricalFactsService(service,
+                new SellerAttachRateRepository(named, new AttachAttributionPolicy(true),
+                        new AttachAttributionQualityRepository(named)), new SellerReturnAttributionRepository(named));
+        SellerHistoricalComparisonFacts result = transaction.execute(status ->
+                combined.read(graph.store(), CURRENT, PREVIOUS, ZoneOffset.UTC, NOW));
+        assertThat(result).isNotNull();
+        assertThat(result.actionEmployeeIds()).containsExactly(current);
+        var selected = result.comparison();
+        assertThat(selected.current().metrics().totals().netRevenue()).isEqualByComparingTo("110");
+        assertThat(selected.previous().metrics().totals().netRevenue()).isEqualByComparingTo("100");
+        for (var period : java.util.List.of(selected.current(), selected.previous())) {
+            assertThat(period.attachFormulaVersion()).isEqualTo("attach-rate-v4-historical-membership-v1");
+            assertThat(period.attachRates()).filteredOn(row -> row.metricCode().equals("FILM_PHONE"))
+                    .singleElement().satisfies(row ->
+                            assertThat(row.numeratorReceiptCount()).isEqualByComparingTo("1"));
+        }
     }
 
     private SellerHistoricalFinancialComparison read(Graph graph, Instant now) {
