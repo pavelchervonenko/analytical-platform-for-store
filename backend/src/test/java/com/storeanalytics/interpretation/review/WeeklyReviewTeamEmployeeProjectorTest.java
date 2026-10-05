@@ -312,9 +312,9 @@ class WeeklyReviewTeamEmployeeProjectorTest {
         assertThat(result.team().state())
                 .isEqualTo(WeeklyReviewResponse.BlockState.READY);
         assertThat(result.team().limitations()).containsExactly(
-                "Часть возвратов не связана с исходной продажей: "
+                "Для части возвратов не определён сотрудник LiveSklad: "
                         + "2 за текущую неделю и 1 за предыдущую. "
-                        + "Итог магазина учтён, вклад сотрудников показан по доступной связи"
+                        + "Итог магазина учтён, вклад сотрудников показан по известным авторам"
         );
         assertThat(result.team().toString())
                 .doesNotContain("Анна", employee.employeeId().toString());

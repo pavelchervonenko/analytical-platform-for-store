@@ -368,6 +368,13 @@ class EmployeeCategoryKpiIntegrationTest {
                 new BigDecimal(netAmount),
                 graph.syncRunId()
         );
+        if ("RETURN".equals(kind) && employeeId != null) {
+            jdbcTemplate.update("""
+                    UPDATE sales_documents SET attach_source_employee_external_id =
+                        (SELECT external_id FROM employees WHERE id = ?)
+                    WHERE id = ?
+                    """, employeeId, documentId);
+        }
         return documentId;
     }
 

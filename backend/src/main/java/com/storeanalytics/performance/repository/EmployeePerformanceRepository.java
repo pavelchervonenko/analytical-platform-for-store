@@ -1,5 +1,6 @@
 package com.storeanalytics.performance.repository;
 
+import com.storeanalytics.metrics.repository.AnalyticalDocumentSql;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -10,15 +11,15 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class EmployeePerformanceRepository {
 
-    private static final String EMPLOYEE_PERFORMANCE_QUERY = """
-            WITH included_items AS (
+    private static final String EMPLOYEE_PERFORMANCE_QUERY = AnalyticalDocumentSql.PERIOD_DOCUMENTS_CTE + """
+            , included_items AS (
                 SELECT
-                    document.employee_id,
+                    document.analytical_employee_id AS employee_id,
                     CASE document.document_kind WHEN 'SALE' THEN 1 ELSE -1 END AS sign,
                     item.net_amount,
                     category.category_kind,
                     category.counts_as_additional_revenue
-                FROM sales_documents document
+                FROM analytical_documents document
                 JOIN sales_document_items item ON item.sales_document_id = document.id
                 JOIN analytics_categories category ON category.id = item.analytics_category_id
                 WHERE document.store_id = :storeId
@@ -26,7 +27,7 @@ public class EmployeePerformanceRepository {
                   AND NOT document.is_deleted
                   AND NOT item.is_deleted
                   AND category.code <> 'EXCLUDE'
-                  AND document.employee_id IS NOT NULL
+                  AND document.analytical_employee_id IS NOT NULL
             ),
             employee_facts AS (
                 SELECT

@@ -195,7 +195,7 @@ class WarrantyAttributionIntegrationTest {
     }
 
     @Test
-    void separateOrdinaryReturnUsesSourceEmployeeWithoutChangingFinancialEmployee() {
+    void separateOrdinaryReturnUsesSourceEmployeeWithoutChangingStoredEmployee() {
         rank(processor);
         UUID doc = sale(AUGUST);
         UUID accessory = item(doc, "Case", "CASE_SAMSUNG", "NOT_APPLICABLE", "1", null);
@@ -211,7 +211,7 @@ class WarrantyAttributionIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT employee_id FROM sales_documents WHERE id = ?", UUID.class, refund))
                 .isEqualTo(seller);
         var selected = sellerAnalytics.readComparison(store, month(SEPTEMBER), month(AUGUST));
-        assertThat(selected.current().metrics().totals().netRevenue()).isZero();
+        assertThat(selected.current().metrics().totals().netRevenue()).isEqualByComparingTo("-100");
         assertThat(selected.current().attachRates())
                 .filteredOn(value -> value.metricCode().equals("CASE_SAMSUNG"))
                 .singleElement().satisfies(value ->
@@ -228,7 +228,8 @@ class WarrantyAttributionIntegrationTest {
 
         var facts = sellerAnalytics.readComparison(store, month(SEPTEMBER), month(AUGUST));
 
-        assertThat(facts.current().metrics().totals().netRevenue()).isEqualByComparingTo("-100");
+        assertThat(facts.current().metrics().totals().netRevenue()).isZero();
+        assertThat(facts.current().returnAttribution().missingReturnEmployeeCount()).isOne();
         assertThat(facts.current().attachRates())
                 .filteredOn(value -> value.metricCode().equals("CASE_SAMSUNG"))
                 .singleElement().satisfies(value -> {

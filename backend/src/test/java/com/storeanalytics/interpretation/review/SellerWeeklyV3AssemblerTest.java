@@ -93,7 +93,7 @@ public class SellerWeeklyV3AssemblerTest {
     }
 
     @Test
-    void orphanReturnKeepsSellerTotalsButAddsScopedPartialLimitation() {
+    void missingReturnEmployeeKeepsKnownTotalsButAddsScopedPartialLimitation() {
         SellerWeeklyReviewFacts facts = source(CURRENT.end());
         when(facts.comparison().current().returnAttribution())
                 .thenReturn(new SellerReturnAttributionQuality(1, 0));
@@ -110,7 +110,7 @@ public class SellerWeeklyV3AssemblerTest {
         assertThat(response.additionalSales().revenue().metricState()).isEqualTo(MetricState.LIMITED);
         assertThat(response.team().state()).isEqualTo(WeeklyReviewResponse.BlockState.LIMITED);
         assertThat(response.limitations()).singleElement().satisfies(item -> {
-            assertThat(item.code()).isEqualTo("ORPHAN_RETURN");
+            assertThat(item.code()).isEqualTo("RETURN_EMPLOYEE_MISSING");
             assertThat(item.scope()).isEqualTo("SELLERS");
             assertThat(item.severity()).isEqualTo("WARNING");
             assertThat(item.affectedMetricCodes()).contains("RETURN_REVENUE", "NET_REVENUE");

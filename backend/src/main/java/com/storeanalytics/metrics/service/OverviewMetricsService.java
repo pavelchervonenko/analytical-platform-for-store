@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class OverviewMetricsService {
 
-    public static final String FORMULA_VERSION = "overview-metrics-v1";
+    public static final String FORMULA_VERSION = "overview-metrics-v2-return-processor";
     private static final int MONEY_SCALE = 2;
     private static final int QUANTITY_SCALE = 3;
     private static final int PERCENT_SCALE = 2;

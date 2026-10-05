@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class EmployeeCategoryKpiService {
 
-    static final String FORMULA_VERSION = "employee-category-kpi-v1";
+    static final String FORMULA_VERSION = "employee-category-kpi-v2-return-processor";
     private static final String UNASSIGNED_DISPLAY_NAME = "Не назначен";
     private static final int PERCENT_SCALE = 2;
 

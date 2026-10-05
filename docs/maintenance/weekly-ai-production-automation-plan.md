@@ -100,13 +100,32 @@ canary не переносятся на другую неделю или нов�
   Независимая historical eligibility projection читает сотрудника записи LiveSklad на дату
   возврата. Не меняет сохранённый финансовый автор, не использует fallback на оригинал;
   собственный UNKNOWN не превращается в отсутствие участия. Подключение к всем агрегатам,
-  новая policy/revision и исторический cutover ещё не реализованы; payroll-контракт сохраняется.
+  новая policy/revision и исторический cutover на этой контрольной точке ещё не реализованы;
+  payroll-контракт сохраняется.
   Локальный PostgreSQL integration test проверяет 16 synthetic документов: разных авторов,
   orphan/late link, отсутствие source ID, unresolved ID с совпадающим manual employee,
   границу baseline и выключения участия, удаление документа и оригинала. Общий `employee_id`
   остаётся прежним; Checkstyle main/test и documentation gates проходят. Это проверка
   независимой projection, не всего нового финансового контура.
+- Пакет 2, денежный этап: общий read-only resolver подключён к employee KPI, категориям,
+  документным totals, финансовым составляющим рейтинга и unknown-return диагностике weekly.
+  Store totals, сохранённый `employee_id`, payroll и warranty allocation не переписываются.
+  Новые formula/policy versions отличают прежнюю семантику без изменения опубликованных
+  prompt/schema artifacts. Исторический membership, полный temporal attach, ежедневный
+  SELLERS-факт планов и historical backlog остаются отдельными незавершёнными этапами.
+  Финальный targeted backend-набор: 113 tests в 17 классах, 0 failures/errors/skips;
+  Checkstyle main/test проходит. Включены KPI/category/rating, seller weekly, source identity,
+  sync и warranty integration; из load suite проверен один точный сценарий, не весь suite.
+  Code review подтверждает точный connection/source resolver, независимость от original link,
+  сохранность signed amounts и warranty allocations, новую identity без переписывания snapshots.
+  Ежедневный SELLERS-факт плана остаётся старым потребителем и блокером согласованного cutover.
+  Targeted результат не заменяет полный backend release gate окончательного кода.
+  Scope, self-review и результаты повторов сохранены в
+  [локальном evidence денежного этапа](../history/audits/2026/10/return-processor-financial-projections-local.md).
 - Production не менялся; постоянная автоматическая публикация ещё не готова к включению.
+- Владелец подтвердил read-only аудитом полное покрытие и стабильность источника за новую
+  закрытую неделю: [наблюдение 5 октября](../history/audits/2026/10/weekly-source-readiness-october5.md).
+  Это снимает прежний source blocker, но не заменяет snapshot/quality/paid approval gates.
 - Общая локальная контрольная точка сохранена в
   [sanitized evidence](../history/audits/2026/10/weekly-ai-local-regression-checkpoint.md).
   Полный backend run: 1 896 tests, один `ContainerLaunchException` при инициализации retention

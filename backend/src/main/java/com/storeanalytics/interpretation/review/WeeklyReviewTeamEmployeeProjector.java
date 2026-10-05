@@ -614,10 +614,10 @@ public final class WeeklyReviewTeamEmployeeProjector {
             result.add("Для части сотрудников недостаточно продаж для сравнения");
         }
         if (currentUnattributedReturns > 0 || previousUnattributedReturns > 0) {
-            result.add("Часть возвратов не связана с исходной продажей: "
+            result.add("Для части возвратов не определён сотрудник LiveSklad: "
                     + currentUnattributedReturns + " за текущую неделю и "
                     + previousUnattributedReturns + " за предыдущую. "
-                    + "Итог магазина учтён, вклад сотрудников показан по доступной связи");
+                    + "Итог магазина учтён, вклад сотрудников показан по известным авторам");
         }
         return List.copyOf(result);
     }

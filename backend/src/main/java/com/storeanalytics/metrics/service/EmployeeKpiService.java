@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class EmployeeKpiService {
 
     private static final String UNASSIGNED_DISPLAY_NAME = "Не назначен";
+    static final String FORMULA_VERSION = "employee-kpi-v2-return-processor";
 
     private static final int MONEY_SCALE = 2;
     private static final int QUANTITY_SCALE = 3;
@@ -58,7 +59,7 @@ public class EmployeeKpiService {
                 storeId,
                 period.start(),
                 period.end(),
-                StoreKpiService.FORMULA_VERSION,
+                FORMULA_VERSION,
                 employees
         );
     }

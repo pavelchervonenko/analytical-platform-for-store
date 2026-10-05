@@ -12,17 +12,17 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class EmployeeCategoryKpiRepository {
 
-    private static final String EMPLOYEE_CATEGORY_QUERY = """
-            WITH included_items AS (
+    private static final String EMPLOYEE_CATEGORY_QUERY = AnalyticalDocumentSql.PERIOD_DOCUMENTS_CTE + """
+            , included_items AS (
                 SELECT
-                    document.employee_id,
+                    document.analytical_employee_id AS employee_id,
                     item.analytics_category_id,
                     CASE document.document_kind WHEN 'SALE' THEN 1 ELSE -1 END AS sign,
                     item.quantity,
                     item.net_amount,
                     item.cost_amount,
                     item.cost_quality
-                FROM sales_documents document
+                FROM analytical_documents document
                 JOIN sales_document_items item ON item.sales_document_id = document.id
                 JOIN analytics_categories category
                   ON category.id = item.analytics_category_id

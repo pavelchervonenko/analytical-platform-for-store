@@ -13,9 +13,11 @@ decision_sources:
   - docs/maintenance/payroll-redesign.md
   - docs/maintenance/weekly-ai-production-automation-plan.md
 implementation_sources:
+  - backend/src/main/java/com/storeanalytics/metrics/repository/AnalyticalDocumentSql.java
   - backend/src/main/java/com/storeanalytics/sync/service/ReturnSyncPersistence.java
   - backend/src/main/java/com/storeanalytics/metrics/repository/SellerHistoricalDocumentSelectionRepository.java
 verification_sources:
+  - backend/src/test/java/com/storeanalytics/metrics/repository/EmployeeKpiIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/ReturnSyncIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/metrics/repository/SellerHistoricalDocumentSelectionRepositoryIntegrationTest.java
 required_reviewers:
@@ -67,8 +69,13 @@ timestamp возврата. Она не меняет общий `employee_id`, p
 Отсутствующий/неразрешённый сотрудник остаётся UNKNOWN, без fallback на оригинал. Поздняя
 привязка или удаление оригинала не меняют аналитического автора.
 
-Projection ещё не подключена к финансовым/структурным/attach агрегатам. Это известное
-расхождение с новым решением, а не подтверждённая работа нового правила в пользовательских KPI.
+Общий read-only `AnalyticalDocumentSql` теперь подключён к денежным KPI, категориям,
+числу документов и финансовым составляющим рейтинга. Он сохраняет суммы магазина и общего
+факта; источник отсутствующего сотрудника не подменяется автором оригинала. Версии расчётов
+и новых weekly snapshots изменены, прежние published payloads не переписываются.
+
+Historical membership ещё не подключён ко всем финансовым/структурным/attach агрегатам.
+Это частичная реализация и не подтверждение production cutover или полного совпадения с CRM.
 
 Перед реализацией проверить, где общий `employee_id` используется зарплатой, гарантией,
 рейтингом, weekly и reconciliation. Если общий факт менять небезопасно, аналитическая

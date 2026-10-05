@@ -142,20 +142,22 @@ public final class WeeklyReviewQualityPolicyV1 {
             String suffix,
             List<Limitation> limitations
     ) {
-        addSellerCountLimitation(new Issue("attribution:orphan-return:" + suffix, "ORPHAN_RETURN"),
+        addSellerCountLimitation(new Issue("attribution:missing-return-author:" + suffix,
+                        "RETURN_EMPLOYEE_MISSING"),
                 List.of("results", "sales-structure", "additional-sales", "team", "employees"),
                 List.of("RETURN_REVENUE", "NET_REVENUE", "GROSS_PROFIT", "MARGIN_PERCENT",
                         "ADDITIONAL_REVENUE", "ADDITIONAL_SHARE", "SALES_STRUCTURE", "ATTACH"),
-                period, quality.orphanReturnDocumentCount(),
-                "Есть возвраты без доступной исходной продажи; их нельзя отнести к продавцам рейтинга",
+                period, quality.missingReturnEmployeeCount(),
+                "У части возвратов не указан сотрудник LiveSklad; их вклад в показатели продавцов неизвестен",
                 limitations);
-        addSellerCountLimitation(new Issue("attribution:unknown-original-author:" + suffix,
-                        "RETURN_ORIGINAL_AUTHOR_UNKNOWN"),
+        addSellerCountLimitation(new Issue("attribution:unresolved-return-author:" + suffix,
+                        "RETURN_EMPLOYEE_UNRESOLVED"),
                 List.of("results", "sales-structure", "additional-sales", "team", "employees"),
                 List.of("RETURN_REVENUE", "NET_REVENUE", "GROSS_PROFIT", "MARGIN_PERCENT",
                         "ADDITIONAL_REVENUE", "ADDITIONAL_SHARE", "SALES_STRUCTURE", "ATTACH"),
-                period, quality.unattributedOriginalReturnDocumentCount(),
-                "Есть возвраты к продажам без автора; они не включены в итоги продавцов рейтинга",
+                period, quality.unresolvedReturnEmployeeCount(),
+                "Сотрудника части возвратов LiveSklad не удалось определить; "
+                        + "их вклад в показатели продавцов неизвестен",
                 limitations);
     }
 

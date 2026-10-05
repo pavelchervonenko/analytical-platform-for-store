@@ -60,7 +60,7 @@ class SellerWeeklySourceIdentityTest {
     }
 
     @Test
-    void lightweightProjectionPreservesOriginalCanonicalBytes() {
+    void lightweightProjectionVersionsTheNewReturnAuthorContract() {
         UUID storeId = UUID.fromString("10000000-0000-0000-0000-000000000001");
         var period = new PeriodContext("Europe/Kaliningrad",
                 new DateRange(LocalDate.of(2026, 8, 17), LocalDate.of(2026, 8, 23)),
@@ -77,6 +77,7 @@ class SellerWeeklySourceIdentityTest {
                 "attach-rate-v4", "attach-rate-v4", SellerWeeklySourceStability.STABLE, coverage, 7L);
 
         assertThat(identity.hash(facts))
-                .isEqualTo("582b58025bca7aea0a26bc933345947a14d01d03d48e3cca335f19218bae7100");
+                .isEqualTo("c353ba320b2fe79a6221f9a451d08f8516bbf6856252874803bc8ad066a58b56")
+                .isNotEqualTo("582b58025bca7aea0a26bc933345947a14d01d03d48e3cca335f19218bae7100");
     }
 }

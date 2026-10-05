@@ -10,15 +10,15 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class SellerDocumentRepository {
 
-    private static final String QUERY = """
-            WITH documents AS (
-                SELECT document.id, document.employee_id, document.document_kind,
+    private static final String QUERY = AnalyticalDocumentSql.PERIOD_DOCUMENTS_CTE + """
+            , documents AS (
+                SELECT document.id, document.analytical_employee_id AS employee_id, document.document_kind,
                        document.source_document_type
-                FROM sales_documents document
+                FROM analytical_documents document
                 WHERE document.store_id = :storeId
                   AND document.business_date BETWEEN :periodStart AND :periodEnd
                   AND NOT document.is_deleted
-                  AND document.employee_id IN (:employeeIds)
+                  AND document.analytical_employee_id IN (:employeeIds)
             ),
             amounts AS (
                 SELECT document.id, SUM(item.net_amount) AS amount

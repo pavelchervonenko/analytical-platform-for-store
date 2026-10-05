@@ -11,6 +11,7 @@ import com.storeanalytics.metrics.service.SellerPeriodAnalyticsService;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.metrics.service.StoreKpiResult;
 import com.storeanalytics.metrics.service.StoreKpiService;
+import com.storeanalytics.performance.repository.EmployeePerformanceRepository;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -52,6 +53,12 @@ class EmployeeKpiIntegrationTest {
 
     @Autowired
     private OverviewMetricsService overviewMetrics;
+
+    @Autowired
+    private EmployeeCategoryKpiRepository employeeCategories;
+
+    @Autowired
+    private EmployeePerformanceRepository performance;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -462,6 +469,85 @@ class EmployeeKpiIntegrationTest {
         return employeeId;
     }
 
+    @Test
+    void returnProcessorOwnsAllFinancialProjectionsWithoutChangingStoredAuthorOrStoreTotals() {
+        TestGraph graph = createGraph();
+        UUID originalSeller = addEmployee(graph, "original-author", "Synthetic original", true);
+        UUID processor = addEmployee(graph, "return-processor", "Synthetic processor", true);
+        addAssignment(originalSeller, graph.storeId(), true, true);
+        addAssignment(processor, graph.storeId(), true, true);
+        UUID sale = addDocument(graph, sale(graph.storeId(), originalSeller, "original-sale",
+                PERIOD_START, "100"));
+        addItem(graph, knownItem(sale, "original-item", "IPHONE_NEW_ASIS", "1", "100", "60"));
+        addSaleWithItem(graph, processor, "processor-sale", "30", "15");
+        UUID returned = addDocument(graph, returnDocument(graph.storeId(), originalSeller, "processed-return",
+                PERIOD_END, "20", sale));
+        addItem(graph, knownItem(returned, "processed-item", "IPHONE_NEW_ASIS", "0.500", "20", "10"));
+        jdbcTemplate.update("""
+                UPDATE sales_documents SET attach_source_employee_external_id = 'return-processor'
+                WHERE id = ?
+                """, returned);
+
+        var rows = employeeKpiService.calculate(graph.storeId(), period());
+        assertThat(employee(rows, originalSeller).netRevenue()).isEqualByComparingTo("100");
+        assertThat(employee(rows, processor).netRevenue()).isEqualByComparingTo("10");
+        assertThat(employee(rows, processor).costAmount()).isEqualByComparingTo("5");
+        assertThat(employee(rows, processor).grossProfit()).isEqualByComparingTo("5");
+        assertThat(employee(rows, processor).netQuantity()).isEqualByComparingTo("0.500");
+        assertThat(employeeCategories.aggregate(graph.storeId(), PERIOD_START, PERIOD_END)).filteredOn(row ->
+                processor.equals(row.employeeId()) && "IPHONE_NEW_ASIS".equals(row.categoryCode()))
+                .singleElement().satisfies(row -> assertThat(row.netRevenue()).isEqualByComparingTo("10"));
+        assertThat(performance.aggregate(graph.storeId(), PERIOD_START, PERIOD_END))
+                .filteredOn(row -> processor.equals(row.employeeId())).singleElement()
+                .satisfies(row -> assertThat(row.netRevenue()).isEqualByComparingTo("10"));
+        var facts = sellerAnalytics.readComparison(graph.storeId(), period(), period()).current();
+        assertThat(facts.metrics().totals().netRevenue()).isEqualByComparingTo("110");
+        assertThat(facts.documents()).filteredOn(row -> processor.equals(row.employeeId()))
+                .singleElement().satisfies(row -> {
+                    assertThat(row.returnRevenue()).isEqualByComparingTo("20");
+                    assertThat(row.returnDocumentCount()).isOne();
+                });
+        assertThat(facts.returnAttribution().complete()).isTrue();
+        assertThat(storeKpiService.calculate(graph.storeId(), period()).netRevenue()).isEqualByComparingTo("110");
+        assertThat(jdbcTemplate.queryForObject("SELECT employee_id FROM sales_documents WHERE id = ?",
+                UUID.class, returned)).isEqualTo(originalSeller);
+
+        jdbcTemplate.update("UPDATE sales_documents SET original_document_id = NULL WHERE id = ?", returned);
+        assertThat(employee(employeeKpiService.calculate(graph.storeId(), period()), processor).netRevenue())
+                .isEqualByComparingTo("10");
+        assertThat(sellerAnalytics.readComparison(graph.storeId(), period(), period())
+                .current().returnAttribution().complete()).isTrue();
+        jdbcTemplate.update("UPDATE sales_documents SET original_document_id = ? WHERE id = ?", sale, returned);
+        jdbcTemplate.update("UPDATE sales_documents SET is_deleted = true WHERE id = ?", sale);
+        assertThat(employee(employeeKpiService.calculate(graph.storeId(), period()), processor).netRevenue())
+                .isEqualByComparingTo("10");
+
+        jdbcTemplate.update("UPDATE sales_documents SET attach_source_employee_external_id = NULL WHERE id = ?",
+                returned);
+        var missing = sellerAnalytics.readComparison(graph.storeId(), period(), period()).current();
+        assertThat(missing.returnAttribution().missingReturnEmployeeCount()).isOne();
+        assertThat(missing.returnAttribution().unresolvedReturnEmployeeCount()).isZero();
+        assertThat(employee(employeeKpiService.calculate(graph.storeId(), period()), processor).netRevenue())
+                .isEqualByComparingTo("30");
+        jdbcTemplate.update("""
+                UPDATE sales_documents SET attach_source_employee_external_id = 'not-imported'
+                WHERE id = ?
+                """, returned);
+        var unresolved = sellerAnalytics.readComparison(graph.storeId(), period(), period()).current();
+        assertThat(unresolved.returnAttribution().missingReturnEmployeeCount()).isZero();
+        assertThat(unresolved.returnAttribution().unresolvedReturnEmployeeCount()).isOne();
+        assertThat(employeeKpiService.calculate(graph.storeId(), period()).employees())
+                .filteredOn(EmployeeKpiEntry::unassigned).singleElement()
+                .satisfies(row -> assertThat(row.netRevenue()).isEqualByComparingTo("-20"));
+        jdbcTemplate.update("""
+                UPDATE sales_document_items SET analytics_category_id =
+                    (SELECT id FROM analytics_categories WHERE code = 'EXCLUDE')
+                WHERE sales_document_id = ?
+                """, returned);
+        assertThat(sellerAnalytics.readComparison(graph.storeId(), period(), period())
+                .current().returnAttribution().complete()).isTrue();
+    }
+
     private void addAssignment(
             UUID employeeId,
             UUID storeId,
@@ -553,6 +639,13 @@ class EmployeeKpiIntegrationTest {
                 document.deleted(),
                 graph.syncRunId()
         );
+        if ("RETURN".equals(document.kind()) && document.employeeId() != null) {
+            jdbcTemplate.update("""
+                    UPDATE sales_documents SET attach_source_employee_external_id =
+                        (SELECT external_id FROM employees WHERE id = ?)
+                    WHERE id = ?
+                    """, document.employeeId(), documentId);
+        }
         return documentId;
     }
 

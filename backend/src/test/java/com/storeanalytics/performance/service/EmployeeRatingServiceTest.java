@@ -79,7 +79,7 @@ class EmployeeRatingServiceTest {
 
         EmployeeRatingResult result = service.calculate(storeId, period());
 
-        assertThat(result.formula().version()).isEqualTo("employee-rating-v1");
+        assertThat(result.formula().version()).isEqualTo("employee-rating-v1-return-processor");
         assertThat(result.employees()).extracting(EmployeeRatingEntry::displayName)
                 .containsExactly("Second", "First");
         EmployeeRatingEntry second = result.employees().getFirst();

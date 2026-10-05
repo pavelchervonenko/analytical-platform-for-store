@@ -7,7 +7,7 @@ audience:
   - developer
   - operator
   - manager
-last_verified: 2026-09-29
+last_verified: 2026-10-05
 requirement_sources:
   - docs/archive/legacy-contracts/AI_WEEKLY_REDESIGN_STAGE2_CONTRACT.md
   - docs/archive/legacy-contracts/weekly-review-ai-management-rubric.md
@@ -200,7 +200,7 @@ Legacy публичный путь сохраняет контракт v2 с п�
 путь собирает v3 по выбранным продавцам: core, структура, допы и финансовые
 факты команды используют единый seller facts bundle. Его scope/evidence — `SELLERS`/`EMPLOYEE`,
 действия на уровне агрегата — `TEAM`, а проверка доказанного личного снижения — `EMPLOYEE`;
-v2 payload/hash не изменены. Незаполненные смены ограничивают только workload-метрики и peer
+Форма v2 transport и ранее сохранённые payload/hash не изменяются. Незаполненные смены ограничивают только workload-метрики и peer
 benchmark: при полном источнике и отсутствии других quality limitations v3 имеет `READY`.
 Личное финансовое действие возможно только при не менее шести завершённых продажах в каждой
 сравниваемой неделе и материальном отрицательном изменении; смены не используются как суррогат
@@ -335,16 +335,20 @@ snapshot ID/hash без лишней revision. Опубликованные payl
 персональные сравнения attach-rate за затронутую неделю.
 Во внутреннем seller-v3 неизвестная атрибуция возврата также делает предварительным только
 затронутый код attach-rate, хотя числитель и знаменатель остаются выбранными по продавцам.
-Отдельно финансовый reader считает документы RETURN без доступной исходной продажи и RETURN,
-связанные с исходной продажей без автора, двумя разными причинами. Эти store-wide неопределённости
+Отдельно финансовый reader считает включённые документы RETURN без source employee и RETURN
+с source employee, который не разрешён в той же LiveSklad connection, двумя разными причинами:
+`RETURN_EMPLOYEE_MISSING` и `RETURN_EMPLOYEE_UNRESOLVED`. Удалённые строки и полностью `EXCLUDE`
+документы не создают финансового ограничения. Эти store-wide неопределённости
 не добавляются к seller-суммам и не блокируют отчёт. При наличии хотя бы одной v3 становится
 `PARTIAL`: затронутые return/net/profit, структура, допы и личные финансовые выводы получают
 `LIMITED`, а SALE revenue/count и средняя продажа остаются доступными. Менеджер видит адресное
 ограничение без персонального обвинения; общий заголовок не утверждает, что неделя лучше
-или хуже, пока чистый итог предварителен. После подтверждённой поздней привязки возврата новый
-snapshot может стать `READY`. Семантика выпущена `weekly-snapshot-v16` / `weekly-quality-v10`;
+или хуже, пока чистый итог предварителен. Известный source employee учитывается независимо
+от доступности оригинала; сама поздняя привязка не подменяет аналитического автора. После
+разрешения сотрудника новый snapshot может стать `READY`. Новая candidate-семантика использует
+`weekly-snapshot-v17` / `weekly-quality-v11` и `weekly-metrics-v9-sellers-return-processor`;
 ранее сохранённые v3 и legacy v2 остаются неизменяемыми и читаемыми.
-Счётчики таких возвратов и pending warranty описывают потенциальный риск по всему магазину,
+Счётчики неизвестных сотрудников возврата и pending warranty описывают потенциальный риск по всему магазину,
 а не количество ошибок конкретного продавца; окончательный вывод по ним не формируется.
 
 ### Roster и исторические snapshots
@@ -379,9 +383,15 @@ read path. Поэтому историческая revision может соде�
 | Provider input | schema 4 | [`weekly-review-ai-input-v4.schema.json`](../../schemas/weekly-review-ai-input-v4.schema.json) |
 | Provider output | selection schema 1 | [`weekly-review-ai-selection-v1.schema.json`](../../schemas/weekly-review-ai-selection-v1.schema.json) |
 | Published content | schema 4 | [`weekly-review-ai-content-v4.schema.json`](../../schemas/weekly-review-ai-content-v4.schema.json) |
-| Deterministic metrics policy | `weekly-metrics-v7` | `WeeklyReviewPolicyV1` |
-| Deterministic snapshot policy | `weekly-snapshot-v13` | `WeeklyReviewPolicyV1` |
-| Data-quality policy | `weekly-quality-v8` | `WeeklyReviewPolicyV1` |
+| Deterministic metrics policy | `weekly-metrics-v8-return-processor` | `WeeklyReviewPolicyV1` |
+| Deterministic snapshot policy | `weekly-snapshot-v14` | `WeeklyReviewPolicyV1` |
+| Data-quality policy | `weekly-quality-v9` | `WeeklyReviewPolicyV1` |
+
+Эти версии описывают код ветки, не состояние production. Аналитический return author отделён
+от общего сохранённого `employee_id` по ADR-0006. Metadata и полный v3 reader используют одну
+новую policy identity: прежний checkpoint не становится CURRENT только из-за неизменной source
+revision. Legacy planner также проверяет policy versions перед переиспользованием. Опубликованные
+снимки, prompts и schemas не переписываются, новая генерация создаёт новую immutable revision.
 
 Backend читает опубликованные schema4 enrichments в порядке `v25`, `v24`, `v23`, `v22`. Worker
 создаёт только активную пару `v25/schema4`. Read compatibility не означает, что старые версии
@@ -489,9 +499,10 @@ Snapshot row lock и уникальность job закрывают гонку 
 и diagnostic counter сохраняются, но limitation не создаётся и состояние прибыли, маржи или всего
 отчёта не понижается. Отсутствующая исходная продажа либо позиция у части возвратов также не
 считается нарушением согласованности итогов магазина; сумма возврата уже входит в чистую выручку.
-Если из-за этого невозможно определить продавца, блок команды показывает нейтральную оговорку о
-доступной связи, не создавая page-level warning и не предлагая исправить нормальное состояние
-данных.
+Отдельно, если отсутствует или не разрешается сотрудник записи возврата LiveSklad, legacy-блок
+команды показывает нейтральную оговорку о неизвестном авторе, не создавая page-level warning
+и не подменяя автора продавцом исходной продажи. Сама по себе отсутствующая связь с оригиналом
+не означает неизвестного сотрудника возврата.
 Если `PARTIAL` возник только внутри структуры или команды, assembler добавляет такой блок в общую
 сводку качества даже при отсутствии корневого quality limitation. Frontend объединяет корневые и
 локальные тексты в одной панели ограничений, а у затронутого главного вывода показывает короткий
@@ -637,9 +648,9 @@ success-плашку. `BLOCKED` скрывает длинный недостов
 - Нулевая себестоимость не является quality limitation Weekly Review; отсутствие себестоимости
   остаётся ограничением.
 - Отсутствие исходной продажи или позиции у части возвратов не входит в store-level consistency
-  count. В legacy v2 недоступная связь с сотрудником объясняется внутри блока команды; в seller-v3
-  RETURN без исходной продажи и RETURN с исходной продажей без автора получают отдельные
-  metric-scoped ограничения без блокировки всего отчёта.
+  count и не меняет известного сотрудника возврата. В legacy v2 неизвестный сотрудник записи
+  LiveSklad объясняется внутри блока команды; в seller-v3 отсутствующий либо неразрешённый
+  сотрудник возврата получает отдельное metric-scoped ограничение без блокировки всего отчёта.
 - У сотрудника, уже попавшего в список по независимому sales-сигналу, отсутствие time-оценки
   объясняется локально: `Часть смен не заполнена — оценка по часам недоступна`. Эта подпись не
   меняет attention, action или report state.

@@ -6,18 +6,23 @@ owner: product
 audience:
   - developer
   - manager
-last_verified: 2026-09-30
+last_verified: 2026-10-05
 requirement_sources:
   - docs/history/audits/2026/08/CUSTOMER_KPI_FORMULA_AUDIT_2026-08-13.md
 implementation_sources:
   - backend/src/main/java/com/storeanalytics/product/service/CatalogSaleRoleSnapshotWriter.java
   - backend/src/main/java/com/storeanalytics/sync/service/SalesSyncPersistence.java
   - backend/src/main/java/com/storeanalytics/sync/service/ReturnSyncPersistence.java
+  - backend/src/main/java/com/storeanalytics/metrics/repository/AnalyticalDocumentSql.java
+  - backend/src/main/java/com/storeanalytics/metrics/repository/EmployeeKpiRepository.java
+  - backend/src/main/java/com/storeanalytics/metrics/repository/EmployeeCategoryKpiRepository.java
+  - backend/src/main/java/com/storeanalytics/performance/repository/EmployeePerformanceRepository.java
   - backend/src/main/resources/db/migration/V43__make_livesklad_webhook_inbox_processable.sql
 verification_sources:
   - backend/src/test/java/com/storeanalytics/product/service/CatalogSaleRoleSnapshotIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/ReturnSyncIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/metrics/repository/StoreKpiIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/metrics/repository/EmployeeKpiIntegrationTest.java
 runtime_evidence: []
 required_reviewers:
   - product
@@ -39,31 +44,37 @@ superseded_by: null
 
 ## Атрибуция сотруднику
 
-Финансовая атрибуция возврата всегда следует исходной продаже:
+Сохранённый `sales_documents.employee_id` по-прежнему следует исходной продаже. Это
+совместимый факт для payroll/reconciliation, **не аналитический автор возврата**:
 
 - linked return получает `employee_id` исходного SALE;
 - processing employee возврата не используется как fallback, даже если успешно разрешён;
-- orphan return без найденного SALE сохраняется с `employee_id = null` и входит в «Не назначен»;
+- orphan return без найденного SALE сохраняется с `employee_id = null`;
 - после появления оригинала повторная синхронизация связывает возврат и назначает исходного
   продавца.
 
+Независимая аналитическая проекция по
+[ADR-0006](../../decisions/ADR-0006-livesklad-return-employee-analytics.md) использует сотрудника
+записи возврата из сохранённого `attach_source_employee_external_id`. Разрешение производится
+только среди LiveSklad employees той же connection, без fallback на исходного продавца.
+Отсутствующий/неразрешённый сотрудник даёт аналитическое «Не назначен», независимо от наличия
+автора оригинала. Известный сотрудник orphan return учитывается без ожидания original link.
+
 Возврат входит в выбранный период по собственной `business_date`, даже если исходная продажа была
-в более раннем месяце. Поэтому он уменьшает показатели продавца исходной продажи именно в периоде
-возврата; переносить минус назад в месяц продажи система не должна.
+в более раннем месяце. Он уменьшает аналитические показатели сотрудника записи возврата в периоде
+возврата; переносить аналитический минус назад в месяц продажи система не должна.
 
 `ReturnSyncIntegrationTest` использует двух разных разрешённых сотрудников и проверяет как
 приоритет исходного продавца, так и отсутствие fallback у orphan return. Store/category signed
-totals от атрибуции не меняются; денежные employee KPI и финансовые составляющие rating уменьшаются
-у продавца продажи. Attach v4 имеет отдельные правила ниже.
-Правило принято в [ADR-0001](../../decisions/ADR-0001-return-employee-attribution.md).
+totals от атрибуции не меняются. Общий сохранённый автор проверяется этим sync-тестом;
+аналитический автор KPI, категорий, количества возвратов и финансовых составляющих рейтинга
+разрешается отдельной read-only проекцией. Attach v4 имеет отдельные правила ниже.
+История прежнего решения сохранена в [ADR-0001](../../decisions/ADR-0001-return-employee-attribution.md).
 
-Известное расхождение с новым требованием: владелец выбрал аналитического сотрудника из записи
-возврата LiveSklad в [ADR-0006](../../decisions/ADR-0006-livesklad-return-employee-analytics.md).
-Переход ещё не выполнен; описанный выше выбор оригинального продавца остаётся поведением кода,
-а не целевым правилом будущей аналитики. Payroll и специальные гарантии требуют независимой
-проверки, чтобы изменение аналитики не затронуло их неявно.
-Локальная historical eligibility projection уже использует отдельное source поле сотрудника
-возврата; к пользовательским KPI она ещё не подключена и общий финансовый факт не изменяет.
+Historical eligibility projection использует ту же проекцию автора и собственный timestamp
+возврата, но historical membership пока не подключён ко всем агрегатам: текущий roster остаётся
+текущим, не восстановленным задним числом. Код не переписывает документы или immutable reports.
+Наличие реализации в ветке не означает production cutover; состояние среды — в project-state.
 
 Нулевая оплата не доказывает отсутствие возврата: авторитетны signed items. Missing cost возврата
 делает cost/GP/margin неполными; неожиданный ноль остаётся quality gap.

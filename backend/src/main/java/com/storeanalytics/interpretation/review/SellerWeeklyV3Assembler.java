@@ -34,7 +34,7 @@ import java.util.Map;
 final class SellerWeeklyV3Assembler {
 
     private static final VersionSet VERSIONS = new VersionSet(
-            "weekly-metrics-v8-sellers-current", "weekly-snapshot-v16", "weekly-quality-v10");
+            "weekly-metrics-v9-sellers-return-processor", "weekly-snapshot-v17", "weekly-quality-v11");
 
     static VersionSet versions() {
         return VERSIONS;

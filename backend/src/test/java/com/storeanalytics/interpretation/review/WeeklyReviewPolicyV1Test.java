@@ -137,11 +137,11 @@ class WeeklyReviewPolicyV1Test {
     void usesVersionsAfterCurrentProductionSnapshotPolicy() {
         assertThat(WeeklyReviewPolicyV1.FACTS_SCHEMA_VERSION).isEqualTo(2);
         assertThat(WeeklyReviewPolicyV1.VERSIONS.metricsPolicy())
-                .isEqualTo("weekly-metrics-v7");
+                .isEqualTo("weekly-metrics-v8-return-processor");
         assertThat(WeeklyReviewPolicyV1.VERSIONS.snapshotPolicy())
-                .isEqualTo("weekly-snapshot-v13");
+                .isEqualTo("weekly-snapshot-v14");
         assertThat(WeeklyReviewPolicyV1.VERSIONS.qualityPolicy())
-                .isEqualTo("weekly-quality-v8");
+                .isEqualTo("weekly-quality-v9");
     }
 
     private RevenuePeriod revenue(

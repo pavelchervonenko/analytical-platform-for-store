@@ -461,7 +461,8 @@ public class EmployeeRatingService {
 
     private RatingFormulaView formula(RatingScheme scheme) {
         return new RatingFormulaView(
-                scheme.getCode() + (storeAttachRateRepository.attributionEnabled() ? "-attach-v4" : ""),
+                scheme.getCode() + "-return-processor"
+                        + (storeAttachRateRepository.attributionEnabled() ? "-attach-v4" : ""),
                 scheme.getContributionWeight(),
                 scheme.getEfficiencyWeight(),
                 scheme.getStructureWeight(),

@@ -68,7 +68,7 @@ class SellerWeeklyQualityPolicyTest {
         assertThat(result.qualitySummary().warningCount()).isEqualTo(2);
         assertThat(result.qualitySummary().blockingCount()).isZero();
         assertThat(result.limitations()).extracting(item -> item.code())
-                .containsExactly("ORPHAN_RETURN", "RETURN_ORIGINAL_AUTHOR_UNKNOWN");
+                .containsExactly("RETURN_EMPLOYEE_MISSING", "RETURN_EMPLOYEE_UNRESOLVED");
         assertThat(result.limitations()).allSatisfy(item -> {
             assertThat(item.scope()).isEqualTo("SELLERS");
             assertThat(item.severity()).isEqualTo("WARNING");

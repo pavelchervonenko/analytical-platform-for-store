@@ -4,6 +4,7 @@ import static com.storeanalytics.common.validation.ModelValidation.requireNonNul
 
 import com.storeanalytics.interpretation.snapshot.EmployeeSalesSampleFacts;
 import com.storeanalytics.metrics.service.AttachRateResult;
+import com.storeanalytics.metrics.repository.AnalyticalDocumentSql;
 import com.storeanalytics.metrics.service.StoreKpiPeriod;
 import com.storeanalytics.performance.repository.EmployeeAttachRateAggregate;
 import com.storeanalytics.performance.repository.EmployeeAttachRateRepository;
@@ -44,9 +45,9 @@ public class WeeklyReviewEmployeeFactsReader {
             GROUP BY document.employee_id
             """;
 
-    private static final String UNATTRIBUTED_RETURNS_QUERY = """
+    private static final String UNATTRIBUTED_RETURNS_QUERY = AnalyticalDocumentSql.PERIOD_DOCUMENTS_CTE + """
             SELECT COUNT(DISTINCT document.id)
-            FROM sales_documents document
+            FROM analytical_documents document
             JOIN sales_document_items item ON item.sales_document_id = document.id
             JOIN analytics_categories category ON category.id = item.analytics_category_id
             WHERE document.store_id = :storeId
@@ -55,7 +56,7 @@ public class WeeklyReviewEmployeeFactsReader {
               AND NOT document.is_deleted
               AND NOT item.is_deleted
               AND category.code <> 'EXCLUDE'
-              AND document.employee_id IS NULL
+              AND document.analytical_employee_id IS NULL
             """;
 
     private final EmployeePerformanceRepository performanceRepository;

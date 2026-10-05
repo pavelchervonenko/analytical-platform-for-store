@@ -303,27 +303,34 @@ class SellerWeeklyV3LoadIntegrationTest {
         assertThat(uncertain.response().revenueDecomposition().salesRevenue().metricState())
                 .isEqualTo(WeeklyReviewResponse.MetricState.READY);
         assertThat(uncertain.response().limitations()).anyMatch(item ->
-                "ORPHAN_RETURN".equals(item.code()) && item.affectedCount() == 1);
+                "RETURN_EMPLOYEE_MISSING".equals(item.code()) && item.affectedCount() == 1);
 
         jdbc.update("""
-                UPDATE sales_documents SET original_document_id = ?, employee_id = ? WHERE id = ?
-                """, originalId, originalEmployeeId, orphanId);
+                UPDATE sales_documents SET original_document_id = ?, employee_id = ?,
+                    attach_source_employee_external_id = (SELECT external_id FROM employees WHERE id = ?)
+                WHERE id = ?
+                """, originalId, originalEmployeeId, originalEmployeeId, orphanId);
         jdbc.update("""
                 UPDATE sales_document_items SET original_item_id = ? WHERE sales_document_id = ?
                 """, originalItemId, orphanId);
         var linked = planner.evaluate(fixture.storeId()).review().snapshot().orElseThrow();
         assertThat(linked.revision()).isEqualTo(uncertain.revision() + 1);
         assertThat(linked.response().reportState()).isEqualTo(WeeklyReviewResponse.ReportState.READY);
-        assertThat(linked.response().limitations()).noneMatch(item -> "ORPHAN_RETURN".equals(item.code()));
+        assertThat(linked.response().limitations()).noneMatch(item ->
+                "RETURN_EMPLOYEE_MISSING".equals(item.code()));
         assertThat(linked.response().results().getFirst().current())
                 .isLessThan(uncertain.response().results().getFirst().current());
 
-        jdbc.update("UPDATE sales_documents SET employee_id = NULL WHERE id IN (?, ?)", originalId, orphanId);
+        jdbc.update("""
+                UPDATE sales_documents SET attach_source_employee_external_id = 'not-imported'
+                WHERE id = ?
+                """, orphanId);
         var unknownAuthor = planner.evaluate(fixture.storeId()).review().snapshot().orElseThrow();
         assertThat(unknownAuthor.response().reportState()).isEqualTo(WeeklyReviewResponse.ReportState.PARTIAL);
         assertThat(unknownAuthor.response().limitations()).anyMatch(item ->
-                "RETURN_ORIGINAL_AUTHOR_UNKNOWN".equals(item.code()) && item.affectedCount() == 1);
-        assertThat(unknownAuthor.response().limitations()).noneMatch(item -> "ORPHAN_RETURN".equals(item.code()));
+                "RETURN_EMPLOYEE_UNRESOLVED".equals(item.code()) && item.affectedCount() == 1);
+        assertThat(unknownAuthor.response().limitations()).noneMatch(item ->
+                "RETURN_EMPLOYEE_MISSING".equals(item.code()));
     }
 
     @Test

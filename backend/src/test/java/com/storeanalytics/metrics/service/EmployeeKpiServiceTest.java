@@ -59,7 +59,7 @@ class EmployeeKpiServiceTest {
 
         EmployeeKpiResult result = service.calculate(storeId, period());
 
-        assertThat(result.formulaVersion()).isEqualTo("store-kpi-v1");
+        assertThat(result.formulaVersion()).isEqualTo("employee-kpi-v2-return-processor");
         assertThat(result.employees()).hasSize(2);
         EmployeeKpiEntry eligible = result.employees().getFirst();
         assertThat(eligible.rankingEligible()).isTrue();

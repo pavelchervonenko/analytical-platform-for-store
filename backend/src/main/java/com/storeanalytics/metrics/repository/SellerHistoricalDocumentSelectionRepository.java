@@ -15,26 +15,13 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class SellerHistoricalDocumentSelectionRepository {
 
-    private static final String QUERY = """
-            WITH documents AS (
-                SELECT document.id, document.business_date, document.document_kind,
-                       document.employee_id, document.occurred_at,
-                       document.attach_source_employee_external_id AS return_employee_external_id,
-                       return_employee.id AS return_employee_id
-                FROM sales_documents document
-                LEFT JOIN employees return_employee
-                  ON return_employee.connection_id = document.connection_id
-                 AND return_employee.source_system = 'LIVESKLAD'
-                 AND return_employee.external_id = document.attach_source_employee_external_id
-                WHERE document.store_id = :storeId
-                  AND document.business_date BETWEEN :periodStart AND :periodEnd
-                  AND NOT document.is_deleted
-            ), attributed AS (
-                SELECT id, business_date, document_kind, return_employee_external_id,
-                       CASE WHEN document_kind = 'SALE' THEN employee_id
-                            ELSE return_employee_id END AS effective_employee_id,
+    private static final String QUERY = AnalyticalDocumentSql.PERIOD_DOCUMENTS_CTE + """
+            , attributed AS (
+                SELECT id, business_date, document_kind,
+                       attach_source_employee_external_id AS return_employee_external_id,
+                       analytical_employee_id AS effective_employee_id,
                        occurred_at AS membership_at
-                FROM documents
+                FROM analytical_documents
             )
             SELECT attributed.id, attributed.business_date,
                    attributed.effective_employee_id, attributed.membership_at,
