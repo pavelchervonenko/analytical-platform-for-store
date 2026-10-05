@@ -108,9 +108,9 @@ view не доказывает совместимость schema-version guard. 
 не обходить включением текущего roster. Baseline должен покрывать обе сравниваемые недели.
 Combined facts, historical identity и opt-in snapshot writer соединены free runner. Additive
 period read и внутренний free planner реализованы; отдельный opt-in free scheduler подключён
-к backlog, но historical paid planner ещё не подключён:
+к backlog; historical paid planner читает только точные SUCCEEDED bindings:
 atomic paid-attempt/publication fence реализован в локальном candidate; перед включением нужны
-его filled-DB concurrency/release acceptance и scheduler wiring по плану. Codec/frontend parsing поддерживают temporal basis; runtime activation
+его filled-DB concurrency/release acceptance и current-reader cutover по плану. Codec/frontend parsing поддерживают temporal basis; runtime activation
 это не доказывает. Для старого периода проверять отсутствие future actions; departed card должна
 сохранить исторические суммы и `actionableNow=false`.
 
@@ -139,9 +139,10 @@ Source change даёт отложенную бесплатную подгото�
 равный semantic content сохраняет прежний snapshot ID/payload и обновляет совместимый checkpoint.
 Free cutover использует `SELLER_WEEKLY_PREPARATION_ENABLED` (default false); parent и seller
 weekly features обязательны. На API/MIGRATION scheduler не создаётся. При free cutover legacy
-current-roster snapshot planner исключён; комбинация с действующим automatic current-roster paid
-planner запрещена release preflight и startup. Не обходить эту защиту: historical paid planning
-и UI/current reader ещё требуют reviewed подключения. Free flag не включает AI worker и не
+current-roster snapshot planner исключён. При отдельных AI parent/planner flags платный planner
+использует только historical queue и exact period reader, без current-roster fallback. Release
+preflight принимает free preparation как deterministic предусловие; parent/provider/budget
+проверки сохраняются. UI/current reader ещё требует reviewed cutover. Free flag не включает AI worker и не
 разрешает платный вызов. Перед включением нужны локальные gates, filled-DB rehearsal, forward-only
 baseline approval и отдельное production решение; документ не утверждает выполненный cutover.
 
@@ -156,7 +157,7 @@ Short queue transactions ограничены 30 seconds. Перезапуск �
 durable cursor/jobs. `SUCCEEDED` остаётся успехом бесплатной подготовки, не AI publication.
 При новой неделе free refresh удаляет future-action horizon посредством новой immutable revision,
 а не UPDATE старого payload. Отчёт без future actions не меняется только из-за новой недели.
-До historical paid planner и runtime acceptance не выдавать free scheduler за готовый автообзор.
+До current-reader cutover и runtime acceptance не выдавать free scheduler за готовый автообзор.
 
 Candidate различает `EXACT` и `AUTOMATIC` jobs. Все прежние rows остаются `EXACT`; не менять их
 origin вручную и не переносить exact approval на новую revision. Только неоплаченная automatic
@@ -165,8 +166,15 @@ provider/model и retry cap. Наличие любого attempt/receipt, UNKNOW
 запрещает такой refresh. Для zero-attempt source failure допускается только `SNAPSHOT_NOT_CURRENT`,
 не прочие terminal failures. Deadline не продлевается; истёкшая job требует operator diagnosis.
 Перед cutover проверить filled upgrade с сохранением old rows/receipts, DB unique key/trigger,
-старый claim после rebind и гонку с startAttempt. Этот механизм ещё не включает historical paid
-planner, baseline или production scheduler.
+старый claim после rebind и гонку с startAttempt. Этот механизм не включает baseline или production scheduler.
+
+Historical paid planning имеет bounded ordered sweep exact prepared periods. Следить за
+sanitized store/week/failure-type; stale/wait не вызывает free refresh или paid provider из planner.
+На restart разрешён повтор metadata discovery, не повтор расхода: weekly uniqueness и origin
+guard проверяются при writable enqueue. Max attempts/deadline берутся при создании job; free
+rebind их не увеличивает. Пустой candidate list не доказывает публикацию: отдельно проверить
+prepared/AI job statuses и enrichment exact snapshot ID. Metadata discovery отбрасывает old exact,
+paid, terminal и expired jobs; устранение такого блокера требует operator diagnosis, не удаления rows.
 
 Исторический GET `/api/stores/{storeId}/weekly-reviews/seller-period?periodStart=YYYY-MM-DD`
 проверяет закрытый Monday-start period и store authorization под прежними parent/seller feature

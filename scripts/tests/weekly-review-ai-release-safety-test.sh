@@ -126,9 +126,12 @@ release_validate_weekly_review_ai_configuration "${release_env}" \
 
 sed -i 's/SELLER_WEEKLY_PREPARATION_ENABLED=false/SELLER_WEEKLY_PREPARATION_ENABLED=true/' \
   "${release_env}"
-if release_validate_weekly_review_ai_configuration "${release_env}" >/dev/null 2>&1; then
-  fail_test 'historical preparation with competing legacy paid planner was accepted'
-fi
+release_validate_weekly_review_ai_configuration "${release_env}" \
+  || fail_test 'historical preparation with exact backlog paid planning was rejected'
+sed -i 's/WEEKLY_REVIEW_SNAPSHOT_PLANNER_ENABLED=true/WEEKLY_REVIEW_SNAPSHOT_PLANNER_ENABLED=false/' \
+  "${release_env}"
+release_validate_weekly_review_ai_configuration "${release_env}" \
+  || fail_test 'historical paid planning incorrectly required competing legacy snapshot planning'
 sed -i 's/WEEKLY_REVIEW_AI_PLANNER_ENABLED=true/WEEKLY_REVIEW_AI_PLANNER_ENABLED=false/' \
   "${release_env}"
 release_validate_weekly_review_ai_configuration "${release_env}" \

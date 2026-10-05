@@ -85,10 +85,6 @@ release_validate_weekly_review_ai_configuration() {
       release_safety_fail 'SELLER_WEEKLY_PREPARATION_ENABLED requires parent and seller features'
       return 1
     fi
-    if [[ "${planner}" == 'true' ]]; then
-      release_safety_fail 'historical free preparation cannot use the current-roster paid AI planner'
-      return 1
-    fi
   fi
   [[ "${snapshot_planner}" == 'true' || "${snapshot_planner}" == 'false' ]] || {
     release_safety_fail \
@@ -108,9 +104,9 @@ release_validate_weekly_review_ai_configuration() {
     ;;
   esac
 
-  if [[ "${planner}" == 'true' && "${snapshot_planner}" != 'true' ]]; then
+  if [[ "${planner}" == 'true' && "${snapshot_planner}" != 'true' && "${preparation}" != 'true' ]]; then
     release_safety_fail \
-      'WEEKLY_REVIEW_AI_PLANNER_ENABLED requires WEEKLY_REVIEW_SNAPSHOT_PLANNER_ENABLED=true'
+      'WEEKLY_REVIEW_AI_PLANNER_ENABLED requires deterministic snapshot preparation'
     return 1
   fi
 

@@ -108,6 +108,10 @@ class SellerWeeklyAiSourceFenceIntegrationTest {
     @Autowired private WeeklyReviewAiEnrichmentStore enrichments;
     @Autowired private SellerWeeklyReviewAiEnricher enricher;
     @Autowired private WeeklyReviewSnapshotStore snapshots;
+    @Autowired private SellerWeeklyPreparationStore preparationQueue;
+    @Autowired private SellerWeeklyPreparationRunner preparationRunner;
+    @Autowired private SellerWeeklyAutomaticAiCandidates automaticCandidates;
+    @Autowired private SellerWeeklyHistoricalReviewService historicalReviews;
     private UUID store;
 
     @BeforeEach
@@ -185,6 +189,74 @@ class SellerWeeklyAiSourceFenceIntegrationTest {
                 2, NOW, Duration.ofHours(2))).isTrue();
         assertThat(jobs.enqueueAutomaticSellerWeek(refreshed.id(), "YANDEX", "synthetic-model",
                 2, NOW, Duration.ofHours(2))).isFalse();
+    }
+
+    @Test
+    void historicalPaidPlannerResumesPreparedWeekWithoutLegacyFallbackOrProviderAttempt() {
+        var snapshot = snapshot();
+        assertThat(preparationQueue.discover(store, NOW, 4).insertedWeeks()).isOne();
+        assertThat(preparationRunner.prepareNext("synthetic-paid-preparation").snapshotId())
+                .isEqualTo(snapshot.id());
+        var properties = new SellerWeeklyPreparationProperties(true, Duration.ofMinutes(1),
+                10, 4, 25, 2, Duration.ofMinutes(1));
+        var yandex = org.mockito.Mockito.mock(com.storeanalytics.integration.llm.yandex.YandexLlmProperties.class);
+        org.mockito.Mockito.when(yandex.getModelUri()).thenReturn("synthetic-model");
+        var ai = com.storeanalytics.interpretation.review.ai.WeeklyReviewAiTestProperties.properties(true, true, true);
+        var planning = new SellerWeeklyHistoricalAiPlanningService(automaticCandidates, historicalReviews,
+                jobs, properties, ai, yandex, clock);
+        invalidate();
+        assertThat(planning.plan()).isZero();
+        assertThat(jobs.findBySnapshot(snapshot.id())).isEmpty();
+        planner.evaluate(store, START, "UTC");
+        assertThat(planning.plan()).isOne();
+        var original = jobs.findBySnapshot(snapshot.id()).orElseThrow();
+        assertThat(original.attemptCount()).isZero();
+        var restarted = new SellerWeeklyHistoricalAiPlanningService(automaticCandidates, historicalReviews,
+                jobs, properties, ai, yandex, clock);
+        assertThat(restarted.plan()).isZero();
+        assertThat(jobs.findBySnapshot(snapshot.id()).orElseThrow().id()).isEqualTo(original.id());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM weekly_review_ai_attempts WHERE job_id=?",
+                Long.class, original.id())).isZero();
+        assertThat(jdbc.queryForObject("SELECT planning_origin FROM weekly_review_ai_jobs WHERE id=?",
+                String.class, original.id())).isEqualTo("AUTOMATIC");
+    }
+
+    @Test
+    void refreshedIdenticalSnapshotRearmsOnlyTheUnpaidAutomaticSourceFailure() {
+        Instant now = (Instant.now().isBefore(NOW) ? NOW : Instant.now())
+                .truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        clock.value.set(now);
+        var snapshot = snapshot();
+        assertThat(preparationQueue.discover(store, now, 4).insertedWeeks()).isOne();
+        preparationRunner.prepareNext("synthetic-identical-snapshot");
+        var properties = new SellerWeeklyPreparationProperties(true, Duration.ofMinutes(1),
+                10, 4, 25, 2, Duration.ofMinutes(1));
+        var yandex = org.mockito.Mockito.mock(com.storeanalytics.integration.llm.yandex.YandexLlmProperties.class);
+        org.mockito.Mockito.when(yandex.getModelUri()).thenReturn("synthetic-model");
+        var ai = com.storeanalytics.interpretation.review.ai.WeeklyReviewAiTestProperties.properties(true, true, true);
+        var planning = new SellerWeeklyHistoricalAiPlanningService(automaticCandidates, historicalReviews,
+                jobs, properties, ai, yandex, clock);
+        assertThat(planning.plan()).isOne();
+        var original = jobs.findBySnapshot(snapshot.id()).orElseThrow();
+        jdbc.update("UPDATE weekly_review_ai_jobs SET status='FAILED',last_error_code='SNAPSHOT_NOT_CURRENT' "
+                + "WHERE id=?", original.id());
+        invalidate();
+        assertThat(planning.plan()).isZero();
+        assertThat(planner.evaluate(store, START, "UTC").review().snapshot().orElseThrow().id())
+                .isEqualTo(snapshot.id());
+        assertThat(planning.plan()).isOne();
+        var resumed = jobs.findBySnapshot(snapshot.id()).orElseThrow();
+        assertThat(resumed.id()).isEqualTo(original.id());
+        assertThat(resumed.status().name()).isEqualTo("PENDING");
+        assertThat(resumed.deadlineAt()).isEqualTo(original.deadlineAt());
+        assertThat(resumed.maxAttempts()).isEqualTo(original.maxAttempts());
+        assertThat(resumed.attemptCount()).isZero();
+        assertThat(planning.plan()).isZero();
+        jdbc.update("UPDATE weekly_review_ai_jobs SET status='FAILED',last_error_code='SNAPSHOT_NOT_CURRENT', "
+                + "attempt_count=1 WHERE id=?", original.id());
+        assertThat(planning.plan()).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM weekly_review_ai_attempts WHERE job_id=?",
+                Long.class, original.id())).isZero();
     }
 
     @Test

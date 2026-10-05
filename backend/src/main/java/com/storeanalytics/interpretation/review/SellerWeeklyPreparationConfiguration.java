@@ -12,8 +12,8 @@ final class SellerWeeklyPreparationConfiguration {
         if (preparation.enabled() && (!sellers.enabled() || !reviews.enabled())) {
             throw new IllegalStateException("Historical preparation requires parent and seller weekly review features");
         }
-        if (preparation.enabled() && ai.plannerEnabled()) {
-            throw new IllegalStateException("Historical preparation cannot use the current-roster paid AI planner");
+        if (preparation.enabled() && ai.plannerEnabled() && !ai.enabled()) {
+            throw new IllegalStateException("Historical paid AI planner requires its parent AI feature");
         }
     }
 }

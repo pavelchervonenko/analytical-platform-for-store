@@ -68,6 +68,13 @@ class SellerWeeklyPreparationConfigurationTest {
     void historicalPreparationNeverSilentlyUsesLegacyAutomaticPaidPlanner() {
         enabled().withPropertyValues("app.interpretation.weekly-review-ai.planner-enabled=true")
                 .run(application -> assertThat(application).hasFailed());
+        enabled().withPropertyValues("app.runtime.role=WORKER",
+                "app.interpretation.weekly-review-ai.enabled=true",
+                "app.interpretation.weekly-review-ai.planner-enabled=true").run(application -> {
+                    assertThat(application).hasNotFailed();
+                    assertThat(application).doesNotHaveBean(SellerWeeklyReviewSnapshotPlanner.class);
+                    assertThat(application).hasSingleBean(SellerWeeklyPreparationScheduler.class);
+                });
     }
 
     @Test

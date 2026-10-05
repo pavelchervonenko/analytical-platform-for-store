@@ -243,7 +243,9 @@ public class WeeklyReviewAiJobStore {
                 UPDATE weekly_review_ai_jobs job SET snapshot_id = ?, status = 'PENDING',
                     next_attempt_at = ?, lease_owner = NULL, lease_until = NULL,
                     last_error_code = NULL, last_error_message = NULL, last_validation_codes = '[]'::jsonb
-                WHERE job.id = ? AND job.planning_origin = 'AUTOMATIC' AND job.snapshot_id <> ?
+                WHERE job.id = ? AND job.planning_origin = 'AUTOMATIC'
+                  AND (job.snapshot_id <> ?
+                       OR (job.status = 'FAILED' AND job.last_error_code = 'SNAPSHOT_NOT_CURRENT'))
                   AND job.prompt_version = ? AND job.content_schema_version = ?
                   AND job.provider_code = ? AND job.requested_model = ?
                   AND job.attempt_count = 0 AND job.deadline_at > ? AND job.deadline_at > clock_timestamp()

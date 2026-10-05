@@ -83,7 +83,7 @@ canary не переносятся на другую неделю или нов�
 Перечень ниже разделяет готовые candidate-инварианты и ещё не подключённый cutover;
 ни один из них не является разрешением production включения:
 
-- Historical paid planner читает только точные `SUCCEEDED` free jobs и повторно проверяет
+- Реализованный historical paid planner читает только точные `SUCCEEDED` free jobs и повторно проверяет
   CURRENT/quality/закрытие обеих недель. Он не вызывает current-roster planner как fallback.
 - Candidate unpaid rebind имеет явную provenance automatic/exact job. Existing jobs нельзя задним
   числом объявить automatic: безопасный default сохраняет exact binding и прежние approvals.
@@ -100,6 +100,19 @@ canary не переносятся на другую неделю или нов�
   выполнить окончательный общий gate после wiring, а не считать нынешний intermediate run выпуском.
 
 ## Прогресс
+
+- Пакет historical paid wiring: bounded exact prepared-period discovery и повторный CURRENT read
+  подключены к automatic enqueue без current-roster fallback и без provider call из planner.
+  Нужны независимые parent AI/planner opt-ins; release/startup guards допускают эту комбинацию,
+  free flag сам не даёт paid authority. Cursor продолжает sweep после ошибки недели и cooperative
+  budget; restart повторяет metadata discovery, но не создаёт новый weekly job.
+  Code review выявил same-ID semantic reuse: только zero-attempt automatic source failure может
+  бесплатно вернуться в PENDING с прежними ID/deadline/cap. Active/exact/paid/terminal jobs не
+  восстанавливаются этим путём; ошибочный historical/legacy contract fail-closed.
+  Реальные queue → snapshot → exact read → automatic job и restart/reused-snapshot scenarios
+  проверены на synthetic DB. Targeted gate: 64 tests в 6 классах, 0 failures/errors/skips,
+  Checkstyle main/test и bootJar PASS. Operator security и docs unit/strict PASS.
+  Public current-reader cutover, activation operator и финальный combined/runtime gate остаются.
 
 - Intermediate frozen gate после free scheduler и source/publication fence: 2 046 backend tests
   в 432 классах, 0 failures/errors/skips, Checkstyle main/test и bootJar PASS. Это не окончательный

@@ -233,10 +233,25 @@ Claim использует `SKIP LOCKED`; отдельный token защища�
 checkpoint, не ИИ-публикацию; текущий current-roster snapshot не подходит. Короткая транзакция
 привязки блокирует store/source revision, но paid attempt и публикация требуют своего повторного
 atomic fence. Исторический assembler и бесплатный runner этой очереди реализованы локально,
-и отдельный opt-in free scheduler подключён к этой очереди; automatic paid planner этого пути
-ещё не подключён. Периодный read/free planner
+и отдельный opt-in free scheduler подключён к этой очереди. Historical automatic AI planner
+читает её точные `SUCCEEDED` bindings; платный worker остаётся отдельным контуром. Периодный read/free planner
 реализованы отдельным additive путём, описанным ниже; прежний current-roster read не переключён.
 Само наличие таблиц или runner не включает автоматический режим.
+
+Historical AI discovery использует bounded ordered metadata page по period/preparation ID. Только
+закрытая `SUCCEEDED` неделя с historical basis, сохранённым baseline/timezone и READY/PARTIAL
+report может стать candidate. Exact/paid/terminal/deadline jobs и опубликованные enrichments
+исключаются; это оптимизация, не замена writable enqueue fence. Каждый candidate повторно читается
+по точному периоду: STALE/PREPARING/BLOCKED, другой snapshot ID или legacy basis откладывают enqueue,
+без generation/fallback/provider call. Cooperative budget использует free preparation time budget;
+ошибка одной недели не удерживает cursor. Cursor в памяти лишь ускоряет sweep: restart безопасно
+повторяет discovery, а durable free jobs и unique automatic weekly job сохраняют пропущенные недели.
+Planner сообщает количество созданных или бесплатно перепривязанных jobs, не число paid calls.
+Если бесплатная повторная проверка подтвердила тот же immutable snapshot, automatic job с
+нулём attempts и `FAILED/SNAPSHOT_NOT_CURRENT` может вернуться в `PENDING` с прежними ID,
+deadline и call cap. Уже ожидающая задача не перезапускается; exact approval и любой paid attempt
+по-прежнему запрещают такое восстановление. Ошибочная комбинация historical mode с legacy
+report contract fail-closed, без fallback к legacy planner.
 Bounded `requeueStaleSnapshots` возвращает устаревшую привязку в `PENDING` той же бесплатной
 задачи, без перемотки cursor, нового store/week и вмешательства в paid jobs. Проверяются текущий
 checkpoint/source revision, latest snapshot и истечение future-action горизонта при новой неделе;
@@ -248,9 +263,11 @@ checkpoint/source revision, latest snapshot и истечение future-action 
 API/MIGRATION не создают scheduler. Нужны parent weekly-review и seller features; baseline
 по-прежнему записывается только отдельной approved forward-only операцией, не при startup/tick.
 Существующий current-roster snapshot scheduler при этом не создаётся: две несовместимые identity
-не должны конкурировать за одну revision chain. До подключения reviewed historical paid planner
-комбинация free historical scheduler с current-roster automatic AI planner запрещена на startup
-и release preflight. Manual exact worker остаётся отдельным контуром и не включается free флагом.
+не должны конкурировать за одну revision chain. При preparation flag существующий AI planner
+маршрутизируется только в historical backlog path, не вызывает current-roster reader/planner как
+fallback. Для этого дополнительно нужны parent AI и planner flags; free flag сам их не включает.
+Release preflight принимает historical preparation вместо legacy snapshot planner как deterministic
+предусловие, но сохраняет parent/provider/budget guards. Manual exact worker независим.
 
 Defaults candidate: 10 stores/page, 4 weeks/store/page, 25 stale jobs/refresh, 2 free claims/tick,
 scan delay 1 minute, cooperative time budget 1 minute. Числовые/временные bounds проверяются
@@ -302,7 +319,8 @@ checkpoint для проверенной source revision; имя и время �
 задаче; UNKNOWN history/author остаётся отдельным ожиданием. Техническая/contract failure terminal
 с sanitized code, без сохранения raw exception message. Runner сам не имеет AI dependency;
 отдельный scheduler вызывает его только по free opt-in flag. Он не создаёт baseline, paid job
-или provider call. Historical paid planning требует следующего reviewed пакета и release gates.
+или provider call. Historical paid planning отдельным opt-in контуром проверяет exact CURRENT
+ещё раз; release/runtime acceptance по-прежнему обязательны.
 
 ### Точный периодный historical read и free planner
 
@@ -339,8 +357,8 @@ current-ranking path сохраняет latest-week restriction. Бесплат�
 может подтвердить тот же immutable ID или отказать; новая revision не заменяет ранее одобренный
 snapshot/input/request. Read-time optional AI failure не скрывает deterministic report. Это
 as-of RR freshness, не самостоятельное разрешение платного вызова. Локальный candidate теперь
-имеет отдельный atomic source fence на startAttempt и completion; automatic backlog AI planning
-и runtime acceptance этой защиты остаются незавершёнными rollout gates.
+имеет отдельный atomic source fence на startAttempt и completion и historical backlog AI planning;
+runtime acceptance этой защиты остаётся незавершённым rollout gate.
 
 `SellerWeeklyAiSourceFence` работает только внутри writable READ_COMMITTED транзакции. Порядок
 locks совпадает с snapshot writer: store → source revision. После ожидания locks reader получает
@@ -371,7 +389,7 @@ attempt/receipt, enrichment или активного lease, тот же automat
 `SNAPSHOT_NOT_CURRENT` может быть переоценён, но иной terminal failure и истёкший deadline — нет.
 После любого attempt, включая UNKNOWN, перепривязка и новая automatic job запрещены. Старый claim
 не может начать попытку с прежним snapshot после rebind. Exact approvals сохраняют исходные hashes;
-historical paid planner и production activation этим механизмом не включаются.
+production activation этим механизмом не включается.
 Seller enrichment integrity reader принимает explicit v26/schema-4 только в seller read path;
 legacy readable prompt list и STORE selector/schema не расширяются. Успешный provider response
 не должен откатывать публикацию из-за ошибочного применения legacy-only prompt allowlist.
@@ -590,10 +608,10 @@ Opt-in historical presenter сохраняет финансовую карточ
 отдельному внутреннему пути; additive membership parsing поддерживает оба basis. Это ещё не
 historical current-screen cutover: основной current reader остаётся current-roster; отдельный
 opt-in free scheduler использует temporal backlog и исключает competing legacy snapshot scheduler.
-Additive exact-period GET/free planner соединены с historical preparation, но automatic historical
-paid planning ещё не подключён. Текущий Overview и first-manual
+Additive exact-period GET/free planner и opt-in automatic historical paid planning соединены с preparation.
+Текущий Overview и first-manual
 path не переключены. Payroll/saved employee и snapshots не переписываются. Нужны automatic
-paid planner wiring, runtime acceptance atomic AI source fence и release gate до включения автоматики.
+current-reader cutover, runtime acceptance atomic AI source fence и release gate до включения автоматики.
 Следовательно, описанный ниже roster остаётся current-roster,
 не восстановленным историческим составом. Автоматическое восстановление пропущенной недели
 пока не включено; exact historical period можно читать отдельным additive GET без generation/AI.

@@ -3,6 +3,7 @@ package com.storeanalytics.interpretation.review.ai;
 import com.storeanalytics.integration.llm.yandex.YandexLlmProperties;
 import com.storeanalytics.interpretation.review.SellerWeeklyReviewService;
 import com.storeanalytics.interpretation.review.SellerWeeklyReviewView;
+import com.storeanalytics.interpretation.review.SellerWeeklyHistoricalAiPlanningService;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse.ReportState;
 import com.storeanalytics.interpretation.snapshot.WeeklySnapshotPlanningStore;
 import java.time.Clock;
@@ -23,6 +24,7 @@ public class WeeklyReviewAiPlanningService {
     private final Clock clock;
     private final WeeklySnapshotPlanningStore stores;
     private final SellerWeeklyReviewService sellerReviews;
+    private final SellerWeeklyHistoricalAiPlanningService historical;
     private UUID cursor;
 
     public WeeklyReviewAiPlanningService(
@@ -34,21 +36,36 @@ public class WeeklyReviewAiPlanningService {
         this(jobStore, properties, yandexProperties, clock, null, null);
     }
 
-    @Autowired
     public WeeklyReviewAiPlanningService(WeeklyReviewAiJobStore jobStore,
                                         WeeklyReviewAiGenerationProperties properties,
                                         YandexLlmProperties yandexProperties, Clock clock,
                                         WeeklySnapshotPlanningStore stores, SellerWeeklyReviewService sellerReviews) {
+        this(jobStore, properties, yandexProperties, clock, stores, sellerReviews, null);
+    }
+
+    @Autowired
+    public WeeklyReviewAiPlanningService(WeeklyReviewAiJobStore jobStore,
+            WeeklyReviewAiGenerationProperties properties, YandexLlmProperties yandexProperties, Clock clock,
+            WeeklySnapshotPlanningStore stores, SellerWeeklyReviewService sellerReviews,
+            SellerWeeklyHistoricalAiPlanningService historical) {
         this.jobStore = jobStore;
         this.properties = properties;
         this.yandexProperties = yandexProperties;
         this.clock = clock;
         this.stores = stores;
         this.sellerReviews = sellerReviews;
+        this.historical = historical;
     }
 
     public synchronized int plan() {
-        if (jobStore.activeReportContractVersion() == 3) {
+        int contract = jobStore.activeReportContractVersion();
+        if (historical != null && historical.historicalModeEnabled()) {
+            if (contract != 3) {
+                throw new IllegalStateException("Historical seller AI requires the exact backlog planner");
+            }
+            return historical.plan();
+        }
+        if (contract == 3) {
             return planSellers();
         }
         return jobStore.enqueueLatest(

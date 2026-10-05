@@ -114,9 +114,11 @@ revision. Бесплатный runner связывает его с exact store/w
 Cheap RR metadata identity совпадает с heavy identity, без финансовых агрегатов. Historical
 read не использует current-ranking fallback и не помечает старый payload CURRENT без compatible
 checkpoint. Exact AI refresh не подменяет snapshot новой ревизией. Отдельный opt-in free scheduler
-подключён к очереди; historical automatic paid planning ещё не подключён. Current-roster публичный
+подключён к очереди; opt-in historical automatic paid planning читает exact SUCCEEDED bindings.
+Current-roster публичный
 путь и frontend не переключены. Free flag не создаёт baseline/paid call и исключает competing
-legacy snapshot scheduler; комбинация с legacy automatic paid planner запрещена до его cutover.
+legacy snapshot scheduler. AI planner при free flag использует только historical period path,
+не legacy fallback; дополнительные AI parent/planner flags и runtime acceptance обязательны.
 Поэтому включение постоянной автоматической публикации до их проверки запрещено.
 
 ## Условия вступления решения в силу

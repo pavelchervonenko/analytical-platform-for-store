@@ -11,6 +11,7 @@ import com.storeanalytics.integration.llm.yandex.YandexLlmProperties;
 import com.storeanalytics.interpretation.review.SellerWeeklyReviewService;
 import com.storeanalytics.interpretation.review.SellerWeeklyReviewView;
 import com.storeanalytics.interpretation.review.SellerWeeklyV3AssemblerTest;
+import com.storeanalytics.interpretation.review.SellerWeeklyHistoricalAiPlanningService;
 import com.storeanalytics.interpretation.review.WeeklyReviewV3Response;
 import com.storeanalytics.interpretation.review.WeeklyReviewResponse;
 import com.storeanalytics.interpretation.snapshot.WeeklySnapshotPlanningStore;
@@ -74,6 +75,36 @@ class WeeklyReviewAiPlanningServiceTest {
         assertThat(planner.plan()).isZero();
 
         verify(jobs, never()).enqueueAutomaticSellerWeek(any(), any(), any(),
+                org.mockito.ArgumentMatchers.anyInt(), any(), any());
+    }
+
+    @Test
+    void historicalModeDelegatesOnlyToTheExactBacklogPlanner() {
+        var historical = mock(SellerWeeklyHistoricalAiPlanningService.class);
+        when(historical.historicalModeEnabled()).thenReturn(true);
+        when(jobs.activeReportContractVersion()).thenReturn(3);
+        when(historical.plan()).thenReturn(3);
+        var selected = new WeeklyReviewAiPlanningService(jobs, properties, yandex,
+                Clock.fixed(NOW, ZoneOffset.UTC), stores, reviews, historical);
+        assertThat(selected.plan()).isEqualTo(3);
+        verify(historical).plan();
+        org.mockito.Mockito.verifyNoInteractions(stores, reviews);
+        verify(jobs, never()).enqueueLatest(any(), any(), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt(), any(), any());
+    }
+
+    @Test
+    void invalidHistoricalContractNeverFallsBackToLegacyPlanning() {
+        var historical = mock(SellerWeeklyHistoricalAiPlanningService.class);
+        when(historical.historicalModeEnabled()).thenReturn(true);
+        when(jobs.activeReportContractVersion()).thenReturn(2);
+        var selected = new WeeklyReviewAiPlanningService(jobs, properties, yandex,
+                Clock.fixed(NOW, ZoneOffset.UTC), stores, reviews, historical);
+        org.assertj.core.api.Assertions.assertThatThrownBy(selected::plan)
+                .isInstanceOf(IllegalStateException.class);
+        org.mockito.Mockito.verifyNoInteractions(stores, reviews);
+        verify(historical, never()).plan();
+        verify(jobs, never()).enqueueLatest(any(), any(), org.mockito.ArgumentMatchers.anyInt(),
                 org.mockito.ArgumentMatchers.anyInt(), any(), any());
     }
 }

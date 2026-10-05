@@ -68,7 +68,8 @@ superseded_by: null
 бесплатный runner уже соединены; additive public period read и бесплатный exact period planner
 реализованы отдельно. Исторический freshness guard не подставляет новую revision вместо одобренной.
 Отдельный opt-in free scheduler и atomic paid-attempt/publication fence реализованы в candidate.
-Historical automatic paid planning, runtime acceptance и UI/current-reader cutover ещё требуются.
+Historical automatic paid planning подключён opt-in к точным prepared bindings, без legacy fallback.
+Runtime acceptance и UI/current-reader cutover ещё требуются.
 Discovery начинается лишь с первой недели, чья предыдущая
 полностью покрыта явным baseline, не с даты старого manual canary. Source/history ожидания
 бесплатны и отложены; техническая ошибка подготовки terminal, а не бесконечный busy retry.
@@ -81,7 +82,7 @@ Candidate хранит explicit immutable planning origin. Старые/manual j
 После любого платного/UNKNOWN attempt новая revision не создаёт новый automatic budget.
 Zero-attempt `SNAPSHOT_NOT_CURRENT` допускает free refresh до прежнего deadline; другие terminal
 ошибки требуют диагностики. Это реализация границы бесплатной подготовки из пункта 4, не новое
-разрешение платного запуска и не доказательство завершённого historical planner/rollout.
+разрешение платного запуска и не доказательство завершённого production rollout.
 
 Уточнение от 5 октября: [ADR-0006](ADR-0006-livesklad-return-employee-analytics.md) меняет
 аналитического автора возврата и его membership timestamp. Условие пункта 2 о более ранней
