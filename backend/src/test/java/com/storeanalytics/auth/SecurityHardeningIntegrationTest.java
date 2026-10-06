@@ -192,7 +192,7 @@ class SecurityHardeningIntegrationTest {
                 .andExpect(jsonPath("$.build.name").value("backend"))
                 .andExpect(jsonPath("$.build.version").value("0.1.0-SNAPSHOT"))
                 .andExpect(jsonPath("$.release.runtimeRole").value("COMBINED"))
-                .andExpect(jsonPath("$.release.schemaVersion").value("93"))
+                .andExpect(jsonPath("$.release.schemaVersion").value("94"))
                 .andExpect(jsonPath("$.git").doesNotExist());
     }
 

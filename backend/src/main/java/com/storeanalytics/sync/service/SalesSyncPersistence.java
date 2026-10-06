@@ -341,7 +341,7 @@ public class SalesSyncPersistence {
             );
 
             SalesItemClassification itemClassification = new SalesItemClassification(
-                    product.getName(),
+                    sourceItem.name(),
                     null,
                     classification.category(),
                     classification.assignment(),

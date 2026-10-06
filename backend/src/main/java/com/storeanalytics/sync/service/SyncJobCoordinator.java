@@ -6,8 +6,10 @@ import com.storeanalytics.audit.service.AuditLogService;
 import com.storeanalytics.audit.service.AuditTarget;
 import com.storeanalytics.common.config.SyncProperties;
 import com.storeanalytics.sync.exception.SyncJobNotFoundException;
+import com.storeanalytics.sync.exception.HistoricalSalesDependencyException;
 import com.storeanalytics.sync.model.SyncJob;
 import com.storeanalytics.sync.model.SyncJobStatus;
+import com.storeanalytics.sync.model.SyncJobType;
 import com.storeanalytics.sync.model.SyncRun;
 import com.storeanalytics.sync.model.SyncRunError;
 import com.storeanalytics.sync.model.SyncStatus;
@@ -40,6 +42,7 @@ public class SyncJobCoordinator {
     private final AuditLogService auditLogService;
     private final SyncRunRepository syncRunRepository;
     private final SyncRunErrorRepository syncRunErrorRepository;
+    private final HistoricalSalesRefreshService historicalSales;
 
     public SyncJobCoordinator(
             SyncJobRepository jobRepository,
@@ -47,7 +50,8 @@ public class SyncJobCoordinator {
             Clock clock,
             AuditLogService auditLogService,
             SyncRunRepository syncRunRepository,
-            SyncRunErrorRepository syncRunErrorRepository
+            SyncRunErrorRepository syncRunErrorRepository,
+            HistoricalSalesRefreshService historicalSales
     ) {
         this.jobRepository = jobRepository;
         this.properties = properties;
@@ -55,6 +59,7 @@ public class SyncJobCoordinator {
         this.auditLogService = auditLogService;
         this.syncRunRepository = syncRunRepository;
         this.syncRunErrorRepository = syncRunErrorRepository;
+        this.historicalSales = historicalSales;
     }
 
     @Transactional
@@ -80,13 +85,20 @@ public class SyncJobCoordinator {
                 job.getPhase(),
                 job.getCursorStart(),
                 job.getCurrentWindowEnd(),
-                job.getAttemptCount()
+                job.getAttemptCount(),
+                owner
         ));
     }
 
     @Transactional
     public void completeStep(UUID jobId, String owner) {
-        locked(jobId).completeStep(owner, clock.instant());
+        SyncJob job = locked(jobId);
+        if (job.getJobType() == SyncJobType.HISTORICAL_SALES
+                && (job.getLeaseUntil() == null || !clock.instant().isBefore(job.getLeaseUntil()))) {
+            throw new IllegalStateException("Historical SALE completion lost its lease");
+        }
+        job.completeStep(owner, clock.instant());
+        historicalSales.recordOutcome(job);
     }
 
     @Transactional
@@ -119,13 +131,35 @@ public class SyncJobCoordinator {
             Duration delay
     ) {
         Instant now = clock.instant();
-        locked(jobId).retryOrFail(
+        SyncJob job = locked(jobId);
+        job.retryOrFail(
                 owner,
                 summary,
                 retryable,
                 now.plus(delay),
                 now
         );
+        historicalSales.recordOutcome(job);
+    }
+
+    @Transactional
+    public void failHistoricalDependency(UUID jobId, String owner, HistoricalSalesDependencyException failure) {
+        SyncJob job = locked(jobId);
+        if (job.getJobType() != SyncJobType.HISTORICAL_SALES) {
+            throw new IllegalArgumentException("Dependency guard applies only to historical SALE jobs");
+        }
+        job.retryOrFail(owner, "HISTORICAL_SALES_LINKED_RETURN_REVIEW_REQUIRED", false,
+                clock.instant(), clock.instant());
+        if (job.getStatus() == SyncJobStatus.FAILED) {
+            historicalSales.recordDependencyFailure(job, failure);
+        }
+    }
+
+    @Transactional
+    public void pauseHistoricalDailyBudget(UUID jobId, String owner, Duration untilReset) {
+        SyncJob job = locked(jobId);
+        Instant now = clock.instant();
+        job.pauseHistoricalDailyBudget(owner, now.plus(untilReset), now);
     }
 
     @Transactional
@@ -169,6 +203,7 @@ public class SyncJobCoordinator {
                     now.plus(properties.retryInitialDelay()),
                     now
             );
+            historicalSales.recordOutcome(job);
         }
     }
 

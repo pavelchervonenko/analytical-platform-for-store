@@ -365,6 +365,14 @@ app:
     incremental-overlap-days: ${SYNC_INCREMENTAL_OVERLAP_DAYS:3}
     maximum-backfill-days: ${SYNC_MAXIMUM_BACKFILL_DAYS:730}
     reporting-zone: ${SYNC_REPORTING_ZONE:Europe/Kaliningrad}
+    historical-sales:
+      enabled: ${SYNC_HISTORICAL_SALES_ENABLED:false}
+      start-date: ${SYNC_HISTORICAL_SALES_START_DATE:}
+      window-minutes: ${SYNC_HISTORICAL_SALES_WINDOW_MINUTES:180}
+      max-requests-per-step: ${SYNC_HISTORICAL_SALES_MAX_REQUESTS_PER_STEP:100}
+      max-requests-per-day: ${SYNC_HISTORICAL_SALES_MAX_REQUESTS_PER_DAY:200}
+      cycle-interval: ${SYNC_HISTORICAL_SALES_CYCLE_INTERVAL:1d}
+      enqueue-delay: ${SYNC_HISTORICAL_SALES_ENQUEUE_DELAY:1m}
   maintenance:
     retention:
       scheduling-enabled: ${RETENTION_SCHEDULING_ENABLED:true}

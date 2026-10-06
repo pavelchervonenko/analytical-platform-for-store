@@ -19,6 +19,7 @@ class ApplicationRoleEnvironmentPostProcessorTest {
     void apiRoleForcesRuntimeFlywayOff() {
         MockEnvironment environment = new MockEnvironment()
                 .withProperty("app.runtime.role", "API")
+                .withProperty("app.sync.historical-sales.enabled", "true")
                 .withProperty("spring.flyway.enabled", "true");
 
         processor.postProcessEnvironment(environment, application);
@@ -27,6 +28,8 @@ class ApplicationRoleEnvironmentPostProcessorTest {
                 .isEqualTo("false");
         assertThat(environment.getProperty("app.runtime.role"))
                 .isEqualTo("API");
+        assertThat(environment.getProperty("app.sync.historical-sales.enabled"))
+                .isEqualTo("false");
     }
 
     @Test

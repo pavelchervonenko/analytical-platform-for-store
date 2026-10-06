@@ -12,6 +12,11 @@ public record SyncJobClaim(
         SyncJobPhase phase,
         Instant windowStart,
         Instant windowEnd,
-        int attemptCount
+        int attemptCount,
+        String leaseOwner
 ) {
+    public SyncJobClaim(UUID jobId, UUID requestedById, SyncJobType jobType, SyncJobPhase phase,
+                        Instant windowStart, Instant windowEnd, int attemptCount) {
+        this(jobId, requestedById, jobType, phase, windowStart, windowEnd, attemptCount, null);
+    }
 }

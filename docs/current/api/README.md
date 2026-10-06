@@ -31,7 +31,7 @@ superseded_by: null
 
 ## Источник истины
 
-[`contracts/openapi/current.json`](../../../contracts/openapi/current.json), версия `13`, —
+[`contracts/openapi/current.json`](../../../contracts/openapi/current.json), версия `15`, —
 transport authority для публичных paths, methods, parameters и schemas. Документы этого каталога
 описывают semantics, access, null/partial behaviour и stable errors; они не заменяют OpenAPI.
 

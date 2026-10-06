@@ -17,6 +17,7 @@ record ReturnFactRepositories(
         DataQualityIssueRepository qualityIssues,
         SyncRunRepository syncRuns,
         RawRecordVersionRepository rawRecords,
-        JdbcTemplate jdbcTemplate
+        JdbcTemplate jdbcTemplate,
+        HistoricalSalesDependencyGuard historicalDependencies
 ) {
 }

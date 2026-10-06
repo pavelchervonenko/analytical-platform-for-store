@@ -310,6 +310,18 @@ public class SyncRun {
         return status;
     }
 
+    public SyncScope getScope() {
+        return syncScope;
+    }
+
+    public Instant getPeriodStart() {
+        return periodStart;
+    }
+
+    public Instant getPeriodEnd() {
+        return periodEnd;
+    }
+
     public int getRecordsFetched() {
         return recordsFetched;
     }

@@ -111,6 +111,9 @@ public class SyncJob extends AbstractMutableEntity {
         Instant periodStart = requireNonNull(definition.periodStart(), "periodStart");
         Instant periodEnd = requireNonNull(definition.periodEnd(), "periodEnd");
         require(periodEnd.isAfter(periodStart), "periodEnd must be after periodStart");
+        require(jobType != SyncJobType.HISTORICAL_SALES
+                        || Duration.between(periodStart, periodEnd).compareTo(Duration.ofHours(3)) <= 0,
+                "historical SALE job must not exceed three hours");
         Duration windowSize = requireNonNull(definition.windowSize(), "windowSize");
         require(!windowSize.minus(MINIMUM_WINDOW).isNegative(),
                 "windowSize must be at least 15 minutes");
@@ -124,7 +127,7 @@ public class SyncJob extends AbstractMutableEntity {
         job.requestedBy = definition.requestedBy();
         job.jobType = jobType;
         job.status = SyncJobStatus.PENDING;
-        job.phase = SyncJobPhase.STORES;
+        job.phase = jobType == SyncJobType.HISTORICAL_SALES ? SyncJobPhase.SALES : SyncJobPhase.STORES;
         job.periodStart = periodStart;
         job.periodEnd = periodEnd;
         job.cursorStart = periodStart;
@@ -164,7 +167,13 @@ public class SyncJob extends AbstractMutableEntity {
         switch (phase) {
             case STORES -> phase = SyncJobPhase.EMPLOYEES;
             case EMPLOYEES -> phase = SyncJobPhase.SALES;
-            case SALES -> phase = SyncJobPhase.RETURNS;
+            case SALES -> {
+                if (jobType == SyncJobType.HISTORICAL_SALES) {
+                    advanceWindow(now);
+                } else {
+                    phase = SyncJobPhase.RETURNS;
+                }
+            }
             case RETURNS -> phase = SyncJobPhase.ORDERS;
             case ORDERS -> advanceWindow(now);
             default -> throw new IllegalStateException("Unsupported sync job phase");
@@ -178,11 +187,13 @@ public class SyncJob extends AbstractMutableEntity {
     public boolean shrinkCurrentWindow(String owner, Instant now) {
         requireOwnedRunningJob(owner);
         Duration currentSize = Duration.between(cursorStart, currentWindowEnd);
-        if (currentSize.compareTo(MINIMUM_WINDOW.multipliedBy(2)) < 0) {
+        if (jobType == SyncJobType.HISTORICAL_SALES ? currentSize.compareTo(MINIMUM_WINDOW) <= 0
+                : currentSize.compareTo(MINIMUM_WINDOW.multipliedBy(2)) < 0) {
             return false;
         }
         long halfMillis = currentSize.toMillis() / 2;
         currentWindowEnd = cursorStart.plusMillis(halfMillis);
+        shortenHistoricalPeriod();
         attemptCount = 0;
         errorSummary = null;
         clearLease();
@@ -199,11 +210,13 @@ public class SyncJob extends AbstractMutableEntity {
     ) {
         requireOwnedRunningJob(owner);
         Duration currentSize = Duration.between(cursorStart, currentWindowEnd);
-        if (currentSize.compareTo(MINIMUM_WINDOW.multipliedBy(2)) < 0) {
+        if (jobType == SyncJobType.HISTORICAL_SALES ? currentSize.compareTo(MINIMUM_WINDOW) <= 0
+                : currentSize.compareTo(MINIMUM_WINDOW.multipliedBy(2)) < 0) {
             return false;
         }
         long halfMillis = currentSize.toMillis() / 2;
         currentWindowEnd = cursorStart.plusMillis(halfMillis);
+        shortenHistoricalPeriod();
         attemptCount = 0;
         totalRetries++;
         errorSummary = boundedSummary(summary);
@@ -237,6 +250,30 @@ public class SyncJob extends AbstractMutableEntity {
         } else {
             status = SyncJobStatus.FAILED;
             finishedAt = requireNonNull(now, "now");
+        }
+    }
+
+    public void pauseHistoricalDailyBudget(String owner, Instant nextAttempt, Instant now) {
+        requireOwnedRunningJob(owner);
+        require(jobType == SyncJobType.HISTORICAL_SALES, "daily history pause requires historical SALE job");
+        require(requireNonNull(nextAttempt, "nextAttempt").isAfter(now), "budget reset must be in the future");
+        errorSummary = "HISTORICAL_SALES_DAILY_BUDGET";
+        clearLease();
+        if (cancelRequested) {
+            cancel(now);
+        } else {
+            status = SyncJobStatus.WAITING_RETRY;
+            nextAttemptAt = nextAttempt;
+        }
+    }
+
+    private void shortenHistoricalPeriod() {
+        if (jobType == SyncJobType.HISTORICAL_SALES) {
+            Instant minimumEnd = cursorStart.plus(MINIMUM_WINDOW);
+            if (currentWindowEnd.isBefore(minimumEnd)) {
+                currentWindowEnd = minimumEnd;
+            }
+            periodEnd = currentWindowEnd;
         }
     }
 
@@ -370,6 +407,10 @@ public class SyncJob extends AbstractMutableEntity {
 
     public Instant getLeaseUntil() {
         return leaseUntil;
+    }
+
+    public String getLeaseOwner() {
+        return leaseOwner;
     }
 
     public String getErrorSummary() {

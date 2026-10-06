@@ -6,10 +6,18 @@ owner: integrations
 audience:
   - developer
   - operator
-last_verified: 2026-10-01
+last_verified: 2026-10-06
 requirement_sources:
   - docs/archive/legacy-contracts/synchronization-api.md
 implementation_sources:
+  - backend/src/main/java/com/storeanalytics/integration/livesklad/client/LiveSkladListingCompleteness.java
+  - backend/src/main/java/com/storeanalytics/integration/livesklad/client/HttpLiveSkladClient.java
+  - backend/src/main/java/com/storeanalytics/integration/livesklad/client/HttpLiveSkladOrderClient.java
+  - backend/src/main/java/com/storeanalytics/sync/service/HistoricalSalesRefreshService.java
+  - backend/src/main/java/com/storeanalytics/sync/service/HistoricalSalesRefreshBatchApplier.java
+  - backend/src/main/java/com/storeanalytics/sync/service/HistoricalSalesDependencyGuard.java
+  - backend/src/main/java/com/storeanalytics/sync/service/KnownReturnRefreshReader.java
+  - backend/src/main/resources/db/migration/V94__add_historical_sales_refresh.sql
   - backend/src/main/java/com/storeanalytics/product/service/CatalogSaleRoleSnapshotWriter.java
   - backend/src/main/java/com/storeanalytics/sync
   - backend/src/main/java/com/storeanalytics/sync/service/EmployeeSyncBatchApplier.java
@@ -20,6 +28,9 @@ implementation_sources:
   - backend/src/main/resources/db/migration/V53__resolve_false_sale_typed_return_issues.sql
   - contracts/openapi/current.json
 verification_sources:
+  - backend/src/test/java/com/storeanalytics/integration/livesklad/client/HttpLiveSkladClientTest.java
+  - backend/src/test/java/com/storeanalytics/integration/livesklad/client/HttpLiveSkladOrderClientTest.java
+  - backend/src/test/java/com/storeanalytics/sync/service/SalesSyncSourceNameTest.java
   - backend/src/test/java/com/storeanalytics/product/service/CatalogSaleRoleSnapshotIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/product/model/ProductSourceGroupObservationTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/SyncJobIntegrationTest.java
@@ -27,6 +38,7 @@ verification_sources:
   - backend/src/test/java/com/storeanalytics/sync/service/StoreSyncIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/EmployeeSyncMembershipHistoryIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/ReturnSyncIntegrationTest.java
+  - backend/src/test/java/com/storeanalytics/sync/service/KnownReturnBackfillIntegrationTest.java
   - backend/src/test/java/com/storeanalytics/sync/service/OrderSyncIntegrationTest.java
 runtime_evidence: []
 required_reviewers:
@@ -99,9 +111,21 @@ Malformed/rejected payload и unclassified `LiveSkladException` завершаю
 (`LIVESKLAD_PERMANENT` для последнего случая) и требуют анализа причины. Нельзя автоматически
 повторять любой permanent failure, не уточнив классификацию.
 
-Targeted webhook sync не запускает period-wide absence/deletion. Для продаж и заказов period sync
-делает absence-based deletion только после полного успешного чтения соответствующей области.
+Targeted webhook sync не запускает period-wide absence/deletion. Для продаж period sync
+разрешает удаление по отсутствию только после полного успешного чтения соответствующей области.
+Для заказов удаление отсутствующей нормализованной позиции ограничено полностью принятым detail
+одного заказа и его source version; отсутствие заказа в changed-listing не удаляет весь период.
 Возвраты являются отдельным случаем и следуют правилу ниже.
+
+SALE, CASH и ORDER listing используют единый completeness guard. Declared total должен быть
+неотрицательным, одинаковым на всех страницах и равным числу принятых строк на terminal page.
+Пустая/короткая страница до этого числа, excess, изменение total и переход null ↔ declared
+завершают чтение ошибкой до публикации фактов или успешного coverage. Если total отсутствует
+на всех страницах обычного listing, сохраняется bounded short-page fallback; это не доказывает
+независимую полноту источника. Historical SALE требует declared total. EMPLOYEES endpoint
+с собственным no-total shape не меняется. Page caps, unique-ID, payload и HTTP budget guards
+сохраняются. Targeted before/after: 14 failures до коррекции, 69 checks после, Checkstyle PASS;
+real provider occurrence и production monetary impact этим не подтверждены.
 
 Targeted sale-return sync читает кассовые операции в одном или двух десятиминутных окнах вокруг
 `occurredAt` и `sourceUpdatedAt` выбранного документа и после валидации отбрасывает операции с
@@ -123,6 +147,26 @@ Validated targeted recovery имеет два exact-document режима. `MISS
 external ID — точного совпадения. Режим не является period backfill: worker получает и нормализует
 один return, а транзакция откатывается при любом расхождении source или текущего DB state.
 
+В рабочей копии durable BACKFILL дополнительно перечитывает уже сохранённые активные
+`LIVESKLAD/saleReturn` документы выбранных connection/stores по occurrence-полуинтервалу.
+Они объединяются с полной CASH выборкой по external ID: известный cashless возврат получает
+detail, платный читается один раз, deleted source candidate сохраняет явную deletion semantics.
+Soft-deleted факты не включаются по сохранённым IDs. Максимум 70 unique detail candidates;
+чтение 71 известного факта прекращает шаг до fetch/publication, без silent truncation.
+Все details проверяются до транзакции; publication повторно проверяет BACKFILL RETURNS phase,
+exact attempt, window, requestedBy, cancel/lease и current anchors под job → connection locks.
+Версия каждого известного документа должна совпадать с preimage до detail fetch. Concurrent
+accepted normalization, даже при равном source clock/null dateChange, вызывает существующий
+`LIVESKLAD_RETURN_CHANGED` и bounded retry с новым чтением; ранее принятое observation сохраняется.
+Равные source clocks без вмешавшейся записи не запрещают correction. Это не определяет порядок
+изменений источника, ещё не наблюдавшихся приложением.
+Потеря условий после flush откатывает весь batch. MANUAL, INCREMENTAL и webhook paths этим
+расширением не меняются. Это refresh известных фактов, не независимое обнаружение неизвестных
+cashless возвратов; последнее всё ещё требует source index/export или подтверждённой доставки.
+Все 24 operational PostgreSQL cases и независимый final review проходят. Полный exact RC gate
+также прошёл: 2 000 tests и отдельная OpenAPI-проверка, ноль failures/errors/skips.
+CI и runtime acceptance ещё не завершены.
+
 Для возвратов child window фильтрует кассовые операции, а не дату документа. LiveSklad может
 провести возврат денег спустя несколько часов после создания документа, поэтому detail допустимо
 находиться в другом child window. `business_date` при этом сохраняется по самому документу.
@@ -134,7 +178,7 @@ source ID и версии.
 
 ## Coverage и API
 
-ADMIN API из OpenAPI v13 создаёт backfill, читает readiness/list/detail и запрашивает cancel.
+ADMIN API создаёт backfill, читает readiness/list/detail и запрашивает cancel.
 Backfill dates включительны в reporting zone; внутри хранятся instant-полуинтервалы. Создание
 требует effective classification на начало периода и ограничено 730 днями.
 
@@ -167,7 +211,7 @@ Sale/order/return position DTO не содержат подтверждённу�
 - Никакой token, credential, upstream body или PII не входит в error summary.
 - Полный historical backfill не заменяет ежедневный overlap и webhook correction path.
 
-## Необязательная shadow-проекция роли новых строк
+## Необязательная запись роли новых строк
 
 SalesSyncPersistence/ReturnSyncPersistence вызывают CatalogSaleRoleSnapshotWriter только
 после создания новой строки. По умолчанию writer ничего не делает; включение требует
@@ -181,5 +225,38 @@ flush на новую строку; перед включением нужен b
 использует имя строки и известную при приёме группу объединённой карточки; последняя не
 выдаётся за полученную из старого документа. Возврат наследует снимок оригинала или
 остаётся на legacy-пути. Исходные деньги/категории/зарплаты, порядок фаз и retry-policy
-не изменены. Shadow-таблицы не подключены к официальным метрикам; формат и ограничения
-описаны в [классификации](../../product/classification.md).
+не изменены. Сохранённые роли читаются catalog-проекциями attach v3/v4; для отсутствующего
+или legacy-снимка сохраняется прежний путь. Это связь в коде, не доказательство включения
+writer на сервере. Формат, per-sale проверки и ограничения — в
+[классификации](../../product/classification.md).
+
+## Старые продажи и повторная проверка
+
+Overlap выбирает продажи по occurrence date; позднее изменение имени не переносит старый документ
+в новый диапазон. Accepted SALE item snapshot использует имя собственного source detail,
+независимо от более поздней общей карточки товара. Категория и condition сохраняют действующие
+правила event-time resolver; source-local name не является категорией.
+
+Новый `HISTORICAL_SALES` job выполняет только SALES, читая полную выборку малого интервала всех
+активных магазинов. Default-off, явная дата начала, durable cursor, бюджеты HTTP attempts,
+приоритет routine sync и проверка lease/cancel ограничивают выполнение. SALE-only SUCCESS
+не подтверждает all-phase coverage для weekly snapshots. Неполная объявленная выборка не
+разрешает запись; изменение materialized зависимостей связанных RETURN требует rollback и
+согласованного BACKFILL по сохранённой области. Блокировка переживает retention job.
+
+Конфигурация, пределы, восстановление и наблюдение: [historical refresh runbook](../../../runbooks/livesklad-historical-sales-refresh.md).
+Начальные 127 targeted unit/PostgreSQL checks и независимый review прошли. Позднее выявлен
+неполный repair postcondition: один covering BACKFILL SUCCESS не доказывает обновление
+связанного cashless RETURN. Durable block теперь сохраняет exact RETURN/parent UUID pairs
+независимо от job retention. Перед advance нужны accepted parent publication этого BACKFILL
+и accepted RETURN observations для всех сохранённых identities: согласованные raw/run pointers,
+connection/store, original links и текущие inherited employee/classification/name snapshots.
+Физические DB publication clocks сравниваются между собой; raw last_seen не считается
+обновлением факта. Деньги и количество partial refund не приравниваются к исходной продаже.
+Moved, missing, unsupported или stale dependency сохраняет block; deleted RETURN требует
+accepted explicit deletion evidence. Финальные 178 targeted tests, Checkstyle и independent
+review проходят; полный exact RC gate также прошёл. CI, production activation и runtime
+acceptance не выполнены. Snapshot name входит в linked RETURN
+postcondition: переименование может изменить SETUP_SERVICE N, а clock-only observation допускается.
+Runtime `CURRENT`
+обычной загрузки не подтверждает повторное чтение всей истории.

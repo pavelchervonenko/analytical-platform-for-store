@@ -36,7 +36,7 @@ class MigrationApplicationIntegrationTest {
             postgres.start();
 
             runMigration(postgres);
-            assertThat(currentVersion(postgres)).isEqualTo("93");
+            assertThat(currentVersion(postgres)).isEqualTo("94");
 
             resetSchema(postgres);
             Flyway.configure()
@@ -53,7 +53,7 @@ class MigrationApplicationIntegrationTest {
             addVersion29Report(postgres);
 
             runMigration(postgres);
-            assertThat(currentVersion(postgres)).isEqualTo("93");
+            assertThat(currentVersion(postgres)).isEqualTo("94");
             assertReportPayloadMigrated(postgres);
             assertFinalizedReportRemainsImmutable(postgres);
 
@@ -72,7 +72,7 @@ class MigrationApplicationIntegrationTest {
             addPreviousVersionRawWrite(postgres, LEGACY_RAW_ID, "legacy-before-v18");
 
             runMigration(postgres);
-            assertThat(currentVersion(postgres)).isEqualTo("93");
+            assertThat(currentVersion(postgres)).isEqualTo("94");
             assertThat(payloadPolicyVersion(postgres, LEGACY_RAW_ID)).isZero();
 
             addPreviousVersionRawWrite(postgres, ROLLBACK_RAW_ID, "rollback-after-v18");
@@ -123,7 +123,7 @@ class MigrationApplicationIntegrationTest {
             String boundary = LocalDate.now(ZoneId.of("Europe/Kaliningrad")).plusDays(2)
                     .atStartOfDay(ZoneId.of("Europe/Kaliningrad")).toInstant().toString();
             runMigration(postgres, boundary);
-            assertThat(currentVersion(postgres)).isEqualTo("93");
+            assertThat(currentVersion(postgres)).isEqualTo("94");
             // The exact immutable boundary also permits a no-op repeat of the migration role.
             runMigration(postgres, boundary);
         }

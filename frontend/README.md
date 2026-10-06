@@ -109,6 +109,12 @@ page-level overflow, query errors, browser runtime errors and HTTP `5xx` respons
 is ignored by Git because images can contain business data. Inspect the images after every material
 UI change. For an interactive local browser run, use `npm run visual:local:headed`.
 
+For a synthetic attach-map review, use `VISUAL_USE_FIXTURES=true`, `VISUAL_ROUTES='/overview'`
+and `VISUAL_FIXTURE_ATTACH_EMPLOYEES=true`. Add `VISUAL_FIXTURE_RATING_HISTORY=FINALIZED` to
+verify that saved seller quantities remain visible without comparison to current store facts.
+These captures verify local rendering against fixtures; they do not verify a running backend,
+real authentication or production metric parity.
+
 By default, an authenticated `/insights` capture keeps the live shell and store context but replaces
 the Weekly Review response with a deterministic fixture. For a pre-release read-path check against
 the running local backend and database, opt in explicitly and select a store through the normal URL

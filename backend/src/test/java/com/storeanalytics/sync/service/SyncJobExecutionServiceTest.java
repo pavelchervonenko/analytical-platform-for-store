@@ -45,7 +45,8 @@ class SyncJobExecutionServiceTest {
         ReturnSyncService returns = mock(ReturnSyncService.class);
         OrderSyncService orders = mock(OrderSyncService.class);
         SyncJobExecutionService service = new SyncJobExecutionService(
-                stores, employees, sales, returns, orders, mock(AppUserRepository.class));
+                stores, employees, sales, returns, orders, mock(AppUserRepository.class),
+                mock(HistoricalSalesRefreshService.class));
         UUID runId = UUID.randomUUID();
         StoreSyncResult storeResult = mock(StoreSyncResult.class);
         EmployeeSyncResult employeeResult = mock(EmployeeSyncResult.class);

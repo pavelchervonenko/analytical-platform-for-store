@@ -18,6 +18,22 @@ import org.springframework.data.repository.query.Param;
 public interface SyncJobRepository extends JpaRepository<SyncJob, UUID> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select job from SyncJob job where job.connection.id = :connection and job.status in :statuses")
+    List<SyncJob> findActiveForUpdate(@Param("connection") UUID connection,
+                                    @Param("statuses") Collection<SyncJobStatus> statuses);
+
+    @Query("""
+            select job from SyncJob job where job.connection.id = :connection
+              and job.jobType = com.storeanalytics.sync.model.SyncJobType.BACKFILL
+              and job.status = com.storeanalytics.sync.model.SyncJobStatus.SUCCESS
+              and job.requestedBy is not null and job.periodStart <= :start and job.periodEnd >= :end
+              and job.finishedAt > :after order by job.finishedAt desc
+            """)
+    List<SyncJob> findCoveringManualBackfill(@Param("connection") UUID connection,
+                                           @Param("start") Instant start, @Param("end") Instant end,
+                                           @Param("after") Instant after, Pageable pageable);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select job from SyncJob job
             where job.status in :statuses

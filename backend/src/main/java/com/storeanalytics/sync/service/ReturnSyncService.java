@@ -59,13 +59,15 @@ public class ReturnSyncService {
     private final SyncRunErrorRepository errorRepository;
     private final Clock clock;
     private final SyncMetrics syncMetrics;
+    private final KnownReturnRefreshReader knownReturns;
 
     public ReturnSyncService(
             LiveSkladClient liveSkladClient,
             IntegrationConnectionRepository connectionRepository,
             StoreRepository storeRepository,
             ReturnSyncPersistence persistence,
-            SyncRunLifecycle lifecycle
+            SyncRunLifecycle lifecycle,
+            KnownReturnRefreshReader knownReturns
     ) {
         this.liveSkladClient = liveSkladClient;
         this.connectionRepository = connectionRepository;
@@ -75,6 +77,7 @@ public class ReturnSyncService {
         this.errorRepository = lifecycle.errors();
         this.clock = lifecycle.clock();
         this.syncMetrics = lifecycle.metrics();
+        this.knownReturns = knownReturns;
     }
 
     public ReturnSyncResult synchronize(ReturnSyncPeriod period) {
@@ -361,9 +364,12 @@ public class ReturnSyncService {
                     returnCashItems,
                     period
             );
+            List<KnownReturnRefreshReader.KnownReturn> known = knownReturns.read(
+                    connection.getId(), stores, period, context, MAX_DETAILS_PER_RUN);
+            discovery = mergeKnown(discovery, known);
             fetched = discovery.activeDocumentCount()
                     + discovery.deletedDocumentCount();
-            if (discovery.activeDocumentCount() > MAX_DETAILS_PER_RUN) {
+            if (known.size() > MAX_DETAILS_PER_RUN || discovery.activeDocumentCount() > MAX_DETAILS_PER_RUN) {
                 failSyncRun(
                         syncRun,
                         fetched,
@@ -372,18 +378,16 @@ public class ReturnSyncService {
                 );
                 throw new ReturnSyncCapacityException(
                         syncRun.getId(),
-                        discovery.activeDocumentCount(),
+                        Math.max(known.size(), discovery.activeDocumentCount()),
                         MAX_DETAILS_PER_RUN
                 );
             }
 
-            List<StoreReturnBatch> batches = loadDetails(discovery);
-            ReturnSyncBatchResult batch = persistence.synchronize(
-                    syncRun.getId(),
-                    period,
-                    cashItems,
-                    batches
-            );
+            List<StoreReturnBatch> batches = loadDetails(discovery, known, period);
+            ReturnSyncBatchResult batch = knownReturns.enabled(context)
+                    ? knownReturns.publish(connection.getId(), stores, period, context, known, batches,
+                            () -> persistence.synchronize(syncRun.getId(), period, cashItems, batches))
+                    : persistence.synchronize(syncRun.getId(), period, cashItems, batches);
             if (batch.unresolvedDocuments() > 0) {
                 syncRun.completePartial(
                         fetched,
@@ -497,19 +501,56 @@ public class ReturnSyncService {
         );
     }
 
-    private List<StoreReturnBatch> loadDetails(Discovery discovery) {
+    private Discovery mergeKnown(Discovery discovery, List<KnownReturnRefreshReader.KnownReturn> known) {
+        List<StoreTransactionDiscovery> stores = new ArrayList<>();
+        int active = discovery.activeDocumentCount();
+        Map<String, UUID> cashStores = new HashMap<>();
+        discovery.storeDiscoveries().forEach(store -> store.transactionsByDocument().keySet()
+                .forEach(id -> cashStores.put(id, store.store().getId())));
+        for (var retained : known) {
+            UUID cashStore = cashStores.get(retained.externalId());
+            if (cashStore != null && !cashStore.equals(retained.storeId())) {
+                throw new IllegalStateException("Known RETURN cash source belongs to another store");
+            }
+        }
+        for (var store : discovery.storeDiscoveries()) {
+            Map<String, List<LiveSkladCashTransactionPayload>> documents =
+                    new LinkedHashMap<>(store.transactionsByDocument());
+            for (var retained : known) {
+                if (store.store().getId().equals(retained.storeId()) && !documents.containsKey(retained.externalId())) {
+                    documents.put(retained.externalId(), List.of());
+                    active++;
+                }
+            }
+            stores.add(new StoreTransactionDiscovery(store.store(), store.cashRegisters(), documents));
+        }
+        return new Discovery(stores, active, discovery.deletedDocumentCount());
+    }
+
+    private List<StoreReturnBatch> loadDetails(Discovery discovery,
+                                             List<KnownReturnRefreshReader.KnownReturn> known,
+                                             ReturnSyncPeriod period) {
+        Map<String, KnownReturnRefreshReader.KnownReturn> retained = new HashMap<>();
+        known.forEach(item -> retained.put(item.externalId(), item));
         List<StoreReturnBatch> batches = new ArrayList<>();
         for (StoreTransactionDiscovery storeDiscovery
                 : discovery.storeDiscoveries()) {
             List<LiveSkladReturnSource> sources = new ArrayList<>();
             for (Map.Entry<String, List<LiveSkladCashTransactionPayload>> entry
                     : storeDiscovery.transactionsByDocument().entrySet()) {
-                boolean deleted = entry.getValue().stream()
+                boolean deleted = !entry.getValue().isEmpty() && entry.getValue().stream()
                         .allMatch(LiveSkladCashTransactionPayload::deleted);
                 LiveSkladReturnDetailPayload detail = deleted
                         ? null
                         : liveSkladClient.fetchReturnDetail(entry.getKey());
-                sources.add(new LiveSkladReturnSource(entry.getValue(), detail));
+                LiveSkladReturnSource source = new LiveSkladReturnSource(entry.getValue(), detail);
+                if (!deleted && retained.containsKey(entry.getKey())) {
+                    if (detail == null || !storeDiscovery.store().getExternalId().equals(detail.storeExternalId())) {
+                        throw new IllegalStateException("Known RETURN detail belongs to another store");
+                    }
+                    knownReturns.validate(retained.get(entry.getKey()), source, period);
+                }
+                sources.add(source);
             }
             batches.add(new StoreReturnBatch(
                     storeDiscovery.store(),

@@ -2,6 +2,8 @@ package com.storeanalytics.sync.service;
 
 import com.storeanalytics.auth.model.AppUser;
 import com.storeanalytics.auth.repository.AppUserRepository;
+import com.storeanalytics.integration.livesklad.client.HistoricalSalesReadScope;
+import com.storeanalytics.sync.model.SyncJobType;
 import com.storeanalytics.sync.model.SyncTriggerType;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,7 @@ public class SyncJobExecutionService {
     private final ReturnSyncService returnSyncService;
     private final OrderSyncService orderSyncService;
     private final AppUserRepository userRepository;
+    private final HistoricalSalesRefreshService historicalSales;
 
     public SyncJobExecutionService(
             StoreSyncService storeSyncService,
@@ -22,7 +25,8 @@ public class SyncJobExecutionService {
             SalesSyncService salesSyncService,
             ReturnSyncService returnSyncService,
             OrderSyncService orderSyncService,
-            AppUserRepository userRepository
+            AppUserRepository userRepository,
+            HistoricalSalesRefreshService historicalSales
     ) {
         this.storeSyncService = storeSyncService;
         this.employeeSyncService = employeeSyncService;
@@ -30,14 +34,31 @@ public class SyncJobExecutionService {
         this.returnSyncService = returnSyncService;
         this.orderSyncService = orderSyncService;
         this.userRepository = userRepository;
+        this.historicalSales = historicalSales;
     }
 
     public UUID execute(SyncJobClaim claim) {
+        if (claim.jobType() == SyncJobType.HISTORICAL_SALES) {
+            if (claim.phase() != com.storeanalytics.sync.model.SyncJobPhase.SALES) {
+                throw new IllegalArgumentException("Historical refresh requires the SALE phase");
+            }
+            HistoricalSalesReadScope.Context scope = new HistoricalSalesReadScope.Context(
+                    claim.jobId(), claim.leaseOwner(), claim.attemptCount(), claim.windowStart(), claim.windowEnd());
+            try (var ignored = HistoricalSalesReadScope.open(scope, historicalSales.maxRequestsPerStep(),
+                    () -> historicalSales.chargeRequest(scope))) {
+                return executePhase(claim);
+            }
+        }
+        return executePhase(claim);
+    }
+
+    private UUID executePhase(SyncJobClaim claim) {
         AppUser requestedBy = claim.requestedById() == null
                 ? null : userRepository.findById(claim.requestedById()).orElse(null);
         SyncTriggerType trigger = switch (claim.jobType()) {
             case BACKFILL -> SyncTriggerType.INITIAL;
             case INCREMENTAL -> SyncTriggerType.SCHEDULED;
+            case HISTORICAL_SALES -> SyncTriggerType.REPROCESS;
             default -> throw new IllegalStateException("Unsupported synchronization job type");
         };
         SyncExecutionContext context = new SyncExecutionContext(

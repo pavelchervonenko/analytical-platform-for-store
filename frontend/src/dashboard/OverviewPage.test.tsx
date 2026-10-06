@@ -243,7 +243,7 @@ const attach: AttachRate = {
   storeId,
   periodStart: "2026-08-01",
   periodEnd: "2026-08-08",
-  formulaVersion: "attach-rate-v2",
+  formulaVersion: "attach-rate-v3",
   dataQuality: {
     unmatchedNumeratorItemCount: 0,
     ambiguousWarrantyItemCount: 0,
@@ -437,6 +437,36 @@ describe("management overview", () => {
     expect(attention).toHaveTextContent("Все продавцы на уровне плана");
   });
 
+  it.each(["FINALIZED", "UNKNOWN"])("does not join live profit into a %s seller snapshot", (status) => {
+    render(<MemoryRouter><EmployeePerformanceSection
+      rating={{ ...rating, history: { ...rating.history, status } }} employeeKpi={employeeKpi}
+    /></MemoryRouter>);
+    expect(within(screen.getByRole("table")).queryByText("25 000 ₽")).not.toBeInTheDocument();
+    expect(screen.getByText("100 000 ₽")).toBeInTheDocument();
+    expect(screen.getByText(status === "FINALIZED"
+      ? "Прибыль не сохранена в архивном рейтинге" : "Нет актуальных данных о прибыли"))
+      .toBeInTheDocument();
+  });
+
+  it.each(["storeId", "periodStart", "periodEnd"] as const)("does not join profit from another %s into seller facts", (field) => {
+    const anotherScope = { ...employeeKpi, [field]: field === "storeId" ? hiddenId : "2026-07-01" };
+    render(<MemoryRouter><EmployeePerformanceSection rating={rating} employeeKpi={anotherScope} /></MemoryRouter>);
+    expect(within(screen.getByRole("table")).queryByText("25 000 ₽")).not.toBeInTheDocument();
+    expect(screen.getByText("100 000 ₽")).toBeInTheDocument();
+    expect(screen.getByText("Данные о прибыли требуют обновления")).toBeInTheDocument();
+  });
+
+  it("keeps seller profit unavailable when the two live responses disagree on revenue", () => {
+    const changedKpi = { ...employeeKpi, employees: employeeKpi.employees.map((entry) =>
+      entry.employeeId === annaId ? { ...entry, netRevenue: 61000, grossProfit: 31000 } : entry) };
+    render(<MemoryRouter><EmployeePerformanceSection rating={rating} employeeKpi={changedKpi} /></MemoryRouter>);
+    const table = screen.getByRole("table");
+    expect(within(table).queryByText("31 000 ₽")).not.toBeInTheDocument();
+    const ilyaRow = within(table).getByText("Илья").closest("tr");
+    expect(ilyaRow?.children[2]).toHaveTextContent("15 000 ₽");
+    expect(screen.getByText("Данные о прибыли требуют обновления")).toBeInTheDocument();
+  });
+
   it("shows separate informational attach rates and an explicit legacy remainder even without a child base", () => {
     const detailRate = (metricCode: string, numerator: number, denominator: number) => ({
       metricCode, numeratorCategoryCode: metricCode, denominatorCode: "PODS_WATCH",
@@ -505,6 +535,78 @@ describe("management overview", () => {
     expect(screen.getByText("На уровне магазина")).toBeInTheDocument();
     expect(screen.getByText("Выше магазина")).toBeInTheDocument();
     expect(screen.queryByText("Скрытый сотрудник")).not.toBeInTheDocument();
+  });
+
+  it.each(["FINALIZED", "UNKNOWN"])("keeps %s employee facts separate from live store comparisons", (status) => {
+    render(<MemoryRouter><AttachRateMatrix attach={attach} rating={{
+      ...rating, history: { ...rating.history, status }
+    }} storeName="Магазин" /></MemoryRouter>);
+
+    const row = screen.getByText("Чехлы Apple / iPhone").closest("tr")!;
+    expect(within(row).getByText("60%")).toBeInTheDocument();
+    const anna = within(row).getByTitle(/Анна: 2 \/ 5 = 40%/u);
+    expect(anna).toHaveAttribute("data-tone", "insufficient");
+    expect(anna).toHaveTextContent("2 / 5");
+    expect(anna).not.toHaveAttribute("title", expect.stringContaining("от среднего по магазину"));
+    expect(screen.queryByText("Вне рейтинга", { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText("Ниже магазина")).not.toBeInTheDocument();
+    expect(screen.getByText(/сравнение с продавцами и остаток вне рейтинга недоступны/u)).toBeInTheDocument();
+  });
+
+  it.each([
+    ["attach-rate-v4", "rating-v1"],
+    ["attach-rate-v3", "rating-v1-attach-v4"],
+    ["attach-rate-v99", "rating-v1"]
+  ])("does not compare incompatible store %s and employee %s formulas", (storeVersion, employeeVersion) => {
+    render(<MemoryRouter><AttachRateMatrix attach={{ ...attach, formulaVersion: storeVersion }}
+      rating={{ ...rating, formula: { ...rating.formula, version: employeeVersion } }}
+      storeName="Магазин" /></MemoryRouter>);
+    const row = screen.getByText("Чехлы Apple / iPhone").closest("tr")!;
+    expect(within(row).getByTitle(/Анна: 2 \/ 5 = 40%/u)).toHaveAttribute("data-tone", "insufficient");
+    expect(screen.queryByText("Вне рейтинга", { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByText(/Правила расчёта магазина и продавцов различаются/u)).toBeInTheDocument();
+  });
+
+  it("compares matching live v4 facts", () => {
+    render(<MemoryRouter><AttachRateMatrix attach={{ ...attach, formulaVersion: "attach-rate-v4" }}
+      rating={{ ...rating, formula: { ...rating.formula, version: "rating-v1-attach-v4" } }}
+      storeName="Магазин" /></MemoryRouter>);
+    expect(screen.getByTitle(/Анна: 2 \/ 5 = 40%; 66,7% от среднего по магазину/u))
+      .toHaveAttribute("data-tone", "below");
+    expect(screen.getByText("Вне рейтинга", { exact: true })).toBeInTheDocument();
+  });
+
+  it("does not treat a missing employee metric as zero when deriving the residual", () => {
+    render(<MemoryRouter><AttachRateMatrix attach={attach} rating={{
+      ...rating, employees: rating.employees.map((entry) => entry.employeeId === annaId
+        ? { ...entry, attachRates: [] } : entry)
+    }} storeName="Магазин" /></MemoryRouter>);
+    expect(screen.queryByText("Вне рейтинга", { exact: true })).not.toBeInTheDocument();
+    const row = screen.getByText("Чехлы Apple / iPhone").closest("tr")!;
+    expect(within(row).getByTitle("Анна: данные показателя недоступны")).toHaveTextContent("—");
+    expect(within(row).getByText("60%")).toBeInTheDocument();
+  });
+
+  it("keeps preliminary store facts from coloring an older live employee comparison", () => {
+    render(<MemoryRouter><AttachRateMatrix attach={{
+      ...attach, rates: attach.rates.map((rate) => ({ ...rate, preliminary: true }))
+    }} rating={rating} storeName="Магазин" /></MemoryRouter>);
+    const row = screen.getByText("Чехлы Apple / iPhone").closest("tr")!;
+    expect(within(row).getByText("Предварительно")).toBeInTheDocument();
+    const anna = within(row).getByTitle(/Анна: 2 \/ 5 = 40%/u);
+    expect(anna).toHaveAttribute("data-tone", "insufficient");
+    expect(anna).toHaveTextContent("2 / 5");
+    expect(anna).not.toHaveAttribute("title", expect.stringContaining("от среднего по магазину"));
+    expect(screen.queryByText("Вне рейтинга", { exact: true })).not.toBeInTheDocument();
+  });
+
+  it.each(["storeId", "periodStart", "periodEnd"] as const)("does not mix employee facts from another %s", (field) => {
+    const otherScope = { ...rating, [field]: field === "storeId" ? hiddenId : "2026-09-01" };
+    render(<MemoryRouter><AttachRateMatrix attach={attach} rating={otherScope} storeName="Магазин" /></MemoryRouter>);
+    expect(screen.queryByRole("link", { name: "Анна" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Вне рейтинга", { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByText("60%")).toBeInTheDocument();
+    expect(screen.getByText(/другого магазина или периода/u)).toBeInTheDocument();
   });
 
   it("shows a separate power-bank attach rate next to chargers", () => {
