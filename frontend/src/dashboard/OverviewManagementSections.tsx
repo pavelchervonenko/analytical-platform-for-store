@@ -210,6 +210,7 @@ interface EmployeePerformanceRow {
   employee: EmployeeRatingEntry;
   grossProfit: number | null;
   completeCostData: boolean;
+  revenueDisagrees: boolean;
 }
 
 function visibleEmployees(rating: EmployeeRatingResult): EmployeeRatingEntry[] {
@@ -219,6 +220,9 @@ function visibleEmployees(rating: EmployeeRatingResult): EmployeeRatingEntry[] {
 }
 
 function employeeRows(rating: EmployeeRatingResult, employeeKpi: EmployeeKpi): EmployeePerformanceRow[] {
+  const compatibleProfitSource = rating.history.status === "LIVE" &&
+    rating.storeId === employeeKpi.storeId && rating.periodStart === employeeKpi.periodStart &&
+    rating.periodEnd === employeeKpi.periodEnd;
   const kpiByEmployee = new Map(
     employeeKpi.employees
       .filter((employee) => employee.employeeId != null)
@@ -226,10 +230,13 @@ function employeeRows(rating: EmployeeRatingResult, employeeKpi: EmployeeKpi): E
   );
   return visibleEmployees(rating).map((employee) => {
     const kpi = kpiByEmployee.get(employee.employeeId);
+    const revenueDisagrees = kpi != null && kpi.netRevenue !== employee.netRevenue;
+    const profitAvailable = compatibleProfitSource && !revenueDisagrees;
     return {
       employee,
-      grossProfit: kpi?.grossProfit ?? null,
-      completeCostData: kpi?.dataQuality.completeCostData ?? false
+      grossProfit: profitAvailable ? kpi?.grossProfit ?? null : null,
+      completeCostData: profitAvailable && (kpi?.dataQuality.completeCostData ?? false),
+      revenueDisagrees
     };
   });
 }
@@ -278,6 +285,14 @@ export function EmployeePerformanceSection({
   const totalGrossProfit = completeGrossProfit
     ? rows.reduce((sum, row) => sum + (row.grossProfit ?? 0), 0)
     : null;
+  const profitNote = rating.history.status === "FINALIZED"
+    ? "Прибыль не сохранена в архивном рейтинге"
+    : rating.history.status !== "LIVE"
+      ? "Нет актуальных данных о прибыли"
+      : rating.storeId !== employeeKpi.storeId || rating.periodStart !== employeeKpi.periodStart ||
+          rating.periodEnd !== employeeKpi.periodEnd || rows.some((row) => row.revenueDisagrees)
+        ? "Данные о прибыли требуют обновления"
+        : completeGrossProfit ? "По отображаемым продавцам" : "Недостаточно данных о прибыли";
 
   return (
     <details className="panel overview-team-panel overview-disclosure" aria-labelledby="overview-team-title" open>
@@ -305,7 +320,7 @@ export function EmployeePerformanceSection({
             <TeamSummaryCard
               label="Валовая прибыль"
               value={formatMoney(totalGrossProfit)}
-              note={completeGrossProfit ? "По отображаемым продавцам" : "Нет себестоимости"}
+              note={profitNote}
             />
             <TeamSummaryCard
               label="Лидер по допам"
@@ -427,9 +442,9 @@ function outsideRatingAttachCell(
   metricCode: string
 ): AttachCellValue | null {
   if (!store) return null;
-  const visible = employees
-    .map((employee) => employeeAttachCell(employee, metricCode))
-    .filter((value): value is AttachCellValue => value != null);
+  const values = employees.map((employee) => employeeAttachCell(employee, metricCode));
+  if (values.some((value) => value == null)) return null;
+  const visible = values.filter((value): value is AttachCellValue => value != null);
   const numerator = store.numerator - visible.reduce((sum, value) => sum + value.numerator, 0);
   const denominator = store.denominator - visible.reduce((sum, value) => sum + value.denominator, 0);
   const normalizedNumerator = Math.abs(numerator) < 0.000001 ? 0 : numerator;
@@ -465,17 +480,20 @@ function AttachCell({
   owner,
   metric,
   benchmarkRate,
+  comparisonUnavailable = false,
   kind = "employee"
 }: {
   value: AttachCellValue | null;
   owner: string;
   metric: string;
   benchmarkRate: number | null;
+  comparisonUnavailable?: boolean;
   kind?: AttachCellKind;
 }) {
   const noBase = value == null || value.denominator <= 0 || value.rate == null;
-  const tone = comparisonTone(value, benchmarkRate, kind);
-  const comparison = !noBase && kind === "employee" && benchmarkRate != null && benchmarkRate > 0
+  const tone = comparisonUnavailable && !noBase ? "insufficient" : comparisonTone(value, benchmarkRate, kind);
+  const comparison = !comparisonUnavailable && !noBase && value?.includedInScore !== false
+    && kind === "employee" && benchmarkRate != null && benchmarkRate > 0
     ? formatPercent(value!.rate! * 100 / benchmarkRate) + " от среднего по магазину"
     : null;
   const suffix = kind === "detail" ? "; справочный показатель, не участвует в рейтинге"
@@ -483,12 +501,16 @@ function AttachCell({
     ? "; средний показатель по всем документам магазина"
     : kind === "context"
       ? "; остаток между магазином и участниками рейтинга"
+      : comparisonUnavailable
+        ? "; сравнение с текущими данными магазина недоступно"
       : tone === "insufficient"
         ? benchmarkRate == null || benchmarkRate <= 0
           ? "; средний показатель по магазину недоступен"
           : value?.attributionIncomplete ? "; ожидается разбор атрибуции, показатель не оценивается" : "; недостаточно продаж для рейтинга"
         : comparison == null ? "" : "; " + comparison;
-  const title = noBase
+  const title = value == null
+    ? owner + ": данные показателя недоступны"
+    : noBase
     ? owner + ": нет релевантных продаж техники"
     : owner + ": " + formatNumber(value!.numerator) + " / " + formatNumber(value!.denominator)
       + " = " + formatPercent(value!.rate) + suffix;
@@ -496,7 +518,7 @@ function AttachCell({
     ? formatNumber(value.numerator) + " / " + formatNumber(value.denominator)
     : noBase
     ? null
-    : tone === "insufficient"
+    : tone === "insufficient" && !comparisonUnavailable
       ? null
       : formatNumber(value!.numerator) + " / " + formatNumber(value!.denominator);
   return (
@@ -520,7 +542,22 @@ export function AttachRateMatrix({
   storeName: string;
 }) {
   const location = useLocation();
-  const employees = visibleEmployees(rating);
+  const matchingScope = attach.storeId === rating.storeId
+    && attach.periodStart === rating.periodStart && attach.periodEnd === rating.periodEnd;
+  const employees = matchingScope ? visibleEmployees(rating) : [];
+  const matchingFormula = attach.formulaVersion === "attach-rate-v4"
+    ? rating.formula.version.endsWith("-attach-v4")
+    : attach.formulaVersion === "attach-rate-v3" && !rating.formula.version.endsWith("-attach-v4");
+  const comparable = matchingScope && rating.history.status === "LIVE" && matchingFormula;
+  const comparisonNote = !matchingScope
+    ? "Показатели продавцов получены для другого магазина или периода. Обновите данные; сравнение с продавцами и остаток вне рейтинга недоступны."
+    : rating.history.status === "FINALIZED"
+      ? "Показатели продавцов взяты из зафиксированного рейтинга. Итоги магазина рассчитаны по текущим данным; сравнение с продавцами и остаток вне рейтинга недоступны."
+      : rating.history.status !== "LIVE"
+        ? "Статус рейтинга не подтверждён; сравнение с продавцами и остаток вне рейтинга недоступны."
+        : !matchingFormula
+          ? "Правила расчёта магазина и продавцов различаются. Показатели показаны отдельно; сравнение с продавцами и остаток вне рейтинга недоступны."
+          : null;
   const visibleMetricCodes = attachMetricOrder.filter((metricCode) => {
     const store = storeAttachCell(attach, metricCode);
     if (store != null && store.denominator > 0 && store.rate != null) return true;
@@ -536,7 +573,8 @@ export function AttachRateMatrix({
   const watch = storeAttachCell(attach, "ACCESSORY_APPLE_WATCH");
   const legacyNumerator = common && airpods && watch ? common.numerator - airpods.numerator - watch.numerator : 0;
   const legacyBase = common && airpods && watch ? common.denominator - airpods.denominator - watch.denominator : 0;
-  const showOutsideRating = visibleMetricCodes.some((metricCode) => {
+  const showOutsideRating = comparable && visibleMetricCodes.some((metricCode) => {
+    if (attach.rates.find((rate) => rate.metricCode === metricCode)?.preliminary) return false;
     const outside = outsideRatingAttachCell(
       storeAttachCell(attach, metricCode),
       employees,
@@ -556,6 +594,7 @@ export function AttachRateMatrix({
         </span>
       </summary>
       <div className="attach-map__content">
+        {comparisonNote && <p className="overview-data-note" role="status">{comparisonNote}</p>}
         {(Math.abs(legacyNumerator) > 0.000001 || Math.abs(legacyBase) > 0.000001) && (
           <p className="overview-data-note">
             Общая сводка AirPods / Watch дополнительно включает {formatNumber(legacyNumerator)} аксессуаров
@@ -599,7 +638,8 @@ export function AttachRateMatrix({
               {visibleMetricCodes.map((metricCode) => {
                 const metricLabel = attachRateLabels[metricCode] ?? metricCode;
                 const storeValue = storeAttachCell(attach, metricCode);
-                const outsideValue = outsideRatingAttachCell(storeValue, employees, metricCode);
+                const metricComparable = comparable && !attach.rates.find((rate) => rate.metricCode === metricCode)?.preliminary;
+                const outsideValue = metricComparable ? outsideRatingAttachCell(storeValue, employees, metricCode) : null;
                 const benchmarkRate = storeValue?.rate ?? null;
                 return (
                   <tr key={metricCode}>
@@ -627,7 +667,8 @@ export function AttachRateMatrix({
                         value={employeeAttachCell(employee, metricCode)}
                         owner={employee.displayName}
                         metric={metricLabel}
-                        benchmarkRate={benchmarkRate}
+                        benchmarkRate={metricComparable ? benchmarkRate : null}
+                        comparisonUnavailable={!metricComparable}
                       />
                     ))}
                   </tr>
@@ -637,11 +678,13 @@ export function AttachRateMatrix({
           </table>
         </div>
         <footer className="attach-map__legend">
+          {comparable ? <>
           <span><i data-tone="empty" />Нет или недостаточно продаж</span>
           <span><i data-tone="below" />Ниже магазина</span>
           <span><i data-tone="at-level" />На уровне магазина</span>
           <span><i data-tone="above" />Выше магазина</span>
           <small>Средний показатель магазина рассчитан по всем документам. Отклонение до 10% считается уровнем магазина.</small>
+          </> : <small>Показаны исходные количества и проценты без сравнения продавцов с магазином.</small>}
         </footer>
         </>}
       </div>

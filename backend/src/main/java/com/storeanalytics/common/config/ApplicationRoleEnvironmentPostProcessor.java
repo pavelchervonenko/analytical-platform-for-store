@@ -22,10 +22,11 @@ public final class ApplicationRoleEnvironmentPostProcessor
         Map<String, Object> enforcedProperties = new LinkedHashMap<>();
         enforcedProperties.put("app.runtime.role", role.name());
         switch (role) {
-            case API, WORKER -> enforcedProperties.put(
-                    "spring.flyway.enabled",
-                    "false"
-            );
+            case API -> {
+                enforcedProperties.put("spring.flyway.enabled", "false");
+                enforcedProperties.put("app.sync.historical-sales.enabled", "false");
+            }
+            case WORKER -> enforcedProperties.put("spring.flyway.enabled", "false");
             case MIGRATION -> {
                 enforcedProperties.put("spring.flyway.enabled", "true");
                 enforcedProperties.put("spring.main.web-application-type", "none");

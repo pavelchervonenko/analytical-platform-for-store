@@ -29,6 +29,7 @@ public class WeeklySnapshotSourceSyncReader {
                 FROM stores store
                 JOIN sync_jobs job ON job.connection_id = store.connection_id
                 WHERE store.id = ? AND job.id = ? AND job.status = 'SUCCESS'
+                  AND job.job_type IN ('BACKFILL', 'INCREMENTAL')
                   AND job.finished_at IS NOT NULL
                 """,
                 (resultSet, rowNumber) -> {

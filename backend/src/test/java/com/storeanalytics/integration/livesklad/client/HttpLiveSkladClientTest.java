@@ -1,6 +1,7 @@
 package com.storeanalytics.integration.livesklad.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -23,12 +24,15 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.web.client.RestClient;
 
 class HttpLiveSkladClientTest {
@@ -40,6 +44,7 @@ class HttpLiveSkladClientTest {
     private final AtomicInteger storeRequests = new AtomicInteger();
     private final AtomicInteger employeeRequests = new AtomicInteger();
     private final AtomicInteger saleRequests = new AtomicInteger();
+    private final AtomicReference<Integer> declaredSalesTotal = new AtomicReference<>(51);
     private final AtomicInteger saleDetailRequests = new AtomicInteger();
     private final List<String> employeeQueries = new CopyOnWriteArrayList<>();
     private final List<String> saleQueries = new CopyOnWriteArrayList<>();
@@ -200,6 +205,121 @@ class HttpLiveSkladClientTest {
         });
         assertThat(saleDetailRequests).hasValue(1);
         assertThat(authRequests).hasValue(1);
+    }
+
+    @Test
+    void emptyPageWithPositiveDeclaredTotalFailsClosed() {
+        server.removeContext("/shops/store-http-fixture/sales");
+        server.createContext("/shops/store-http-fixture/sales", exchange ->
+                sendJson(exchange, 200, "{\"data\":[],\"total\":1}"));
+        assertThatThrownBy(this::fixtureSales).hasMessageContaining("terminal page is incomplete");
+    }
+
+    @Test
+    void changedDeclaredTotalBetweenFullAndTerminalPageFailsClosed() {
+        server.removeContext("/shops/store-http-fixture/sales");
+        server.createContext("/shops/store-http-fixture/sales", exchange -> {
+            if (exchange.getRequestURI().getRawQuery().contains("page=2")) {
+                sendJson(exchange, 200, "{\"data\":[],\"total\":52}");
+            } else {
+                handleSales(exchange);
+            }
+        });
+        assertThatThrownBy(this::fixtureSales).hasMessageContaining("total changed during pagination");
+    }
+
+    @Test
+    void excessRowsCannotBeAcceptedAsDeclaredCompleteness() {
+        declaredSalesTotal.set(1);
+        assertThatThrownBy(this::fixtureSales).hasMessageContaining("exceed the declared listing total");
+    }
+
+    @Test
+    void legacyUndeclaredShortPageCannotEstablishHistoricalAbsence() {
+        server.removeContext("/shops/store-http-fixture/sales");
+        server.createContext("/shops/store-http-fixture/sales", exchange ->
+                sendJson(exchange, 200, "{\"data\":[]}"));
+        assertThat(fixtureSales()).isEmpty();
+        var context = new HistoricalSalesReadScope.Context(UUID.randomUUID(), "fixture-worker", 0,
+                Instant.parse("2026-07-01T00:00:00Z"), Instant.parse("2026-07-01T03:00:00Z"));
+        try (var ignored = HistoricalSalesReadScope.open(context, 10, () -> { })) {
+            assertThatThrownBy(this::fixtureSales).hasMessageContaining("requires a declared listing total");
+        }
+        assertThat(HistoricalSalesReadScope.current()).isNull();
+    }
+
+    @Test
+    void ordinarySalesAllUndeclaredPagesKeepLegacyShortPageTermination() {
+        declaredSalesTotal.set(null);
+        assertThat(fixtureSales()).hasSize(51);
+        assertThat(saleRequests).hasValue(2);
+    }
+
+    @ParameterizedTest
+    @CsvSource(value = {"0,1,0,1", "1,2,0,2", "0,-1,0,-1", "2,1,0,1",
+            "50,51,1,52", "50,NULL,1,51", "50,51,1,NULL"}, nullValues = "NULL")
+    void rejectsIncompleteOrInconsistentCashListing(int firstRows, Integer firstTotal,
+                                                   int secondRows, Integer secondTotal) {
+        installCashListing(firstRows, firstTotal, secondRows, secondTotal);
+        assertThatThrownBy(this::fixtureCash)
+                .isInstanceOf(com.storeanalytics.integration.livesklad.exception.LiveSkladException.class);
+        assertThat(returnDetailRequests).hasValue(0);
+    }
+
+    @ParameterizedTest
+    @CsvSource(value = {"50,51,1,51,51,2", "50,50,0,50,50,1", "0,0,0,0,0,1",
+            "50,NULL,1,NULL,51,2"}, nullValues = "NULL")
+    void acceptsCompleteCashListingAndPreservesUndeclaredLegacyPages(int firstRows, Integer firstTotal,
+            int secondRows, Integer secondTotal, int expectedRows, int expectedRequests) {
+        installCashListing(firstRows, firstTotal, secondRows, secondTotal);
+        assertThat(fixtureCash()).hasSize(expectedRows);
+        assertThat(cashTransactionRequests).hasValue(expectedRequests);
+        assertThat(authRequests).hasValue(1);
+    }
+
+    private List<LiveSkladCashTransactionPayload> fixtureCash() {
+        var client = new HttpLiveSkladClient(RestClient.builder(), new LiveSkladProperties(
+                "http://127.0.0.1:" + server.getAddress().getPort(), "test-login", "test-password",
+                Duration.ofSeconds(2), Duration.ofSeconds(2)), objectMapper);
+        return client.fetchCashTransactions("register-http-fixture", "cash-item-http-fixture",
+                Instant.parse("2026-07-01T00:00:00Z"), Instant.parse("2026-07-02T00:00:00Z"));
+    }
+
+    private void installCashListing(int firstRows, Integer firstTotal, int secondRows, Integer secondTotal) {
+        server.removeContext("/cash-registers/register-http-fixture/cash");
+        server.createContext("/cash-registers/register-http-fixture/cash", exchange -> {
+            cashTransactionRequests.incrementAndGet();
+            boolean second = exchange.getRequestURI().getRawQuery().contains("page=2");
+            var response = objectMapper.createObjectNode();
+            var data = response.putArray("data");
+            for (int index = 0; index < (second ? secondRows : firstRows); index++) {
+                var transaction = data.addObject();
+                transaction.put("id", "cash-fixture-" + (index + (second ? 51 : 1)));
+                transaction.put("date", "2026-07-01T12:00:00Z");
+                transaction.put("type", "saleReturn");
+                transaction.put("shopId", "store-http-fixture");
+                transaction.put("isBalance", true);
+                transaction.put("isBankTransfer", false);
+                transaction.put("money", 90);
+                transaction.putObject("cashRegister").put("id", "register-http-fixture");
+                transaction.putObject("cashItem").put("id", "cash-item-http-fixture")
+                        .put("type", "saleReturn").put("isIncome", false);
+                transaction.putObject("document").put("id", "return-http-fixture");
+            }
+            Integer total = second ? secondTotal : firstTotal;
+            if (total != null) {
+                response.put("total", total);
+            }
+            sendJson(exchange, 200, objectMapper.writeValueAsString(response));
+        });
+    }
+
+    private List<LiveSkladSaleSummaryPayload> fixtureSales() {
+        var client = new HttpLiveSkladClient(RestClient.builder(), new LiveSkladProperties(
+                "http://127.0.0.1:" + server.getAddress().getPort(), "fixture-login", "fixture-password",
+                Duration.ofSeconds(2), Duration.ofSeconds(2)), objectMapper);
+        return client.fetchSales("store-http-fixture", Instant.parse("2026-07-01T00:00:00Z"),
+                Instant.parse("2026-07-02T00:00:00Z"));
     }
 
     @Test
@@ -364,7 +484,9 @@ class HttpLiveSkladClientTest {
         }
         ObjectNode response = objectMapper.createObjectNode();
         response.set("data", data);
-        response.put("total", 51);
+        if (declaredSalesTotal.get() != null) {
+            response.put("total", declaredSalesTotal.get());
+        }
         response.put("page", page);
         response.put("pageSize", 50);
         sendJson(exchange, 200, objectMapper.writeValueAsString(response));
@@ -607,4 +729,3 @@ class HttpLiveSkladClientTest {
         sendJson(exchange, 200, objectMapper.writeValueAsString(response));
     }
 }
-

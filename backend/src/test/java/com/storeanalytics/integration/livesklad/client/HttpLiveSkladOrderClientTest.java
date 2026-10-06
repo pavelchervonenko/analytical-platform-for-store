@@ -1,6 +1,7 @@
 package com.storeanalytics.integration.livesklad.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.storeanalytics.common.config.LiveSkladProperties;
 import com.storeanalytics.integration.livesklad.dto.LiveSkladOrderDetailPayload;
@@ -20,6 +21,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -101,6 +104,57 @@ class HttpLiveSkladOrderClientTest {
         });
         assertThat(detailRequests).hasValue(1);
         assertThat(authRequests).hasValue(1);
+    }
+
+    @ParameterizedTest
+    @CsvSource(value = {"0,1,0,1", "1,2,0,2", "0,-1,0,-1", "2,1,0,1",
+            "50,51,1,52", "50,NULL,1,51", "50,51,1,NULL"}, nullValues = "NULL")
+    void rejectsIncompleteOrInconsistentOrderListing(int firstRows, Integer firstTotal,
+                                                    int secondRows, Integer secondTotal) {
+        installOrderListing(firstRows, firstTotal, secondRows, secondTotal);
+        assertThatThrownBy(this::fixtureOrders)
+                .isInstanceOf(com.storeanalytics.integration.livesklad.exception.LiveSkladException.class);
+        assertThat(detailRequests).hasValue(0);
+    }
+
+    @ParameterizedTest
+    @CsvSource(value = {"50,51,1,51,51,2", "50,50,0,50,50,1", "0,0,0,0,0,1",
+            "50,NULL,1,NULL,51,2"}, nullValues = "NULL")
+    void acceptsCompleteOrderListingAndPreservesUndeclaredLegacyPages(int firstRows, Integer firstTotal,
+            int secondRows, Integer secondTotal, int expectedRows, int expectedRequests) {
+        installOrderListing(firstRows, firstTotal, secondRows, secondTotal);
+        assertThat(fixtureOrders()).hasSize(expectedRows);
+        assertThat(listRequests).hasValue(expectedRequests);
+        assertThat(authRequests).hasValue(1);
+    }
+
+    private List<LiveSkladOrderSummaryPayload> fixtureOrders() {
+        var client = new HttpLiveSkladOrderClient(RestClient.builder(), properties(), objectMapper);
+        return client.fetchOrders(Instant.parse("2026-08-01T00:00:00Z"), Instant.parse("2026-08-10T00:00:00Z"));
+    }
+
+    private void installOrderListing(int firstRows, Integer firstTotal, int secondRows, Integer secondTotal) {
+        server.removeContext("/company/orders");
+        server.createContext("/company/orders", exchange -> {
+            listRequests.incrementAndGet();
+            boolean second = exchange.getRequestURI().getRawQuery().contains("page=2");
+            var response = objectMapper.createObjectNode();
+            var data = response.putArray("data");
+            for (int index = 0; index < (second ? secondRows : firstRows); index++) {
+                var order = data.addObject();
+                order.put("id", "order-fixture-" + (index + (second ? 51 : 1)));
+                order.put("number", "A-fixture-" + index);
+                order.put("dateCreate", "2026-08-01T08:00:00Z");
+                order.put("isVisible", true);
+                relation(order.putObject("status"), "status-issued", "Выдан");
+                relation(order.putObject("shop"), "store-http-fixture", "HTTP Fixture Store");
+            }
+            Integer total = second ? secondTotal : firstTotal;
+            if (total != null) {
+                response.put("total", total);
+            }
+            sendJson(exchange, response);
+        });
     }
 
     private LiveSkladProperties properties() {

@@ -10,6 +10,8 @@ readonly PROJECT_ROOT="$(cd -- "${TEST_DIR}/../.." && pwd)"
 # shellcheck source=../../deploy/bin/release-safety.sh
 source "${PROJECT_ROOT}/deploy/bin/release-safety.sh"
 
+bash "${PROJECT_ROOT}/scripts/tests/historical-sales-release-safety-test.sh"
+
 fail_test() {
   printf 'DEPLOY RELEASE SAFETY TEST FAILED: %s\n' "$*" >&2
   exit 1

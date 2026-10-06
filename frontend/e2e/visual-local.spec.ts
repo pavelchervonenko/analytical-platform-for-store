@@ -4,6 +4,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 import { makeWeeklyReview } from "../src/test/weeklyReviewFixture";
 import { visualWeeklyReview } from "./weekly-review-visual-fixtures";
 import { makeSellerWeeklyReviewView } from "../src/test/sellerWeeklyReviewFixture";
+import { attachMapVisualEmployees, attachMapVisualKpiEmployees } from "./attach-map-visual-fixture";
 
 const email = process.env.VISUAL_EMAIL?.trim() || process.env.E2E_ADMIN_EMAIL?.trim();
 const password = process.env.VISUAL_PASSWORD || process.env.E2E_ADMIN_PASSWORD;
@@ -11,6 +12,8 @@ const configuredRoutes = process.env.VISUAL_ROUTES?.trim() || "/insights";
 const useFixtureApi = process.env.VISUAL_USE_FIXTURES === "true";
 const useLiveWeeklyReview = process.env.VISUAL_USE_LIVE_WEEKLY_REVIEW === "true";
 const fixtureRole = process.env.VISUAL_FIXTURE_ROLE === "ADMIN" ? "ADMIN" : "MANAGER";
+const fixtureRatingFinalized = process.env.VISUAL_FIXTURE_RATING_HISTORY === "FINALIZED";
+const fixtureAttachEmployees = process.env.VISUAL_FIXTURE_ATTACH_EMPLOYEES === "true";
 const configuredFixtureFeatures = process.env.VISUAL_FIXTURE_FEATURES?.trim();
 const fixtureFeatures = configuredFixtureFeatures === "NONE"
   ? []
@@ -607,13 +610,13 @@ async function installFixtureApi(page: Page) {
       actualStoreRevenue: 54_800_000,
       revenueAchievementPercent: 114.4
     },
-    employees: [],
+    employees: fixtureAttachEmployees ? attachMapVisualEmployees : [],
     history: {
-      status: "LIVE",
-      snapshotId: null,
-      finalizedAt: null,
-      finalizedBy: null,
-      finalizedByName: null
+      status: fixtureRatingFinalized ? "FINALIZED" : "LIVE",
+      snapshotId: fixtureRatingFinalized ? "50000000-0000-4000-8000-000000000001" : null,
+      finalizedAt: fixtureRatingFinalized ? "2026-09-11T08:00:00Z" : null,
+      finalizedBy: fixtureRatingFinalized ? "20000000-0000-4000-8000-000000000001" : null,
+      finalizedByName: fixtureRatingFinalized ? "Администратор" : null
     }
   }));
   await page.route("**/api/stores/*/employees?*", async (route) => json(route, {
@@ -629,7 +632,7 @@ async function installFixtureApi(page: Page) {
     periodStart,
     periodEnd,
     formulaVersion: "employee-kpi-v1",
-    employees: []
+    employees: fixtureAttachEmployees ? attachMapVisualKpiEmployees : []
   }));
   await page.route("**/api/stores/*/kpi/attach-rates?*", async (route) => json(route, {
     storeId: visualStoreId,
@@ -1511,15 +1514,51 @@ test.describe("local frontend visual review", () => {
           animations: "disabled"
         });
         await teamPanel.locator(":scope > summary").click();
+        if (useFixtureApi && fixtureAttachEmployees) {
+          const profitSummary = teamPanel.locator(".overview-team-summary__card")
+            .filter({ has: page.getByText("Валовая прибыль", { exact: true }) });
+          if (fixtureRatingFinalized) {
+            await expect(profitSummary).toContainText("Прибыль не сохранена в архивном рейтинге");
+            await expect(profitSummary.locator("strong")).toHaveText("—");
+            await expect(teamPanel.locator(".overview-team-table tbody tr td:nth-child(3)"))
+              .toHaveText("—");
+          } else {
+            await expect(profitSummary).toContainText("По отображаемым продавцам");
+            await expect(profitSummary.locator("strong")).toContainText("40");
+          }
+          await teamPanel.screenshot({
+            path: resolve(screenshotDirectory, screenshotName(route) + "-seller-performance.png"),
+            animations: "disabled",
+            style: ".topbar, .skip-link { visibility: hidden !important; }"
+          });
+        }
         const attachMap = page.locator(".attach-map-panel");
         if (await attachMap.count() > 0) {
           await attachMap.locator(":scope > summary").click();
           await expect(attachMap).toHaveAttribute("open", "");
+          if (useFixtureApi && fixtureAttachEmployees && fixtureRatingFinalized) {
+            await expect(attachMap.getByRole("status"))
+              .toContainText("Показатели продавцов взяты из зафиксированного рейтинга");
+            await expect(attachMap.getByRole("columnheader", { name: /Вне рейтинга/u })).toHaveCount(0);
+            await expect(attachMap.locator('[data-tone="below"], [data-tone="above"], [data-tone="at-level"]'))
+              .toHaveCount(0);
+          }
           await attachMap.screenshot({
             path: resolve(screenshotDirectory, screenshotName(route) + "-attach-map.png"),
             animations: "disabled",
             style: ".topbar, .skip-link { visibility: hidden !important; }"
           });
+          if (useFixtureApi && fixtureAttachEmployees) {
+            await expect(attachMap.getByRole("link", { name: "Анна (тест)" })).toHaveCount(1);
+            await attachMap.locator(".attach-map-wrap").evaluate((element) => {
+              element.scrollLeft = element.scrollWidth;
+            });
+            await attachMap.screenshot({
+              path: resolve(screenshotDirectory, screenshotName(route) + "-attach-map-sellers.png"),
+              animations: "disabled",
+              style: ".topbar, .skip-link { visibility: hidden !important; }"
+            });
+          }
         }
       }
       const routePath = new URL(route, "http://local.test").pathname;

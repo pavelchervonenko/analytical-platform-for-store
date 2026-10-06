@@ -131,22 +131,26 @@ public class SyncJobService {
             );
             return Optional.empty();
         }
+        Optional<SyncJob> previous = jobRepository
+                .findFirstByConnectionIdAndJobTypeAndPeriodStartAndPeriodEndOrderByCreatedAtDesc(
+                        connection.getId(), SyncJobType.INCREMENTAL, start, end);
+        if (previous.isPresent() && !isRecoverableScheduledFailure(previous.get())) {
+            return Optional.empty();
+        }
+        for (SyncJob active : jobRepository.findActiveForUpdate(connection.getId(), ACTIVE_STATUSES)) {
+            if (active.getJobType() == SyncJobType.HISTORICAL_SALES) {
+                active.requestCancellation(clock.instant());
+                auditLogService.recordSystem(null, AuditAction.SYNC_JOB_CANCELLATION_REQUESTED,
+                        new AuditTarget(AuditEntityType.SYNC_JOB, active.getId()), null, null,
+                        Map.of("reason", "ROUTINE_SYNC_PRIORITY", "cancelRequested", true));
+            }
+        }
         if (hasActiveJob(connection)) {
             LOGGER.info(
                     "Deferred scheduled synchronization for connection {} because another "
                             + "synchronization job is active",
                     connection.getConnectionKey()
             );
-            return Optional.empty();
-        }
-        Optional<SyncJob> previous = jobRepository
-                .findFirstByConnectionIdAndJobTypeAndPeriodStartAndPeriodEndOrderByCreatedAtDesc(
-                        connection.getId(),
-                        SyncJobType.INCREMENTAL,
-                        start,
-                        end
-                );
-        if (previous.isPresent() && !isRecoverableScheduledFailure(previous.get())) {
             return Optional.empty();
         }
         previous.ifPresent(job -> LOGGER.warn(

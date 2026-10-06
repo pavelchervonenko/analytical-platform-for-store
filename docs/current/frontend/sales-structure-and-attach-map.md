@@ -6,7 +6,7 @@ owner: frontend
 audience:
   - developer
   - manager
-last_verified: 2026-09-27
+last_verified: 2026-10-06
 requirement_sources:
   - docs/current/product/business-metrics.md
   - docs/current/product/attach-rate.md
@@ -16,6 +16,11 @@ implementation_sources:
   - frontend/src/employees/rating-ui.ts
   - frontend/src/warranties/CaseReview.tsx
   - frontend/src/warranties/WarrantyPanel.tsx
+  - backend/src/main/java/com/storeanalytics/performance/repository/EmployeeAttachRateRepository.java
+  - backend/src/main/java/com/storeanalytics/performance/service/EmployeeRatingQueryService.java
+  - backend/src/main/java/com/storeanalytics/performance/service/EmployeeRatingSnapshotCodec.java
+  - backend/src/main/resources/db/migration/V55__attach_warranty_attribution.sql
+  - backend/src/main/resources/db/migration/V86__apply_confirmed_catalog_attach_roles.sql
 verification_sources:
   - frontend/src/warranties/CaseReview.test.tsx
   - frontend/src/warranties/WarrantyPanel.test.tsx
@@ -52,8 +57,28 @@ superseded_by: null
 сальдо с исходными продажами/возвратами сохраняются. Пустые виды техники не выводятся. `SELLERS` включает только `rankingEligible` сотрудников, `STORE` — весь
 магазин; переключатель общий с верхними метриками и планом.
 
-Attach-map использует `/kpi/attach-rates` для store benchmark и `/employee-ratings` для roster.
-Residual = store facts минус показанный roster; это «вне рейтинга / без сотрудника», не сотрудник.
+Таблица продавцов сохраняет выручку и структуру из employee rating. Валовая прибыль из текущего
+employee KPI присоединяется только для LIVE, одинаковых магазина и периода и совпадающей
+выручки конкретного сотрудника. При расхождении его прибыль недоступна; сумма прибыли также
+не выводится как полная. FINALIZED сохраняет архивные показатели, но прибыль в rating snapshot
+не записана: экран показывает отсутствие архивной прибыли, не подставляя текущую. Неизвестный
+статус также исключает присоединение текущей прибыли. Два LIVE запроса не доказывают атомарный
+срез; совпадение выручки является дополнительной проверкой совместимости.
+
+Attach-map использует `/kpi/attach-rates` для текущего store benchmark и `/employee-ratings` для
+показанных employee rows. Comparison и residual разрешены только для LIVE, одинаковых store/period
+и совместимых v3/v4: rating suffix `-attach-v4` соответствует store `attach-rate-v4`, без него —
+`attach-rate-v3`. Неизвестная store formula не разрешает comparison. FINALIZED/unknown и разные
+методики сохраняют исходные проценты и N/B без цветов относительной оценки, residual и легенды
+сравнения; экран поясняет ограничение. Employee rows другого store/period не показываются.
+У FINALIZED employee values остаются историческими, store endpoint читает текущие facts.
+
+Residual вычисляется отдельно для N и B как store facts минус показанные employee rows и подписан
+«вне рейтинга / без сотрудника»; это остаток, а не сотрудник. Для конкретной метрики необходимы
+значения всех показанных сотрудников: отсутствующий metric не считается нулём и не позволяет
+рассчитать residual. LIVE и совпадение методики не доказывают единый атомарный snapshot двух запросов.
+Предварительная store metric также исключает относительное сравнение и residual этой строки,
+даже если ранее полученный employee response ещё разрешает её оценку.
 
 - `rate=null`, base<=0: «Нет продаж для расчёта».
 - Нет положительного store benchmark: «Нет среднего по магазину».
@@ -64,7 +89,16 @@ Residual = store facts минус показанный roster; это «вне �
 17 метрик, включая отдельные строки «Зарядные устройства и кабели», «Пауэрбанки»,
 «Аксессуары AirPods» и «Аксессуары Apple Watch»,
 определены в [product/attach-rate](../product/attach-rate.md).
-Правила атрибуции employee rows и предварительности в v4 определены ADR-0003.
+В LIVE employee attach rows используют методику, выбранную настройкой атрибуции: v3 сохраняет
+финансового сотрудника и фактический период возврата; в v4 обычные метрики, включая Care,
+относят возврат сотруднику строки LiveSklad в периоде возврата. Неизвестный сотрудник не
+подменяется финансовым продавцом. Обычные гарантии v4 и их возвраты относятся к продавцу
+и периоду устройства; возврат устройства уменьшает гарантийную базу исходного периода.
+Финансовая структура продаж при этом сохраняет атрибуцию исходному продавцу.
+Правила связей и предварительности определены
+[ADR-0003](../../decisions/ADR-0003-warranty-attach-attribution.md) и
+[attach-rate](../product/attach-rate.md). FINALIZED сохраняет прежние employee значения и
+`formula.version`; изменение текущей методики не пересчитывает опубликованный rating snapshot.
 Две дочерние строки аксессуаров подписаны «Справочно, вне рейтинга» и не окрашиваются
 как рейтинговое сравнение. Если у дочерней строки есть количество без положительной базы,
 показываются исходные N/B и недоступный процент. Неуточнённый остаток старой категории

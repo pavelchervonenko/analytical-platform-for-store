@@ -79,6 +79,7 @@ public class WeeklySnapshotPlanningStore {
                 JOIN sync_jobs job ON job.connection_id = store.connection_id
                 WHERE store.id = ? AND store.is_active = true
                   AND job.status = 'SUCCESS' AND job.finished_at IS NOT NULL
+                  AND job.job_type IN ('BACKFILL', 'INCREMENTAL')
                   AND job.period_end >= ? AND job.finished_at <= ?
                 ORDER BY job.finished_at DESC, job.created_at DESC, job.id DESC
                 LIMIT 1
@@ -111,6 +112,7 @@ public class WeeklySnapshotPlanningStore {
                     JOIN sync_jobs job ON job.connection_id = store.connection_id
                     WHERE store.id = ? AND store.is_active = true
                       AND job.status = 'SUCCESS' AND job.finished_at IS NOT NULL
+                      AND job.job_type IN ('BACKFILL', 'INCREMENTAL')
                       AND job.period_end > ? AND job.period_start < ?
                       AND job.finished_at <= ?
                 ), coverage AS (

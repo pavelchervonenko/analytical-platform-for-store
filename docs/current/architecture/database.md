@@ -6,7 +6,7 @@ owner: backend
 audience:
   - developer
   - operator
-last_verified: 2026-09-20
+last_verified: 2026-10-06
 requirement_sources:
   - docs/archive/legacy-contracts/database-design.md
 implementation_sources:
@@ -41,8 +41,8 @@ superseded_by: null
 ## Источник истины
 
 Результирующую схему определяет упорядоченная цепочка Flyway migrations, а не этот текст и не JPA.
-Текущий source-tree заканчивается V54 и включает отдельную decimal-версию V39.1. Применённую в
-конкретной БД версию можно утверждать только после чтения `flyway_schema_history`.
+Полный набор колонок и ограничений определяют миграции, включая отдельные decimal-версии.
+Применённую в конкретной БД версию можно утверждать только после чтения `flyway_schema_history`.
 
 ## Основные слои
 
@@ -133,3 +133,17 @@ privacy/retention gap: документ не объявляет payload безо
 
 Полная migration compatibility описана отдельно в [`migrations.md`](migrations.md). Формулы KPI и
 решение об employee attribution возврата не являются частью физической модели данных.
+
+## Состояние historical SALE refresh
+
+`historical_sales_refresh_state` в новой непубликованной миграции хранит connection, явную дату
+начала, cursor и фиксированный конец цикла, active job, HTTP budget и блокировку независимо
+от retention job. Exact paired RETURN/parent UUID arrays и required flag сохраняют cohort;
+БД проверяет размеры, отсутствие null и обязательность identities. Продвижение cursor разрешает
+успешное fenced выполнение; для dependency block covering manual BACKFILL SUCCESS дополнен
+accepted parent/child publications и current inherited snapshots каждого retained RETURN.
+State не обозначает полноту всех sync-фаз.
+Область dependent repair и область cursor имеют разный смысл: возврат может произойти позже
+продажи. Не удалять state и не переносить начало как способ обхода блокировки.
+
+См. [операционную процедуру](../../runbooks/livesklad-historical-sales-refresh.md).

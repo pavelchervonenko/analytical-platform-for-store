@@ -137,6 +137,7 @@ public class HttpLiveSkladOrderClient implements LiveSkladOrderClient {
                 + "," + changedPeriodEnd.toEpochMilli() + "]";
         List<LiveSkladOrderSummaryPayload> orders = new ArrayList<>();
         Set<String> orderIds = new HashSet<>();
+        var completeness = new LiveSkladListingCompleteness("orders", ORDER_PAGE_SIZE, false);
         for (int page = 1; page <= MAX_ORDER_PAGES; page++) {
             int currentPage = page;
             OrdersEnvelope response = restClient.get()
@@ -178,9 +179,7 @@ public class HttpLiveSkladOrderClient implements LiveSkladOrderClient {
                         payload.deepCopy()
                 ));
             }
-            if (response.data().size() < ORDER_PAGE_SIZE
-                    || response.total() != null
-                    && orders.size() >= response.total()) {
+            if (completeness.acceptPage(response.data().size(), response.total())) {
                 return List.copyOf(orders);
             }
         }

@@ -143,7 +143,7 @@ val checkOpenApiCompatibility by tasks.registering(Exec::class) {
         "node",
         "scripts/check-openapi-compatibility.mjs",
         "--baseline",
-        "contracts/openapi/baselines/v14.json",
+        "contracts/openapi/baselines/v15.json",
         "--committed",
         "contracts/openapi/current.json",
         "--generated",

@@ -338,6 +338,8 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                 + "," + periodEnd.toEpochMilli() + "]";
         List<LiveSkladSaleSummaryPayload> sales = new ArrayList<>();
         Set<String> saleIds = new HashSet<>();
+        var completeness = new LiveSkladListingCompleteness(
+                "sales", SALES_PAGE_SIZE, HistoricalSalesReadScope.current() != null);
         for (int page = 1; page <= MAX_SALES_PAGES; page++) {
             int currentPage = page;
             SalesEnvelope response = restClient.get()
@@ -381,8 +383,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                         payload.deepCopy()
                 ));
             }
-            if (response.data().size() < SALES_PAGE_SIZE
-                    || response.total() != null && sales.size() >= response.total()) {
+            if (completeness.acceptPage(response.data().size(), response.total())) {
                 return List.copyOf(sales);
             }
         }
@@ -535,6 +536,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                 + "," + periodEnd.toEpochMilli() + "]";
         List<LiveSkladCashTransactionPayload> transactions = new ArrayList<>();
         Set<String> transactionIds = new HashSet<>();
+        var completeness = new LiveSkladListingCompleteness("cash transactions", CASH_PAGE_SIZE, false);
         for (int page = 1; page <= MAX_CASH_PAGES; page++) {
             int currentPage = page;
             CashTransactionsEnvelope response = restClient.get()
@@ -573,9 +575,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                 }
                 transactions.add(toCashTransactionPayload(transaction, payload));
             }
-            if (response.data().size() < CASH_PAGE_SIZE
-                    || response.total() != null
-                    && transactions.size() >= response.total()) {
+            if (completeness.acceptPage(response.data().size(), response.total())) {
                 return List.copyOf(transactions);
             }
         }
@@ -1274,6 +1274,7 @@ public class HttpLiveSkladClient implements LiveSkladClient {
                 .requestFactory(requestFactory)
                 .requestInterceptor((request, body, execution) -> {
                     requestBudget.beforeRequest();
+                    HistoricalSalesReadScope.beforeRequest();
                     return execution.execute(request, body);
                 })
                 .build();

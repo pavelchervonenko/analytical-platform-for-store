@@ -10,6 +10,7 @@ import com.storeanalytics.store.model.Store;
 import com.storeanalytics.store.repository.StoreRepository;
 import com.storeanalytics.sync.exception.SalesSyncCapacityException;
 import com.storeanalytics.sync.exception.SalesSyncException;
+import com.storeanalytics.sync.exception.HistoricalSalesReadBudgetException;
 import com.storeanalytics.sync.model.SourceSystem;
 import com.storeanalytics.sync.model.SyncPeriod;
 import com.storeanalytics.sync.model.SyncRun;
@@ -34,7 +35,7 @@ public class SalesSyncService {
     private final LiveSkladClient liveSkladClient;
     private final IntegrationConnectionRepository connectionRepository;
     private final StoreRepository storeRepository;
-    private final SalesSyncPersistence persistence;
+    private final HistoricalSalesRefreshBatchApplier batchApplier;
     private final SyncRunRepository syncRunRepository;
     private final SyncRunErrorRepository errorRepository;
     private final Clock clock;
@@ -44,13 +45,13 @@ public class SalesSyncService {
             LiveSkladClient liveSkladClient,
             IntegrationConnectionRepository connectionRepository,
             StoreRepository storeRepository,
-            SalesSyncPersistence persistence,
-            SyncRunLifecycle lifecycle
+            SyncRunLifecycle lifecycle,
+            HistoricalSalesRefreshBatchApplier batchApplier
     ) {
         this.liveSkladClient = liveSkladClient;
         this.connectionRepository = connectionRepository;
         this.storeRepository = storeRepository;
-        this.persistence = persistence;
+        this.batchApplier = batchApplier;
         this.syncRunRepository = lifecycle.runs();
         this.errorRepository = lifecycle.errors();
         this.clock = lifecycle.clock();
@@ -138,7 +139,7 @@ public class SalesSyncService {
                 batches.add(new StoreSalesBatch(storeSummaries.store(), sources));
             }
 
-            SalesSyncBatchResult batch = persistence.synchronize(
+            SalesSyncBatchResult batch = batchApplier.apply(
                     syncRun.getId(),
                     period,
                     batches
@@ -159,7 +160,7 @@ public class SalesSyncService {
                     fetched,
                     "Sales synchronization failed: "
                             + exception.getClass().getSimpleName(),
-                    exception instanceof LiveSkladException
+                    exception instanceof LiveSkladException || exception instanceof HistoricalSalesReadBudgetException
             );
             throw new SalesSyncException(syncRun.getId(), exception);
         }

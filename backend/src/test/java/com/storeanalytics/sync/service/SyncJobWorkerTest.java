@@ -21,6 +21,7 @@ import com.storeanalytics.sync.exception.ReturnSyncException;
 import com.storeanalytics.sync.exception.OrderSyncException;
 import com.storeanalytics.sync.exception.SalesSyncCapacityException;
 import com.storeanalytics.sync.exception.SalesSyncException;
+import com.storeanalytics.sync.exception.HistoricalSalesReadBudgetException;
 import com.storeanalytics.sync.model.SyncJobPhase;
 import com.storeanalytics.sync.model.SyncJobType;
 import java.time.Duration;
@@ -299,5 +300,35 @@ class SyncJobWorkerTest {
                 delay.capture()
         );
         assertThat(delay.getValue()).isEqualTo(Duration.ofDays(1));
+    }
+
+    @Test
+    void historicalStepQuotaShrinksCompleteWindowBeforeRetry() {
+        claim = new SyncJobClaim(claim.jobId(), null, SyncJobType.HISTORICAL_SALES,
+                SyncJobPhase.SALES, claim.windowStart(), claim.windowStart().plusSeconds(10800), 0, "fixture-worker");
+        when(coordinator.claimNext(anyString())).thenReturn(Optional.of(claim));
+        when(executionService.execute(claim)).thenThrow(new SalesSyncException(UUID.randomUUID(),
+                new HistoricalSalesReadBudgetException(Duration.ofMinutes(1), false)));
+        when(coordinator.shrinkWindowForRetry(eq(jobId), anyString(), anyString(), any())).thenReturn(true);
+        worker.processNextStep();
+        verify(coordinator).shrinkWindowForRetry(eq(jobId), anyString(),
+                eq("Synchronization phase SALES failed: HISTORICAL_SALES_STEP_BUDGET"), any());
+        verify(coordinator, never()).retryOrFail(any(), anyString(), anyString(), anyBoolean(), any());
+    }
+
+    @Test
+    void historicalDailyQuotaWaitsForResetWithoutShrinkingOrPermanentFailure() {
+        worker = new SyncJobWorker(coordinator, executionService, new SyncProperties(Duration.ofHours(3), 1,
+                Duration.ofHours(2), Duration.ofMinutes(1), Duration.ofMinutes(15), Duration.ofMinutes(15),
+                3, 730, ZoneId.of("Europe/Kaliningrad")));
+        claim = new SyncJobClaim(claim.jobId(), null, SyncJobType.HISTORICAL_SALES,
+                SyncJobPhase.SALES, claim.windowStart(), claim.windowStart().plusSeconds(10800), 0, "fixture-worker");
+        when(coordinator.claimNext(anyString())).thenReturn(Optional.of(claim));
+        when(executionService.execute(claim)).thenThrow(new SalesSyncException(UUID.randomUUID(),
+                new HistoricalSalesReadBudgetException(Duration.ofHours(10), true)));
+        worker.processNextStep();
+        verify(coordinator, never()).shrinkWindowForRetry(any(), anyString(), anyString(), any());
+        verify(coordinator, never()).retryOrFail(any(), anyString(), anyString(), anyBoolean(), any());
+        verify(coordinator).pauseHistoricalDailyBudget(eq(jobId), anyString(), eq(Duration.ofHours(10)));
     }
 }

@@ -105,6 +105,7 @@ public class ReturnSyncPersistence {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "syncRun does not exist"
                 ));
+        factRepositories.historicalDependencies().lockConnection(syncRun.getConnection().getId());
         AnalyticsCategory unmappedCategory = referenceRepositories.categories()
                 .findByCode(UNMAPPED_CATEGORY_CODE)
                 .orElseThrow(() -> new IllegalStateException(
@@ -177,6 +178,7 @@ public class ReturnSyncPersistence {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "syncRun does not exist"
                 ));
+        factRepositories.historicalDependencies().lockConnection(syncRun.getConnection().getId());
         Store store = referenceRepositories.stores()
                 .findById(requestedStore.getId())
                 .orElseThrow(() -> new IllegalArgumentException(

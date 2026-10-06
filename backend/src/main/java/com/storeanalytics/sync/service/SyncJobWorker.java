@@ -14,6 +14,8 @@ import com.storeanalytics.sync.config.SyncWorkerSchedulingConfiguration;
 import com.storeanalytics.sync.exception.OrderSyncCapacityException;
 import com.storeanalytics.sync.exception.ReturnSyncCapacityException;
 import com.storeanalytics.sync.exception.SalesSyncCapacityException;
+import com.storeanalytics.sync.exception.HistoricalSalesReadBudgetException;
+import com.storeanalytics.sync.exception.HistoricalSalesDependencyException;
 import com.storeanalytics.sync.model.SyncJobPhase;
 import java.time.Duration;
 import java.util.Optional;
@@ -92,6 +94,17 @@ public class SyncJobWorker {
     }
 
     private void handleFailure(SyncJobClaim claim, RuntimeException exception) {
+        var dependency = find(exception, HistoricalSalesDependencyException.class);
+        if (dependency != null && claim.jobType() == com.storeanalytics.sync.model.SyncJobType.HISTORICAL_SALES) {
+            coordinator.failHistoricalDependency(claim.jobId(), workerId, dependency);
+            return;
+        }
+        var budget = find(exception, HistoricalSalesReadBudgetException.class);
+        if (budget != null && budget.daily()
+                && claim.jobType() == com.storeanalytics.sync.model.SyncJobType.HISTORICAL_SALES) {
+            coordinator.pauseHistoricalDailyBudget(claim.jobId(), workerId, budget.retryAfter());
+            return;
+        }
         boolean retryable = isRetryableFailure(exception);
         Duration delay = retryDelay(claim, exception);
         String errorCode = failureCode(exception);
@@ -150,10 +163,12 @@ public class SyncJobWorker {
             SyncJobClaim claim,
             Throwable exception
     ) {
+        HistoricalSalesReadBudgetException historical = find(exception, HistoricalSalesReadBudgetException.class);
         return (claim.phase() == SyncJobPhase.SALES
                 || claim.phase() == SyncJobPhase.RETURNS
                 || claim.phase() == SyncJobPhase.ORDERS)
-                && contains(exception, LiveSkladRateLimitException.class);
+                && (contains(exception, LiveSkladRateLimitException.class)
+                    || historical != null && !historical.daily());
     }
 
     private Duration retryDelay(SyncJobClaim claim, Throwable exception) {
@@ -170,6 +185,10 @@ public class SyncJobWorker {
         Duration minimumDelay = rateLimit != null
                 && rateLimit.getRetryAfter().compareTo(localDelay) > 0
                 ? rateLimit.getRetryAfter() : localDelay;
+        HistoricalSalesReadBudgetException historical = find(exception, HistoricalSalesReadBudgetException.class);
+        if (historical != null && historical.retryAfter().compareTo(minimumDelay) > 0) {
+            minimumDelay = historical.retryAfter();
+        }
         Duration cappedDelay = minimumDelay.compareTo(
                 properties.retryAbsoluteMaxDelay()
         ) > 0 ? properties.retryAbsoluteMaxDelay() : minimumDelay;
@@ -198,6 +217,9 @@ public class SyncJobWorker {
     }
 
     private boolean isRetryableFailure(Throwable exception) {
+        if (contains(exception, HistoricalSalesReadBudgetException.class)) {
+            return true;
+        }
         if (contains(exception, LiveSkladPayloadRejectedException.class)) {
             return false;
         }
@@ -218,6 +240,10 @@ public class SyncJobWorker {
     }
 
     private String failureCode(Throwable exception) {
+        HistoricalSalesReadBudgetException historical = find(exception, HistoricalSalesReadBudgetException.class);
+        if (historical != null) {
+            return historical.daily() ? "HISTORICAL_SALES_DAILY_BUDGET" : "HISTORICAL_SALES_STEP_BUDGET";
+        }
         LiveSkladPayloadRejectedException rejected = find(
                 exception,
                 LiveSkladPayloadRejectedException.class

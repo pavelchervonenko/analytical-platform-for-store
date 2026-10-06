@@ -43,6 +43,9 @@ class SellerWeeklySourceStabilityRepository {
                   AND NOT EXISTS (
                       SELECT 1 FROM sync_jobs later
                       WHERE later.connection_id = job.connection_id AND later.status = 'SUCCESS'
+                        AND (later.job_type IN ('BACKFILL', 'INCREMENTAL')
+                             OR (job.job_type = 'HISTORICAL_SALES'
+                                 AND later.job_type = 'HISTORICAL_SALES'))
                         AND later.finished_at > job.finished_at
                       HAVING count(*) > 0 AND CASE
                           WHEN job.phase IN ('STORES', 'EMPLOYEES') THEN true
